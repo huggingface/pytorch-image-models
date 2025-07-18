@@ -120,6 +120,7 @@ class AttentionRope(nn.Module):
             norm_layer: Type[nn.Module] = None,
             qk_norm: bool = False,
             scale_norm: bool = False,
+            proj_bias: bool = True,
     ):
         """Initialize the Attention module.
 
@@ -161,7 +162,7 @@ class AttentionRope(nn.Module):
         self.k_norm = norm_layer(head_dim) if qk_norm else nn.Identity()
         self.attn_drop = nn.Dropout(attn_drop)
         self.norm = norm_layer(attn_dim) if scale_norm else nn.Identity()
-        self.proj = nn.Linear(attn_dim, dim)
+        self.proj = nn.Linear(attn_dim, dim, bias=proj_bias)
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(

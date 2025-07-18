@@ -25,24 +25,27 @@ from typing import Callable, Dict, List, Optional, Set, Tuple, Type, Union, Any
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.utils.rnn import pad_sequence
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import (
     AttentionPoolLatent,
     Mlp,
+    LayerNorm,
+    PatchDropoutWithIndices,
+    PatchEmbedInterpolator,
+    _assert,
     to_2tuple,
     get_act_layer,
     get_norm_layer,
-    LayerNorm,
-    _assert,
+    apply_keep_indices_nlc,
+    disable_compiler,
 )
-from timm.models._builder import build_model_with_cfg
-from timm.models._features import feature_take_indices
-from timm.models._features_fx import register_notrace_function, register_notrace_module
-from timm.models._registry import register_model, generate_default_cfgs
-from timm.models._manipulate import checkpoint, checkpoint_seq, named_apply
-
+from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
+from ._features_fx import register_notrace_function, register_notrace_module
+from ._manipulate import checkpoint, named_apply
+from ._registry import register_model, generate_default_cfgs
+from .eva import EvaBlock
 from .vision_transformer import Block, global_pool_nlc
 
 __all__ = ['NaFlexVitCfg', 'NaFlexVit']
@@ -65,12 +68,14 @@ class NaFlexVitCfg:
     depth: int = 12
     num_heads: int = 12
     mlp_ratio: float = 4.0
+    scale_mlp_norm: bool = False  # Apply scaling norm to MLP
 
     # Attention parameters
     qkv_bias: bool = True
     qk_norm: bool = False
     proj_bias: bool = True
     attn_drop_rate: float = 0.0
+    scale_attn_inner_norm: bool = False  # Apply scaling norm to attn context
 
     # Regularization
     init_values: Optional[float] = None  # Layer-scale init values (layer-scale enabled if not None)
@@ -90,6 +95,13 @@ class NaFlexVitCfg:
     pos_embed_interp_mode: str = 'bicubic'  # Interpolation mode for position embedding resizing
     pos_embed_ar_preserving: bool = False  # Whether to preserve aspect ratio during position embedding interpolation
     pos_embed_use_grid_sample: bool = False  # Whether to use grid_sample for naflex position embedding interpolation
+
+    # ROPE specific configuration
+    rope_type: str = ''  # ROPE type: '' or 'none' for no ROPE, 'axial' for standard, 'mixed' for learnable frequencies
+    rope_temperature: float = 10000.0  # Temperature for ROPE frequency computation
+    rope_ref_feat_shape: Optional[Tuple[int, int]] = None
+    rope_grid_offset: float = 0.  # Grid offset for non-pixel ROPE mode
+    rope_grid_indexing: str = 'ij'  # Grid indexing mode for ROPE ('ij' or 'xy')
 
     # Image processing
     dynamic_img_pad: bool = False  # Whether to enable dynamic padding for variable resolution
@@ -115,6 +127,11 @@ class NaFlexVitCfg:
     act_layer: Optional[str] = None  # Activation layer for MLP blocks
     block_fn: Optional[str] = None  # Transformer block implementation class name
     mlp_layer: Optional[str] = None  # MLP implementation class name
+
+    # EVA-specific parameters
+    attn_type: str = 'standard'  # Attention type: 'standard', 'eva', 'rope'
+    swiglu_mlp: bool = False  # Use SwiGLU MLP variant
+    qkv_fused: bool = True  # Whether to use fused QKV projections
 
     # Variable patch size support
     enable_patch_interpolator: bool = False  # Enable dynamic patch size support
@@ -171,6 +188,112 @@ def calculate_naflex_grid_sizes(_coord: torch.Tensor):
     return [(int(h.item()), int(w.item())) for h, w in zip(max_y, max_x)]
 
 
+class NaFlexRopeIterator:
+    """Iterator for generating batched ROPE embeddings for mixed mode with multiple grid sizes."""
+
+    def __init__(
+        self,
+        rope_module,
+        size_to_indices: Dict[Tuple[int, int], List[int]],
+        unique_sizes: List[Tuple[int, int]],
+        batch_size: int,
+        seq_len: int,
+        dtype: torch.dtype,
+        device: torch.device,
+    ):
+        self.rope = rope_module
+        self.size_to_indices = size_to_indices
+        self.unique_sizes = unique_sizes
+        self.batch_size = batch_size
+        self.seq_len = seq_len
+        self.dtype = dtype
+        self.device = device
+        self.depth = rope_module.depth
+        self.num_heads = rope_module.num_heads
+        self.head_dim = 2 * rope_module.dim // rope_module.num_heads
+        self._depth_idx = 0
+
+        # Pre-compute embeddings for each unique size
+        self._embeddings_per_size = {}
+        for grid_size in unique_sizes:
+            # get_embed returns all depths at once for mixed mode
+            rope_embed = rope_module.get_embed(shape=grid_size)
+            self._embeddings_per_size[grid_size] = rope_embed
+
+    def __iter__(self):
+        self._depth_idx = 0
+        return self
+
+    @disable_compiler
+    def __next__(self):
+        if self._depth_idx >= self.depth:
+            raise StopIteration
+
+        # Create batch tensor for current depth
+        batch_embed = torch.zeros(
+            self.batch_size, self.num_heads, self.seq_len, self.head_dim,
+            dtype=self.dtype, device=self.device
+        )
+
+        # Fill in embeddings for each unique grid size
+        for grid_size in self.unique_sizes:
+            h, w = grid_size
+            actual_len = h * w
+            batch_indices = self.size_to_indices[grid_size]
+
+            # Get pre-computed embeddings for this size at current depth
+            embed = self._embeddings_per_size[grid_size][self._depth_idx]  # [num_heads, H*W, dim]
+
+            # Assign to batch indices
+            for bi in batch_indices:
+                batch_embed[bi, :, :actual_len, :] = embed[:, :actual_len, :]
+
+        self._depth_idx += 1
+        return batch_embed
+
+
+def get_block_fn(cfg: NaFlexVitCfg) -> Callable:
+    """Get appropriate block function based on configuration.
+
+    Returns a partially applied block constructor with EVA-specific
+    or conflicting parameters pre-configured if needed.
+    """
+    # Check if we need EVA block features
+    use_eva_features = (
+        cfg.attn_type in ('eva', 'rope') or
+        cfg.rope_type not in ('', 'none') or  # Any ROPE type requires EVA blocks
+        cfg.swiglu_mlp
+    )
+
+    if use_eva_features:
+        # Determine attention type based on rope_type if not explicitly set
+        attn_type = cfg.attn_type
+        if attn_type == 'standard' and cfg.rope_type not in ('', 'none'):
+            attn_type = 'rope'
+
+        num_prefix_tokens = (1 if cfg.class_token else 0) + cfg.reg_tokens
+        return partial(
+            EvaBlock,
+            attn_type=attn_type,
+            swiglu_mlp=cfg.swiglu_mlp,
+            scale_mlp=cfg.scale_mlp_norm,
+            scale_attn_inner=cfg.scale_attn_inner_norm,
+            qkv_fused=cfg.qkv_fused,
+            num_prefix_tokens=num_prefix_tokens,
+        )
+    else:
+        # Standard ViT block
+        block_fn = cfg.block_fn or Block
+        if cfg.scale_mlp_norm or cfg.scale_attn_inner_norm:
+            # param names differ between EVA vs non-EVA block types
+            block_fn = partial(
+                block_fn,
+                scale_mlp_norm=cfg.scale_mlp_norm,
+                scale_attn_norm=cfg.scale_attn_inner_norm
+            )
+        return block_fn
+
+
 @register_notrace_module
 class NaFlexEmbeds(nn.Module):
     """NaFlex Embedding module for Vision Transformers.
@@ -201,9 +324,8 @@ class NaFlexEmbeds(nn.Module):
         proj_type: Type of embedding projection layer ('conv' or 'linear')
         input_norm_layer: Normalization layer applied to input (linear mode only)
         proj_norm_layer: Normalization layer applied after projection
-        pos_embed: Type of position embedding ('learned', 'factorized', 'rope', 'none')
+        pos_embed: Type of position embedding ('learned', 'factorized', 'none')
         pos_drop_rate: Dropout rate for position embeddings
-        patch_drop_rate: Dropout rate for patch tokens
         class_token: Whether to include a class token
         reg_tokens: Number of register tokens to include
         bias: Whether to use bias in projection layers
@@ -234,7 +356,6 @@ class NaFlexEmbeds(nn.Module):
             proj_norm_layer: Union[bool, Optional[Type[nn.Module]]] = None,
             norm_layer: Optional[Type[nn.Module]] = None,
             pos_drop_rate: float = 0.,
-            patch_drop_rate: float = 0.,
             enable_patch_interpolator: bool = False,
     ) -> None:
         """Initialize NaFlexEmbeds module.
@@ -249,7 +370,7 @@ class NaFlexEmbeds(nn.Module):
             reg_tokens: Number of register tokens to include.
             dynamic_img_pad: Whether to enable dynamic padding for variable resolution.
             default_img_size: Default image size for position embedding grid calculation.
-            pos_embed: Type of position embedding ('learned', 'factorized', 'rope', 'none').
+            pos_embed: Type of position embedding ('learned', 'factorized', 'none').
             pos_embed_grid_size: Grid size for position embedding initialization.
             pos_embed_interp_mode: Interpolation mode for position embedding resizing.
             pos_embed_ar_preserving: Whether to preserve aspect ratio during interpolation.
@@ -257,7 +378,6 @@ class NaFlexEmbeds(nn.Module):
             proj_norm_layer: Normalization layer applied after projection.
             norm_layer: Default normalization layer.
             pos_drop_rate: Dropout rate for position embeddings.
-            patch_drop_rate: Dropout rate for patch tokens.
             enable_patch_interpolator: Enable dynamic patch size support.
         """
         super().__init__()
@@ -315,7 +435,6 @@ class NaFlexEmbeds(nn.Module):
 
         # Create patch embedding interpolator if enabled
         if self.enable_patch_interpolator:
-            from timm.layers import PatchEmbedInterpolator
             self.patch_interpolator = PatchEmbedInterpolator(
                 base_patch_size=self.patch_size,
                 in_chans=in_chans,
@@ -342,9 +461,6 @@ class NaFlexEmbeds(nn.Module):
         self.pos_embed_x: Optional[torch.Tensor] = None
         if not pos_embed or pos_embed == 'none':
             self.pos_embed_type = 'none'
-        elif pos_embed == 'rope':
-            self.pos_embed_type = 'rope'
-            # Rotary embeddings will be computed on-the-fly in the forward pass
         elif pos_embed == 'factorized':
             assert self.pos_embed_grid_size is not None
             h, w = self.pos_embed_grid_size
@@ -357,16 +473,8 @@ class NaFlexEmbeds(nn.Module):
             self.pos_embed = nn.Parameter(torch.randn(1, h, w, embed_dim) * .02)
             self.pos_embed_type = 'learned'
 
-        # Dropout layers
+        # Dropout layer
         self.pos_drop = nn.Dropout(p=pos_drop_rate)
-        if patch_drop_rate > 0:
-            from timm.layers.patch_dropout import PatchDropout
-            self.patch_drop = PatchDropout(
-                patch_drop_rate,
-                num_prefix_tokens=self.num_prefix_tokens,
-            )
-        else:
-            self.patch_drop = nn.Identity()
 
     def feature_info(self, location) -> Dict[str, Any]:
         """Get feature information for feature extraction.
@@ -409,7 +517,7 @@ class NaFlexEmbeds(nn.Module):
         else:
             return img_size[0] // self.patch_size[0], img_size[1] // self.patch_size[1]
 
-    #@torch.compiler.disable()
+    @disable_compiler
     def _apply_learned_naflex_pos_embed(
             self,
             x: torch.Tensor,
@@ -466,6 +574,7 @@ class NaFlexEmbeds(nn.Module):
                 pos_embed_flat[:, :seq_len].expand(len(batch_indices), -1, -1)
             )
 
+    @disable_compiler
     def _apply_learned_naflex_pos_embed_grid_sample(
             self,
             x: torch.Tensor,
@@ -547,6 +656,7 @@ class NaFlexEmbeds(nn.Module):
 
         x.add_(pos_embed_flat)
 
+    @disable_compiler
     def _apply_factorized_naflex_pos_embed(
             self,
             x: torch.Tensor,
@@ -608,6 +718,7 @@ class NaFlexEmbeds(nn.Module):
                 pos[:, :seq_len].expand(len(batch_indices), -1, -1)
             )
 
+    @disable_compiler
     def _apply_factorized_naflex_pos_embed_grid_sample(
             self,
             x: torch.Tensor,
@@ -701,7 +812,8 @@ class NaFlexEmbeds(nn.Module):
             self,
             x: torch.Tensor,
             patch_coord: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
+            patch_valid: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, Optional[Tuple[int, int]]]:
         """Forward pass for patch embedding with position encoding.
 
         Args:
@@ -710,12 +822,14 @@ class NaFlexEmbeds(nn.Module):
                 - [B, N, P*P*C] for pre-patchified linear mode (normal)
                 - [B, N, Ph, Pw, C] for pre-patchified linear mode (variable patch size)
             patch_coord: Optional patch coordinates [B, N, 2] for NaFlex mode.
+            patch_valid: Optional validity mask for patches [B, N] for NaFlex mode.
 
         Returns:
-            Embedded tensor with position encoding and class/register tokens.
-            Shape: [B, num_prefix_tokens + N, embed_dim]
+            Tuple of (embedded_tensor, grid_size) where:
+                - embedded_tensor: [B, num_prefix_tokens + N, embed_dim]
+                - grid_size: (H, W) tuple for standard mode, None for NaFlex mode
         """
-        grid_size: Optional[List[int]] = None
+        grid_size: Optional[Tuple[int, int]] = None
         B = x.shape[0]
         if self.is_linear:
             # Linear embedding path, works with NaFlex mode or standard 2D mode
@@ -783,8 +897,6 @@ class NaFlexEmbeds(nn.Module):
                     self._apply_factorized_naflex_pos_embed_grid_sample(x, patch_coord=patch_coord)
                 else:
                     self._apply_factorized_naflex_pos_embed(x, patch_coord=patch_coord)
-        elif self.pos_embed_type == 'rope':
-            assert False, "ROPE not yet implemented"
 
         # Prepare and add class and register tokens
         to_cat = []
@@ -796,10 +908,10 @@ class NaFlexEmbeds(nn.Module):
         if to_cat:
             x = torch.cat(to_cat + [x], dim=1)
 
-        # Apply dropouts
+        # Apply dropout
         x = self.pos_drop(x)
-        x = self.patch_drop(x)
-        return x
+
+        return x, grid_size
 
 
 @register_notrace_function
@@ -990,7 +1102,7 @@ class NaFlexVit(nn.Module):
         norm_layer = get_norm_layer(cfg.norm_layer) or LayerNorm
         embed_norm_layer = get_norm_layer(cfg.embed_norm_layer)
         act_layer = get_act_layer(cfg.act_layer) or nn.GELU
-        block_fn = cfg.block_fn or Block  # TODO: Support configurable block_fn via string lookup
+        block_fn = get_block_fn(cfg)
         mlp_layer = cfg.mlp_layer or Mlp   # TODO: Support configurable mlp_layer via string lookup
 
         # Store instance variables
@@ -1023,13 +1135,51 @@ class NaFlexVit(nn.Module):
             pos_embed_use_grid_sample=cfg.pos_embed_use_grid_sample,
             proj_norm_layer=embed_norm_layer,
             pos_drop_rate=cfg.pos_drop_rate,
-            patch_drop_rate=cfg.patch_drop_rate,
             enable_patch_interpolator=getattr(cfg, 'enable_patch_interpolator', False),
         )
         self.norm_pre = norm_layer(cfg.embed_dim) if cfg.pre_norm else nn.Identity()
 
+        # ROPE position embeddings at model level
+        self.rope: Optional[nn.Module] = None
+        self.rope_is_mixed = False
+        if cfg.rope_type and cfg.rope_type != 'none':
+            from timm.layers.pos_embed_sincos import RotaryEmbeddingCat, RotaryEmbeddingMixed
+            if cfg.rope_type == 'mixed':
+                self.rope = RotaryEmbeddingMixed(
+                    cfg.embed_dim,
+                    depth=cfg.depth,
+                    num_heads=cfg.num_heads,
+                    temperature=cfg.rope_temperature,
+                    feat_shape=None,  # Dynamic shapes for NaFlex
+                    grid_indexing=cfg.rope_grid_indexing,
+                )
+                self.rope_is_mixed = True
+            elif cfg.rope_type == 'axial':
+                self.rope = RotaryEmbeddingCat(
+                    cfg.embed_dim // cfg.num_heads,
+                    temperature=cfg.rope_temperature,
+                    in_pixels=False,
+                    feat_shape=None,  # Dynamic shapes for NaFlex
+                    ref_feat_shape=cfg.rope_ref_feat_shape,
+                    grid_offset=cfg.rope_grid_offset,
+                    grid_indexing=cfg.rope_grid_indexing,
+                )
+                self.rope_is_mixed = False
+            else:
+                raise ValueError(f"Unknown rope_type: {cfg.rope_type}")
+
+        # Patch dropout
+        if cfg.patch_drop_rate > 0:
+            self.patch_drop = PatchDropoutWithIndices(
+                cfg.patch_drop_rate,
+                num_prefix_tokens=self.num_prefix_tokens,
+            )
+        else:
+            self.patch_drop = None
+
         # Transformer blocks
         dpr = [x.item() for x in torch.linspace(0, cfg.drop_path_rate, cfg.depth)]  # stochastic depth decay rule
+        # Create transformer blocks
         self.blocks = nn.Sequential(*[
             block_fn(
                 dim=cfg.embed_dim,
@@ -1046,7 +1196,8 @@ class NaFlexVit(nn.Module):
                 act_layer=act_layer,
                 mlp_layer=mlp_layer,
             )
-            for i in range(cfg.depth)])
+            for i in range(cfg.depth)
+        ])
 
         # Feature info for downstream tasks
         patch_reduction = self.embeds.feat_ratio(as_scalar=True)
@@ -1085,11 +1236,19 @@ class NaFlexVit(nn.Module):
     def fix_init_weight(self) -> None:
         """Apply initialization weight fix with layer-wise scaling."""
         def rescale(param: torch.Tensor, _layer_id: int) -> None:
-            param.div_(math.sqrt(2.0 * _layer_id))
+            with torch.no_grad():
+                param.div_(math.sqrt(2.0 * _layer_id))
 
         for layer_id, layer in enumerate(self.blocks):
-            rescale(layer.attn.proj.weight.data, layer_id + 1)
-            rescale(layer.mlp.fc2.weight.data, layer_id + 1)
+            if hasattr(layer, 'attn'):
+                rescale(layer.attn.proj.weight, layer_id + 1)
+            if hasattr(layer, 'mlp'):
+                rescale(layer.mlp.fc2.weight, layer_id + 1)
+            if hasattr(layer, 'attn_out_proj'):
+                rescale(layer.attn_out_proj.weight, layer_id + 1)
+            if hasattr(layer, 'mlp_out_proj'):
+                rescale(layer.mlp_out_proj.weight, layer_id + 1)
+
 
     def init_weights(self, mode: str = '') -> None:
         """Initialize model weights according to specified scheme.
@@ -1135,6 +1294,8 @@ class NaFlexVit(nn.Module):
             Set of parameter names to skip during weight decay
         """
         skip_list = {'embeds.pos_embed', 'embeds.cls_token', 'embeds.reg_token'}
+        if self.rope and hasattr(self.rope, 'no_weight_decay'):
+            skip_list.update(self.rope.no_weight_decay())
         return skip_list
 
     @torch.jit.ignore
@@ -1172,6 +1333,75 @@ class NaFlexVit(nn.Module):
         """
         return self.head
 
+    @disable_compiler
+    def _generate_rope_naflex(
+            self,
+            x: torch.Tensor,
+            patch_coord: torch.Tensor,
+    ) -> Union[torch.Tensor, List[torch.Tensor], Any]:
+        """Generate ROPE position embeddings for NaFlex batch with variable grid sizes.
+
+        Args:
+            x: Input tensor [B, N, C]
+            patch_coord: Patch coordinates [B, N, 2] with (y, x) values
+
+        Returns:
+            ROPE embeddings:
+            - Axial mode: Tensor of shape [B, 1, N, dim*2]
+            - Mixed mode: List of tensors, each of shape [B, num_heads, N, dim], one per depth layer
+            - Mixed mode with iterator: Iterator yielding tensors per depth
+        """
+        # Calculate grid sizes for each sample
+        naflex_grid_sizes = calculate_naflex_grid_sizes(patch_coord)
+
+        # Build ROPE embeddings for each unique grid size
+        size_to_indices = {}
+        unique_sizes = []
+        for bi, grid_size in enumerate(naflex_grid_sizes):
+            if grid_size not in size_to_indices:
+                size_to_indices[grid_size] = []
+                unique_sizes.append(grid_size)
+            size_to_indices[grid_size].append(bi)
+
+        B, N, C = x.shape
+        seq_len = N - self.num_prefix_tokens
+
+        if self.rope_is_mixed:
+            # Use an iterator for Mixed mode, returns [batch_size, depth, num_heads, seq_len, dim]
+            return NaFlexRopeIterator(
+                self.rope,
+                size_to_indices,
+                unique_sizes,
+                B,
+                seq_len,
+                x.dtype,
+                x.device
+            )
+
+        # Axial mode: [batch_size, seq_len, dim*2]
+        rope_embeds = torch.zeros(B, seq_len, self.rope.dim * 2, dtype=x.dtype, device=x.device)
+
+        if hasattr(self.rope, 'get_batch_embeds'):
+            # Batch mode - generate unique embeds from one grid and then assign
+            unique_embeds = self.rope.get_batch_embeds(unique_sizes)
+            for grid_size, embed, batch_indices in zip(unique_sizes, unique_embeds, size_to_indices.values()):
+                h, w = grid_size
+                actual_len = h * w
+                for bi in batch_indices:
+                    rope_embeds[bi, :actual_len] = embed[:actual_len]
+
+        else:
+            # Generate each unique size separately and assign
+            for grid_size, bi in size_to_indices.items():
+                rope_embed = self.rope.get_embed(shape=grid_size)
+                h, w = grid_size
+                actual_len = h * w
+                rope_embeds[bi, :actual_len] = rope_embed[:actual_len]
+
+        rope_embeds = rope_embeds.unsqueeze(1)
+
+        return rope_embeds
+
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
         """Reset the classification head with new number of classes and pooling.
 
@@ -1188,6 +1418,68 @@ class NaFlexVit(nn.Module):
                 self.attn_pool = None  # remove attention pooling
             self.global_pool = global_pool
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+
+    def _forward_embeds(
+            self,
+            x,
+            patch_coord,
+            patch_valid,
+            attn_mask,
+    ) -> Dict[str, torch.Tensor]:
+        """ Forward pass through patch / abs pos / rope pos embeds and patch dropout
+        """
+        naflex_mode = patch_coord is not None
+
+        # patch embed, abs pos embed, returns global grid size as calculated from 'standard' NCHW batches
+        x, grid_size = self.embeds(
+            x,
+            patch_coord=patch_coord,
+            patch_valid=patch_valid,
+        )
+
+        # Generate ROPE embeddings at model level
+        rope_embeds = None
+        if self.rope is not None:
+            if patch_coord is not None:
+                # NaFlex mode - variable grid sizes
+                rope_embeds = self._generate_rope_naflex(x, patch_coord)
+            elif grid_size is not None:
+                # Standard mode - fixed grid size
+                rope_embeds = self.rope.get_embed(shape=grid_size)
+            else:
+                assert False, 'Expected one of patch_coord or grid_size to be valid'
+
+        # Apply patch dropout with coordinated updates
+        keep_indices: Optional[torch.Tensor] = None
+        if self.training and self.patch_drop is not None:
+            x, keep_indices = self.patch_drop(x)
+            # keep_indices excludes prefix tokens, can use directly on patch_valid & rope embeds
+            if patch_valid is not None:
+                patch_valid = patch_valid.gather(1, keep_indices)
+            if rope_embeds is not None and not self.rope_is_mixed:
+                # Update ROPE embeddings to match dropped tokens (only for axial mode)
+                # Batch dim already present in NaFlex mode, but will be added in standard mode.
+                rope_embeds = apply_keep_indices_nlc(x, rope_embeds, keep_indices, pos_embed_has_batch=naflex_mode)
+                if not naflex_mode:
+                    # B, N, dim -> B, 1, N, dim. Need head dim added for standard mode, already added in NaFlex.
+                    rope_embeds = rope_embeds.unsqueeze(1)
+
+        # Create attention mask from patch_valid after patch dropout applied
+        if attn_mask is None:
+            attn_mask = create_attention_mask(
+                patch_valid,
+                num_prefix_tokens=self.num_prefix_tokens,
+                dtype=x.dtype
+            )
+
+        x = self.norm_pre(x)
+        return {
+            'patches': x,
+            'patch_valid': patch_valid,
+            'rope_embeds': rope_embeds,
+            'attn_mask': attn_mask,
+            'keep_indices': keep_indices,
+        }
 
     def forward_intermediates(
             self,
@@ -1239,13 +1531,17 @@ class NaFlexVit(nn.Module):
             height, width = x.shape[-2:]
             H, W = self.embeds.dynamic_feat_size((height, width))
 
-        # Create attention mask if patch_type is provided and mask is not
-        if attn_mask is None and patch_valid is not None:
-            attn_mask = create_attention_mask(patch_valid, self.num_prefix_tokens, patches.dtype)
-
-        # Forward pass through embedding
-        x = self.embeds(patches, patch_coord=patch_coord)
-        x = self.norm_pre(x)
+        # Forward pass through patch and abs position embedding
+        embeds = self._forward_embeds(
+            patches,
+            patch_coord=patch_coord,
+            patch_valid=patch_valid,
+            attn_mask=attn_mask,
+        )
+        x = embeds['patches']
+        rope_embeds = embeds.get('rope_embeds', None)
+        keep_indices = embeds.get('keep_indices', None)
+        attn_mask = embeds.get('attn_mask', None)
 
         # Forward pass through blocks
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
@@ -1253,16 +1549,42 @@ class NaFlexVit(nn.Module):
         else:
             blocks = self.blocks[:max_index + 1]
 
-        for i, blk in enumerate(blocks):
-            if attn_mask is not None:
-                x = blk(x, attn_mask=attn_mask)
-            elif self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint(blk, x)
-            else:
-                x = blk(x)
-            if i in take_indices:
-                # normalize intermediates with final norm layer if enabled
-                intermediates.append(self.norm(x) if norm else x)
+        do_checkpointing = self.grad_checkpointing and not torch.jit.is_scripting()
+        if self.rope_is_mixed and rope_embeds is not None:
+            # Mixed mode with per-layer embeddings (list or iterator)
+            for i, (blk, rope_embed) in enumerate(zip(self.blocks, rope_embeds)):
+                # Apply patch dropout to rope_embed if needed
+                if self.training and self.patch_drop is not None and keep_indices is not None:
+                    # Apply patch dropout to rope_embed if needed (batch dim already present in naflex mode)
+                    rope_embed = apply_keep_indices_nlc(
+                        x,
+                        rope_embed,
+                        keep_indices,
+                        pos_embed_has_batch=embeds.get('naflex_mode', False),
+                    )
+                if do_checkpointing:
+                    x = checkpoint(blk, x, rope=rope_embed, attn_mask=attn_mask)
+                else:
+                    x = blk(x, rope=rope_embed, attn_mask=attn_mask)
+                if i in take_indices:
+                    # normalize intermediates with final norm layer if enabled
+                    intermediates.append(self.norm(x) if norm else x)
+        else:
+            for i, blk in enumerate(blocks):
+                # Axial ROPE mode with shared embeddings
+                if rope_embeds is not None:
+                    if do_checkpointing:
+                        x = checkpoint(blk, x, rope=rope_embeds, attn_mask=attn_mask)
+                    else:
+                        x = blk(x, rope=rope_embeds, attn_mask=attn_mask)
+                else:
+                    if do_checkpointing:
+                        x = checkpoint(blk, x, attn_mask=attn_mask)
+                    else:
+                        x = blk(x, attn_mask=attn_mask)
+                if i in take_indices:
+                    # normalize intermediates with final norm layer if enabled
+                    intermediates.append(self.norm(x) if norm else x)
 
         # Process intermediates
         if self.num_prefix_tokens:
@@ -1278,6 +1600,8 @@ class NaFlexVit(nn.Module):
                 y.reshape(y.shape[0], H, W, -1).permute(0, 3, 1, 2).contiguous()
                 for y in intermediates
             ]
+
+        # FIXME always use dict for NaFlex mode to return masks and more?
 
         # For dictionary output
         if output_dict:
@@ -1308,33 +1632,66 @@ class NaFlexVit(nn.Module):
 
     def forward_features(
             self,
-            x: torch.Tensor,
+            patches: torch.Tensor,
             patch_coord: Optional[torch.Tensor] = None,
             patch_valid: Optional[torch.Tensor] = None,
             attn_mask: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
+    ) -> Union[torch.Tensor, Dict[str, torch.Tensor]]:
+        """
+        """
+        naflex_mode = patch_coord is not None
 
-        if attn_mask is None:
-            attn_mask = create_attention_mask(
-                patch_valid,
-                num_prefix_tokens=self.num_prefix_tokens,
-                dtype=x.dtype
-            )
+        # Pass through patch & abs position embedding module with patch coordinate/type support
+        embeds = self._forward_embeds(
+            patches,
+            patch_coord=patch_coord,
+            patch_valid=patch_valid,
+            attn_mask=attn_mask,
+        )
+        x = embeds['patches']
+        rope_embeds = embeds.get('rope_embeds', None)
+        keep_indices = embeds.get('keep_indices', None)
+        attn_mask = embeds.get('attn_mask', None)
 
-        # Pass through embedding module with patch coordinate/type support
-        x = self.embeds(x, patch_coord=patch_coord)
-        x = self.norm_pre(x)
-        # Apply transformer blocks with masked attention if mask provided
-        if attn_mask is not None:
-            # We need to apply blocks one by one with mask
+        # Apply transformer blocks with masked attention and/or ROPE if provided
+        do_checkpointing = self.grad_checkpointing and not torch.jit.is_scripting()
+        if self.rope_is_mixed and rope_embeds is not None:
+            # Mixed mode with per-layer embeddings (list or iterator)
+            for i, (blk, rope_embed) in enumerate(zip(self.blocks, rope_embeds)):
+                if self.training and self.patch_drop is not None and keep_indices is not None:
+                    # Apply patch dropout to rope_embed if needed (batch dim already present in naflex mode)
+                    rope_embed = apply_keep_indices_nlc(
+                        x,
+                        rope_embed,
+                        keep_indices,
+                        pos_embed_has_batch=naflex_mode,
+                    )
+                if do_checkpointing:
+                    x = checkpoint(blk, x, rope=rope_embed, attn_mask=attn_mask)
+                else:
+                    x = blk(x, rope=rope_embed, attn_mask=attn_mask)
+        elif rope_embeds is not None:
+            # Axial ROPE mode with shared embeddings
             for blk in self.blocks:
-                x = blk(x, attn_mask=attn_mask)
-        elif self.grad_checkpointing and not torch.jit.is_scripting():
-            x = checkpoint_seq(self.blocks, x)
+                if do_checkpointing:
+                    x = checkpoint(blk, x, rope=rope_embeds, attn_mask=attn_mask)
+                else:
+                    x = blk(x, rope=rope_embeds, attn_mask=attn_mask)
         else:
-            x = self.blocks(x)
+            for blk in self.blocks:
+                if do_checkpointing:
+                    x = checkpoint(blk, x, attn_mask=attn_mask)
+                else:
+                    x = blk(x, attn_mask=attn_mask)
 
         x = self.norm(x)
+
+        if naflex_mode:
+            return {
+                'patches': x,
+                'patch_valid': embeds.get('patch_valid', None),
+            }
+
         return x
 
     def _pool(
@@ -1369,11 +1726,11 @@ class NaFlexVit(nn.Module):
 
     def forward_head(
             self,
-            x: torch.Tensor,
+            patches: torch.Tensor,
             pre_logits: bool = False,
             patch_valid: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        x = self._pool(x, patch_valid=patch_valid)
+        x = self._pool(patches, patch_valid=patch_valid)
         x = self.fc_norm(x)
         x = self.head_drop(x)
         return x if pre_logits else self.head(x)
@@ -1383,6 +1740,7 @@ class NaFlexVit(nn.Module):
             x: Union[torch.Tensor, Dict[str, torch.Tensor]],
             patch_coord: Optional[torch.Tensor] = None,
             patch_valid: Optional[torch.Tensor] = None,
+            attn_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """Forward pass with optional NaFlex support.
 
@@ -1394,49 +1752,53 @@ class NaFlexVit(nn.Module):
                 - Dict from NaFlex collator
             patch_coord: Optional patch coordinates [B, N, 2] for NaFlex mode.
             patch_valid: Optional patch validity indicators for NaFlex.
+            attn_mask: Optional attn mask to override defaults generated from patch_valid
 
         Returns:
             Model output tensor.
         """
-        if isinstance(x, Dict):
-            # Handle dictionary input from NaFlex collator
-            patch_coord = x['patch_coord']
-            patch_valid = x['patch_valid']
-            patches = x['patches']
+        input_is_dict = isinstance(x, Dict)
+        naflex_mode = input_is_dict or patch_coord is not None
+        if naflex_mode:
+            if input_is_dict:
+                # Handle dictionary input from NaFlex collator, dict inputs take priority over args
+                patches = x['patches']
+                patch_valid = x.get('patch_valid', patch_valid)
+                patch_coord = x.get('patch_coord', patch_coord)
+                attn_mask = x.get('attn_mask', attn_mask)
+            else:
+                patches = x
+            _assert(patch_coord is not None, "patch_coord is required in naflex mode")
+            _assert(patch_valid is not None, "patch_valid is required in naflex mode")
 
-            # DEBUG, reconstruct patches
-            # for i in range(len(patches)):
-            #     patch = patches[i][patch_valid[i]]
-            #     h = (patch_coord[i, :, 0].max() + 1).item()
-            #     w = (patch_coord[i, :, 1].max() + 1).item()
-            #     patch = patch.reshape(h, w, 16, 16, 3).permute(4, 0, 2, 1, 3)
-            #     patch = patch.reshape(3, h*16, w*16)
-            #     from torchvision.utils import save_image
-            #     save_image(patch, f'patch_{i}.jpg', normalize=True)
+            features = self.forward_features(
+                patches=patches,
+                patch_valid=patch_valid,
+                patch_coord=patch_coord,
+                attn_mask=attn_mask,
+            )
+
+            # Pass patches & patch_valid to forward_head for masked pooling
+            x = self.forward_head(**features)
         else:
-            patches = x
-
-        # Create attention mask if patch_type is provided
-        attn_mask = create_attention_mask(
-            patch_valid,
-            num_prefix_tokens=self.num_prefix_tokens,
-            dtype=patches.dtype,
-        )
-
-        # Forward features with mask
-        x = self.forward_features(
-            patches,
-            patch_coord=patch_coord,
-            patch_valid=patch_valid,
-            attn_mask=attn_mask,
-        )
-
-        # Pass mask to forward_head for masked pooling
-        x = self.forward_head(
-            x,
-            patch_valid=patch_valid,
-        )
+            x = self.forward_features(x)
+            x = self.forward_head(x)
         return x
+
+
+def _debug_dump_patches(x):
+    # DEBUG, reconstruct patches & save
+    patch_coord = x['patch_coord']
+    patch_valid = x['patch_valid']
+    patches = x['patches']
+    for i in range(len(patches)):
+        patch = patches[i][patch_valid[i]]
+        h = (patch_coord[i, :, 0].max() + 1).item()
+        w = (patch_coord[i, :, 1].max() + 1).item()
+        patch = patch.reshape(h, w, 16, 16, 3).permute(4, 0, 2, 1, 3)
+        patch = patch.reshape(3, h*16, w*16)
+        from torchvision.utils import save_image
+        save_image(patch, f'patch_{i}.jpg', normalize=True)
 
 
 def get_init_weights_vit(mode: str = 'jax', head_bias: float = 0.0) -> Callable:
@@ -1453,7 +1815,6 @@ def get_init_weights_vit(mode: str = 'jax', head_bias: float = 0.0) -> Callable:
 
 def checkpoint_filter_fn(state_dict: Dict[str, Any], model: NaFlexVit) -> Dict[str, Any]:
     """Handle state dict conversion from original ViT to the new version with combined embedding."""
-    from .vision_transformer import checkpoint_filter_fn as orig_filter_fn
 
     # Handle CombinedEmbed module pattern
     out_dict = {}
@@ -1615,10 +1976,97 @@ def _create_naflexvit_from_classic(
         'class_token': kwargs.get('class_token', True),
         'global_pool': gp,
         'fc_norm': fc_norm,
+        'scale_mlp_norm': kwargs.pop('scale_mlp_norm', False),
+        'scale_attn_inner_norm': kwargs.pop('scale_attn_norm', False),
         **kwargs  # User overrides take precedence
     }
 
     return _create_naflexvit(variant, pretrained, **flex_kwargs)
+
+
+def _create_naflexvit_from_eva(
+        variant: str,
+        pretrained: bool = False,
+        **kwargs,
+) -> NaFlexVit:
+    """Create NaFlexVit model from EVA configuration.
+
+    This function handles the parameter mapping and configuration logic needed
+    to create NaFlexVit models that are compatible with EVA configurations
+    and pretrained weights.
+
+    Args:
+        variant: Model variant name
+        pretrained: Whether to load pretrained weights
+        **kwargs: EVA model parameters
+
+    Returns:
+        NaFlexVit model instance
+    """
+    # Map EVA-specific parameters to NaFlexVit equivalents
+
+    # Handle EVA's unique parameters
+    kwargs.pop('no_embed_class', None)  # EVA specific, not used in NaFlexVit
+
+    # abs pos embed
+    use_abs_pos_emb = kwargs.pop('use_abs_pos_emb', True)
+
+    # Map EVA's rope parameters
+    use_rot_pos_emb = kwargs.pop('use_rot_pos_emb', False)
+    rope_mixed_mode = kwargs.pop('rope_mixed_mode', False)
+    rope_temperature = kwargs.pop('rope_temperature', 10000.)
+    rope_grid_offset = kwargs.pop('rope_grid_offset', 0.)
+    rope_grid_indexing = kwargs.pop('rope_grid_indexing', 'ij')
+
+    # Get EVA's attn_type directly
+    attn_type = kwargs.pop('attn_type', 'eva')
+
+    # Determine rope_type based on EVA parameters
+    if use_rot_pos_emb:
+        rope_type = 'mixed' if rope_mixed_mode else 'axial'
+    else:
+        rope_type = 'none'
+
+    # Handle EVA's swiglu_mlp and scale_mlp
+    swiglu_mlp = kwargs.pop('swiglu_mlp', False)
+    scale_mlp = kwargs.pop('scale_mlp', False)
+    scale_attn_inner = kwargs.pop('scale_attn_inner', False)
+
+    # Map qkv_fused parameter
+    qkv_fused = kwargs.pop('qkv_fused', True)
+
+    # Handle register tokens
+    num_reg_tokens = kwargs.pop('num_reg_tokens', kwargs.get('reg_tokens', 0))
+
+    # Handle global pooling
+    gp = kwargs.pop('global_pool', 'avg')
+    fc_norm = kwargs.pop('fc_norm', None)
+    if fc_norm is None and gp == 'avg':
+        fc_norm = True
+
+    # Set NaFlexVit-specific parameters
+    naflex_kwargs = {
+        'pos_embed_grid_size': None,  # rely on img_size (// patch_size)
+        'class_token': kwargs.get('class_token', True),
+        'reg_tokens': num_reg_tokens,
+        'global_pool': gp,
+        'fc_norm': fc_norm,
+        'pos_embed': 'learned' if use_abs_pos_emb else 'none',
+        'rope_type': rope_type,
+        'rope_temperature': rope_temperature,
+        'rope_grid_offset': rope_grid_offset,
+        'rope_grid_indexing': rope_grid_indexing,
+        'rope_ref_feat_shape': kwargs.get('ref_feat_shape', None),
+        'attn_type': attn_type,
+        'swiglu_mlp': swiglu_mlp,
+        'scale_mlp': scale_mlp,
+        'scale_attn_inner': scale_attn_inner,
+        'qkv_fused': qkv_fused,
+        **kwargs  # Pass remaining kwargs through
+    }
+    print(naflex_kwargs)
+
+    return _create_naflexvit(variant, pretrained, **naflex_kwargs)
 
 
 @register_model

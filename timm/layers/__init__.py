@@ -104,7 +104,7 @@ from .norm_act import (
     unfreeze_batch_norm_2d,
 )
 from .padding import get_padding, get_same_padding, pad_same
-from .patch_dropout import PatchDropout
+from .patch_dropout import PatchDropout, PatchDropoutWithIndices, patch_dropout_forward
 from .patch_embed import PatchEmbed, PatchEmbedWithSize, PatchEmbedInterpolator, resample_patch_embed
 from .pool1d import global_pool_nlc
 from .pool2d_same import AvgPool2dSame, create_pool2d
@@ -144,7 +144,7 @@ from .split_batchnorm import SplitBatchNorm2d, convert_splitbn_model
 from .std_conv import StdConv2d, StdConv2dSame, ScaledStdConv2d, ScaledStdConv2dSame
 from .test_time_pool import TestTimePoolHead, apply_test_time_pool
 from .trace_utils import _assert, _float_to_int
-from .typing import LayerType, PadType
+from .typing import LayerType, PadType, disable_compiler
 from .weight_init import (
     trunc_normal_,
     trunc_normal_tf_,
