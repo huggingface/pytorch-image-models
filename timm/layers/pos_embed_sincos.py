@@ -234,10 +234,40 @@ def apply_rot_embed_cat(x: torch.Tensor, emb):
     return x * cos_emb + rot(x) * sin_emb
 
 
-def apply_keep_indices_nlc(x, pos_embed, keep_indices):
-    pos_embed = pos_embed.unsqueeze(0).expand(x.shape[0], -1, -1)
-    pos_embed = pos_embed.gather(1, keep_indices.unsqueeze(-1).expand(-1, -1, pos_embed.shape[-1]))
-    return pos_embed
+def apply_keep_indices_nlc(
+        x: torch.Tensor,
+        pos_embed: torch.Tensor,
+        keep_indices: torch.Tensor,
+        pos_embed_has_batch: bool = False,
+) -> torch.Tensor:
+    """ Apply keep indices to different ROPE shapes
+    Expected shapes:
+    * pos_embed shape [seq_len, pos_embed_dim] → output [batch_size, seq_len, pos_embed_dim]
+    * pos_embed shape [num_heads, seq_len, pos_embed_dim] → output [batch_size, num_heads, seq_len, pos_embed_dim]
+    * pos_embed shape [depth, num_heads, seq_len, pos_embed_dim] → output [batch_size, depth, num_heads, seq_len, pos_embed_dim]
+
+    And all of the above with leading batch dimension already present if `pos_embed_has_batch == True`
+
+    """
+    if pos_embed_has_batch:
+        # Pos embed already includes batch dim
+        _assert(pos_embed.ndim >= 3, 'Incorrect number of dimensions')  # At least [batch, seq_len, pos_embed_dim]
+    else:
+        # Add batch dimension and expand to batch size
+        _assert(pos_embed.ndim >= 2, 'Incorrect number of dimensions')  # At least [seq_len, pos_embed_dim]
+        expand_shape = (x.shape[0],) + (-1,) * pos_embed.ndim
+        pos_embed = pos_embed.unsqueeze(0).expand(expand_shape)
+
+    # Reshape keep_indices to add singleton dims
+    keep_shape = (keep_indices.shape[0],) + (1,) * (pos_embed.ndim - 3) + (keep_indices.shape[1], 1)
+    keep_indices = keep_indices.view(keep_shape)
+
+    # Expand all dims to match position embedding except the gather dim (second-last)
+    keep_expand = list(pos_embed.shape)
+    keep_expand[-2] = -1
+    keep_indices = keep_indices.expand(keep_expand)
+
+    return pos_embed.gather(-2, keep_indices)
 
 
 def build_rotary_pos_embed(
@@ -484,6 +514,59 @@ class RotaryEmbeddingCat(nn.Module):
         else:
             assert False, "get_embed() requires pre-computed pos embed or valid shape w/ pre-computed bands"
 
+    def get_batch_embeds(
+            self,
+            shapes: List[Tuple[int, int]],
+            seq_len: Optional[int] = None,
+    ) -> Union[torch.Tensor, List[torch.Tensor]]:
+        """Generate ROPE embeddings for multiple grid shapes efficiently.
+
+        Computes embeddings for the maximum grid size once, then extracts
+        and flattens the relevant portions for each requested shape.
+
+        Args:
+            shapes: List of (H, W) tuples representing different grid sizes
+
+        Returns:
+            List of concatenated sin/cos embeddings for each shape,
+            where each tensor has shape (H*W, dim)
+        """
+        if not shapes:
+            return []
+
+        # Check if we have pre-computed bands
+        if self.bands is None:
+            # If we have pre-computed pos_embed for a fixed shape, we can't do batch generation
+            raise RuntimeError("Batch embedding generation requires cached bands, not pre-computed embeddings")
+
+        # Find max dimensions across all shapes
+        max_h = max(h for h, w in shapes)
+        max_w = max(w for h, w in shapes)
+
+        # Generate embeddings for max size ONCE
+        sin_emb, cos_emb = build_rotary_pos_embed(
+            feat_shape=(max_h, max_w),
+            bands=self.bands,
+            in_pixels=self.in_pixels,
+            ref_feat_shape=self.ref_feat_shape,
+            grid_offset=self.grid_offset,
+            grid_indexing=self.grid_indexing,
+        )
+
+        # sin_emb and cos_emb are (max_h * max_w, dim//2)
+        # concat and reshape to 2D for slicing
+        rope_embed_2d = torch.cat([sin_emb, cos_emb], dim=-1).view(max_h, max_w, -1)
+
+        if seq_len is not None:
+            flat_embeds = torch.zeros(len(shapes), seq_len, rope_embed_2d.shape[-1]).type_as(sin_emb)
+            for i, (h, w) in enumerate(shapes):
+                src_len = h * w
+                flat_embeds[i, :src_len] = rope_embed_2d[:h, :w].reshape(src_len, -1)
+            return flat_embeds
+        else:
+            flat_embeds_list = [rope_embed_2d[:h, :w].reshape(h * w, -1) for h, w in shapes]
+            return flat_embeds_list
+
     def forward(self, x):
         # assuming channel-first tensor where spatial dim are >= 2
         pos_embed = self.get_embed(x.shape[2:])
@@ -641,6 +724,62 @@ class RotaryEmbeddingMixed(nn.Module):
             assert False, "get_embed() requires pre-computed t_x/t_y or valid shape"
 
         return get_mixed_freqs(self.freqs, t_x, t_y)
+
+    def get_batch_embeds(
+            self,
+            shapes: List[Tuple[int, int]],
+            seq_len: Optional[int] = None,
+    ) -> Union[torch.Tensor, List[torch.Tensor]]:
+        """Generate ROPE embeddings for multiple grid shapes efficiently.
+
+        Computes embeddings for the maximum grid size once, then extracts
+        and flattens the relevant portions for each requested shape.
+
+        Args:
+            shapes: List of (H, W) tuples representing different grid sizes
+            seq_len: If provided, return padded tensor of this length. Otherwise return list.
+
+        Returns:
+            If seq_len is provided: Padded tensor of shape (len(shapes), depth, num_heads, seq_len, dim)
+            Otherwise: List of tensors with shape (depth, num_heads, H*W, dim) for each shape
+        """
+        if not shapes:
+            return []
+
+        # Find max dimensions
+        max_h = max(h for h, w in shapes)
+        max_w = max(w for h, w in shapes)
+
+        # Generate embeddings for max size ONCE
+        t_x, t_y = get_mixed_grid(
+            [max_h, max_w],
+            grid_indexing=self.grid_indexing,
+            device=self.freqs.device
+        )
+        max_embed = get_mixed_freqs(self.freqs, t_x, t_y)  # (depth, num_heads, max_h*max_w, dim)
+
+        # Reshape to 2D grid for easy slicing
+        depth, num_heads, _, dim = max_embed.shape
+        max_embed_2d = max_embed.view(depth, num_heads, max_h, max_w, dim)
+
+        if seq_len is not None:
+            # Return padded tensor
+            B = len(shapes)
+            padded = torch.zeros(B, depth, num_heads, seq_len, dim, device=self.freqs.device, dtype=self.freqs.dtype)
+            for i, (h, w) in enumerate(shapes):
+                # Slice and flatten
+                embed_slice = max_embed_2d[:, :, :h, :w].reshape(depth, num_heads, h * w, dim)
+                actual_len = h * w
+                padded[i, :, :, :actual_len] = embed_slice
+            return padded
+        else:
+            # Return list
+            results = []
+            for h, w in shapes:
+                # Slice and flatten
+                embed_slice = max_embed_2d[:, :, :h, :w].reshape(depth, num_heads, h * w, dim)
+                results.append(embed_slice)
+            return results
 
     def forward(self, x):
         # assuming channel-first tensor where spatial dim are >= 2
