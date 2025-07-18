@@ -2017,11 +2017,13 @@ def _create_naflexvit_from_eva(
     else:
         rope_type = 'none'
 
-    # Handle global pooling logic to mirror EVA use
+    # Handle norm/pool resolution logic to mirror EVA
     gp = kwargs.pop('global_pool', 'avg')
-    fc_norm = kwargs.pop('fc_norm', None)
-    if fc_norm is None and gp == 'avg':
-        fc_norm = True
+    use_pre_transformer_norm = kwargs.pop('use_pre_transformer_norm', False)
+    use_post_transformer_norm = kwargs.pop('use_post_transformer_norm', True)
+    use_fc_norm = kwargs.pop('use_fc_norm', None)
+    if use_fc_norm is None:
+        use_fc_norm = gp == 'avg'  # default on if avg pool used
 
     # Set NaFlexVit-specific parameters
     naflex_kwargs = {
@@ -2029,7 +2031,9 @@ def _create_naflexvit_from_eva(
         'class_token': kwargs.get('class_token', True),
         'reg_tokens':  kwargs.pop('num_reg_tokens', kwargs.get('reg_tokens', 0)),
         'global_pool': gp,
-        'fc_norm': fc_norm,
+        'pre_norm': use_pre_transformer_norm,
+        'final_norm': use_post_transformer_norm,
+        'fc_norm': use_fc_norm,
         'pos_embed': 'learned' if kwargs.pop('use_abs_pos_emb', True) else 'none',
         'rope_type': rope_type,
         'rope_temperature': rope_temperature,
