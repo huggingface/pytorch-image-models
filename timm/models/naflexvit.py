@@ -2003,13 +2003,8 @@ def _create_naflexvit_from_eva(
     Returns:
         NaFlexVit model instance
     """
-    # Map EVA-specific parameters to NaFlexVit equivalents
-
-    # Handle EVA's unique parameters
-    kwargs.pop('no_embed_class', None)  # EVA specific, not used in NaFlexVit
-
-    # abs pos embed
-    use_abs_pos_emb = kwargs.pop('use_abs_pos_emb', True)
+    # Handle EVA's unique parameters & block args
+    kwargs.pop('no_embed_class', None)  # EVA specific, not used in NaFlexVit (always no-embed)
 
     # Map EVA's rope parameters
     use_rot_pos_emb = kwargs.pop('use_rot_pos_emb', False)
@@ -2017,28 +2012,12 @@ def _create_naflexvit_from_eva(
     rope_temperature = kwargs.pop('rope_temperature', 10000.)
     rope_grid_offset = kwargs.pop('rope_grid_offset', 0.)
     rope_grid_indexing = kwargs.pop('rope_grid_indexing', 'ij')
-
-    # Get EVA's attn_type directly
-    attn_type = kwargs.pop('attn_type', 'eva')
-
-    # Determine rope_type based on EVA parameters
     if use_rot_pos_emb:
         rope_type = 'mixed' if rope_mixed_mode else 'axial'
     else:
         rope_type = 'none'
 
-    # Handle EVA's swiglu_mlp and scale_mlp
-    swiglu_mlp = kwargs.pop('swiglu_mlp', False)
-    scale_mlp = kwargs.pop('scale_mlp', False)
-    scale_attn_inner = kwargs.pop('scale_attn_inner', False)
-
-    # Map qkv_fused parameter
-    qkv_fused = kwargs.pop('qkv_fused', True)
-
-    # Handle register tokens
-    num_reg_tokens = kwargs.pop('num_reg_tokens', kwargs.get('reg_tokens', 0))
-
-    # Handle global pooling
+    # Handle global pooling logic to mirror EVA use
     gp = kwargs.pop('global_pool', 'avg')
     fc_norm = kwargs.pop('fc_norm', None)
     if fc_norm is None and gp == 'avg':
@@ -2048,23 +2027,22 @@ def _create_naflexvit_from_eva(
     naflex_kwargs = {
         'pos_embed_grid_size': None,  # rely on img_size (// patch_size)
         'class_token': kwargs.get('class_token', True),
-        'reg_tokens': num_reg_tokens,
+        'reg_tokens':  kwargs.pop('num_reg_tokens', kwargs.get('reg_tokens', 0)),
         'global_pool': gp,
         'fc_norm': fc_norm,
-        'pos_embed': 'learned' if use_abs_pos_emb else 'none',
+        'pos_embed': 'learned' if kwargs.pop('use_abs_pos_emb', True) else 'none',
         'rope_type': rope_type,
         'rope_temperature': rope_temperature,
         'rope_grid_offset': rope_grid_offset,
         'rope_grid_indexing': rope_grid_indexing,
         'rope_ref_feat_shape': kwargs.get('ref_feat_shape', None),
-        'attn_type': attn_type,
-        'swiglu_mlp': swiglu_mlp,
-        'scale_mlp': scale_mlp,
-        'scale_attn_inner': scale_attn_inner,
-        'qkv_fused': qkv_fused,
+        'attn_type': kwargs.pop('attn_type', 'eva'),
+        'swiglu_mlp': kwargs.pop('swiglu_mlp', False),
+        'qkv_fused': kwargs.pop('qkv_fused', True),
+        'scale_mlp_norm': kwargs.pop('scale_mlp', False),
+        'scale_attn_inner_norm': kwargs.pop('scale_attn_inner', False),
         **kwargs  # Pass remaining kwargs through
     }
-    print(naflex_kwargs)
 
     return _create_naflexvit(variant, pretrained, **naflex_kwargs)
 
