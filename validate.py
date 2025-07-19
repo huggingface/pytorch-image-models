@@ -300,6 +300,10 @@ def validate(args):
 
     crop_pct = 1.0 if test_time_pool else data_config['crop_pct']
     if args.naflex_loader:
+        model_patch_size = None
+        if hasattr(model, 'embeds') and hasattr(model.embeds, 'patch_size'):
+            # NaFlexVit models have embeds.patch_size
+            model_patch_size = model.embeds.patch_size
         from timm.data  import create_naflex_loader
         loader = create_naflex_loader(
             dataset,
@@ -315,7 +319,7 @@ def validate(args):
             pin_memory=args.pin_mem,
             device=device,
             img_dtype=model_dtype or torch.float32,
-            patch_size=16,  # Could be derived from model config
+            patch_size=model_patch_size or (16, 16),
             max_seq_len=args.naflex_max_seq_len,
         )
     else:
