@@ -136,18 +136,23 @@ class ChannelAttentionV2(nn.Module):
     def forward(self, x):
         B, N, C = x.shape
 
-        qkv = self.qkv(x).reshape(B, N, 3, self.groups, C // self.groups).permute(2, 0, 3, 1, 4)
+        qkv = self.qkv(x).reshape(B, N, 3, self.groups, C // self.groups).permute(2, 0, 3, 4, 1)
         q, k, v = qkv.unbind(0)
 
         if self.dynamic_scale:
-            q = q * N ** -0.5
+            scale = N ** -0.5
         else:
-            q = q * self.head_dim ** -0.5
-        attn = q.transpose(-1, -2) @ k
-        attn = attn.softmax(dim=-1)
-        x = (attn @ v.transpose(-1, -2)).transpose(-1, -2)
+            scale = self.head_dim ** -0.5
 
-        x = x.transpose(1, 2).reshape(B, N, C)
+        if self.fused_attn:
+            x = F.scaled_dot_product_attention(q, k, v, scale=scale)
+        else:
+            q = q * self.scale
+            attn = (q @ k.transpose(-2, -1))
+            attn = self.softmax(attn)
+            x = attn @ v
+
+        x = x.permute(0, 3, 2, 1).reshape(B, N, C)
         x = self.proj(x)
         return x
 
