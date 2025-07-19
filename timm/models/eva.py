@@ -638,12 +638,10 @@ class Eva(nn.Module):
         self.norm =  norm_layer(embed_dim) if activate_post_norm else nn.Identity()
 
         if global_pool == 'map':
-            attn_pool_num_heads = attn_pool_num_heads or num_heads
-            attn_pool_mlp_ratio = attn_pool_mlp_ratio or mlp_ratio
             self.attn_pool = AttentionPoolLatent(
                 self.embed_dim,
-                num_heads=attn_pool_num_heads,
-                mlp_ratio=attn_pool_mlp_ratio,
+                num_heads=attn_pool_num_heads or num_heads,
+                mlp_ratio=attn_pool_mlp_ratio or mlp_ratio,
                 norm_layer=norm_layer,
                 act_layer=nn.GELU,
             )
@@ -1366,6 +1364,20 @@ default_cfgs = generate_default_cfgs({
     ),
 
     # Perception Encoder weights
+    'vit_pe_core_tiny_patch16_384.fb': _pe_cfg(
+        hf_hub_id='timm/',
+        #hf_hub_id='facebook/PE-Core-T16-384',
+        #hf_hub_filename='PE-Core-T16-384.pt',
+        input_size=(3, 384, 384),
+        num_classes=512,  # output proj dim
+    ),
+    'vit_pe_core_small_patch16_384.fb': _pe_cfg(
+        hf_hub_id='timm/',
+        #hf_hub_id='facebook/PE-Core-S16-384',
+        #hf_hub_filename='PE-Core-S16-384.pt',
+        input_size=(3, 384, 384),
+        num_classes=512,  # output proj dim
+    ),
     'vit_pe_core_base_patch16_224.fb': _pe_cfg(
         hf_hub_id='timm/',
         #hf_hub_id='facebook/PE-Core-B16-224',
@@ -1387,6 +1399,7 @@ default_cfgs = generate_default_cfgs({
         input_size=(3, 448, 448),
         num_classes=1280,  # output proj dim
     ),
+
     'vit_pe_lang_large_patch14_448.fb': _pe_cfg(
         hf_hub_id='timm/',
         #hf_hub_id='facebook/PE-Lang-L14-448',
@@ -1394,10 +1407,53 @@ default_cfgs = generate_default_cfgs({
         input_size=(3, 448, 448),
         num_classes=0,
     ),
+    'vit_pe_lang_large_patch14_448.fb_tiling': _pe_cfg(
+        hf_hub_id='timm/',
+        #hf_hub_id='facebook/PE-Lang-L14-448-Tiling',
+        #hf_hub_filename='PE-Lang-L14-448-Tiling.pt',
+        input_size=(3, 448, 448),
+        num_classes=0,
+    ),
     'vit_pe_lang_gigantic_patch14_448.fb': _pe_cfg(
         hf_hub_id='timm/',
         #hf_hub_id='facebook/PE-Lang-G14-448',
         #hf_hub_filename='PE-Lang-G14-448.pt',
+        input_size=(3, 448, 448),
+        num_classes=0,
+    ),
+    'vit_pe_lang_gigantic_patch14_448.fb_tiling': _pe_cfg(
+        hf_hub_id='timm/',
+        #hf_hub_id='facebook/PE-Lang-G14-448-Tiling',
+        #hf_hub_filename='PE-Lang-G14-448-Tiling.pt',
+        input_size=(3, 448, 448),
+        num_classes=0,
+    ),
+
+    'vit_pe_spatial_tiny_patch16_512.fb': _pe_cfg(
+        hf_hub_id='timm/',
+        #hf_hub_id='facebook/PE-Spatial-T16-512',
+        #hf_hub_filename='PE-Spatial-T16-512.pt',
+        input_size=(3, 512, 512),
+        num_classes=0,
+    ),
+    'vit_pe_spatial_small_patch16_512.fb': _pe_cfg(
+        hf_hub_id='timm/',
+        #hf_hub_id='facebook/PE-Spatial-S16-512',
+        #hf_hub_filename='PE-Spatial-S16-512.pt',
+        input_size=(3, 512, 512),
+        num_classes=0,
+    ),
+    'vit_pe_spatial_base_patch16_512.fb': _pe_cfg(
+        hf_hub_id='timm/',
+        #hf_hub_id='facebook/PE-Spatial-B16-512',
+        #hf_hub_filename='PE-Spatial-B16-512.pt',
+        input_size=(3, 512, 512),
+        num_classes=0,
+    ),
+    'vit_pe_spatial_large_patch14_448.fb': _pe_cfg(
+        hf_hub_id='timm/',
+        #hf_hub_id='facebook/PE-Spatial-L14-448',
+        #hf_hub_filename='PE-Spatial-L14-448.pt',
         input_size=(3, 448, 448),
         num_classes=0,
     ),
@@ -1843,6 +1899,55 @@ def vit_base_patch16_rope_reg1_gap_256(pretrained: bool = False, **kwargs) -> Ev
 
 
 @register_model
+def vit_pe_core_tiny_patch16_384(pretrained: bool = False, **kwargs) -> Eva:
+    """Perception Encoder (PE) ViT from Meta (https://arxiv.org/abs/2504.13181)"""
+    model_args = dict(
+        patch_size=16,
+        embed_dim=192,
+        depth=12,
+        num_heads=3,
+        mlp_ratio=4.0,
+        global_pool='map',
+        attn_type='rope',
+        use_pre_transformer_norm=True,
+        use_rot_pos_emb=True,
+        ref_feat_shape=(24, 24),
+        rope_grid_offset=1.,
+        rope_grid_indexing='xy',
+        attn_pool_num_heads=8,
+        attn_pool_mlp_ratio=4.,
+        norm_layer=partial(LayerNorm, eps=1e-5),
+        #dynamic_img_size=True
+    )
+    return _create_eva('vit_pe_core_tiny_patch16_384', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+
+@register_model
+def vit_pe_core_small_patch16_384(pretrained: bool = False, **kwargs) -> Eva:
+    """Perception Encoder (PE) ViT from Meta (https://arxiv.org/abs/2504.13181)"""
+    model_args = dict(
+        patch_size=16,
+        embed_dim=384,
+        depth=12,
+        num_heads=6,
+        mlp_ratio=4.0,
+        global_pool='map',
+        attn_type='rope',
+        use_pre_transformer_norm=True,
+        use_rot_pos_emb=True,
+        ref_feat_shape=(24, 24),
+        rope_grid_offset=1.,
+        rope_grid_indexing='xy',
+        attn_pool_num_heads=8,
+        attn_pool_mlp_ratio=4.,
+        norm_layer=partial(LayerNorm, eps=1e-5),
+        #dynamic_img_size=True
+    )
+    return _create_eva('vit_pe_core_small_patch16_384', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
 def vit_pe_core_base_patch16_224(pretrained: bool = False, **kwargs) -> Eva:
     """Perception Encoder (PE) ViT from Meta (https://arxiv.org/abs/2504.13181)"""
     model_args = dict(
@@ -1961,6 +2066,98 @@ def vit_pe_lang_gigantic_patch14_448(pretrained: bool = False, **kwargs) -> Eva:
         #dynamic_img_size=True,
     )
     return _create_eva('vit_pe_lang_gigantic_patch14_448', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def vit_pe_spatial_tiny_patch16_512(pretrained: bool = False, **kwargs) -> Eva:
+    """Perception Encoder (PE) ViT from Meta (https://arxiv.org/abs/2504.13181)"""
+    model_args = dict(
+        patch_size=16,
+        embed_dim=192,
+        depth=12,
+        num_heads=3,
+        mlp_ratio=4.0,
+        attn_type='rope',
+        use_pre_transformer_norm=True,
+        use_post_transformer_norm=False,
+        use_fc_norm=False,  # explicitly disable
+        use_rot_pos_emb=True,
+        ref_feat_shape=(32, 32),
+        rope_grid_offset=1.,
+        rope_grid_indexing='xy',
+        norm_layer=partial(LayerNorm, eps=1e-5),
+        #dynamic_img_size=True
+    )
+    return _create_eva('vit_pe_spatial_tiny_patch16_512', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def vit_pe_spatial_small_patch16_512(pretrained: bool = False, **kwargs) -> Eva:
+    """Perception Encoder (PE) ViT from Meta (https://arxiv.org/abs/2504.13181)"""
+    model_args = dict(
+        patch_size=16,
+        embed_dim=384,
+        depth=12,
+        num_heads=6,
+        mlp_ratio=4.0,
+        attn_type='rope',
+        use_pre_transformer_norm=True,
+        use_post_transformer_norm=False,
+        use_fc_norm=False,  # explicitly disable
+        use_rot_pos_emb=True,
+        ref_feat_shape=(32, 32),
+        rope_grid_offset=1.,
+        rope_grid_indexing='xy',
+        norm_layer=partial(LayerNorm, eps=1e-5),
+        #dynamic_img_size=True
+    )
+    return _create_eva('vit_pe_spatial_small_patch16_512', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def vit_pe_spatial_base_patch16_512(pretrained: bool = False, **kwargs) -> Eva:
+    """Perception Encoder (PE) ViT from Meta (https://arxiv.org/abs/2504.13181)"""
+    model_args = dict(
+        patch_size=16,
+        embed_dim=768,
+        depth=12,
+        num_heads=12,
+        mlp_ratio=4.0,
+        attn_type='rope',
+        use_pre_transformer_norm=True,
+        use_post_transformer_norm=False,
+        use_fc_norm=False,  # explicitly disable
+        use_rot_pos_emb=True,
+        ref_feat_shape=(32, 32),
+        rope_grid_offset=1.,
+        rope_grid_indexing='xy',
+        norm_layer=partial(LayerNorm, eps=1e-5),
+        #dynamic_img_size=True
+    )
+    return _create_eva('vit_pe_spatial_base_patch16_512', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def vit_pe_spatial_large_patch14_448(pretrained: bool = False, **kwargs) -> Eva:
+    """Perception Encoder (PE) ViT from Meta (https://arxiv.org/abs/2504.13181)"""
+    model_args = dict(
+        patch_size=14,
+        embed_dim=1024,
+        depth=24,
+        num_heads=16,
+        mlp_ratio=4.0,
+        attn_type='rope',
+        use_pre_transformer_norm=True,
+        use_post_transformer_norm=False,
+        use_fc_norm=False,  # explicitly disable
+        use_rot_pos_emb=True,
+        ref_feat_shape=(32, 32),
+        rope_grid_offset=1.,
+        rope_grid_indexing='xy',
+        norm_layer=partial(LayerNorm, eps=1e-5),
+        #dynamic_img_size=True,
+    )
+    return _create_eva('vit_pe_spatial_large_patch14_448', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
