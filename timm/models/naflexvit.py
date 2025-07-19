@@ -106,12 +106,16 @@ class NaFlexVitCfg:
     # Image processing
     dynamic_img_pad: bool = False  # Whether to enable dynamic padding for variable resolution
 
-    # Architecture choices
+    # Other architecture choices
     pre_norm: bool = False  # Whether to apply normalization before attention/MLP layers (start of blocks)
     final_norm: bool = True  # Whether to apply final normalization before pooling and classifier (end of blocks)
     fc_norm: Optional[bool] = None  # Whether to normalize features before final classifier (after pooling)
+
+    # Global pooling setup
     global_pool: str = 'map'  # Type of global pooling for final sequence
     pool_include_prefix: bool = False  # Whether to include class/register prefix tokens in global pooling
+    attn_pool_num_heads: Optional[int] = None  # Override num_heads for attention pool
+    attn_pool_mlp_ratio: Optional[float] = None   # Override mlp_ratio for attention pool
 
     # Weight initialization
     weight_init: str = ''  # Weight initialization scheme
@@ -1212,8 +1216,8 @@ class NaFlexVit(nn.Module):
         if cfg.global_pool == 'map':
             self.attn_pool = AttentionPoolLatent(
                 self.embed_dim,
-                num_heads=cfg.num_heads,
-                mlp_ratio=cfg.mlp_ratio,
+                num_heads=cfg.attn_pool_num_heads or cfg.num_heads,
+                mlp_ratio=cfg.attn_pool_mlp_ratio or cfg.mlp_ratio,
                 norm_layer=norm_layer,
                 act_layer=act_layer,
             )
