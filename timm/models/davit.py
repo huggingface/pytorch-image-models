@@ -129,6 +129,7 @@ class ChannelAttentionV2(nn.Module):
         self.groups = num_heads
         self.head_dim = dim // num_heads
         self.dynamic_scale = dynamic_scale
+        self.fused_attn = use_fused_attn()
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.proj = nn.Linear(dim, dim)
@@ -147,12 +148,12 @@ class ChannelAttentionV2(nn.Module):
         if self.fused_attn:
             x = F.scaled_dot_product_attention(q, k, v, scale=scale)
         else:
-            q = q * self.scale
+            q = q * scale
             attn = (q @ k.transpose(-2, -1))
-            attn = self.softmax(attn)
+            attn = attn.softmax(dim=-1)
             x = attn @ v
 
-        x = x.permute(0, 3, 2, 1).reshape(B, N, C)
+        x = x.permute(0, 3, 1, 2).reshape(B, N, C)
         x = self.proj(x)
         return x
 
