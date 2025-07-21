@@ -12,6 +12,12 @@
 
 ## What's New
 
+## July 21, 2025
+* ROPE support added to NaFlexViT. All models covered by the EVA base (`eva.py`) including EVA, EVA02, Meta PE ViT, `timm` SBB ViT w/ ROPE, and Naver ROPE-ViT can be now loaded in NaFlexViT when `use_naflex=True` passed at model creation time
+* More Meta PE ViT encoders added, including small/tiny variants, lang variants w/ tiling, and more spatial variants.
+* PatchDropout fixed with NaFlexViT and also w/ EVA models (regression after adding Naver ROPE-ViT)
+* Fix XY order with grid_indexing='xy', impacted non-square image use in 'xy' mode (only ROPE-ViT and PE impacted).
+
 ## July 7, 2025
 * MobileNet-v5 backbone tweaks for improved Google Gemma 3n behaviour (to pair with updated official weights)
   * Add stem bias (zero'd in updated weights, compat break with old weights)
@@ -511,6 +517,7 @@ All model architecture families include variants with pretrained weights. There 
 * Next-ViT - https://arxiv.org/abs/2207.05501
 * NFNet-F - https://arxiv.org/abs/2102.06171
 * NF-RegNet / NF-ResNet - https://arxiv.org/abs/2101.08692
+* PE (Perception Encoder) - https://arxiv.org/abs/2504.13181
 * PNasNet - https://arxiv.org/abs/1712.00559
 * PoolFormer (MetaFormer) - https://arxiv.org/abs/2111.11418
 * Pooling-based Vision Transformer (PiT) - https://arxiv.org/abs/2103.16302
