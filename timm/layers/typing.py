@@ -1,6 +1,6 @@
 from contextlib import nullcontext
 from functools import wraps
-from typing import Callable, Tuple, Type, TypeVar, Union, overload, ContextManager
+from typing import Callable, Optional, Tuple, Type, TypeVar, Union, overload, ContextManager
 
 import torch
 
@@ -19,7 +19,7 @@ def nullwrap(fn: F) -> F: ...  # decorator form
 @overload
 def nullwrap(fn: None = ...) -> ContextManager: ...  # context‑manager form
 
-def nullwrap(fn: F | None = None):
+def nullwrap(fn: Optional[F] = None):
     # as a context manager
     if fn is None:
         return nullcontext()  # `with nullwrap():`
