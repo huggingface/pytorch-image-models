@@ -723,6 +723,35 @@ class Eva(nn.Module):
             self.global_pool = global_pool
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
+    def set_input_size(
+            self,
+            img_size: Optional[Tuple[int, int]] = None,
+            patch_size: Optional[Tuple[int, int]] = None,
+    ) -> None:
+        """Update the input image resolution and patch size.
+
+        Args:
+            img_size: New input resolution, if None current resolution is used.
+            patch_size: New patch size, if None existing patch size is used.
+        """
+        prev_grid_size = self.patch_embed.grid_size
+        self.patch_embed.set_input_size(img_size=img_size, patch_size=patch_size)
+
+        if self.pos_embed is not None:
+            num_prefix_tokens = 0 if self.no_embed_class else self.num_prefix_tokens
+            num_new_tokens = self.patch_embed.num_patches + num_prefix_tokens
+            if num_new_tokens != self.pos_embed.shape[1]:
+                self.pos_embed = nn.Parameter(resample_abs_pos_embed(
+                    self.pos_embed,
+                    new_size=self.patch_embed.grid_size,
+                    old_size=prev_grid_size,
+                    num_prefix_tokens=num_prefix_tokens,
+                    verbose=True,
+                ))
+
+        if self.rope is not None:
+            self.rope.update_feat_shape(self.patch_embed.grid_size)
+
     def _pos_embed(self, x) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         if self.dynamic_img_size:
             B, H, W, C = x.shape
