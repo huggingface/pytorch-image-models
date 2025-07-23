@@ -12,6 +12,10 @@
 
 ## What's New
 
+## July 23, 2025
+* Add `set_input_size()` method to EVA models, used by OpenCLIP 3.0.0 to allow resizing for timm based encoder models.
+* Release 1.0.18, needed for PE-Core S & T models in OpenCLIP 3.0.0
+
 ## July 21, 2025
 * ROPE support added to NaFlexViT. All models covered by the EVA base (`eva.py`) including EVA, EVA02, Meta PE ViT, `timm` SBB ViT w/ ROPE, and Naver ROPE-ViT can be now loaded in NaFlexViT when `use_naflex=True` passed at model creation time
 * More Meta PE ViT encoders added, including small/tiny variants, lang variants w/ tiling, and more spatial variants.
