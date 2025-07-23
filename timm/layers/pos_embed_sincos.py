@@ -414,7 +414,8 @@ class RotaryEmbedding(nn.Module):
     def update_feat_shape(self, feat_shape: List[int]):
         if self.feat_shape is not None and feat_shape != self.feat_shape:
             # only update if feat_shape was set and different from previous value
-            assert self.pos_embed is not None
+            assert self.pos_embed_sin is not None
+            assert self.pos_embed_cos is not None
             emb_sin, emb_cos = self._get_pos_embed_values(feat_shape)
             self.pos_embed_sin = emb_sin.to(self.pos_embed_sin.device, self.pos_embed_sin.dtype)
             self.pos_embed_cos = emb_cos.to(self.pos_embed_cos.device, self.pos_embed_cos.dtype)
