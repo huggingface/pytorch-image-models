@@ -566,6 +566,11 @@ def main():
                 'Converted model to use Synchronized BatchNorm. WARNING: You may have issues if using '
                 'zero initialized BN layers (enabled by default for ResNets) while sync-bn enabled.')
 
+    model_patch_size = None
+    if args.naflex_loader:
+        # NaFlexVit models have embeds.patch_size. Needs to be extracted here before mutating the model.
+        model_patch_size = getattr(getattr(model, "embeds", None), "patch_size", None)
+
     if args.torchscript:
         assert not args.torchcompile
         assert not use_amp == 'apex', 'Cannot use APEX AMP with torchscripted model'
@@ -762,7 +767,6 @@ def main():
         )
 
     naflex_mode = False
-    model_patch_size = None
     if args.naflex_loader:
         if utils.is_primary(args):
             _logger.info('Using NaFlex loader')
@@ -775,11 +779,8 @@ def main():
             mixup_args.pop('cutmix_minmax')  # not supported
             naflex_mixup_fn = NaFlexMixup(**mixup_args)
 
-        # Extract model's patch size for NaFlex mode
-        if hasattr(model, 'embeds') and hasattr(model.embeds, 'patch_size'):
-            # NaFlexVit models have embeds.patch_size
-            model_patch_size = model.embeds.patch_size
-        else:
+        # Check if we have model's patch size for NaFlex mode
+        if model_patch_size is None:
             # Fallback to default
             model_patch_size = (16, 16)
             if utils.is_primary(args):
@@ -1197,6 +1198,7 @@ def train_one_epoch(
                 dist_scale = args.world_size * batch_size / global_batch_size
             else:
                 dist_scale = None
+                global_batch_size = batch_size
 
             if has_no_sync and not need_update:
                 with model.no_sync():
@@ -1212,7 +1214,10 @@ def train_one_epoch(
                     scaled_loss *= dist_scale
                 _backward(scaled_loss)
         else:
-            batch_size = input.shape[0]
+            global_batch_size = batch_size = input.shape[0]
+            if args.distributed:
+                global_batch_size *= args.world_size
+
             if has_no_sync and not need_update:
                 with model.no_sync():
                     loss = _forward()
@@ -1222,7 +1227,7 @@ def train_one_epoch(
                 _backward(loss)
 
         losses_m.update(loss.item() * accum_steps, batch_size)
-        update_sample_count += batch_size
+        update_sample_count += global_batch_size
 
         if not need_update:
             data_start_time = time.time()
@@ -1240,7 +1245,7 @@ def train_one_epoch(
                 torch.npu.synchronize()
         time_now = time.time()
 
-        update_time_m.update((time.time() - update_start_time) / update_sample_count, update_sample_count)
+        update_time_m.update(time.time() - update_start_time)
         update_start_time = time_now
 
         if update_idx % args.log_interval == 0:
@@ -1252,15 +1257,14 @@ def train_one_epoch(
                 # synchronize current step and avg loss, each process keeps its own running avg
                 loss_avg = utils.reduce_tensor(loss.new([loss_avg]), args.world_size).item()
                 loss_now = utils.reduce_tensor(loss.new([loss_now]), args.world_size).item()
-                update_sample_count *= args.world_size
 
             if utils.is_primary(args):
                 _logger.info(
                     f'Train: {epoch} [{update_idx:>4d}/{updates_per_epoch} '
                     f'({100. * (update_idx + 1) / updates_per_epoch:>3.0f}%)]  '
                     f'Loss: {loss_now:#.3g} ({loss_avg:#.3g})  '
-                    f'Time: {update_time_m.val:.3f}s, {1 / update_time_m.val:>7.2f}/s  '
-                    f'({update_time_m.avg:.3f}s, {1 / update_time_m.avg:>7.2f}/s)  '
+                    f'Time: {update_time_m.val:.3f}s, {update_sample_count / update_time_m.val:>7.2f}/s  '
+                    f'({update_time_m.avg:.3f}s, {update_sample_count / update_time_m.avg:>7.2f}/s)  '
                     f'LR: {lr:.3e}  '
                     f'Data: {data_time_m.val:.3f} ({data_time_m.avg:.3f})'
                 )
