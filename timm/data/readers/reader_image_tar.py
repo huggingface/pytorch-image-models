@@ -49,20 +49,53 @@ class ReaderImageTar(Reader):
         class_to_idx = None
         if class_map:
             class_to_idx = load_class_map(class_map, root)
-        assert os.path.isfile(root)
+        assert os.path.isfile(root), f'Root file {root} not found'
         self.root = root
+        
+        # Initialize worker info attributes
+        self._worker_info = None
+        self._worker_id = 0
+        self._num_workers = 1
 
-        with tarfile.open(root) as tf:  # cannot keep this open across processes, reopen later
+        # Extract tar info without keeping the file open
+        with tarfile.open(root) as tf:
             self.samples, self.class_to_idx = extract_tarinfo(tf, class_to_idx)
         self.imgs = self.samples
         self.tarfile = None  # lazy init in __getitem__
+        
+    def __del__(self):
+        # Clean up the tarfile when the reader is garbage collected
+        if hasattr(self, 'tarfile') and self.tarfile is not None:
+            try:
+                self.tarfile.close()
+            except Exception as e:
+                import warnings
+                warnings.warn(f'Error closing tarfile {self.root}: {str(e)}')
 
     def __getitem__(self, index):
         if self.tarfile is None:
+            # Only keep one tarfile open per worker process to avoid file descriptor leaks
+            if not hasattr(self, '_worker_info'):
+                import torch.utils.data
+                worker_info = torch.utils.data.get_worker_info()
+                if worker_info is not None:
+                    self._worker_info = worker_info
+                    self._worker_id = worker_info.id
+                    self._num_workers = worker_info.num_workers
+            
             self.tarfile = tarfile.open(self.root)
+            
         tarinfo, target = self.samples[index]
-        fileobj = self.tarfile.extractfile(tarinfo)
-        return fileobj, target
+        try:
+            fileobj = self.tarfile.extractfile(tarinfo)
+            if fileobj is None:
+                raise RuntimeError(f'Failed to extract file {tarinfo.name} from tar {self.root}')
+            # Read the file content immediately and close the file object
+            content = fileobj.read()
+            fileobj.close()
+            return io.BytesIO(content), target
+        except Exception as e:
+            raise RuntimeError(f'Error reading {tarinfo.name} from {self.root}: {str(e)}')
 
     def __len__(self):
         return len(self.samples)
