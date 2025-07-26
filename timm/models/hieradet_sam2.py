@@ -353,6 +353,7 @@ class HieraDet(nn.Module):
                 window_size=window_size,
                 norm_layer=norm_layer,
                 act_layer=act_layer,
+                init_values=init_values,
             )
 
             embed_dim = dim_out
