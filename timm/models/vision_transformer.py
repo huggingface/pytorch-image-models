@@ -1919,6 +1919,31 @@ default_cfgs = {
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         crop_pct=1.0, input_size=(3, 378, 378), num_classes=1024),
 
+    'vit_large_patch14_clip_224.metaclip2_worldwide': _cfg(
+        hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        notes=('natively QuickGELU, use quickgelu model variant for original results',),
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
+    'vit_huge_patch14_clip_224.metaclip2_worldwide': _cfg(
+        hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        notes=('natively QuickGELU, use quickgelu model variant for original results',),
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1024),
+    'vit_huge_patch14_clip_378.metaclip2_worldwide': _cfg(
+        hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 378, 378), crop_pct=1.0, crop_mode='squash', num_classes=1024),
+    'vit_gigantic_patch14_clip_224.metaclip2_worldwide': _cfg(
+        hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1280),
+    'vit_gigantic_patch14_clip_378.metaclip2_worldwide': _cfg(
+        hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 378, 378), crop_pct=1.0, crop_mode='squash', num_classes=1280),
+
     'vit_base_patch32_clip_224.metaclip_2pt5b': _cfg(
         hf_hub_id='timm/',
         license='cc-by-nc-4.0',
@@ -3175,6 +3200,20 @@ def vit_gigantic_patch14_clip_224(pretrained: bool = False, **kwargs) -> VisionT
     )
     model = _create_vision_transformer(
         'vit_gigantic_patch14_clip_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_gigantic_patch14_clip_378(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT-bigG model (ViT-G/14) from `Scaling Vision Transformers` - https://arxiv.org/abs/2106.04560
+    Pretrained weights from CLIP image tower.
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=1664, mlp_ratio=64/13, depth=48, num_heads=16, pre_norm=True,
+        norm_layer=partial(LayerNorm, eps=1e-5),
+    )
+    model = _create_vision_transformer(
+        'vit_gigantic_patch14_clip_378', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
