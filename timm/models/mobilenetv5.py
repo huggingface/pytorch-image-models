@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Callable, List, Optional, Sequence, Tuple, Union
+from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -129,12 +129,12 @@ class MobileNetV5(nn.Module):
             num_classes: int = 1000,
             in_chans: int = 3,
             stem_size: int = 16,
-            stem_bias: bool = False,
+            stem_bias: bool = True,
             fix_stem: bool = False,
             num_features: int = 2048,
             pad_type: str = '',
             use_msfa: bool = True,
-            msfa_indices: List[int] = (-3, -2, -1),
+            msfa_indices: List[int] = (-2, -1),
             msfa_output_resolution: int = 16,
             act_layer: Optional[LayerType] = None,
             norm_layer: Optional[LayerType] = None,
@@ -574,6 +574,19 @@ class MobileNetV5Encoder(nn.Module):
         return self.forward_features(x)
 
 
+def checkpoint_filter_fn(
+        state_dict: Dict[str, torch.Tensor],
+        model,
+) -> Dict[str, torch.Tensor]:
+    """ convert weights from gemma encoders """
+    state_dict = state_dict.get('model', state_dict)
+    state_dict = state_dict.get('state_dict', state_dict)
+    if 'model.vision_tower.timm_model.conv_stem.conv.weight' in state_dict:
+        prefix = 'model.vision_tower.timm_model.'
+        state_dict = {k.replace(prefix, ''): v for k, v in state_dict.items() if prefix in k}
+    return state_dict
+
+
 def _create_mnv5_encoder(variant: str, pretrained: bool = False, **kwargs) -> MobileNetV5Encoder:
     out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4))
     feature_cfg = dict(out_indices=out_indices, feature_cls='getter')
@@ -590,6 +603,7 @@ def _create_mnv5_encoder(variant: str, pretrained: bool = False, **kwargs) -> Mo
         variant,
         pretrained,
         pretrained_strict=False,
+        pretrained_filter_fn=checkpoint_filter_fn,
         feature_cfg=feature_cfg,
         kwargs_filter=kwargs_filter,
         **kwargs,
@@ -597,14 +611,14 @@ def _create_mnv5_encoder(variant: str, pretrained: bool = False, **kwargs) -> Mo
     return model
 
 
-def _create_mnv5(variant: str, pretrained: bool = False, **kwargs) -> MobileNetV5Encoder:
+def _create_mnv5(variant: str, pretrained: bool = False, **kwargs) -> MobileNetV5:
     out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4))
     feature_cfg = dict(out_indices=out_indices, feature_cls='getter')
     model = build_model_with_cfg(
         MobileNetV5,
         variant,
         pretrained,
-        pretrained_strict=False,
+        pretrained_filter_fn=checkpoint_filter_fn,
         feature_cfg=feature_cfg,
         **kwargs,
     )
@@ -809,8 +823,8 @@ default_cfgs = generate_default_cfgs({
         num_classes=0),
 
     # WIP classification configs for testing
-    'mobilenetv5_300m': _cfg(
-        # hf_hub_id='timm/',
+    'mobilenetv5_300m.gemma3n': _cfg(
+        hf_hub_id='timm/',
         mean=(0., 0., 0.), std=(1., 1., 1.),
         input_size=(3, 768, 768),
         num_classes=0),
