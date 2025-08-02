@@ -815,19 +815,20 @@ def _cfg(url: str = '', **kwargs):
 
 
 default_cfgs = generate_default_cfgs({
-    # encoder-only configs
+    # Encoder-only config for Gemma 3n Transformers integration
     'mobilenetv5_300m_enc': _cfg(
-        #hf_hub_id='timm/',
         mean=(0., 0., 0.), std=(1., 1., 1.),
         input_size=(3, 768, 768),
         num_classes=0),
 
-    # WIP classification configs for testing
+    # Gemma 3n encoder weights for timm use / fine-tune
     'mobilenetv5_300m.gemma3n': _cfg(
         hf_hub_id='timm/',
         mean=(0., 0., 0.), std=(1., 1., 1.),
         input_size=(3, 768, 768),
         num_classes=0),
+
+    # WIP classification configs for testing
     'mobilenetv5_base.untrained': _cfg(
         # hf_hub_id='timm/',
         num_classes=1000)
