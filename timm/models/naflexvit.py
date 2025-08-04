@@ -1921,8 +1921,13 @@ default_cfgs = generate_default_cfgs({
     ),
     'naflexvit_base_patch16_map.untrained': _cfg(),
 
-    'naflexvit_base_patch16_siglip.untrained': _cfg(),
-    'naflexvit_so400m_patch16_siglip.untrained': _cfg(),
+    # SigLIP-2 NaFlex vit encoder weights
+    'naflexvit_base_patch16_siglip.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        num_classes=0),
+    'naflexvit_so400m_patch16_siglip.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        num_classes=0),
 })
 
 
