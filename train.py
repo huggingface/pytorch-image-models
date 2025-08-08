@@ -648,7 +648,11 @@ def main():
         if args.resume:
             load_checkpoint(model_ema.module, args.resume, use_ema=True)
         if args.torchcompile:
-            model_ema = torch.compile(model_ema, backend=args.torchcompile)
+            model_ema = torch.compile(
+                model_ema,
+                backend=args.torchcompile,
+                mode=args.torchcompile_mode,
+            )
 
     # setup distributed training
     if args.distributed:
