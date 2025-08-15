@@ -24,6 +24,7 @@ class ImageDataset(data.Dataset):
             self,
             root,
             reader=None,
+            labels=None,
             split='train',
             class_map=None,
             load_bytes=False,
@@ -36,6 +37,7 @@ class ImageDataset(data.Dataset):
             reader = create_reader(
                 reader or '',
                 root=root,
+                labels=labels,
                 split=split,
                 class_map=class_map,
                 **kwargs,
@@ -89,6 +91,7 @@ class IterableImageDataset(data.IterableDataset):
             self,
             root,
             reader=None,
+            labels=None,
             split='train',
             class_map=None,
             is_training=False,
@@ -110,6 +113,7 @@ class IterableImageDataset(data.IterableDataset):
             self.reader = create_reader(
                 reader,
                 root=root,
+                labels=labels,
                 split=split,
                 class_map=class_map,
                 is_training=is_training,
