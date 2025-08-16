@@ -18,8 +18,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .grid import ndgrid
-
 
 def clip_mask_2d(
         h: int,
@@ -49,13 +47,11 @@ def clip_mask_2d(
     """
     assert kernel <= min(h, w), f"{kernel=} > min({h=}, {w=})"
 
-    h_i, w_i = ndgrid(torch.arange(h, device=device), torch.arange(w, device=device))
-    return (
-        (h_i >= kernel // 2) &
-        (h_i < h - (kernel - 1) // 2) &
-        (w_i >= kernel // 2) &
-        (w_i < w - (kernel - 1) // 2)
-    ).reshape(h, w)
+    mask = torch.zeros((h, w), dtype=torch.bool, device=device)
+    start = kernel // 2
+    end = ((kernel - 1) // 2)
+    mask[start:h-end, start:w-end] = True
+    return mask
 
 
 def drop_block_2d(

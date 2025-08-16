@@ -14,6 +14,7 @@ torch_device = os.environ.get('TORCH_DEVICE', 'cpu')
 class ClipMaskTests(unittest.TestCase):
     def test_clip_mask_2d_odd(self):
         mask = drop.clip_mask_2d(h=5, w=7, kernel=3, device=torch_device)
+        print(mask)
         assert mask.device == torch.device(torch_device)
         assert mask.tolist() == \
             [
@@ -26,6 +27,7 @@ class ClipMaskTests(unittest.TestCase):
 
     def test_clip_mask_2d_even(self):
         mask = drop.clip_mask_2d(h=5, w=7, kernel=2, device=torch_device)
+        print(mask)
         assert mask.device == torch.device(torch_device)
         # TODO: This is a suprising result; should even kernels be forbidden?
         assert mask.tolist() == \
