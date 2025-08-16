@@ -21,6 +21,43 @@ import torch.nn.functional as F
 from .grid import ndgrid
 
 
+def clip_mask_2d(
+        h: int,
+        w: int,
+        kernel: int,
+        device,
+):
+    """Build a clip mask.
+
+    Returns a mask of all points which permit a (kernel, kernel) sized
+    block to sit entirely within the (h, w) index space.
+
+    Requires `kernel <= min(h, w)`.
+
+    TODO: Should even kernels be forbidden?
+    Even kernels behave oddly, but are not forbidden for historical reasons.
+
+    Args:
+        h: the height.
+        w: the width.
+        kernel_size: the size of the kernel.
+        device: the target device.
+        check_kernel: when true, assert that the kernel_size is odd.
+
+    Returns:
+        a (h, w) bool mask tensor.
+    """
+    assert kernel <= min(h, w), f"{kernel=} > min({h=}, {w=})"
+
+    h_i, w_i = ndgrid(torch.arange(h, device=device), torch.arange(w, device=device))
+    return (
+        (h_i >= kernel // 2) &
+        (h_i < h - (kernel - 1) // 2) &
+        (w_i >= kernel // 2) &
+        (w_i < w - (kernel - 1) // 2)
+    ).reshape(h, w)
+
+
 def drop_block_2d(
         x,
         drop_prob: float = 0.1,
@@ -30,23 +67,39 @@ def drop_block_2d(
         inplace: bool = False,
         batchwise: bool = False
 ):
-    """ DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
+    """DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
 
     DropBlock with an experimental gaussian noise option. This layer has been tested on a few training
     runs with success, but needs further validation and possibly optimization for lower runtime impact.
+
+    Args:
+        drop_prob: the probability of dropping any given block.
+        block_size: the size of the dropped blocks; should be odd.
+        gamma_scale: adjustment scale for the drop_prob.
+        with_noise: should normal noise be added to the dropped region?
+        inplace: if the drop should be applied in-place on the input tensor.
+        batchwise: should the entire batch use the same drop mask?
+
+    Returns:
+        If inplace, the modified `x`; otherwise, the dropped copy of `x`, on the same device.
     """
     B, C, H, W = x.shape
     total_size = W * H
-    clipped_block_size = min(block_size, min(W, H))
+
+    # TODO: This behaves oddly when clipped_block_size < block_size, or block_size % 2 == 0.
+    clipped_block_size = min(block_size, W, H)
+
     # seed_drop_rate, the gamma parameter
     gamma = gamma_scale * drop_prob * total_size / clipped_block_size ** 2 / (
             (W - block_size + 1) * (H - block_size + 1))
 
     # Forces the block to be inside the feature map.
-    w_i, h_i = ndgrid(torch.arange(W, device=x.device), torch.arange(H, device=x.device))
-    valid_block = ((w_i >= clipped_block_size // 2) & (w_i < W - (clipped_block_size - 1) // 2)) & \
-                  ((h_i >= clipped_block_size // 2) & (h_i < H - (clipped_block_size - 1) // 2))
-    valid_block = torch.reshape(valid_block, (1, 1, H, W)).to(dtype=x.dtype)
+    valid_block = clip_mask_2d(
+        h=H,
+        w=W,
+        kernel=clipped_block_size,
+        device=x.device,
+    ).reshape((1, 1, H, W)).to(dtype=x.dtype)
 
     if batchwise:
         # one mask for whole batch, quite a bit faster
