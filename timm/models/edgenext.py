@@ -375,6 +375,7 @@ class EdgeNeXt(nn.Module):
         self.stages = nn.Sequential(*stages)
 
         self.num_features = self.head_hidden_size = dims[-1]
+
         if head_norm_first:
             self.norm_pre = norm_layer(self.num_features)
             self.head = ClassifierHead(
@@ -416,7 +417,6 @@ class EdgeNeXt(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
-        self.num_classes = num_classes
         self.head.reset(num_classes, global_pool)
 
     def forward_intermediates(
