@@ -30,6 +30,7 @@ class ImageDataset(data.Dataset):
             input_img_mode='RGB',
             transform=None,
             target_transform=None,
+            additional_features=None,
             **kwargs,
     ):
         if reader is None or isinstance(reader, str):
@@ -38,6 +39,7 @@ class ImageDataset(data.Dataset):
                 root=root,
                 split=split,
                 class_map=class_map,
+                additional_features=additional_features,
                 **kwargs,
             )
         self.reader = reader
@@ -45,10 +47,11 @@ class ImageDataset(data.Dataset):
         self.input_img_mode = input_img_mode
         self.transform = transform
         self.target_transform = target_transform
+        self.additional_features = additional_features
         self._consecutive_errors = 0
 
     def __getitem__(self, index):
-        img, target = self.reader[index]
+        img, target, *features = self.reader[index]
 
         try:
             img = img.read() if self.load_bytes else Image.open(img)
@@ -71,7 +74,10 @@ class ImageDataset(data.Dataset):
         elif self.target_transform is not None:
             target = self.target_transform(target)
 
-        return img, target
+        if self.additional_features is None:
+            return img, target
+        else:
+            return img, target, *features
 
     def __len__(self):
         return len(self.reader)
