@@ -11,9 +11,9 @@ if torch_backend is not None:
     importlib.import_module(torch_backend)
 torch_device = os.environ.get('TORCH_DEVICE', 'cpu')
 
-class ClipMaskTests(unittest.TestCase):
-    def test_clip_mask_2d_odd(self):
-        mask = drop.clip_mask_2d(h=5, w=7, kernel=3, device=torch_device)
+class Conv2dKernelMidpointMask2d(unittest.TestCase):
+    def test_conv2d_kernel_midpoint_mask_odd_bool(self):
+        mask = drop.conv2d_kernel_midpoint_mask(shape=(5, 7), kernel=(3, 3), device=torch_device)
         print(mask)
         assert mask.device == torch.device(torch_device)
         assert mask.tolist() == \
@@ -25,8 +25,44 @@ class ClipMaskTests(unittest.TestCase):
                 [False, False, False, False, False, False, False],
             ]
 
-    def test_clip_mask_2d_even(self):
-        mask = drop.clip_mask_2d(h=5, w=7, kernel=2, device=torch_device)
+    def test_conv2d_kernel_midpoint_mask_odd_float(self):
+        mask = drop.conv2d_kernel_midpoint_mask(
+            shape=(5, 7),
+            kernel=(3, 3),
+            device=torch_device,
+            dtype=torch.float32,
+        )
+        print(mask)
+        assert mask.device == torch.device(torch_device)
+        assert mask.tolist() == \
+            [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0],
+                [0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0],
+                [0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            ]
+
+    def test_conv2d_kernel_midpoint_mask_odd_int(self):
+        mask = drop.conv2d_kernel_midpoint_mask(
+            shape=(5, 7),
+            kernel=(3, 3),
+            device=torch_device,
+            dtype=torch.int32,
+        )
+        print(mask)
+        assert mask.device == torch.device(torch_device)
+        assert mask.tolist() == \
+            [
+                [0, 0, 0, 0, 0, 0, 0],
+                [0, 1, 1, 1, 1, 1, 0],
+                [0, 1, 1, 1, 1, 1, 0],
+                [0, 1, 1, 1, 1, 1, 0],
+                [0, 0, 0, 0, 0, 0, 0],
+            ]
+
+    def test_conv2d_kernel_midpoint_mask_even(self):
+        mask = drop.conv2d_kernel_midpoint_mask(shape=(5, 7), kernel=(2, 2), device=torch_device)
         print(mask)
         assert mask.device == torch.device(torch_device)
         # TODO: This is a suprising result; should even kernels be forbidden?
@@ -41,9 +77,9 @@ class ClipMaskTests(unittest.TestCase):
 
     def test_clip_mask_2d_kernel_too_big(self):
         try:
-            drop.clip_mask_2d(h=4, w=7, kernel=5, device=torch_device)
+            drop.conv2d_kernel_midpoint_mask(shape=(4, 7), kernel=(5, 5), device=torch_device)
             raise RuntimeError("Expected throw")
 
         except AssertionError as e:
-            assert "kernel=5 > min(h=4, w=7)" in e.args[0]
+            assert "kernel=(5, 5) ! <= shape=(4, 7)" in e.args[0]
 

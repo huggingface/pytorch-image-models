@@ -19,38 +19,45 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-def clip_mask_2d(
-        h: int,
-        w: int,
-        kernel: int,
+def conv2d_kernel_midpoint_mask(
+        shape: (int, int),
+        kernel: (int, int),
         device,
+        dtype = torch.bool,
 ):
-    """Build a clip mask.
+    """Build a mask of kernel midpoints.
 
-    Returns a mask of all points which permit a (kernel, kernel) sized
-    block to sit entirely within the (h, w) index space.
+    This predicts the kernel midpoints that conv2d (and related kernel functions)
+    would place a kernel.
+
+    The *midpoint* of a kernel is computed as ``size / 2``:
+    * the midpoint of odd kernels is the middle: `mid(3) == 1`
+    * the midpoint of even kernels is the first point in the second half: `mid(4) == 2`
 
     Requires `kernel <= min(h, w)`.
 
-    TODO: Should even kernels be forbidden?
-    Even kernels behave oddly, but are not forbidden for historical reasons.
-
     Args:
-        h: the height.
-        w: the width.
-        kernel_size: the size of the kernel.
+        shape: the (h, w) shape of the tensor.
+        kernel: the (kh, hw) shape of the kernel.
         device: the target device.
         check_kernel: when true, assert that the kernel_size is odd.
 
     Returns:
         a (h, w) bool mask tensor.
     """
-    assert kernel <= min(h, w), f"{kernel=} > min({h=}, {w=})"
+    h, w = shape
+    kh, kw = kernel
+    assert kh <= h and kw <= w, f"{kernel=} ! <= {shape=}"
 
-    mask = torch.zeros((h, w), dtype=torch.bool, device=device)
-    start = kernel // 2
-    end = ((kernel - 1) // 2)
-    mask[start:h-end, start:w-end] = True
+    mask = torch.zeros((h, w), dtype=dtype, device=device)
+
+    h_start = kh // 2
+    h_end = (kh - 1) // 2
+
+    w_start = kw // 2
+    w_end = (kw - 1) // 2
+
+    mask[h_start:h - h_end, w_start:w - w_end] = 1
     return mask
 
 
@@ -82,7 +89,7 @@ def drop_block_2d(
     B, C, H, W = x.shape
     total_size = W * H
 
-    # TODO: This behaves oddly when clipped_block_size < block_size, or block_size % 2 == 0.
+    # TODO: This behaves oddly when clipped_block_size < block_size.
     clipped_block_size = min(block_size, W, H)
 
     # seed_drop_rate, the gamma parameter
@@ -90,12 +97,12 @@ def drop_block_2d(
             (W - block_size + 1) * (H - block_size + 1))
 
     # Forces the block to be inside the feature map.
-    valid_block = clip_mask_2d(
-        h=H,
-        w=W,
-        kernel=clipped_block_size,
+    valid_block = conv2d_kernel_midpoint_mask(
+        shape=(H, W),
+        kernel=(clipped_block_size, clipped_block_size),
         device=x.device,
-    ).reshape((1, 1, H, W)).to(dtype=x.dtype)
+        dtype=x.dtype,
+    ).unsqueeze().unsqueeze()
 
     if batchwise:
         # one mask for whole batch, quite a bit faster
