@@ -36,7 +36,7 @@ class Conv2dKernelMidpointMask2d(unittest.TestCase):
             shape=(5, 7),
             kernel=(2, 2),
             device=torch_device,
-            dtype=torch.bool,
+            dtype=torch.float32,
         )
         print(mask)
         assert mask.device == torch.device(torch_device)
@@ -55,7 +55,7 @@ class Conv2dKernelMidpointMask2d(unittest.TestCase):
                 shape=(4, 7),
                 kernel=(5, 5),
                 device=torch_device,
-                dtype=torch.bool,
+                dtype=torch.float32,
             )
             raise RuntimeError("Expected throw")
 
@@ -102,7 +102,7 @@ class DropBlock2dDropFilterTest(unittest.TestCase):
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
             ],
             device=torch_device,
-            dtype=torch.int32,
+            dtype=torch.float32,
         ).unsqueeze(0).unsqueeze(0)
 
         result = drop.drop_block_2d_drop_filter_(
