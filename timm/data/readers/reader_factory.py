@@ -19,11 +19,14 @@ def create_reader(
         prefix = name[0]
     name = name[-1]
 
+    # FIXME the additional features are only supported by ReaderHfds for now.
+    additional_features = kwargs.pop("additional_features", None)
+
     # FIXME improve the selection right now just tfds prefix or fallback path, will need options to
     # explicitly select other options shortly
     if prefix == 'hfds':
         from .reader_hfds import ReaderHfds  # defer Hf datasets import
-        reader = ReaderHfds(name=name, root=root, split=split, **kwargs)
+        reader = ReaderHfds(name=name, root=root, split=split, additional_features=additional_features, **kwargs)
     elif prefix == 'hfids':
         from .reader_hfids import ReaderHfids  # defer HF datasets import
         reader = ReaderHfids(name=name, root=root, split=split, **kwargs)
