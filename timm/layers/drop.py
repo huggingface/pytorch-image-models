@@ -14,16 +14,19 @@ DropBlock impl inspired by two Tensorflow impl that I liked:
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
+from typing import Optional, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
 def conv2d_kernel_midpoint_mask(
-        shape: (int, int),
-        kernel: (int, int),
-        device,
-        dtype = torch.bool,
+        kernel: Tuple[int, int],
+        *,
+        inplace_mask = None,
+        shape: Optional[Tuple[int, int]] = None,
+        device = None,
+        dtype = None,
 ):
     """Build a mask of kernel midpoints.
 
@@ -36,28 +39,53 @@ def conv2d_kernel_midpoint_mask(
 
     Requires `kernel <= min(h, w)`.
 
+    When an `inplace_mask` is not provided, a new mask of `1`s is allocated,
+    and then the `0` locations are cleared.
+
+    When an `inplace_mask` is provided, the `0` locations are cleared on the mask,
+    and no other changes are made. `shape`, `dtype`, and `device` must match, if
+    they are provided.
+
     Args:
-        shape: the (h, w) shape of the tensor.
         kernel: the (kh, hw) shape of the kernel.
+        inplace_mask: if supplied, updates will apply to the inplace_mask,
+          and device and dtype will be ignored. Only clears 'false' locations.
+        shape: the (h, w) shape of the tensor.
         device: the target device.
-        check_kernel: when true, assert that the kernel_size is odd.
+        dtype: the target dtype.
 
     Returns:
         a (h, w) bool mask tensor.
     """
+    if inplace_mask is not None:
+        mask = inplace_mask
+
+        if shape:
+            assert shape == mask.shape[-2], f"{shape=} !~= {mask.shape=}"
+
+        shape = mask.shape
+
+        if device:
+            device = torch.device(device)
+            assert device == mask.device, f"{device=} != {mask.device=}"
+
+        if dtype:
+            dtype = torch.dtype(dtype)
+            assert dtype == inplace_mask.dtype, f"{dtype=} != {mask.dtype=}"
+
+    else:
+        mask = torch.ones(shape, dtype=dtype, device=device)
+
     h, w = shape
     kh, kw = kernel
     assert kh <= h and kw <= w, f"{kernel=} ! <= {shape=}"
 
-    mask = torch.zeros((h, w), dtype=dtype, device=device)
+    # Set to 0, rather than set to 1, so we can clear the inplace mask.
+    mask[:kh // 2, :] = 0
+    mask[h - (kh - 1) // 2:, :] = 0
+    mask[:, :kw // 2] = 0
+    mask[:, w - (kw - 1) // 2:] = 0
 
-    h_start = kh // 2
-    h_end = (kh - 1) // 2
-
-    w_start = kw // 2
-    w_end = (kw - 1) // 2
-
-    mask[h_start:h - h_end, w_start:w - w_end] = 1
     return mask
 
 
@@ -68,7 +96,8 @@ def drop_block_2d(
         gamma_scale: float = 1.0,
         with_noise: bool = False,
         inplace: bool = False,
-        batchwise: bool = False
+        batchwise: bool = False,
+        messy: bool = False,
 ):
     """DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
 
@@ -82,6 +111,7 @@ def drop_block_2d(
         with_noise: should normal noise be added to the dropped region?
         inplace: if the drop should be applied in-place on the input tensor.
         batchwise: should the entire batch use the same drop mask?
+        messy: partial-blocks at the edges, faster.
 
     Returns:
         If inplace, the modified `x`; otherwise, the dropped copy of `x`, on the same device.
@@ -90,44 +120,55 @@ def drop_block_2d(
     total_size = W * H
 
     # TODO: This behaves oddly when clipped_block_size < block_size.
-    clipped_block_size = min(block_size, W, H)
+    clipped_block_size = min(block_size, H, W)
 
-    # seed_drop_rate, the gamma parameter
-    gamma = gamma_scale * drop_prob * total_size / clipped_block_size ** 2 / (
-            (W - block_size + 1) * (H - block_size + 1))
+    gamma = (
+        float(gamma_scale * drop_prob * total_size)
+        / float(clipped_block_size ** 2)
+        / float((H - block_size + 1) * (W - block_size + 1))
+    )
 
-    # Forces the block to be inside the feature map.
-    valid_block = conv2d_kernel_midpoint_mask(
-        shape=(H, W),
-        kernel=(clipped_block_size, clipped_block_size),
-        device=x.device,
+    # batchwise => one mask for whole batch, quite a bit faster
+    mask_shape = (1 if batchwise else B, C, H, W)
+
+    block_mask = torch.empty(
+        mask_shape,
         dtype=x.dtype,
-    ).unsqueeze().unsqueeze()
+        device=x.device
+    ).bernoulli_(gamma)
 
-    if batchwise:
-        # one mask for whole batch, quite a bit faster
-        uniform_noise = torch.rand((1, C, H, W), dtype=x.dtype, device=x.device)
-    else:
-        uniform_noise = torch.rand_like(x)
-    block_mask = ((2 - gamma - valid_block + uniform_noise) >= 1).to(dtype=x.dtype)
-    block_mask = -F.max_pool2d(
-        -block_mask,
-        kernel_size=clipped_block_size,  # block_size,
+    if not messy:
+        conv2d_kernel_midpoint_mask(
+            kernel=(clipped_block_size, clipped_block_size),
+            inplace_mask=block_mask,
+        )
+
+    block_mask = F.max_pool2d(
+        block_mask,
+        kernel_size=clipped_block_size,
         stride=1,
         padding=clipped_block_size // 2)
 
-    if with_noise:
-        normal_noise = torch.randn((1, C, H, W), dtype=x.dtype, device=x.device) if batchwise else torch.randn_like(x)
-        if inplace:
-            x.mul_(block_mask).add_(normal_noise * (1 - block_mask))
-        else:
-            x = x * block_mask + normal_noise * (1 - block_mask)
+    if inplace:
+        x.mul_(block_mask)
     else:
-        normalize_scale = (block_mask.numel() / block_mask.to(dtype=torch.float32).sum().add(1e-7)).to(x.dtype)
-        if inplace:
-            x.mul_(block_mask * normalize_scale)
-        else:
-            x = x * block_mask * normalize_scale
+        x = x * block_mask
+
+    # From this point on, we do inplace ops on X.
+
+    if with_noise:
+        noise = torch.randn(mask_shape, dtype=x.dtype, device=x.device)
+        # x += (noise * (1 - block_mask))
+        block_mask.neg_().add_(1)
+        noise.mul_(block_mask)
+        x.add_(noise)
+
+    else:
+        # x *= (size(block_mask) / sum(block_mask))
+        total = block_mask.to(dtype=torch.float32).sum()
+        normalize_scale = block_mask.numel() / total.add(1e-7).to(x.dtype)
+        x.mul_(normalize_scale)
+
     return x
 
 
@@ -144,35 +185,37 @@ def drop_block_fast_2d(
     DropBlock with an experimental gaussian noise option. Simplied from above without concern for valid
     block mask at edges.
     """
-    B, C, H, W = x.shape
-    total_size = W * H
-    clipped_block_size = min(block_size, min(W, H))
-    gamma = gamma_scale * drop_prob * total_size / clipped_block_size ** 2 / (
-            (W - block_size + 1) * (H - block_size + 1))
-
-    block_mask = torch.empty_like(x).bernoulli_(gamma)
-    block_mask = F.max_pool2d(
-        block_mask.to(x.dtype), kernel_size=clipped_block_size, stride=1, padding=clipped_block_size // 2)
-
-    if with_noise:
-        normal_noise = torch.empty_like(x).normal_()
-        if inplace:
-            x.mul_(1. - block_mask).add_(normal_noise * block_mask)
-        else:
-            x = x * (1. - block_mask) + normal_noise * block_mask
-    else:
-        block_mask = 1 - block_mask
-        normalize_scale = (block_mask.numel() / block_mask.to(dtype=torch.float32).sum().add(1e-6)).to(dtype=x.dtype)
-        if inplace:
-            x.mul_(block_mask * normalize_scale)
-        else:
-            x = x * block_mask * normalize_scale
-    return x
+    drop_block_2d(
+        x=x,
+        drop_prob=drop_prob,
+        block_size=block_size,
+        gamma_scale=gamma_scale,
+        with_noise=with_noise,
+        inplace=inplace,
+        batchwise=True,
+        messy=True,
+    )
 
 
 class DropBlock2d(nn.Module):
-    """ DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
+    """DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
+
+    Args:
+        drop_prob: the probability of dropping any given block.
+        block_size: the size of the dropped blocks; should be odd.
+        gamma_scale: adjustment scale for the drop_prob.
+        with_noise: should normal noise be added to the dropped region?
+        inplace: if the drop should be applied in-place on the input tensor.
+        batchwise: should the entire batch use the same drop mask?
+        messy: partial-blocks at the edges, faster.
     """
+    drop_prob: float
+    block_size: int
+    gamma_scale: float
+    with_noise: bool
+    inplace: bool
+    batchwise: bool
+    messy: bool
 
     def __init__(
             self,
@@ -182,7 +225,8 @@ class DropBlock2d(nn.Module):
             with_noise: bool = False,
             inplace: bool = False,
             batchwise: bool = False,
-            fast: bool = True):
+            messy: bool = True,
+    ):
         super(DropBlock2d, self).__init__()
         self.drop_prob = drop_prob
         self.gamma_scale = gamma_scale
@@ -190,17 +234,21 @@ class DropBlock2d(nn.Module):
         self.with_noise = with_noise
         self.inplace = inplace
         self.batchwise = batchwise
-        self.fast = fast  # FIXME finish comparisons of fast vs not
+        self.messy = messy
 
     def forward(self, x):
         if not self.training or not self.drop_prob:
             return x
-        if self.fast:
-            return drop_block_fast_2d(
-                x, self.drop_prob, self.block_size, self.gamma_scale, self.with_noise, self.inplace)
-        else:
-            return drop_block_2d(
-                x, self.drop_prob, self.block_size, self.gamma_scale, self.with_noise, self.inplace, self.batchwise)
+
+        return drop_block_2d(
+            x=x,
+            drop_prob=self.drop_prob,
+            block_size=self.block_size,
+            gamma_scale=self.gamma_scale,
+            with_noise=self.with_noise,
+            inplace=self.inplace,
+            batchwise=self.batchwise,
+            messy=self.messy)
 
 
 def drop_path(x, drop_prob: float = 0., training: bool = False, scale_by_keep: bool = True):

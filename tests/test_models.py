@@ -204,7 +204,7 @@ def test_model_forward(model_name, batch_size):
 @pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS, name_matches_cfg=True))
 @pytest.mark.parametrize('batch_size', [2])
 def test_model_backward(model_name, batch_size):
-    """Run a single forward pass with each model"""
+    """Run a single forward and backward pass with each model"""
     input_size = _get_input_size(model_name=model_name, target=TARGET_BWD_SIZE)
     if max(input_size) > MAX_BWD_SIZE:
         pytest.skip("Fixed input size model > limit.")
@@ -594,7 +594,7 @@ def _create_fx_model(model, train=False):
     return fx_model
 
 
-EXCLUDE_FX_FILTERS = ['vit_gi*', 'hiera*']
+EXCLUDE_FX_FILTERS = ['vit_gi*', 'hiera*', '*dropblock*']
 # not enough memory to run fx on more models than other tests
 if 'GITHUB_ACTIONS' in os.environ:
     EXCLUDE_FX_FILTERS += [

@@ -25,6 +25,32 @@ class Conv2dKernelMidpointMask2d(unittest.TestCase):
                 [False, False, False, False, False, False, False],
             ]
 
+    def test_conv2d_kernel_midpoint_mask_odd_float_inplace(self):
+        mask = torch.tensor(
+            [
+                [2.0, 1.0, 1.0, 1.0, 1.0, 7.0, 1.0],
+                [1.0, 3.0, 1.0, 1.0, 1.0, 1.0, 8.0],
+                [9.0, 1.0, 4.0, 1.0, 1.0, 1.0, 1.0],
+                [1.0, 1.0, 1.0, 5.0, 1.0, 1.0, 1.0],
+                [1.0, 1.0, 1.0, 1.0, 6.0, 1.0, 1.0],
+            ],
+            device=torch_device,
+        )
+        drop.conv2d_kernel_midpoint_mask(
+            kernel=(3, 3),
+            inplace_mask=mask,
+        )
+        print(mask)
+        assert mask.device == torch.device(torch_device)
+        assert mask.tolist() == \
+            [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 3.0, 1.0, 1.0, 1.0, 1.0, 0.0],
+                [0.0, 1.0, 4.0, 1.0, 1.0, 1.0, 0.0],
+                [0.0, 1.0, 1.0, 5.0, 1.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            ]
+
     def test_conv2d_kernel_midpoint_mask_odd_float(self):
         mask = drop.conv2d_kernel_midpoint_mask(
             shape=(5, 7),
