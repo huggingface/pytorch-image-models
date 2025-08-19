@@ -21,12 +21,11 @@ import torch.nn.functional as F
 
 
 def conv2d_kernel_midpoint_mask(
-        kernel: Tuple[int, int],
         *,
-        inplace_mask = None,
-        shape: Optional[Tuple[int, int]] = None,
-        device = None,
-        dtype = None,
+        shape: Tuple[int, int],
+        kernel: Tuple[int, int],
+        device,
+        dtype,
 ):
     """Build a mask of kernel midpoints.
 
@@ -39,17 +38,10 @@ def conv2d_kernel_midpoint_mask(
 
     Requires `kernel <= min(h, w)`.
 
-    When an `inplace_mask` is not provided, a new mask of `1`s is allocated,
-    and then the `0` locations are cleared.
-
-    When an `inplace_mask` is provided, the `0` locations are cleared on the mask,
-    and no other changes are made. `shape`, `dtype`, and `device` must match, if
-    they are provided.
+    A new mask of `1`s is allocated, and then the `0` locations are cleared.
 
     Args:
         kernel: the (kh, hw) shape of the kernel.
-        inplace_mask: if supplied, updates will apply to the inplace_mask,
-          and device and dtype will be ignored. Only clears 'false' locations.
         shape: the (h, w) shape of the tensor.
         device: the target device.
         dtype: the target dtype.
@@ -57,36 +49,58 @@ def conv2d_kernel_midpoint_mask(
     Returns:
         a (h, w) bool mask tensor.
     """
-    if inplace_mask is not None:
-        mask = inplace_mask
-
-        if shape:
-            assert shape == mask.shape[-2], f"{shape=} !~= {mask.shape=}"
-
-        shape = mask.shape
-
-        if device:
-            device = torch.device(device)
-            assert device == mask.device, f"{device=} != {mask.device=}"
-
-        if dtype:
-            dtype = torch.dtype(dtype)
-            assert dtype == inplace_mask.dtype, f"{dtype=} != {mask.dtype=}"
-
-    else:
-        mask = torch.ones(shape, dtype=dtype, device=device)
-
     h, w = shape
     kh, kw = kernel
     assert kh <= h and kw <= w, f"{kernel=} ! <= {shape=}"
 
-    # Set to 0, rather than set to 1, so we can clear the inplace mask.
-    mask[:kh // 2, :] = 0
-    mask[h - (kh - 1) // 2:, :] = 0
-    mask[:, :kw // 2] = 0
-    mask[:, w - (kw - 1) // 2:] = 0
+    mask = torch.zeros(shape, dtype=dtype, device=device)
+
+    mask[kh//2: h - ((kh - 1) // 2), kw//2: w - ((kw - 1) // 2)] = 1.0
 
     return mask
+
+
+def drop_block_2d_drop_filter_(
+        *,
+        selection,
+        kernel: Tuple[int, int],
+        messy: bool
+):
+    """Convert drop block gamma noise to a drop filter.
+
+    This is a deterministic internal component of drop_block_2d.
+
+    Args:
+        selection: 4D (B, C, H, W) input selection noise;
+          `1.0` at the midpoints of selected blocks to drop,
+          `0.0` everywhere else. Expected to be gamma noise.
+        kernel: the shape of the 2d kernel.
+        messy: permit partial blocks at the edges, faster.
+
+    Returns:
+        A drop filter, `1.0` at points to drop, `0.0` at points to keep.
+    """
+
+    if not messy:
+        selection = selection * conv2d_kernel_midpoint_mask(
+            shape=selection.shape[-2:],
+            kernel=kernel,
+            dtype=selection.dtype,
+            device=selection.device,
+        )
+
+    kh, kw = kernel
+
+    drop_filter = F.max_pool2d(
+        selection,
+        kernel_size=kernel,
+        stride=1,
+        padding=[kh // 2, kw // 2],
+    )
+    if (kh % 2 == 0) or (kw % 2 == 0):
+        drop_filter = drop_filter[..., (kh%2==0):, (kw%2==0):]
+
+    return drop_filter
 
 
 def drop_block_2d(
@@ -117,57 +131,60 @@ def drop_block_2d(
         If inplace, the modified `x`; otherwise, the dropped copy of `x`, on the same device.
     """
     B, C, H, W = x.shape
-    total_size = W * H
 
     # TODO: This behaves oddly when clipped_block_size < block_size.
-    clipped_block_size = min(block_size, H, W)
+    kh = kw = block_size
+
+    kernel = [min(kh, H), min(kw, W)]
+    kh, kw = kernel
 
     gamma = (
-        float(gamma_scale * drop_prob * total_size)
-        / float(clipped_block_size ** 2)
-        / float((H - block_size + 1) * (W - block_size + 1))
+        float(gamma_scale * drop_prob * H * W)
+        / float(kh * kw)
+        / float((H - kh + 1) * (W - kw + 1))
     )
 
     # batchwise => one mask for whole batch, quite a bit faster
     mask_shape = (1 if batchwise else B, C, H, W)
 
-    block_mask = torch.empty(
+    selection = torch.empty(
         mask_shape,
         dtype=x.dtype,
         device=x.device
     ).bernoulli_(gamma)
 
-    if not messy:
-        conv2d_kernel_midpoint_mask(
-            kernel=(clipped_block_size, clipped_block_size),
-            inplace_mask=block_mask,
-        )
-
-    block_mask = F.max_pool2d(
-        block_mask,
-        kernel_size=clipped_block_size,
-        stride=1,
-        padding=clipped_block_size // 2)
+    drop_filter = drop_block_2d_drop_filter_(
+        selection=selection,
+        kernel=kernel,
+        messy=messy,
+    )
+    keep_filter = 1.0 - drop_filter
 
     if inplace:
-        x.mul_(block_mask)
+        x.mul_(keep_filter)
     else:
-        x = x * block_mask
-
-    # From this point on, we do inplace ops on X.
+        x = x * keep_filter
 
     if with_noise:
-        noise = torch.randn(mask_shape, dtype=x.dtype, device=x.device)
         # x += (noise * (1 - block_mask))
-        block_mask.neg_().add_(1)
-        noise.mul_(block_mask)
-        x.add_(noise)
+        noise = torch.randn(mask_shape, dtype=x.dtype, device=x.device)
+
+        if inplace:
+            noise.mul_(drop_filter)
+            x.add_(noise)
+        else:
+            x = x + noise * drop_filter
 
     else:
         # x *= (size(block_mask) / sum(block_mask))
-        total = block_mask.to(dtype=torch.float32).sum()
-        normalize_scale = block_mask.numel() / total.add(1e-7).to(x.dtype)
-        x.mul_(normalize_scale)
+        count = keep_filter.numel()
+        total = keep_filter.to(dtype=torch.float32).sum()
+        normalize_scale = count / total.add(1e-7).to(x.dtype)
+
+        if inplace:
+            x.mul_(normalize_scale)
+        else:
+            x = x * normalize_scale
 
     return x
 
