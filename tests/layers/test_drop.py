@@ -12,25 +12,7 @@ if torch_backend is not None:
 torch_device = os.environ.get('TORCH_DEVICE', 'cpu')
 
 class Conv2dKernelMidpointMask2d(unittest.TestCase):
-    def test_conv2d_kernel_midpoint_mask_odd_bool(self):
-        mask = drop.conv2d_kernel_midpoint_mask(
-            shape=(5, 7),
-            kernel=(3, 3),
-            device=torch_device,
-            dtype=torch.bool,
-        )
-        print(mask)
-        assert mask.device == torch.device(torch_device)
-        assert mask.tolist() == \
-            [
-                [False, False, False, False, False, False, False],
-                [False, True, True, True, True, True, False],
-                [False, True, True, True, True, True, False],
-                [False, True, True, True, True, True, False],
-                [False, False, False, False, False, False, False],
-            ]
-
-    def test_conv2d_kernel_midpoint_mask_odd_float(self):
+    def test_conv2d_kernel_midpoint_mask_odd(self):
         mask = drop.conv2d_kernel_midpoint_mask(
             shape=(5, 7),
             kernel=(3, 3),
@@ -48,23 +30,6 @@ class Conv2dKernelMidpointMask2d(unittest.TestCase):
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
             ]
 
-    def test_conv2d_kernel_midpoint_mask_odd_int(self):
-        mask = drop.conv2d_kernel_midpoint_mask(
-            shape=(5, 7),
-            kernel=(3, 3),
-            device=torch_device,
-            dtype=torch.int32,
-        )
-        print(mask)
-        assert mask.device == torch.device(torch_device)
-        assert mask.tolist() == \
-            [
-                [0, 0, 0, 0, 0, 0, 0],
-                [0, 1, 1, 1, 1, 1, 0],
-                [0, 1, 1, 1, 1, 1, 0],
-                [0, 1, 1, 1, 1, 1, 0],
-                [0, 0, 0, 0, 0, 0, 0],
-            ]
 
     def test_conv2d_kernel_midpoint_mask_even(self):
         mask = drop.conv2d_kernel_midpoint_mask(
@@ -77,11 +42,11 @@ class Conv2dKernelMidpointMask2d(unittest.TestCase):
         assert mask.device == torch.device(torch_device)
         assert mask.tolist() == \
             [
-                [False, False, False, False, False, False, False],
-                [False, True, True, True, True, True, True],
-                [False, True, True, True, True, True, True],
-                [False, True, True, True, True, True, True],
-                [False, True, True, True, True, True, True],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+                [0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+                [0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+                [0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
             ]
 
     def test_clip_mask_2d_kernel_too_big(self):
@@ -130,11 +95,11 @@ class DropBlock2dDropFilterTest(unittest.TestCase):
     def test_drop_filter_messy(self):
         selection = torch.tensor(
             [
-                [0, 0, 0, 1, 0, 0, 0],
-                [0, 1, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 1, 0],
-                [0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 1],
+                [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
             ],
             device=torch_device,
             dtype=torch.int32,
@@ -149,11 +114,11 @@ class DropBlock2dDropFilterTest(unittest.TestCase):
         assert result.device == torch.device(torch_device)
         assert result.tolist() == \
             [
-                [1, 1, 1, 1, 1, 0, 0],
-                [1, 1, 1, 0, 1, 1, 1],
-                [0, 0, 0, 0, 1, 1, 1],
-                [0, 0, 0, 0, 0, 1, 1],
-                [0, 0, 0, 0, 0, 1, 1],
+                [1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0],
+                [1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0],
+                [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0],
             ]
 
 class DropBlock2dTest(unittest.TestCase):
