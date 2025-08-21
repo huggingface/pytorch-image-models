@@ -65,7 +65,10 @@ def conv2d_kernel_midpoint_mask(
 
 
 def drop_block_2d_drop_filter_(
-    *, selection, kernel: Tuple[int, int], partial_edge_blocks: bool
+    *,
+    selection,
+    kernel: Tuple[int, int],
+    partial_edge_blocks: bool,
 ):
     """Convert drop block gamma noise to a drop filter.
 
@@ -81,7 +84,6 @@ def drop_block_2d_drop_filter_(
     Returns:
         A drop filter, `1.0` at points to drop, `0.0` at points to keep.
     """
-
     if not partial_edge_blocks:
         selection = selection * conv2d_kernel_midpoint_mask(
             shape=selection.shape[-2:],
@@ -276,7 +278,10 @@ class DropBlock2d(nn.Module):
 
 
 def drop_path(
-    x, drop_prob: float = 0.0, training: bool = False, scale_by_keep: bool = True
+    x,
+    drop_prob: float = 0.0,
+    training: bool = False,
+    scale_by_keep: bool = True,
 ):
     """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
 
@@ -304,13 +309,22 @@ def drop_path(
 class DropPath(nn.Module):
     """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks)."""
 
-    def __init__(self, drop_prob: float = 0.0, scale_by_keep: bool = True):
+    def __init__(
+        self,
+        drop_prob: float = 0.0,
+        scale_by_keep: bool = True,
+    ):
         super(DropPath, self).__init__()
         self.drop_prob = drop_prob
         self.scale_by_keep = scale_by_keep
 
     def forward(self, x):
-        return drop_path(x, self.drop_prob, self.training, self.scale_by_keep)
+        return drop_path(
+            x,
+            drop_prob=self.drop_prob,
+            training=self.training,
+            scale_by_keep=self.scale_by_keep,
+        )
 
     def extra_repr(self):
         return f"drop_prob={round(self.drop_prob,3):0.3f}"
