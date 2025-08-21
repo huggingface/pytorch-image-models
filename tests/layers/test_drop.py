@@ -79,7 +79,7 @@ class DropBlock2dDropFilterTest(unittest.TestCase):
         result = drop.drop_block_2d_drop_filter_(
             selection=selection,
             kernel=(2, 3),
-            messy=False
+            partial_edge_blocks=False
         ).squeeze()
         print(result)
         assert result.device == torch.device(torch_device)
@@ -92,7 +92,7 @@ class DropBlock2dDropFilterTest(unittest.TestCase):
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
             ]
 
-    def test_drop_filter_messy(self):
+    def test_drop_filter_partial_edge_blocks(self):
         selection = torch.tensor(
             [
                 [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
@@ -108,7 +108,7 @@ class DropBlock2dDropFilterTest(unittest.TestCase):
         result = drop.drop_block_2d_drop_filter_(
             selection=selection,
             kernel=(2, 3),
-            messy=True
+            partial_edge_blocks=True
         ).squeeze()
         print(result)
         assert result.device == torch.device(torch_device)

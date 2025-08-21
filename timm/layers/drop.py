@@ -64,7 +64,7 @@ def drop_block_2d_drop_filter_(
         *,
         selection,
         kernel: Tuple[int, int],
-        messy: bool
+        partial_edge_blocks: bool
 ):
     """Convert drop block gamma noise to a drop filter.
 
@@ -75,13 +75,13 @@ def drop_block_2d_drop_filter_(
           `1.0` at the midpoints of selected blocks to drop,
           `0.0` everywhere else. Expected to be gamma noise.
         kernel: the shape of the 2d kernel.
-        messy: permit partial blocks at the edges, faster.
+        partial_edge_blocks: permit partial blocks at the edges, faster.
 
     Returns:
         A drop filter, `1.0` at points to drop, `0.0` at points to keep.
     """
 
-    if not messy:
+    if not partial_edge_blocks:
         selection = selection * conv2d_kernel_midpoint_mask(
             shape=selection.shape[-2:],
             kernel=kernel,
@@ -111,7 +111,7 @@ def drop_block_2d(
         with_noise: bool = False,
         inplace: bool = False,
         batchwise: bool = False,
-        messy: bool = False,
+        partial_edge_blocks: bool = False,
 ):
     """DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
 
@@ -125,7 +125,7 @@ def drop_block_2d(
         with_noise: should normal noise be added to the dropped region?
         inplace: if the drop should be applied in-place on the input tensor.
         batchwise: should the entire batch use the same drop mask?
-        messy: partial-blocks at the edges, faster.
+        partial_edge_blocks: partial-blocks at the edges, faster.
 
     Returns:
         If inplace, the modified `x`; otherwise, the dropped copy of `x`, on the same device.
@@ -156,7 +156,7 @@ def drop_block_2d(
     drop_filter = drop_block_2d_drop_filter_(
         selection=selection,
         kernel=kernel,
-        messy=messy,
+        partial_edge_blocks=partial_edge_blocks,
     )
     keep_filter = 1.0 - drop_filter
 
@@ -210,7 +210,7 @@ def drop_block_fast_2d(
         with_noise=with_noise,
         inplace=inplace,
         batchwise=True,
-        messy=True,
+        partial_edge_blocks=True,
     )
 
 
@@ -224,7 +224,7 @@ class DropBlock2d(nn.Module):
         with_noise: should normal noise be added to the dropped region?
         inplace: if the drop should be applied in-place on the input tensor.
         batchwise: should the entire batch use the same drop mask?
-        messy: partial-blocks at the edges, faster.
+        partial_edge_blocks: partial-blocks at the edges, faster.
     """
     drop_prob: float
     block_size: int
@@ -232,7 +232,7 @@ class DropBlock2d(nn.Module):
     with_noise: bool
     inplace: bool
     batchwise: bool
-    messy: bool
+    partial_edge_blocks: bool
 
     def __init__(
             self,
@@ -242,7 +242,7 @@ class DropBlock2d(nn.Module):
             with_noise: bool = False,
             inplace: bool = False,
             batchwise: bool = False,
-            messy: bool = True,
+            partial_edge_blocks: bool = True,
     ):
         super(DropBlock2d, self).__init__()
         self.drop_prob = drop_prob
@@ -251,7 +251,7 @@ class DropBlock2d(nn.Module):
         self.with_noise = with_noise
         self.inplace = inplace
         self.batchwise = batchwise
-        self.messy = messy
+        self.partial_edge_blocks = partial_edge_blocks
 
     def forward(self, x):
         if not self.training or not self.drop_prob:
@@ -265,7 +265,7 @@ class DropBlock2d(nn.Module):
             with_noise=self.with_noise,
             inplace=self.inplace,
             batchwise=self.batchwise,
-            messy=self.messy)
+            partial_edge_blocks=self.partial_edge_blocks)
 
 
 def drop_path(x, drop_prob: float = 0., training: bool = False, scale_by_keep: bool = True):

@@ -328,7 +328,7 @@ def make_blocks(
         drop_block_rate: float = 0.,
         drop_path_rate: float = 0.,
         drop_block_batchwise: bool = False,
-        drop_block_messy: bool = True,
+        drop_block_partial_edge_blocks: bool = True,
         **kwargs,
 ) -> Tuple[List[Tuple[str, nn.Module]], List[Dict[str, Any]]]:
     """Create ResNet stages with specified block configurations.
@@ -344,7 +344,7 @@ def make_blocks(
         avg_down: Use average pooling for downsample.
         drop_block_rate: DropBlock drop rate.
         drop_block_batchwise: Batchwise block dropping, faster.
-        drop_block_messy: dropping produces partial blocks on the edge, faster.
+        drop_block_partial_edge_blocks: dropping produces partial blocks on the edge, faster.
         drop_path_rate: Drop path rate for stochastic depth.
         **kwargs: Additional arguments passed to block constructors.
 
@@ -364,7 +364,7 @@ def make_blocks(
             drop_blocks(
                 drop_prob=drop_block_rate,
                 batchwise=drop_block_batchwise,
-                messy=drop_block_messy,
+                partial_edge_blocks=drop_block_partial_edge_blocks,
             ))):
         stage_name = f'layer{stage_idx + 1}'  # never liked this name, but weight compat requires it
         stride = 1 if stage_idx == 0 else 2
@@ -468,7 +468,7 @@ class ResNet(nn.Module):
             drop_path_rate: float = 0.,
             drop_block_rate: float = 0.,
             drop_block_batchwise: bool = True,
-            drop_block_messy: bool = True,
+            drop_block_partial_edge_blocks: bool = True,
             zero_init_last: bool = True,
             block_args: Optional[Dict[str, Any]] = None,
     ):
@@ -500,7 +500,7 @@ class ResNet(nn.Module):
             drop_path_rate (float): Stochastic depth drop-path rate (default 0.)
             drop_block_rate (float): Drop block rate (default 0.)
             drop_block_batchwise (bool): Sample blocks batchwise, faster.
-            drop_block_messy (bool): Partial block dropping at the edges, faster.
+            drop_block_partial_edge_blocks (bool): Partial block dropping at the edges, faster.
             zero_init_last (bool): zero-init the last weight in residual path (usually last BN affine weight)
             block_args (dict): Extra kwargs to pass through to block module
         """
@@ -572,7 +572,7 @@ class ResNet(nn.Module):
             aa_layer=aa_layer,
             drop_block_rate=drop_block_rate,
             drop_block_batchwise=drop_block_batchwise,
-            drop_block_messy=drop_block_messy,
+            drop_block_partial_edge_blocks=drop_block_partial_edge_blocks,
             drop_path_rate=drop_path_rate,
             **block_args,
         )
@@ -1470,7 +1470,7 @@ def resnet10t_dropblock_correct(pretrained: bool = False, **kwargs) -> ResNet:
         avg_down=True,
         drop_block_rate=0.05,
         drop_block_batchwise=True,
-        drop_block_messy=True,
+        drop_block_partial_edge_blocks=True,
     )
     return _create_resnet('resnet10t', pretrained, **dict(model_args, **kwargs))
 
@@ -1486,7 +1486,7 @@ def resnet10t_dropblock_fast(pretrained: bool = False, **kwargs) -> ResNet:
         avg_down=True,
         drop_block_rate=0.05,
         drop_block_batchwise=False,
-        drop_block_messy=False,
+        drop_block_partial_edge_blocks=False,
     )
     return _create_resnet('resnet10t', pretrained, **dict(model_args, **kwargs))
 
