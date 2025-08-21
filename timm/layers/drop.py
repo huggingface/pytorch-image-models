@@ -1,4 +1,4 @@
-""" DropBlock, DropPath
+"""DropBlock, DropPath
 
 PyTorch implementations of DropBlock and DropPath (Stochastic Depth) regularization layers.
 
@@ -14,6 +14,7 @@ DropBlock impl inspired by two Tensorflow impl that I liked:
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
+
 from typing import Optional, Tuple
 import torch
 import torch.nn as nn
@@ -21,11 +22,11 @@ import torch.nn.functional as F
 
 
 def conv2d_kernel_midpoint_mask(
-        *,
-        shape: Tuple[int, int],
-        kernel: Tuple[int, int],
-        device,
-        dtype,
+    *,
+    shape: Tuple[int, int],
+    kernel: Tuple[int, int],
+    device,
+    dtype,
 ):
     """Build a mask of kernel midpoints.
 
@@ -55,16 +56,13 @@ def conv2d_kernel_midpoint_mask(
 
     mask = torch.zeros(shape, dtype=dtype, device=device)
 
-    mask[kh//2: h - ((kh - 1) // 2), kw//2: w - ((kw - 1) // 2)] = 1.0
+    mask[kh // 2 : h - ((kh - 1) // 2), kw // 2 : w - ((kw - 1) // 2)] = 1.0
 
     return mask
 
 
 def drop_block_2d_drop_filter_(
-        *,
-        selection,
-        kernel: Tuple[int, int],
-        partial_edge_blocks: bool
+    *, selection, kernel: Tuple[int, int], partial_edge_blocks: bool
 ):
     """Convert drop block gamma noise to a drop filter.
 
@@ -98,20 +96,20 @@ def drop_block_2d_drop_filter_(
         padding=[kh // 2, kw // 2],
     )
     if (kh % 2 == 0) or (kw % 2 == 0):
-        drop_filter = drop_filter[..., (kh%2==0):, (kw%2==0):]
+        drop_filter = drop_filter[..., (kh % 2 == 0) :, (kw % 2 == 0) :]
 
     return drop_filter
 
 
 def drop_block_2d(
-        x,
-        drop_prob: float = 0.1,
-        block_size: int = 7,
-        gamma_scale: float = 1.0,
-        with_noise: bool = False,
-        inplace: bool = False,
-        batchwise: bool = False,
-        partial_edge_blocks: bool = False,
+    x,
+    drop_prob: float = 0.1,
+    block_size: int = 7,
+    gamma_scale: float = 1.0,
+    with_noise: bool = False,
+    inplace: bool = False,
+    batchwise: bool = False,
+    partial_edge_blocks: bool = False,
 ):
     """DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
 
@@ -147,11 +145,9 @@ def drop_block_2d(
     # batchwise => one mask for whole batch, quite a bit faster
     mask_shape = (1 if batchwise else B, C, H, W)
 
-    selection = torch.empty(
-        mask_shape,
-        dtype=x.dtype,
-        device=x.device
-    ).bernoulli_(gamma)
+    selection = torch.empty(mask_shape, dtype=x.dtype, device=x.device).bernoulli_(
+        gamma
+    )
 
     drop_filter = drop_block_2d_drop_filter_(
         selection=selection,
@@ -190,14 +186,14 @@ def drop_block_2d(
 
 
 def drop_block_fast_2d(
-        x: torch.Tensor,
-        drop_prob: float = 0.1,
-        block_size: int = 7,
-        gamma_scale: float = 1.0,
-        with_noise: bool = False,
-        inplace: bool = False,
+    x: torch.Tensor,
+    drop_prob: float = 0.1,
+    block_size: int = 7,
+    gamma_scale: float = 1.0,
+    with_noise: bool = False,
+    inplace: bool = False,
 ):
-    """ DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
+    """DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
 
     DropBlock with an experimental gaussian noise option. Simplied from above without concern for valid
     block mask at edges.
@@ -226,6 +222,7 @@ class DropBlock2d(nn.Module):
         batchwise: should the entire batch use the same drop mask?
         partial_edge_blocks: partial-blocks at the edges, faster.
     """
+
     drop_prob: float
     block_size: int
     gamma_scale: float
@@ -235,14 +232,14 @@ class DropBlock2d(nn.Module):
     partial_edge_blocks: bool
 
     def __init__(
-            self,
-            drop_prob: float = 0.1,
-            block_size: int = 7,
-            gamma_scale: float = 1.0,
-            with_noise: bool = False,
-            inplace: bool = False,
-            batchwise: bool = False,
-            partial_edge_blocks: bool = True,
+        self,
+        drop_prob: float = 0.1,
+        block_size: int = 7,
+        gamma_scale: float = 1.0,
+        with_noise: bool = False,
+        inplace: bool = False,
+        batchwise: bool = False,
+        partial_edge_blocks: bool = True,
     ):
         super(DropBlock2d, self).__init__()
         self.drop_prob = drop_prob
@@ -265,10 +262,13 @@ class DropBlock2d(nn.Module):
             with_noise=self.with_noise,
             inplace=self.inplace,
             batchwise=self.batchwise,
-            partial_edge_blocks=self.partial_edge_blocks)
+            partial_edge_blocks=self.partial_edge_blocks,
+        )
 
 
-def drop_path(x, drop_prob: float = 0., training: bool = False, scale_by_keep: bool = True):
+def drop_path(
+    x, drop_prob: float = 0.0, training: bool = False, scale_by_keep: bool = True
+):
     """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
 
     This is the same as the DropConnect impl I created for EfficientNet, etc networks, however,
@@ -278,10 +278,12 @@ def drop_path(x, drop_prob: float = 0., training: bool = False, scale_by_keep: b
     'survival rate' as the argument.
 
     """
-    if drop_prob == 0. or not training:
+    if drop_prob == 0.0 or not training:
         return x
     keep_prob = 1 - drop_prob
-    shape = (x.shape[0],) + (1,) * (x.ndim - 1)  # work with diff dim tensors, not just 2D ConvNets
+    shape = (x.shape[0],) + (1,) * (
+        x.ndim - 1
+    )  # work with diff dim tensors, not just 2D ConvNets
     random_tensor = x.new_empty(shape).bernoulli_(keep_prob)
     if keep_prob > 0.0 and scale_by_keep:
         random_tensor.div_(keep_prob)
@@ -289,9 +291,9 @@ def drop_path(x, drop_prob: float = 0., training: bool = False, scale_by_keep: b
 
 
 class DropPath(nn.Module):
-    """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks).
-    """
-    def __init__(self, drop_prob: float = 0., scale_by_keep: bool = True):
+    """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks)."""
+
+    def __init__(self, drop_prob: float = 0.0, scale_by_keep: bool = True):
         super(DropPath, self).__init__()
         self.drop_prob = drop_prob
         self.scale_by_keep = scale_by_keep
@@ -300,4 +302,4 @@ class DropPath(nn.Module):
         return drop_path(x, self.drop_prob, self.training, self.scale_by_keep)
 
     def extra_repr(self):
-        return f'drop_prob={round(self.drop_prob,3):0.3f}'
+        return f"drop_prob={round(self.drop_prob,3):0.3f}"
