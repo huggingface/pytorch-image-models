@@ -23,10 +23,11 @@ import torch.nn.functional as F
 
 def conv2d_kernel_midpoint_mask(
     *,
-    shape: Tuple[int, int],
     kernel: Tuple[int, int],
-    device,
-    dtype,
+    inplace=None,
+    shape: Optional[Tuple[int, int]] = None,
+    device=None,
+    dtype=None,
 ):
     """Build a mask of kernel midpoints.
 
@@ -43,6 +44,7 @@ def conv2d_kernel_midpoint_mask(
 
     Args:
         kernel: the (kh, hw) shape of the kernel.
+        inplace: use the provided tensor as the mask; set masked-out values to 0.
         shape: the (h, w) shape of the tensor.
         device: the target device.
         dtype: the target dtype.
@@ -50,16 +52,30 @@ def conv2d_kernel_midpoint_mask(
     Returns:
         a (h, w) bool mask tensor.
     """
+    if inplace is None:
+        assert shape is not None, f"shape is required when inplace is None."
+        assert dtype is not None, f"dtype is required when inplace is None."
+        assert device is not None, f"device is required when inplace is None."
+
+        mask = torch.ones(shape, dtype=dtype, device=device)
+    else:
+        assert shape is None, f"shape and inplace are incompatile"
+        assert dtype is None, f"dtype and inplace are incompatile"
+        assert device is None, f"device and inplace are incompatile"
+
+        mask = inplace
+        shape = inplace.shape[-2:]
+        device = inplace.device
+        dtype = inplace.dtype
+
     h, w = shape
     kh, kw = kernel
     assert kh <= h and kw <= w, f"{kernel=} ! <= {shape=}"
 
-    mask = torch.zeros(shape, dtype=dtype, device=device)
-
-    mask[
-        kh // 2 : h - ((kh - 1) // 2),
-        kw // 2 : w - ((kw - 1) // 2),
-    ] = 1.0
+    mask[..., 0 : kh // 2, :] = 0
+    mask[..., :, 0 : kw // 2 :] = 0
+    mask[..., h - ((kh - 1) // 2) :, :] = 0
+    mask[..., :, w - ((kw - 1) // 2) :] = 0
 
     return mask
 
@@ -67,6 +83,7 @@ def conv2d_kernel_midpoint_mask(
 def drop_block_2d_drop_filter_(
     *,
     selection,
+    inplace: bool = False,
     kernel: Tuple[int, int],
     partial_edge_blocks: bool,
 ):
@@ -78,6 +95,7 @@ def drop_block_2d_drop_filter_(
         selection: 4D (B, C, H, W) input selection noise;
           `1.0` at the midpoints of selected blocks to drop,
           `0.0` everywhere else. Expected to be gamma noise.
+        inplace: permit in-place updates to `selection`.
         kernel: the shape of the 2d kernel.
         partial_edge_blocks: permit partial blocks at the edges, faster.
 
@@ -85,12 +103,18 @@ def drop_block_2d_drop_filter_(
         A drop filter, `1.0` at points to drop, `0.0` at points to keep.
     """
     if not partial_edge_blocks:
-        selection = selection * conv2d_kernel_midpoint_mask(
-            shape=selection.shape[-2:],
-            kernel=kernel,
-            dtype=selection.dtype,
-            device=selection.device,
-        )
+        if inplace:
+            selection = conv2d_kernel_midpoint_mask(
+                kernel=kernel,
+                inplace=selection,
+            )
+        else:
+            selection = selection * conv2d_kernel_midpoint_mask(
+                shape=selection.shape[-2:],
+                kernel=kernel,
+                dtype=selection.dtype,
+                device=selection.device,
+            )
 
     kh, kw = kernel
 
@@ -136,10 +160,12 @@ def drop_block_2d(
     B, C, H, W = x.shape
 
     # TODO: This behaves oddly when clipped_block_size < block_size.
-    kh = kw = block_size
-
-    kernel = [min(kh, H), min(kw, W)]
+    # We could expose non-square blocks above this layer.
+    kernel = [min(block_size, H), min(block_size, W)]
     kh, kw = kernel
+
+    # batchwise => one mask for whole batch, quite a bit faster
+    noise_shape = (1 if batchwise else B, C, H, W)
 
     gamma = (
         float(gamma_scale * drop_prob * H * W)
@@ -147,51 +173,42 @@ def drop_block_2d(
         / float((H - kh + 1) * (W - kw + 1))
     )
 
-    # batchwise => one mask for whole batch, quite a bit faster
-    mask_shape = (1 if batchwise else B, C, H, W)
-
-    selection = torch.empty(
-        mask_shape,
-        dtype=x.dtype,
-        device=x.device,
-    ).bernoulli_(gamma)
-
     drop_filter = drop_block_2d_drop_filter_(
-        selection=selection,
         kernel=kernel,
         partial_edge_blocks=partial_edge_blocks,
+        inplace=True,
+        selection=torch.empty(
+            noise_shape,
+            dtype=x.dtype,
+            device=x.device,
+        ).bernoulli_(gamma),
     )
     keep_filter = 1.0 - drop_filter
 
-    if inplace:
-        x.mul_(keep_filter)
-    else:
-        x = x * keep_filter
-
     if with_noise:
-        # x += (noise * (1 - block_mask))
-        noise = torch.randn(
-            mask_shape,
-            dtype=x.dtype,
-            device=x.device,
-        )
+        # x += (noise * drop_filter)
+        drop_noise = torch.randn_like(drop_filter)
+        drop_noise.mul_(drop_filter)
 
         if inplace:
-            noise.mul_(drop_filter)
-            x.add_(noise)
+            x.mul_(keep_filter)
+            x.add_(drop_noise)
+
         else:
-            x = x + noise * drop_filter
+            x = x * keep_filter + drop_noise
 
     else:
-        # x *= (size(block_mask) / sum(block_mask))
+        # x *= (size(keep_filter) / (sum(keep_filter) + eps))
         count = keep_filter.numel()
         total = keep_filter.to(dtype=torch.float32).sum()
-        normalize_scale = count / total.add(1e-7).to(x.dtype)
+        keep_scale = count / total.add(1e-7).to(x.dtype)
+
+        keep_filter.mul_(keep_scale)
 
         if inplace:
-            x.mul_(normalize_scale)
+            x.mul_(keep_filter)
         else:
-            x = x * normalize_scale
+            x = x * keep_filter
 
     return x
 
