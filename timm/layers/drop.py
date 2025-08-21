@@ -56,7 +56,10 @@ def conv2d_kernel_midpoint_mask(
 
     mask = torch.zeros(shape, dtype=dtype, device=device)
 
-    mask[kh // 2 : h - ((kh - 1) // 2), kw // 2 : w - ((kw - 1) // 2)] = 1.0
+    mask[
+        kh // 2 : h - ((kh - 1) // 2),
+        kw // 2 : w - ((kw - 1) // 2),
+    ] = 1.0
 
     return mask
 
@@ -145,9 +148,11 @@ def drop_block_2d(
     # batchwise => one mask for whole batch, quite a bit faster
     mask_shape = (1 if batchwise else B, C, H, W)
 
-    selection = torch.empty(mask_shape, dtype=x.dtype, device=x.device).bernoulli_(
-        gamma
-    )
+    selection = torch.empty(
+        mask_shape,
+        dtype=x.dtype,
+        device=x.device,
+    ).bernoulli_(gamma)
 
     drop_filter = drop_block_2d_drop_filter_(
         selection=selection,
@@ -163,7 +168,11 @@ def drop_block_2d(
 
     if with_noise:
         # x += (noise * (1 - block_mask))
-        noise = torch.randn(mask_shape, dtype=x.dtype, device=x.device)
+        noise = torch.randn(
+            mask_shape,
+            dtype=x.dtype,
+            device=x.device,
+        )
 
         if inplace:
             noise.mul_(drop_filter)
@@ -281,10 +290,12 @@ def drop_path(
     if drop_prob == 0.0 or not training:
         return x
     keep_prob = 1 - drop_prob
-    shape = (x.shape[0],) + (1,) * (
-        x.ndim - 1
-    )  # work with diff dim tensors, not just 2D ConvNets
+
+    # work with diff dim tensors, not just 2D ConvNets
+    shape = (x.shape[0],) + (1,) * (x.ndim - 1)
+
     random_tensor = x.new_empty(shape).bernoulli_(keep_prob)
+
     if keep_prob > 0.0 and scale_by_keep:
         random_tensor.div_(keep_prob)
     return x * random_tensor
