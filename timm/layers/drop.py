@@ -138,6 +138,7 @@ def drop_block_2d(
     with_noise: bool = False,
     inplace: bool = False,
     batchwise: bool = False,
+    couple_channels: bool = False,
     partial_edge_blocks: bool = False,
 ):
     """DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
@@ -151,8 +152,10 @@ def drop_block_2d(
         gamma_scale: adjustment scale for the drop_prob.
         with_noise: should normal noise be added to the dropped region?
         inplace: if the drop should be applied in-place on the input tensor.
-        batchwise: should the entire batch use the same drop mask?
-        partial_edge_blocks: partial-blocks at the edges, faster.
+        batchwise: when true, the entire batch is shares the same drop mask; much faster.
+        couple_channels: when true, channels share the same drop mask;
+          much faster, with significant semantic impact.
+        partial_edge_blocks: partial-blocks at the edges; minor speedup, minor semantic impact.
 
     Returns:
         If inplace, the modified `x`; otherwise, the dropped copy of `x`, on the same device.
@@ -165,7 +168,7 @@ def drop_block_2d(
     kh, kw = kernel
 
     # batchwise => one mask for whole batch, quite a bit faster
-    noise_shape = (1 if batchwise else B, C, H, W)
+    noise_shape = (1 if batchwise else B, 1 if couple_channels else C, H, W)
 
     gamma = (
         float(gamma_scale * drop_prob * H * W)
@@ -173,37 +176,39 @@ def drop_block_2d(
         / float((H - kh + 1) * (W - kw + 1))
     )
 
-    drop_filter = drop_block_2d_drop_filter_(
-        kernel=kernel,
-        partial_edge_blocks=partial_edge_blocks,
-        inplace=True,
-        selection=torch.empty(
-            noise_shape,
-            dtype=x.dtype,
-            device=x.device,
-        ).bernoulli_(gamma),
-    )
-    keep_filter = 1.0 - drop_filter
+    with torch.no_grad():
+        drop_filter = drop_block_2d_drop_filter_(
+            kernel=kernel,
+            partial_edge_blocks=partial_edge_blocks,
+            inplace=True,
+            selection=torch.empty(
+                noise_shape,
+                dtype=x.dtype,
+                device=x.device,
+            ).bernoulli_(gamma),
+        )
+        keep_filter = 1.0 - drop_filter
 
     if with_noise:
         # x += (noise * drop_filter)
-        drop_noise = torch.randn_like(drop_filter)
-        drop_noise.mul_(drop_filter)
+        with torch.no_grad():
+            drop_noise = torch.randn_like(drop_filter)
+            drop_noise.mul_(drop_filter)
 
         if inplace:
             x.mul_(keep_filter)
             x.add_(drop_noise)
-
         else:
             x = x * keep_filter + drop_noise
 
     else:
         # x *= (size(keep_filter) / (sum(keep_filter) + eps))
-        count = keep_filter.numel()
-        total = keep_filter.to(dtype=torch.float32).sum()
-        keep_scale = count / total.add(1e-7).to(x.dtype)
+        with torch.no_grad():
+            count = keep_filter.numel()
+            total = keep_filter.to(dtype=torch.float32).sum()
+            keep_scale = count / total.add(1e-7).to(x.dtype)
 
-        keep_filter.mul_(keep_scale)
+            keep_filter.mul_(keep_scale)
 
         if inplace:
             x.mul_(keep_filter)
@@ -247,8 +252,10 @@ class DropBlock2d(nn.Module):
         gamma_scale: adjustment scale for the drop_prob.
         with_noise: should normal noise be added to the dropped region?
         inplace: if the drop should be applied in-place on the input tensor.
-        batchwise: should the entire batch use the same drop mask?
-        partial_edge_blocks: partial-blocks at the edges, faster.
+        batchwise: when true, the entire batch is shares the same drop mask; much faster.
+        couple_channels: when true, channels share the same drop mask;
+          much faster, with significant semantic impact.
+        partial_edge_blocks: partial-blocks at the edges; minor speedup, minor semantic impact.
     """
 
     drop_prob: float
@@ -257,6 +264,7 @@ class DropBlock2d(nn.Module):
     with_noise: bool
     inplace: bool
     batchwise: bool
+    couple_channels: bool
     partial_edge_blocks: bool
 
     def __init__(
@@ -266,8 +274,9 @@ class DropBlock2d(nn.Module):
         gamma_scale: float = 1.0,
         with_noise: bool = False,
         inplace: bool = False,
-        batchwise: bool = False,
-        partial_edge_blocks: bool = True,
+        batchwise: bool = True,
+        couple_channels: bool = False,
+        partial_edge_blocks: bool = False,
     ):
         super(DropBlock2d, self).__init__()
         self.drop_prob = drop_prob

@@ -326,9 +326,10 @@ def make_blocks(
         down_kernel_size: int = 1,
         avg_down: bool = False,
         drop_block_rate: float = 0.,
-        drop_path_rate: float = 0.,
-        drop_block_batchwise: bool = False,
+        drop_block_batchwise: bool = True,
+        drop_block_couple_channels: bool = False,
         drop_block_partial_edge_blocks: bool = True,
+        drop_path_rate: float = 0.,
         **kwargs,
 ) -> Tuple[List[Tuple[str, nn.Module]], List[Dict[str, Any]]]:
     """Create ResNet stages with specified block configurations.
@@ -343,8 +344,10 @@ def make_blocks(
         down_kernel_size: Kernel size for downsample layers.
         avg_down: Use average pooling for downsample.
         drop_block_rate: DropBlock drop rate.
-        drop_block_batchwise: Batchwise block dropping, faster.
-        drop_block_partial_edge_blocks: dropping produces partial blocks on the edge, faster.
+        drop_block_batchwise: Batchwise block dropping, much faster.
+        drop_block_couple_channels: Couple channel drops.
+        drop_block_partial_edge_blocks: Permit partial drop blocks on the edge,
+          slightly faster.
         drop_path_rate: Drop path rate for stochastic depth.
         **kwargs: Additional arguments passed to block constructors.
 
@@ -364,6 +367,7 @@ def make_blocks(
             drop_blocks(
                 drop_prob=drop_block_rate,
                 batchwise=drop_block_batchwise,
+                couple_channels=drop_block_couple_channels,
                 partial_edge_blocks=drop_block_partial_edge_blocks,
             ))):
         stage_name = f'layer{stage_idx + 1}'  # never liked this name, but weight compat requires it
@@ -465,10 +469,11 @@ class ResNet(nn.Module):
             norm_layer: LayerType = nn.BatchNorm2d,
             aa_layer: Optional[Type[nn.Module]] = None,
             drop_rate: float = 0.0,
-            drop_path_rate: float = 0.,
             drop_block_rate: float = 0.,
             drop_block_batchwise: bool = True,
+            drop_block_couple_channels: bool = False,
             drop_block_partial_edge_blocks: bool = True,
+            drop_path_rate: float = 0.,
             zero_init_last: bool = True,
             block_args: Optional[Dict[str, Any]] = None,
     ):
@@ -497,10 +502,11 @@ class ResNet(nn.Module):
             norm_layer (str, nn.Module): normalization layer
             aa_layer (nn.Module): anti-aliasing layer
             drop_rate (float): Dropout probability before classifier, for training (default 0.)
-            drop_path_rate (float): Stochastic depth drop-path rate (default 0.)
             drop_block_rate (float): Drop block rate (default 0.)
-            drop_block_batchwise (bool): Sample blocks batchwise, faster.
+            drop_block_batchwise (bool): Sample blocks batchwise, significantly faster.
+            drop_block_couple_channels (bool): couple channels when dropping blocks.
             drop_block_partial_edge_blocks (bool): Partial block dropping at the edges, faster.
+            drop_path_rate (float): Stochastic depth drop-path rate (default 0.)
             zero_init_last (bool): zero-init the last weight in residual path (usually last BN affine weight)
             block_args (dict): Extra kwargs to pass through to block module
         """
@@ -572,6 +578,7 @@ class ResNet(nn.Module):
             aa_layer=aa_layer,
             drop_block_rate=drop_block_rate,
             drop_block_batchwise=drop_block_batchwise,
+            drop_block_couple_channels=drop_block_couple_channels,
             drop_block_partial_edge_blocks=drop_block_partial_edge_blocks,
             drop_path_rate=drop_path_rate,
             **block_args,
@@ -1459,8 +1466,8 @@ def resnet10t(pretrained: bool = False, **kwargs) -> ResNet:
     return _create_resnet('resnet10t', pretrained, **dict(model_args, **kwargs))
 
 @register_model
-def resnet10t_dropblock_correct(pretrained: bool = False, **kwargs) -> ResNet:
-    """Constructs a ResNet-10-T model with drop_block_rate=0.05, using the most accurate DropBlock2d features.
+def resnet10t_dropblock_slow(pretrained: bool = False, **kwargs) -> ResNet:
+    """Constructs a ResNet-10-T model with drop_block_rate=0.05, using the slowest DropBlock2d features.
     """
     model_args = dict(
         block=BasicBlock,
@@ -1469,7 +1476,8 @@ def resnet10t_dropblock_correct(pretrained: bool = False, **kwargs) -> ResNet:
         stem_type='deep_tiered',
         avg_down=True,
         drop_block_rate=0.05,
-        drop_block_batchwise=True,
+        drop_block_batchwise=False,
+        drop_block_couple_channels=False,
         drop_block_partial_edge_blocks=True,
     )
     return _create_resnet('resnet10t', pretrained, **dict(model_args, **kwargs))
@@ -1485,7 +1493,8 @@ def resnet10t_dropblock_fast(pretrained: bool = False, **kwargs) -> ResNet:
         stem_type='deep_tiered',
         avg_down=True,
         drop_block_rate=0.05,
-        drop_block_batchwise=False,
+        drop_block_batchwise=True,
+        drop_block_couple_channels=True,
         drop_block_partial_edge_blocks=False,
     )
     return _create_resnet('resnet10t', pretrained, **dict(model_args, **kwargs))
