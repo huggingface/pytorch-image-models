@@ -345,6 +345,7 @@ def main():
         results_filename = f'{args.model}-{img_size}'
 
     if args.results_dir:
+        os.makedirs(args.results_dir, exist_ok=True)
         results_filename = os.path.join(args.results_dir, results_filename)
 
     for fmt in args.results_format:
