@@ -442,9 +442,9 @@ def validate(args):
         recall = recall_score(all_targets, all_preds, average=args.metrics_avg, zero_division=0)
         f1 = f1_score(all_targets, all_preds, average=args.metrics_avg, zero_division=0)
         metric_results = {
-            f'{args.metrics_avg}_precision': round(precision, 4),
-            f'{args.metrics_avg}_recall': round(recall, 4),
-            f'{args.metrics_avg}_f1_score': round(f1, 4),
+            f'{args.metrics_avg}_precision': round(100 * precision, 4),
+            f'{args.metrics_avg}_recall': round(100 * recall, 4),
+            f'{args.metrics_avg}_f1_score': round(100 * f1, 4),
         }
 
     results = OrderedDict(
