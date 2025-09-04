@@ -66,28 +66,33 @@ class ReaderHfds(Reader):
         self.split_info = self.dataset.info.splits[split]
         self.num_samples = self.split_info.num_examples
 
-        if isinstance(additional_features, str):
-            self.additional_features = [additional_features]
-        elif isinstance(additional_features, list):
-            self.additional_features = additional_features
+        if additional_features is not None:
+            if isinstance(additional_features, list):
+                self.additional_features = additional_features
+            else:
+                self.additional_features = [additional_features]
         else:
-            self.additional_features = []
+            self.additional_features = None
 
     def __getitem__(self, index):
         item = self.dataset[index]
         image = item[self.image_key]
-        features = [item[feat] for feat in self.additional_features]
 
         if 'bytes' in image and image['bytes']:
             image = io.BytesIO(image['bytes'])
         else:
             assert 'path' in image and image['path']
             image = open(image['path'], 'rb')
+
         label = item[self.label_key]
         if self.remap_class:
             label = self.class_to_idx[label]
 
-        return image, label, *features
+        if self.additional_features is not None:
+            features = [item[feat] for feat in self.additional_features]
+            return image, label, *features
+        else:
+            return image, label
 
     def __len__(self):
         return len(self.dataset)
