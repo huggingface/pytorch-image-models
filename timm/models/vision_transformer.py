@@ -1416,6 +1416,8 @@ def checkpoint_filter_fn(
             # remap final nn.Linear if it exists outside of the timm .trunk (ie in visual.head.proj)
             out_dict['head.weight'] = state_dict['visual.head.proj.weight']
             out_dict['head.bias'] = torch.zeros(state_dict['visual.head.proj.weight'].shape[0])
+    elif 'module.visual.trunk.pos_embed' in state_dict:
+        prefix = 'module.visual.trunk.'
     elif 'preprocessor.patchifier.proj.weight' in state_dict:
         state_dict = _convert_aimv2(state_dict, model)
 
@@ -2006,6 +2008,13 @@ default_cfgs = {
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         crop_pct=1.0, input_size=(3, 336, 336), num_classes=768),
+
+    'vit_large_patch14_clip_224.apple_mclip2_dfndr2b': _cfg(
+        hf_hub_id='timm/',
+        num_classes=768,
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0,
+        license='apple-amlr'
+    ),
 
     # experimental (may be removed)
     'vit_base_patch32_plus_256.untrained': _cfg(url='', input_size=(3, 256, 256), crop_pct=0.95),
