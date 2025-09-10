@@ -230,6 +230,12 @@ default_cfgs = generate_default_cfgs({
         num_classes=512,
         mean=(0., 0., 0.), std=(1., 1., 1.), first_conv='patch_embed.backbone.0.conv',
     ),
+    'vit_base_mci_224.apple_mclip2_dfndr2b': _cfg(
+        hf_hub_id='timm/',
+        num_classes=512,
+        mean=(0., 0., 0.), std=(1., 1., 1.), first_conv='patch_embed.backbone.0.conv',
+        license='apple-amlr'
+    ),
 })
 
 
