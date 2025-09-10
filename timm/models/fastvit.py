@@ -1446,6 +1446,7 @@ default_cfgs = generate_default_cfgs({
         crop_pct=0.95,
         num_classes=768,  # CLIP proj dim
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        pool_size=(4, 4),
         license='apple-amlr'
     ),
     "fastvit_mci4.apple_mclip2_dfndr2b": _cfg(
@@ -1453,6 +1454,7 @@ default_cfgs = generate_default_cfgs({
         crop_pct=0.95,
         num_classes=768,  # CLIP proj dim
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        pool_size=(4, 4),
         license='apple-amlr'
     ),
 })
