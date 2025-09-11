@@ -1061,6 +1061,33 @@ default_cfgs = generate_default_cfgs({
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0, num_classes=1024),
 
+    # NOTE dinov3 convnext weights are under a specific license, and downstream outputs must be shared with this
+    # https://ai.meta.com/resources/models-and-libraries/dinov3-license/
+    'convnext_tiny.dinov3_lvd1689m': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=1.0,
+        num_classes=0,
+        license='dinov3',
+    ),
+    'convnext_small.dinov3_lvd1689m': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=1.0,
+        num_classes=0,
+        license='dinov3',
+    ),
+    'convnext_base.dinov3_lvd1689m': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=1.0,
+        num_classes=0,
+        license='dinov3',
+    ),
+    'convnext_large.dinov3_lvd1689m': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=1.0,
+        num_classes=0,
+        license='dinov3',
+    ),
+
     "test_convnext.r160_in1k": _cfg(
         hf_hub_id='timm/',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
