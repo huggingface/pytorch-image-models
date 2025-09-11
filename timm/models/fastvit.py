@@ -1447,6 +1447,7 @@ default_cfgs = generate_default_cfgs({
         num_classes=768,  # CLIP proj dim
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         pool_size=(4, 4),
+        first_conv='stem.0.conv_kxk.0.conv',
         license='apple-amlr'
     ),
     "fastvit_mci4.apple_mclip2_dfndr2b": _cfg(
@@ -1455,6 +1456,7 @@ default_cfgs = generate_default_cfgs({
         num_classes=768,  # CLIP proj dim
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         pool_size=(4, 4),
+        first_conv='stem.0.conv_kxk.0.conv',
         license='apple-amlr'
     ),
 })
