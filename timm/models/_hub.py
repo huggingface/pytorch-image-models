@@ -457,13 +457,18 @@ def push_to_hf_hub(
         )
 
 
-def generate_readme(model_card: dict, model_name: str):
-    tags = model_card.get('tags', None) or ['image-classification', 'timm', 'transformers']
+def generate_readme(
+        model_card: dict,
+        model_name: str,
+        task_name: str = 'image-classification',
+):
+    tags = model_card.get('tags', None) or [task_name, 'timm', 'transformers']
     readme_text = "---\n"
     if tags:
         readme_text += "tags:\n"
         for t in tags:
             readme_text += f"- {t}\n"
+    readme_text += f"pipeline_tag: {task_name}\n"
     readme_text += f"library_name: {model_card.get('library_name', 'timm')}\n"
     readme_text += f"license: {model_card.get('license', 'apache-2.0')}\n"
     if 'license_name' in model_card:
