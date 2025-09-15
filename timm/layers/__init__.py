@@ -133,7 +133,9 @@ from .pos_embed_sincos import (
     RotaryEmbedding,
     RotaryEmbeddingCat,
     RotaryEmbeddingMixed,
+    RotaryEmbeddingDinoV3,
     get_mixed_freqs,
+    create_rope_embed,
 )
 from .squeeze_excite import SEModule, SqueezeExcite, EffectiveSEModule, EffectiveSqueezeExcite
 from .selective_kernel import SelectiveKernel
