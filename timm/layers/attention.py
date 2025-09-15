@@ -121,6 +121,7 @@ class AttentionRope(nn.Module):
             qk_norm: bool = False,
             scale_norm: bool = False,
             proj_bias: bool = True,
+            rotate_half: bool = False,
     ):
         """Initialize the Attention module.
 
@@ -136,6 +137,7 @@ class AttentionRope(nn.Module):
             norm_layer: Normalization layer constructor to use for QK and scale normalization
             qk_norm: Enable normalization of query (Q) and key (K) vectors with norm_layer
             scale_norm: Enable normalization (scaling) of attention output with norm_layer
+            rotate_half: Use 'half' ROPE layout instead of default 'interleaved'
         """
         super().__init__()
         if scale_norm or qk_norm:
@@ -148,6 +150,7 @@ class AttentionRope(nn.Module):
         self.scale = head_dim ** -0.5
         self.num_prefix_tokens = num_prefix_tokens
         self.fused_attn = use_fused_attn()
+        self.rotate_half = rotate_half
 
         if qkv_fused:
             self.qkv = nn.Linear(dim, attn_dim * 3, bias=qkv_bias)
@@ -196,8 +199,9 @@ class AttentionRope(nn.Module):
 
         if rope is not None:
             npt = self.num_prefix_tokens
-            q = torch.cat([q[:, :, :npt, :], apply_rot_embed_cat(q[:, :, npt:, :], rope)], dim=2).type_as(v)
-            k = torch.cat([k[:, :, :npt, :], apply_rot_embed_cat(k[:, :, npt:, :], rope)], dim=2).type_as(v)
+            half = getattr(self, 'rotate_half', False)
+            q = torch.cat([q[:, :, :npt, :], apply_rot_embed_cat(q[:, :, npt:, :], rope, half=half)], dim=2).type_as(v)
+            k = torch.cat([k[:, :, :npt, :], apply_rot_embed_cat(k[:, :, npt:, :], rope, half=half)], dim=2).type_as(v)
 
         if self.fused_attn:
             x = F.scaled_dot_product_attention(
