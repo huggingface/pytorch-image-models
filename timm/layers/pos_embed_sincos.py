@@ -898,8 +898,8 @@ class RotaryEmbeddingDinoV3(nn.Module):
             self,
             dim: int,
             temperature: Optional[float] = 100.0,
-            min_period: Optional[float] = 0.5,
-            max_period: Optional[float] = 90.,
+            min_period: Optional[float] = None,
+            max_period: Optional[float] = None,
             feat_shape: Optional[List[int]] = None,
             ref_feat_shape: Optional[List[int]] = None,
             normalize_coords: str = "separate",  # 'min', 'max', 'separate'
@@ -957,8 +957,8 @@ class RotaryEmbeddingDinoV3(nn.Module):
             exponents = 2.0 * torch.arange(dim, device=device, dtype=dtype) / (self.dim // 2)
             periods = self.temperature ** exponents
 
-        # NOTE: original has periods downcast to bfloat16 in persistent buffers, so loaded models
-        # BTW orignal and timm might differ a bit here
+        # NOTE: The original dinv3 model weights have periods downcast to bfloat16 in persistent buffers,
+        # loaded models will differ a bit vs timm as periods is not persistent and generated in float32 by default
 
         return periods
 
