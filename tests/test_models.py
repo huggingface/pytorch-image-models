@@ -78,10 +78,10 @@ if 'GITHUB_ACTIONS' in os.environ:
         '*enormous*', 'maxvit_xlarge*', 'regnet*1280', 'regnet*2560', '*_1b_*', '*_3b_*']
     NON_STD_EXCLUDE_FILTERS = ['*huge*', '*giant*',  '*gigantic*', '*enormous*', '*_1b_*', '*_3b_*', '*_7b_*']
 else:
-    EXCLUDE_FILTERS = ['*enormous*']
+    EXCLUDE_FILTERS = ['*enormous*', '*_7b_*']
     NON_STD_EXCLUDE_FILTERS = ['*gigantic*', '*enormous*', '*_3b_*', '*_7b_*']
 
-EXCLUDE_JIT_FILTERS = ['hiera_*', '*naflex*']
+EXCLUDE_JIT_FILTERS = ['hiera_*', '*naflex*', '*_7b_*']
 
 TARGET_FWD_SIZE = MAX_FWD_SIZE = 384
 TARGET_BWD_SIZE = 128

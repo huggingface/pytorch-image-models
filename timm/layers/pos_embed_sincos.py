@@ -901,7 +901,6 @@ class RotaryEmbeddingDinoV3(nn.Module):
             min_period: Optional[float] = None,
             max_period: Optional[float] = None,
             feat_shape: Optional[List[int]] = None,
-            ref_feat_shape: Optional[List[int]] = None,
             normalize_coords: str = "separate",  # 'min', 'max', 'separate'
             grid_offset: float = 0.0,
             grid_indexing: str = "ij",
@@ -930,7 +929,6 @@ class RotaryEmbeddingDinoV3(nn.Module):
 
         # Grid config
         self.feat_shape = feat_shape
-        self.ref_feat_shape = ref_feat_shape
         self.grid_offset = grid_offset
         self.grid_indexing = grid_indexing
 
@@ -944,7 +942,7 @@ class RotaryEmbeddingDinoV3(nn.Module):
             self.register_buffer("pos_embed_cached", None, persistent=False)
             self.feat_shape = None
 
-    def _compute_periods(self, device='cpu', dtype=torch.float32) -> torch.Tensor:
+    def _compute_periods(self, device: torch.device = 'cpu', dtype: torch.dtype = torch.float32) -> torch.Tensor:
         """Construct periods from either min/max or temperature."""
         dim = self.dim // 4
 
@@ -1016,7 +1014,7 @@ class RotaryEmbeddingDinoV3(nn.Module):
         # Shift per-axis in [-s, +s]
         if self.shift_coords is not None:
             shift = float(self.shift_coords)
-            shift_hw = torch.empty(2, device=device, dtype=dtype).uniform_(-shift, +shift)
+            shift_hw = torch.empty(2, device=device, dtype=dtype).uniform_(-shift, shift)
             coords = coords + shift_hw[None, :]
 
         # Jitter: per-axis log-uniform factor in [1/J, J]
@@ -1025,7 +1023,7 @@ class RotaryEmbeddingDinoV3(nn.Module):
             if jitter_factor <= 0:
                 raise ValueError("jitter_coords must be > 0 (interpreted as multiplicative factor).")
             jitter_max = math.log(jitter_factor)
-            jitter_hw = torch.empty(2, device=device, dtype=dtype).uniform_(-jitter_max, +jitter_max).exp()
+            jitter_hw = torch.empty(2, device=device, dtype=dtype).uniform_(-jitter_max, jitter_max).exp()
             coords = coords * jitter_hw[None, :]
 
         # Rescale: shared scalar log-uniform factor in [1/R, R]
@@ -1034,7 +1032,7 @@ class RotaryEmbeddingDinoV3(nn.Module):
             if rescale_factor <= 0:
                 raise ValueError("rescale_coords must be > 0 (interpreted as multiplicative factor).")
             rescale_max = math.log(rescale_factor)
-            rescale = torch.empty(1, device=device, dtype=dtype).uniform_(-rescale_max, +rescale_max).exp()
+            rescale = torch.empty(1, device=device, dtype=dtype).uniform_(-rescale_max, rescale_max).exp()
             coords = coords * rescale
 
         return coords
