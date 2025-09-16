@@ -885,6 +885,54 @@ class RotaryEmbeddingMixed(nn.Module):
         return {'freqs'}
 
 
+@torch.fx.wrap
+@register_notrace_function
+def make_coords_dinov3(
+        height: int,
+        width: int,
+        normalize_coords: str = 'separate',
+        grid_indexing: str = 'ij',
+        grid_offset: float = 0.,
+        device: torch.device = 'cpu',
+        dtype: torch.dtype = torch.float32,
+) -> torch.Tensor:
+    """Make coordinate grid matching offset and normalization of original.
+    Returns: coords with shape (HW, 2) in [-1, 1].
+    """
+    # 0.5-centered indices with optional offset
+    coords_h = torch.arange(0.5, height, device=device, dtype=dtype) + grid_offset
+    coords_w = torch.arange(0.5, width, device=device, dtype=dtype) + grid_offset
+
+    # Normalization denominators
+    if normalize_coords == "max":
+        denom = float(max(height, width))
+        h_denom = denom
+        w_denom = denom
+    elif normalize_coords == "min":
+        denom = float(min(height, width))
+        h_denom = denom
+        w_denom = denom
+    elif normalize_coords == "separate":
+        h_denom = float(height)
+        w_denom = float(width)
+    else:
+        raise ValueError(f"Unknown normalize_coords: {normalize_coords}")
+
+    # Normalize to [0, 1]
+    coords_h = coords_h / h_denom
+    coords_w = coords_w / w_denom
+
+    # Create grid then map to [-1, 1]
+    if grid_indexing == "xy":
+        grid_w, grid_h = torch.meshgrid(coords_w, coords_h, indexing="xy")
+        coords = torch.stack([grid_h, grid_w], dim=-1)  # (H, W, 2) -> (h, w order)
+    else:
+        coords = torch.stack(torch.meshgrid(coords_h, coords_w, indexing="ij"), dim=-1)  # (H, W, 2)
+    coords = coords.flatten(0, 1)  # (HW, 2)
+    coords = 2.0 * coords - 1.0  # (H, W, 2) in [-1, 1]
+    return coords
+
+
 class RotaryEmbeddingDinoV3(nn.Module):
     """RoPE for timm DinoV3 port, numerically matching original.
 
@@ -960,49 +1008,6 @@ class RotaryEmbeddingDinoV3(nn.Module):
 
         return periods
 
-    def _make_coords(
-            self,
-            height: int,
-            width: int,
-            device: torch.device = 'cpu',
-            dtype: torch.dtype = torch.float32,
-    ) -> torch.Tensor:
-        """Make coordinate grid matching offset and normalization of original.
-        Returns: coords with shape (HW, 2) in [-1, 1].
-        """
-        # 0.5-centered indices with optional offset
-        coords_h = torch.arange(0.5, height, device=device, dtype=dtype) + self.grid_offset
-        coords_w = torch.arange(0.5, width, device=device, dtype=dtype) + self.grid_offset
-
-        # Normalization denominators
-        if self.normalize_coords == "max":
-            denom = float(max(height, width))
-            h_denom = denom
-            w_denom = denom
-        elif self.normalize_coords == "min":
-            denom = float(min(height, width))
-            h_denom = denom
-            w_denom = denom
-        elif self.normalize_coords == "separate":
-            h_denom = float(height)
-            w_denom = float(width)
-        else:
-            raise ValueError(f"Unknown normalize_coords: {self.normalize_coords}")
-
-        # Normalize to [0, 1]
-        coords_h = coords_h / h_denom
-        coords_w = coords_w / w_denom
-
-        # Create grid then map to [-1, 1]
-        if self.grid_indexing == "xy":
-            grid_w, grid_h = torch.meshgrid(coords_w, coords_h, indexing="xy")
-            coords = torch.stack([grid_h, grid_w], dim=-1)  # (H, W, 2) -> (h, w order)
-        else:
-            coords = torch.stack(torch.meshgrid(coords_h, coords_w, indexing="ij"), dim=-1)  # (H, W, 2)
-        coords = coords.flatten(0, 1)  # (HW, 2)
-        coords = 2.0 * coords - 1.0  # (H, W, 2) in [-1, 1]
-        return coords
-
     def _apply_coord_augs(self, coords: torch.Tensor) -> torch.Tensor:
         """Apply shift/jitter/rescale train time augmentations."""
         if not self.training or not self.aug_active:
@@ -1063,7 +1068,12 @@ class RotaryEmbeddingDinoV3(nn.Module):
 
     def _create_embed(self, feat_shape: List[int], no_aug: bool = False) -> torch.Tensor:
         H, W = feat_shape
-        coords = self._make_coords(H, W)  # (HW, 2)
+        coords = make_coords_dinov3(
+            H, W,
+            normalize_coords=self.normalize_coords,
+            grid_indexing=self.grid_indexing,
+            grid_offset=self.grid_offset
+        )  # (HW, 2)
         if not no_aug:
             coords = self._apply_coord_augs(coords)
         sin, cos = self._get_pos_embed_from_coords(coords)  # 2 * (HW, dim)
