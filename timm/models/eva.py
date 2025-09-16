@@ -1260,6 +1260,25 @@ def _pe_cfg(url: str = '', **kwargs) -> Dict[str, Any]:
     }
 
 
+def _dinov3_cfg(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Generate default configuration for DINOv3 models.
+
+    Args:
+        url: Model weights URL.
+        **kwargs: Additional configuration parameters.
+
+    Returns:
+        Model configuration dictionary.
+    """
+    return {
+        'url': url,
+        'num_classes': 0, 'input_size': (3, 256, 256), 'pool_size': None,
+        'crop_pct': 1.0, 'interpolation': 'bicubic', 'min_input_size': (3, 128, 128),
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'patch_embed.proj', 'classifier': 'head',
+        'license': 'dinov3', **kwargs
+    }
+
 default_cfgs = generate_default_cfgs({
 
     # EVA 01 CLIP fine-tuned on imagenet-1k
@@ -1614,89 +1633,43 @@ default_cfgs = generate_default_cfgs({
 
     # DINOv3 weights are under a specific license with redistribution terms, please see
     # https://github.com/facebookresearch/dinov3/blob/main/LICENSE.md
-    'vit_small_patch16_dinov3_224.lvdm_1689m': _cfg(
+    'vit_small_patch16_dinov3.lvdm_1689m': _dinov3_cfg(
         # hf_hub_id='timm/',
-        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD,
-        crop_pct=1.0,
-        num_classes=0,
-        license='dinov3',
     ),
-    'vit_small_patch16_dinov3_qkvb_224.lvdm_1689m': _cfg(
+    'vit_small_patch16_dinov3_qkvb.lvdm_1689m': _dinov3_cfg(
         # hf_hub_id='timm/',
-        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD,
-        crop_pct=1.0,
-        num_classes=0,
-        license='dinov3',
     ),
-    'vit_small_plus_patch16_dinov3_224.lvdm_1689m': _cfg(
+    'vit_small_plus_patch16_dinov3.lvdm_1689m': _dinov3_cfg(
         # hf_hub_id='timm/',
-        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD,
-        crop_pct=1.0,
-        num_classes=0,
-        license='dinov3',
     ),
-    'vit_small_plus_patch16_dinov3_qkvb_224.lvdm_1689m': _cfg(
+    'vit_small_plus_patch16_dinov3_qkvb.lvdm_1689m': _dinov3_cfg(
         # hf_hub_id='timm/',
-        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD,
-        crop_pct=1.0,
-        num_classes=0,
-        license='dinov3',
     ),
-    'vit_base_patch16_dinov3_224.lvdm_1689m': _cfg(
+    'vit_base_patch16_dinov3.lvdm_1689m': _dinov3_cfg(
         #hf_hub_id='timm/',
-        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD,
-        crop_pct=1.0,
-        num_classes=0,
-        license='dinov3',
     ),
-    'vit_base_patch16_dinov3_qkvb_224.lvdm_1689m': _cfg(
+    'vit_base_patch16_dinov3_qkvb.lvdm_1689m': _dinov3_cfg(
         #hf_hub_id='timm/',
-        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD,
-        crop_pct=1.0,
-        num_classes=0,
-        license='dinov3',
     ),
-    'vit_large_patch16_dinov3_224.lvdm_1689m': _cfg(
+    'vit_large_patch16_dinov3.lvdm_1689m': _dinov3_cfg(
         # hf_hub_id='timm/',
-        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD,
-        crop_pct=1.0,
-        num_classes=0,
-        license='dinov3',
     ),
-    'vit_large_patch16_dinov3_qkvb_224.lvdm_1689m': _cfg(
+    'vit_large_patch16_dinov3_qkvb.lvdm_1689m': _dinov3_cfg(
         # hf_hub_id='timm/',
-        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD,
-        crop_pct=1.0,
-        num_classes=0,
-        license='dinov3',
     ),
-    'vit_large_patch16_dinov3_224.sat_493m': _cfg(
+    'vit_large_patch16_dinov3.sat_493m': _dinov3_cfg(
         # hf_hub_id='timm/',
         mean=(0.430, 0.411, 0.296), std=(0.213, 0.156, 0.143),
-        crop_pct=1.0,
-        num_classes=0,
-        license='dinov3',
     ),
-    'vit_huge_plus_patch16_dinov3_224.lvdm_1689m': _cfg(
+    'vit_huge_plus_patch16_dinov3.lvdm_1689m': _dinov3_cfg(
         # hf_hub_id='timm/',
-        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD,
-        crop_pct=1.0,
-        num_classes=0,
-        license='dinov3',
     ),
-    'vit_7b_patch16_dinov3_224.lvdm_1689m': _cfg(
+    'vit_7b_patch16_dinov3.lvdm_1689m': _dinov3_cfg(
         # hf_hub_id='timm/',
-        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD,
-        crop_pct=1.0,
-        num_classes=0,
-        license='dinov3',
     ),
-    'vit_7b_patch16_dinov3_224.sat_493m': _cfg(
+    'vit_7b_patch16_dinov3.sat_493m': _dinov3_cfg(
         # hf_hub_id='timm/',
         mean=(0.430, 0.411, 0.296), std=(0.213, 0.156, 0.143),
-        crop_pct=1.0,
-        num_classes=0,
-        license='dinov3',
     ),
 
 })
@@ -2640,9 +2613,10 @@ def vit_large_patch16_rope_mixed_ape_224(pretrained: bool = False, **kwargs) -> 
 
 
 @register_model
-def vit_small_patch16_dinov3_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_small_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         patch_size=16,
+        dynamic_img_size=True,
         embed_dim=384,
         depth=12,
         num_heads=6,
@@ -2658,14 +2632,15 @@ def vit_small_patch16_dinov3_224(pretrained: bool = False, **kwargs) -> Eva:
         use_fc_norm=False,
         norm_layer=partial(LayerNorm, eps=1e-5),
     )
-    model = _create_eva('vit_small_patch16_dinov3_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_small_patch16_dinov3', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_small_patch16_dinov3_qkvb_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_small_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         patch_size=16,
+        dynamic_img_size=True,
         embed_dim=384,
         depth=12,
         num_heads=6,
@@ -2681,14 +2656,15 @@ def vit_small_patch16_dinov3_qkvb_224(pretrained: bool = False, **kwargs) -> Eva
         use_fc_norm=False,
         norm_layer=partial(LayerNorm, eps=1e-5),
     )
-    model = _create_eva('vit_small_patch16_dinov3_qkvb_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_small_patch16_dinov3_qkvb', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_small_plus_patch16_dinov3_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_small_plus_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         patch_size=16,
+        dynamic_img_size=True,
         embed_dim=384,
         depth=12,
         num_heads=6,
@@ -2706,14 +2682,15 @@ def vit_small_plus_patch16_dinov3_224(pretrained: bool = False, **kwargs) -> Eva
         use_fc_norm=False,
         norm_layer=partial(LayerNorm, eps=1e-5),
     )
-    model = _create_eva('vit_small_plus_patch16_dinov3_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_small_plus_patch16_dinov3', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_small_plus_patch16_dinov3_qkvb_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_small_plus_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         patch_size=16,
+        dynamic_img_size=True,
         embed_dim=384,
         depth=12,
         num_heads=6,
@@ -2731,14 +2708,15 @@ def vit_small_plus_patch16_dinov3_qkvb_224(pretrained: bool = False, **kwargs) -
         use_fc_norm=False,
         norm_layer=partial(LayerNorm, eps=1e-5),
     )
-    model = _create_eva('vit_small_plus_patch16_dinov3_qkvb_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_small_plus_patch16_dinov3_qkvb', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_base_patch16_dinov3_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_base_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         patch_size=16,
+        dynamic_img_size=True,
         embed_dim=768,
         depth=12,
         num_heads=12,
@@ -2754,15 +2732,16 @@ def vit_base_patch16_dinov3_224(pretrained: bool = False, **kwargs) -> Eva:
         use_fc_norm=False,
         norm_layer=partial(LayerNorm, eps=1e-5),
     )
-    model = _create_eva('vit_base_patch16_dinov3_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_base_patch16_dinov3', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_base_patch16_dinov3_qkvb_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_base_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
     # DINOv3 Base variant w/ qkv_bias enabled (zero'd in weights)
     model_args = dict(
         patch_size=16,
+        dynamic_img_size=True,
         embed_dim=768,
         depth=12,
         num_heads=12,
@@ -2778,14 +2757,15 @@ def vit_base_patch16_dinov3_qkvb_224(pretrained: bool = False, **kwargs) -> Eva:
         use_fc_norm=False,
         norm_layer=partial(LayerNorm, eps=1e-5),
     )
-    model = _create_eva('vit_base_patch16_dinov3_qkvb_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_base_patch16_dinov3_qkvb', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_large_patch16_dinov3_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_large_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         patch_size=16,
+        dynamic_img_size=True,
         embed_dim=1024,
         depth=24,
         num_heads=16,
@@ -2801,14 +2781,15 @@ def vit_large_patch16_dinov3_224(pretrained: bool = False, **kwargs) -> Eva:
         use_fc_norm=False,
         norm_layer=partial(LayerNorm, eps=1e-5),
     )
-    model = _create_eva('vit_large_patch16_dinov3_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_large_patch16_dinov3', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_large_patch16_dinov3_qkvb_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_large_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         patch_size=16,
+        dynamic_img_size=True,
         embed_dim=768,
         depth=24,
         num_heads=16,
@@ -2824,14 +2805,15 @@ def vit_large_patch16_dinov3_qkvb_224(pretrained: bool = False, **kwargs) -> Eva
         use_fc_norm=False,
         norm_layer=partial(LayerNorm, eps=1e-5),
     )
-    model = _create_eva('vit_large_patch16_dinov3_qkvb_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_large_patch16_dinov3_qkvb', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_huge_plus_patch16_dinov3_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_huge_plus_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         patch_size=16,
+        dynamic_img_size=True,
         embed_dim=1280,
         depth=32,
         num_heads=20,
@@ -2850,14 +2832,15 @@ def vit_huge_plus_patch16_dinov3_224(pretrained: bool = False, **kwargs) -> Eva:
         norm_layer=partial(LayerNorm, eps=1e-5),
     )
 
-    model = _create_eva('vit_huge_plus_patch16_dinov3_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_huge_plus_patch16_dinov3', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_7b_patch16_dinov3_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_7b_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         patch_size=16,
+        dynamic_img_size=True,
         embed_dim=4096,
         depth=40,
         num_heads=32,
@@ -2877,5 +2860,5 @@ def vit_7b_patch16_dinov3_224(pretrained: bool = False, **kwargs) -> Eva:
         norm_layer=partial(LayerNorm, eps=1e-5),
     )
 
-    model = _create_eva('vit_7b_patch16_dinov3_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_7b_patch16_dinov3', pretrained=pretrained, **dict(model_args, **kwargs))
     return model

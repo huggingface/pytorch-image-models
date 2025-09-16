@@ -1088,6 +1088,7 @@ class RotaryEmbeddingDinoV3(nn.Module):
                 assert self.feat_shape is not None, 'feature shape must be cached on create'
                 rope_embed = self._create_embed(self.feat_shape)
             else:
+                assert self.pos_embed_cached is not None
                 rope_embed = self.pos_embed_cached
 
         return rope_embed
