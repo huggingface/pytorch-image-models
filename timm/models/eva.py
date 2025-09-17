@@ -2875,7 +2875,7 @@ def vit_huge_plus_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva
         norm_layer=partial(LayerNorm, eps=1e-5),
     )
 
-    model = _create_eva('vit_huge_plus_patch16_dinov3', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_huge_plus_patch16_dinov3_qkvb', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 @register_model
