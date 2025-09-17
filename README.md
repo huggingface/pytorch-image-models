@@ -12,6 +12,14 @@
 
 ## What's New
 
+## Sept 17, 2025
+* DINOv3 (https://arxiv.org/abs/2508.10104) ConvNeXt and ViT models added. ConvNeXt models were mapped to existing `timm` model. ViT support done via the EVA base model w/ a new `RotaryEmbeddingDinoV3` to match the DINOv3 specific RoPE impl
+  * HuggingFace Hub: https://huggingface.co/collections/timm/timm-dinov3-68cb08bb0bee365973d52a4d
+* MobileCLIP-2 (https://arxiv.org/abs/2508.20691) vision encoders. New MCI3/MCI4 FastViT variants added and weights mapped to existing FastViT and B, L/14 ViTs.
+* MetaCLIP-2 Worldwide (https://arxiv.org/abs/2507.22062) ViT encoder weights added.
+* SigLIP-2 (https://arxiv.org/abs/2502.14786) NaFlex ViT encoder weights added via timm NaFlexViT model.
+* Misc fixes and contributions
+
 ## July 23, 2025
 * Add `set_input_size()` method to EVA models, used by OpenCLIP 3.0.0 to allow resizing for timm based encoder models.
 * Release 1.0.18, needed for PE-Core S & T models in OpenCLIP 3.0.0
