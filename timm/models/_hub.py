@@ -404,6 +404,7 @@ def push_to_hf_hub(
         model_config: Optional[dict] = None,
         model_card: Optional[dict] = None,
         model_args: Optional[dict] = None,
+        task_name: str = 'image-classification',
         safe_serialization: Union[bool, Literal["both"]] = 'both',
 ):
     """
@@ -444,7 +445,7 @@ def push_to_hf_hub(
             model_card = model_card or {}
             model_name = repo_id.split('/')[-1]
             readme_path = Path(tmpdir) / "README.md"
-            readme_text = generate_readme(model_card, model_name)
+            readme_text = generate_readme(model_card, model_name, task_name=task_name)
             readme_path.write_text(readme_text)
 
         # Upload model and return
