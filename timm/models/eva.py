@@ -1633,42 +1633,49 @@ default_cfgs = generate_default_cfgs({
 
     # DINOv3 weights are under a specific license with redistribution terms, please see
     # https://github.com/facebookresearch/dinov3/blob/main/LICENSE.md
-    'vit_small_patch16_dinov3.lvdm_1689m': _dinov3_cfg(
-        # hf_hub_id='timm/',
+    'vit_small_patch16_dinov3.lvd_1689m': _dinov3_cfg(
+        hf_hub_id='timm/',
     ),
-    'vit_small_patch16_dinov3_qkvb.lvdm_1689m': _dinov3_cfg(
-        # hf_hub_id='timm/',
+    'vit_small_patch16_dinov3_qkvb.lvd_1689m': _dinov3_cfg(
+        hf_hub_id='timm/',
     ),
-    'vit_small_plus_patch16_dinov3.lvdm_1689m': _dinov3_cfg(
-        # hf_hub_id='timm/',
+    'vit_small_plus_patch16_dinov3.lvd_1689m': _dinov3_cfg(
+        hf_hub_id='timm/',
     ),
-    'vit_small_plus_patch16_dinov3_qkvb.lvdm_1689m': _dinov3_cfg(
-        # hf_hub_id='timm/',
+    'vit_small_plus_patch16_dinov3_qkvb.lvd_1689m': _dinov3_cfg(
+        hf_hub_id='timm/',
     ),
-    'vit_base_patch16_dinov3.lvdm_1689m': _dinov3_cfg(
-        #hf_hub_id='timm/',
+    'vit_base_patch16_dinov3.lvd_1689m': _dinov3_cfg(
+        hf_hub_id='timm/',
     ),
-    'vit_base_patch16_dinov3_qkvb.lvdm_1689m': _dinov3_cfg(
-        #hf_hub_id='timm/',
+    'vit_base_patch16_dinov3_qkvb.lvd_1689m': _dinov3_cfg(
+        hf_hub_id='timm/',
     ),
-    'vit_large_patch16_dinov3.lvdm_1689m': _dinov3_cfg(
-        # hf_hub_id='timm/',
+    'vit_large_patch16_dinov3.lvd_1689m': _dinov3_cfg(
+        hf_hub_id='timm/',
     ),
-    'vit_large_patch16_dinov3_qkvb.lvdm_1689m': _dinov3_cfg(
-        # hf_hub_id='timm/',
+    'vit_large_patch16_dinov3_qkvb.lvd_1689m': _dinov3_cfg(
+        hf_hub_id='timm/',
     ),
     'vit_large_patch16_dinov3.sat_493m': _dinov3_cfg(
-        # hf_hub_id='timm/',
+        hf_hub_id='timm/',
         mean=(0.430, 0.411, 0.296), std=(0.213, 0.156, 0.143),
     ),
-    'vit_huge_plus_patch16_dinov3.lvdm_1689m': _dinov3_cfg(
-        # hf_hub_id='timm/',
+    'vit_large_patch16_dinov3_qkvb.sat_493m': _dinov3_cfg(
+        hf_hub_id='timm/',
+        mean=(0.430, 0.411, 0.296), std=(0.213, 0.156, 0.143),
     ),
-    'vit_7b_patch16_dinov3.lvdm_1689m': _dinov3_cfg(
-        # hf_hub_id='timm/',
+    'vit_huge_plus_patch16_dinov3.lvd_1689m': _dinov3_cfg(
+        hf_hub_id='timm/',
+    ),
+    'vit_huge_plus_patch16_dinov3_qkvb.lvd_1689m': _dinov3_cfg(
+        hf_hub_id='timm/',
+    ),
+    'vit_7b_patch16_dinov3.lvd_1689m': _dinov3_cfg(
+        hf_hub_id='timm/',
     ),
     'vit_7b_patch16_dinov3.sat_493m': _dinov3_cfg(
-        # hf_hub_id='timm/',
+        hf_hub_id='timm/',
         mean=(0.430, 0.411, 0.296), std=(0.213, 0.156, 0.143),
     ),
 
@@ -2614,6 +2621,7 @@ def vit_large_patch16_rope_mixed_ape_224(pretrained: bool = False, **kwargs) -> 
 
 @register_model
 def vit_small_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
+    """DINOv3 S/16 https://arxiv.org/abs/2508.10104"""
     model_args = dict(
         patch_size=16,
         dynamic_img_size=True,
@@ -2638,6 +2646,7 @@ def vit_small_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def vit_small_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
+    """DINOv3 S/16 w/ QKV bias enabled (but zero) https://arxiv.org/abs/2508.10104"""
     model_args = dict(
         patch_size=16,
         dynamic_img_size=True,
@@ -2662,6 +2671,7 @@ def vit_small_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def vit_small_plus_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
+    """DINOv3 S/16 Plus https://arxiv.org/abs/2508.10104"""
     model_args = dict(
         patch_size=16,
         dynamic_img_size=True,
@@ -2688,6 +2698,7 @@ def vit_small_plus_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def vit_small_plus_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
+    """DINOv3 S/16 Plus w/ QKV bias enabled (but 0) https://arxiv.org/abs/2508.10104"""
     model_args = dict(
         patch_size=16,
         dynamic_img_size=True,
@@ -2714,6 +2725,7 @@ def vit_small_plus_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Ev
 
 @register_model
 def vit_base_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
+    """DINOv3 B/16 https://arxiv.org/abs/2508.10104"""
     model_args = dict(
         patch_size=16,
         dynamic_img_size=True,
@@ -2738,7 +2750,7 @@ def vit_base_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def vit_base_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
-    # DINOv3 Base variant w/ qkv_bias enabled (zero'd in weights)
+    """DINOv3 B/16 w/ QKV bias enabled (but zero) https://arxiv.org/abs/2508.10104"""
     model_args = dict(
         patch_size=16,
         dynamic_img_size=True,
@@ -2763,6 +2775,7 @@ def vit_base_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def vit_large_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
+    """DINOv3 L/16 https://arxiv.org/abs/2508.10104"""
     model_args = dict(
         patch_size=16,
         dynamic_img_size=True,
@@ -2787,10 +2800,11 @@ def vit_large_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def vit_large_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
+    """DINOv3 w/ QKV bias enabled (but zero) https://arxiv.org/abs/2508.10104"""
     model_args = dict(
         patch_size=16,
         dynamic_img_size=True,
-        embed_dim=768,
+        embed_dim=1024,
         depth=24,
         num_heads=16,
         qkv_bias=True,
@@ -2811,6 +2825,7 @@ def vit_large_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def vit_huge_plus_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
+    """DINOv3 H/16 Plus https://arxiv.org/abs/2508.10104"""
     model_args = dict(
         patch_size=16,
         dynamic_img_size=True,
@@ -2837,7 +2852,35 @@ def vit_huge_plus_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
 
 
 @register_model
+def vit_huge_plus_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
+    """DINOv3 H/16 Plus w/ QKV bias enabled (but zero) https://arxiv.org/abs/2508.10104"""
+    model_args = dict(
+        patch_size=16,
+        dynamic_img_size=True,
+        embed_dim=1280,
+        depth=32,
+        num_heads=20,
+        qkv_bias=True,
+        init_values=1.0e-5, # layer-scale
+        rope_type='dinov3',
+        rope_temperature=100,
+        use_rot_pos_emb=True,
+        use_abs_pos_emb=False,
+        rope_rotate_half=True,
+        swiglu_mlp=True,
+        swiglu_align_to=8,
+        #rope_rescale_coords=2,  # haven't added to interface
+        num_reg_tokens=4,
+        use_fc_norm=False,
+        norm_layer=partial(LayerNorm, eps=1e-5),
+    )
+
+    model = _create_eva('vit_huge_plus_patch16_dinov3', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+@register_model
 def vit_7b_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
+    """DINOv3 7B/16 https://arxiv.org/abs/2508.10104"""
     model_args = dict(
         patch_size=16,
         dynamic_img_size=True,
