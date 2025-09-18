@@ -1921,11 +1921,11 @@ default_cfgs = {
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         crop_pct=1.0, input_size=(3, 378, 378), num_classes=1024),
 
-    'vit_large_patch14_clip_224.metaclip2_worldwide': _cfg(
-        hf_hub_id='timm/',
-        license='cc-by-nc-4.0',
-        notes=('natively QuickGELU, use quickgelu model variant for original results',),
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
+    # 'vit_large_patch14_clip_224.metaclip2_worldwide': _cfg(
+    #     hf_hub_id='timm/',
+    #     license='cc-by-nc-4.0',
+    #     notes=('natively QuickGELU, use quickgelu model variant for original results',),
+    #     mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
     'vit_huge_patch14_clip_224.metaclip2_worldwide': _cfg(
         hf_hub_id='timm/',
         license='cc-by-nc-4.0',
