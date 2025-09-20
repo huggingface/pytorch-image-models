@@ -17,6 +17,7 @@ except ImportError:
 
 try:
     import safetensors.torch
+
     _has_safetensors = True
 except ImportError:
     _has_safetensors = False
@@ -31,10 +32,16 @@ from timm.models._pretrained import filter_pretrained_cfg
 
 try:
     from huggingface_hub import (
-        create_repo, get_hf_file_metadata,
-        hf_hub_download, hf_hub_url,
-        repo_type_and_id_from_hf_id, upload_folder)
-    from huggingface_hub.utils import EntryNotFoundError
+        create_repo,
+        get_hf_file_metadata,
+        hf_hub_download,
+        hf_hub_url,
+        model_info,
+        repo_type_and_id_from_hf_id,
+        upload_folder,
+    )
+    from huggingface_hub.utils import EntryNotFoundError, RepositoryNotFoundError
+
     hf_hub_download = partial(hf_hub_download, library_name="timm", library_version=__version__)
     _has_hf_hub = True
 except ImportError:
@@ -43,8 +50,16 @@ except ImportError:
 
 _logger = logging.getLogger(__name__)
 
-__all__ = ['get_cache_dir', 'download_cached_file', 'has_hf_hub', 'hf_split', 'load_model_config_from_hf',
-           'load_state_dict_from_hf', 'save_for_hf', 'push_to_hf_hub']
+__all__ = [
+    'get_cache_dir',
+    'download_cached_file',
+    'has_hf_hub',
+    'hf_split',
+    'load_model_config_from_hf',
+    'load_state_dict_from_hf',
+    'save_for_hf',
+    'push_to_hf_hub',
+]
 
 # Default name for a weights file hosted on the Huggingface Hub.
 HF_WEIGHTS_NAME = "pytorch_model.bin"  # default pytorch pkl
@@ -69,10 +84,10 @@ def get_cache_dir(child_dir: str = ''):
 
 
 def download_cached_file(
-        url: Union[str, List[str], Tuple[str, str]],
-        check_hash: bool = True,
-        progress: bool = False,
-        cache_dir: Optional[Union[str, Path]] = None,
+    url: Union[str, List[str], Tuple[str, str]],
+    check_hash: bool = True,
+    progress: bool = False,
+    cache_dir: Optional[Union[str, Path]] = None,
 ):
     if isinstance(url, (list, tuple)):
         url, filename = url
@@ -95,9 +110,9 @@ def download_cached_file(
 
 
 def check_cached_file(
-        url: Union[str, List[str], Tuple[str, str]],
-        check_hash: bool = True,
-        cache_dir: Optional[Union[str, Path]] = None,
+    url: Union[str, List[str], Tuple[str, str]],
+    check_hash: bool = True,
+    cache_dir: Optional[Union[str, Path]] = None,
 ):
     if isinstance(url, (list, tuple)):
         url, filename = url
@@ -114,7 +129,7 @@ def check_cached_file(
             if hash_prefix:
                 with open(cached_file, 'rb') as f:
                     hd = hashlib.sha256(f.read()).hexdigest()
-                    if hd[:len(hash_prefix)] != hash_prefix:
+                    if hd[: len(hash_prefix)] != hash_prefix:
                         return False
         return True
     return False
@@ -124,7 +139,8 @@ def has_hf_hub(necessary: bool = False):
     if not _has_hf_hub and necessary:
         # if no HF Hub module installed, and it is necessary to continue, raise error
         raise RuntimeError(
-            'Hugging Face hub model specified but package not installed. Run `pip install huggingface_hub`.')
+            'Hugging Face hub model specified but package not installed. Run `pip install huggingface_hub`.'
+        )
     return _has_hf_hub
 
 
@@ -144,9 +160,9 @@ def load_cfg_from_json(json_file: Union[str, Path]):
 
 
 def download_from_hf(
-        model_id: str,
-        filename: str,
-        cache_dir: Optional[Union[str, Path]] = None,
+    model_id: str,
+    filename: str,
+    cache_dir: Optional[Union[str, Path]] = None,
 ):
     hf_model_id, hf_revision = hf_split(model_id)
     return hf_hub_download(
@@ -158,8 +174,8 @@ def download_from_hf(
 
 
 def _parse_model_cfg(
-        cfg: Dict[str, Any],
-        extra_fields: Dict[str, Any],
+    cfg: Dict[str, Any],
+    extra_fields: Dict[str, Any],
 ) -> Tuple[Dict[str, Any], str, Dict[str, Any]]:
     """"""
     # legacy "single‑dict" → split
@@ -170,7 +186,7 @@ def _parse_model_cfg(
             "num_features": pretrained_cfg.pop("num_features", None),
             "pretrained_cfg": pretrained_cfg,
         }
-        if "labels" in pretrained_cfg:                  # rename ‑‑> label_names
+        if "labels" in pretrained_cfg:  # rename ‑‑> label_names
             pretrained_cfg["label_names"] = pretrained_cfg.pop("labels")
 
     pretrained_cfg = cfg["pretrained_cfg"]
@@ -190,8 +206,8 @@ def _parse_model_cfg(
 
 
 def load_model_config_from_hf(
-        model_id: str,
-        cache_dir: Optional[Union[str, Path]] = None,
+    model_id: str,
+    cache_dir: Optional[Union[str, Path]] = None,
 ):
     """Original HF‑Hub loader (unchanged download, shared parsing)."""
     assert has_hf_hub(True)
@@ -201,7 +217,7 @@ def load_model_config_from_hf(
 
 
 def load_model_config_from_path(
-        model_path: Union[str, Path],
+    model_path: Union[str, Path],
 ):
     """Load from ``<model_path>/config.json`` on the local filesystem."""
     model_path = Path(model_path)
@@ -214,10 +230,10 @@ def load_model_config_from_path(
 
 
 def load_state_dict_from_hf(
-        model_id: str,
-        filename: str = HF_WEIGHTS_NAME,
-        weights_only: bool = False,
-        cache_dir: Optional[Union[str, Path]] = None,
+    model_id: str,
+    filename: str = HF_WEIGHTS_NAME,
+    weights_only: bool = False,
+    cache_dir: Optional[Union[str, Path]] = None,
 ):
     assert has_hf_hub(True)
     hf_model_id, hf_revision = hf_split(model_id)
@@ -234,7 +250,8 @@ def load_state_dict_from_hf(
                 )
                 _logger.info(
                     f"[{model_id}] Safe alternative available for '{filename}' "
-                    f"(as '{safe_filename}'). Loading weights using safetensors.")
+                    f"(as '{safe_filename}'). Loading weights using safetensors."
+                )
                 return safetensors.torch.load_file(cached_safe_file, device="cpu")
             except EntryNotFoundError:
                 pass
@@ -266,9 +283,10 @@ _PREFERRED_FILES = (
 )
 _EXT_PRIORITY = ('.safetensors', '.pth', '.pth.tar', '.bin')
 
+
 def load_state_dict_from_path(
-        path: str,
-        weights_only: bool = False,
+    path: str,
+    weights_only: bool = False,
 ):
     found_file = None
     for fname in _PREFERRED_FILES:
@@ -283,10 +301,7 @@ def load_state_dict_from_path(
         files = sorted(path.glob(f"*{ext}"))
         if files:
             if len(files) > 1:
-                logging.warning(
-                    f"Multiple {ext} checkpoints in {path}: {names}. "
-                    f"Using '{files[0].name}'."
-                )
+                logging.warning(f"Multiple {ext} checkpoints in {path}: {names}. " f"Using '{files[0].name}'.")
             found_file = files[0]
 
     if not found_file:
@@ -300,10 +315,10 @@ def load_state_dict_from_path(
 
 
 def load_custom_from_hf(
-        model_id: str,
-        filename: str,
-        model: torch.nn.Module,
-        cache_dir: Optional[Union[str, Path]] = None,
+    model_id: str,
+    filename: str,
+    model: torch.nn.Module,
+    cache_dir: Optional[Union[str, Path]] = None,
 ):
     assert has_hf_hub(True)
     hf_model_id, hf_revision = hf_split(model_id)
@@ -317,10 +332,7 @@ def load_custom_from_hf(
 
 
 def save_config_for_hf(
-        model: torch.nn.Module,
-        config_path: str,
-        model_config: Optional[dict] = None,
-        model_args: Optional[dict] = None
+    model: torch.nn.Module, config_path: str, model_config: Optional[dict] = None, model_args: Optional[dict] = None
 ):
     model_config = model_config or {}
     hf_config = {}
@@ -339,7 +351,8 @@ def save_config_for_hf(
     if 'labels' in model_config:
         _logger.warning(
             "'labels' as a config field for is deprecated. Please use 'label_names' and 'label_descriptions'."
-            " Renaming provided 'labels' field to 'label_names'.")
+            " Renaming provided 'labels' field to 'label_names'."
+        )
         model_config.setdefault('label_names', model_config.pop('labels'))
 
     label_names = model_config.pop('label_names', None)
@@ -366,11 +379,11 @@ def save_config_for_hf(
 
 
 def save_for_hf(
-        model: torch.nn.Module,
-        save_directory: str,
-        model_config: Optional[dict] = None,
-        model_args: Optional[dict] = None,
-        safe_serialization: Union[bool, Literal["both"]] = False,
+    model: torch.nn.Module,
+    save_directory: str,
+    model_config: Optional[dict] = None,
+    model_args: Optional[dict] = None,
+    safe_serialization: Union[bool, Literal["both"]] = False,
 ):
     assert has_hf_hub(True)
     save_directory = Path(save_directory)
@@ -394,18 +407,18 @@ def save_for_hf(
 
 
 def push_to_hf_hub(
-        model: torch.nn.Module,
-        repo_id: str,
-        commit_message: str = 'Add model',
-        token: Optional[str] = None,
-        revision: Optional[str] = None,
-        private: bool = False,
-        create_pr: bool = False,
-        model_config: Optional[dict] = None,
-        model_card: Optional[dict] = None,
-        model_args: Optional[dict] = None,
-        task_name: str = 'image-classification',
-        safe_serialization: Union[bool, Literal["both"]] = 'both',
+    model: torch.nn.Module,
+    repo_id: str,
+    commit_message: str = 'Add model',
+    token: Optional[str] = None,
+    revision: Optional[str] = None,
+    private: bool = False,
+    create_pr: bool = False,
+    model_config: Optional[dict] = None,
+    model_card: Optional[dict] = None,
+    model_args: Optional[dict] = None,
+    task_name: str = 'image-classification',
+    safe_serialization: Union[bool, Literal["both"]] = 'both',
 ):
     """
     Arguments:
@@ -459,9 +472,9 @@ def push_to_hf_hub(
 
 
 def generate_readme(
-        model_card: dict,
-        model_name: str,
-        task_name: str = 'image-classification',
+    model_card: dict,
+    model_name: str,
+    task_name: str = 'image-classification',
 ):
     tags = model_card.get('tags', None) or [task_name, 'timm', 'transformers']
     readme_text = "---\n"
@@ -540,3 +553,44 @@ def _get_safe_alternatives(filename: str) -> Iterable[str]:
         yield HF_OPEN_CLIP_SAFE_WEIGHTS_NAME
     if filename not in (HF_WEIGHTS_NAME, HF_OPEN_CLIP_WEIGHTS_NAME) and filename.endswith(".bin"):
         yield filename[:-4] + ".safetensors"
+
+
+def _get_license_from_hf_hub(model_id: str | None, hf_hub_id: str | None) -> str | None:
+    """Retrieve license information for a model from Hugging Face Hub.
+
+    Fetches the license field from the model card metadata on Hugging Face Hub
+    for the specified model. Returns None if the model is not found, if
+    huggingface_hub is not installed, or if the model is marked as "untrained".
+
+    Args:
+        model_id: The model identifier/name. In the case of None we assume an untrained model.
+        hf_hub_id: The Hugging Face Hub organization/user ID. If it is None,
+            we will return None as we cannot infer the license terms.
+
+    Returns:
+        The license string in lowercase if found, None otherwise.
+
+    Note:
+        Requires huggingface_hub package to be installed. Will log a warning
+        and return None if the package is not available.
+    """
+    if not has_hf_hub(True):
+        msg = "For updated license information run `pip install huggingface_hub`."
+        _logger.warning(msg=msg)
+        return None
+
+    if not (model_id and hf_hub_id):
+        return None
+
+    repo_id: str = hf_hub_id + model_id
+
+    try:
+        info = model_info(repo_id=repo_id)
+
+    except RepositoryNotFoundError:
+        # TODO: any wish what happens here? @rwightman
+        print(repo_id)
+        return None
+
+    license = info.card_data.get("license").lower() if info.card_data else None
+    return license
