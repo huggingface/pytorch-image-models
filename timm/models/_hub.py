@@ -30,8 +30,8 @@ from timm import __version__
 from timm.models._pretrained import filter_pretrained_cfg
 
 try:
-    from huggingface_hub import HfApi, hf_hub_download
-    from huggingface_hub.utils import EntryNotFoundError
+    from huggingface_hub import HfApi, hf_hub_download, model_info
+    from huggingface_hub.utils import EntryNotFoundError, RepositoryNotFoundError
     hf_hub_download = partial(hf_hub_download, library_name="timm", library_version=__version__)
     _has_hf_hub = True
 except ImportError:
@@ -533,3 +533,44 @@ def _get_safe_alternatives(filename: str) -> Iterable[str]:
         yield HF_OPEN_CLIP_SAFE_WEIGHTS_NAME
     if filename not in (HF_WEIGHTS_NAME, HF_OPEN_CLIP_WEIGHTS_NAME) and filename.endswith(".bin"):
         yield filename[:-4] + ".safetensors"
+
+
+def _get_license_from_hf_hub(model_id: str | None, hf_hub_id: str | None) -> str | None:
+    """Retrieve license information for a model from Hugging Face Hub.
+
+    Fetches the license field from the model card metadata on Hugging Face Hub
+    for the specified model. Returns None if the model is not found, if
+    huggingface_hub is not installed, or if the model is marked as "untrained".
+
+    Args:
+        model_id: The model identifier/name. In the case of None we assume an untrained model.
+        hf_hub_id: The Hugging Face Hub organization/user ID. If it is None,
+            we will return None as we cannot infer the license terms.
+
+    Returns:
+        The license string in lowercase if found, None otherwise.
+
+    Note:
+        Requires huggingface_hub package to be installed. Will log a warning
+        and return None if the package is not available.
+    """
+    if not has_hf_hub(True):
+        msg = "For updated license information run `pip install huggingface_hub`."
+        _logger.warning(msg=msg)
+        return None
+
+    if not (model_id and hf_hub_id):
+        return None
+
+    repo_id: str = hf_hub_id + model_id
+
+    try:
+        info = model_info(repo_id=repo_id)
+
+    except RepositoryNotFoundError:
+        # TODO: any wish what happens here? @rwightman
+        print(repo_id)
+        return None
+
+    license = info.card_data.get("license").lower() if info.card_data else None
+    return license
