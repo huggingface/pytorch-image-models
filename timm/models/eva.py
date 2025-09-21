@@ -1633,48 +1633,48 @@ default_cfgs = generate_default_cfgs({
 
     # DINOv3 weights are under a specific license with redistribution terms, please see
     # https://github.com/facebookresearch/dinov3/blob/main/LICENSE.md
-    'vit_small_patch16_dinov3.lvd_1689m': _dinov3_cfg(
+    'vit_small_patch16_dinov3.lvd1689m': _dinov3_cfg(
         hf_hub_id='timm/',
     ),
-    'vit_small_patch16_dinov3_qkvb.lvd_1689m': _dinov3_cfg(
+    'vit_small_patch16_dinov3_qkvb.lvd1689m': _dinov3_cfg(
         hf_hub_id='timm/',
     ),
-    'vit_small_plus_patch16_dinov3.lvd_1689m': _dinov3_cfg(
+    'vit_small_plus_patch16_dinov3.lvd1689m': _dinov3_cfg(
         hf_hub_id='timm/',
     ),
-    'vit_small_plus_patch16_dinov3_qkvb.lvd_1689m': _dinov3_cfg(
+    'vit_small_plus_patch16_dinov3_qkvb.lvd1689m': _dinov3_cfg(
         hf_hub_id='timm/',
     ),
-    'vit_base_patch16_dinov3.lvd_1689m': _dinov3_cfg(
+    'vit_base_patch16_dinov3.lvd1689m': _dinov3_cfg(
         hf_hub_id='timm/',
     ),
-    'vit_base_patch16_dinov3_qkvb.lvd_1689m': _dinov3_cfg(
+    'vit_base_patch16_dinov3_qkvb.lvd1689m': _dinov3_cfg(
         hf_hub_id='timm/',
     ),
-    'vit_large_patch16_dinov3.lvd_1689m': _dinov3_cfg(
+    'vit_large_patch16_dinov3.lvd1689m': _dinov3_cfg(
         hf_hub_id='timm/',
     ),
-    'vit_large_patch16_dinov3_qkvb.lvd_1689m': _dinov3_cfg(
+    'vit_large_patch16_dinov3_qkvb.lvd1689m': _dinov3_cfg(
         hf_hub_id='timm/',
     ),
-    'vit_large_patch16_dinov3.sat_493m': _dinov3_cfg(
-        hf_hub_id='timm/',
-        mean=(0.430, 0.411, 0.296), std=(0.213, 0.156, 0.143),
-    ),
-    'vit_large_patch16_dinov3_qkvb.sat_493m': _dinov3_cfg(
+    'vit_large_patch16_dinov3.sat493m': _dinov3_cfg(
         hf_hub_id='timm/',
         mean=(0.430, 0.411, 0.296), std=(0.213, 0.156, 0.143),
     ),
-    'vit_huge_plus_patch16_dinov3.lvd_1689m': _dinov3_cfg(
+    'vit_large_patch16_dinov3_qkvb.sat493m': _dinov3_cfg(
+        hf_hub_id='timm/',
+        mean=(0.430, 0.411, 0.296), std=(0.213, 0.156, 0.143),
+    ),
+    'vit_huge_plus_patch16_dinov3.lvd1689m': _dinov3_cfg(
         hf_hub_id='timm/',
     ),
-    'vit_huge_plus_patch16_dinov3_qkvb.lvd_1689m': _dinov3_cfg(
+    'vit_huge_plus_patch16_dinov3_qkvb.lvd1689m': _dinov3_cfg(
         hf_hub_id='timm/',
     ),
-    'vit_7b_patch16_dinov3.lvd_1689m': _dinov3_cfg(
+    'vit_7b_patch16_dinov3.lvd1689m': _dinov3_cfg(
         hf_hub_id='timm/',
     ),
-    'vit_7b_patch16_dinov3.sat_493m': _dinov3_cfg(
+    'vit_7b_patch16_dinov3.sat493m': _dinov3_cfg(
         hf_hub_id='timm/',
         mean=(0.430, 0.411, 0.296), std=(0.213, 0.156, 0.143),
     ),
