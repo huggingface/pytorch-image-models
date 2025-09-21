@@ -12,6 +12,10 @@
 
 ## What's New
 
+## Sept 21, 2025
+* Remap DINOv3 ViT weight tags from `lvd_1689m` -> `lvd1689m` to match (same for `sat_493m` -> `sat493m`)
+* Release 1.0.20
+
 ## Sept 17, 2025
 * DINOv3 (https://arxiv.org/abs/2508.10104) ConvNeXt and ViT models added. ConvNeXt models were mapped to existing `timm` model. ViT support done via the EVA base model w/ a new `RotaryEmbeddingDinoV3` to match the DINOv3 specific RoPE impl
   * HuggingFace Hub: https://huggingface.co/collections/timm/timm-dinov3-68cb08bb0bee365973d52a4d
