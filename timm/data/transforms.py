@@ -557,7 +557,7 @@ class ResizeKeepRatio:
         format_string += f', longest={self.longest:.3f}'
         format_string += f', random_scale_prob={self.random_scale_prob:.3f}'
         format_string += f', random_scale_range=(' \
-                         f'{self.random_scale_range[0]:.3f}, {self.random_aspect_range[1]:.3f})'
+                         f'{self.random_scale_range[0]:.3f}, {self.random_scale_range[1]:.3f})'
         format_string += f', random_aspect_prob={self.random_aspect_prob:.3f}'
         format_string += f', random_aspect_range=(' \
                          f'{self.random_aspect_range[0]:.3f}, {self.random_aspect_range[1]:.3f}))'
