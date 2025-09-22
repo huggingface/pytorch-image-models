@@ -22,7 +22,6 @@ import torch.nn as nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import ClassifierHead, ConvNormAct, DropPath, calculate_drop_path_rates, get_attn, create_act_layer, make_divisible
 from ._builder import build_model_with_cfg
-from ._hub import _get_license_from_hf_hub
 from ._manipulate import named_apply, MATCH_PREV_GROUP
 from ._registry import register_model, generate_default_cfgs
 
@@ -1012,25 +1011,22 @@ def _cfg(url='', **kwargs):
         'crop_pct': 0.887, 'interpolation': 'bilinear',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'stem.conv1.conv', 'classifier': 'head.fc',
-        'license': _get_license_from_hf_hub(kwargs.pop('model_id', None), kwargs.get('hf_hub_id')),
         **kwargs
     }
+
 
 default_cfgs = generate_default_cfgs({
     'cspresnet50.ra_in1k': _cfg(
         hf_hub_id='timm/',
-        model_id='cspresnet50.ra_in1k',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/cspresnet50_ra-d3e8d487.pth'),
     'cspresnet50d.untrained': _cfg(),
     'cspresnet50w.untrained': _cfg(),
     'cspresnext50.ra_in1k': _cfg(
         hf_hub_id='timm/',
-        model_id='cspresnext50.ra_in1k',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/cspresnext50_ra_224-648b4713.pth',
     ),
     'cspdarknet53.ra_in1k': _cfg(
         hf_hub_id='timm/',
-        model_id='cspdarknet53.ra_in1k',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/cspdarknet53_ra_256-d05c7c21.pth'),
 
     'darknet17.untrained': _cfg(),
@@ -1038,58 +1034,48 @@ default_cfgs = generate_default_cfgs({
     'sedarknet21.untrained': _cfg(),
     'darknet53.c2ns_in1k': _cfg(
         hf_hub_id='timm/',
-        model_id='darknet53.c2ns_in1k',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/darknet53_256_c2ns-3aeff817.pth',
         interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=1.0),
     'darknetaa53.c2ns_in1k': _cfg(
         hf_hub_id='timm/',
-        model_id='darknetaa53.c2ns_in1k',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/darknetaa53_c2ns-5c28ec8a.pth',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
 
     'cs3darknet_s.untrained': _cfg(interpolation='bicubic'),
     'cs3darknet_m.c2ns_in1k': _cfg(
         hf_hub_id='timm/',
-        model_id='cs3darknet_m.c2ns_in1k',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_m_c2ns-43f06604.pth',
         interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=0.95,
     ),
     'cs3darknet_l.c2ns_in1k': _cfg(
         hf_hub_id='timm/',
-        model_id='cs3darknet_l.c2ns_in1k',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_l_c2ns-16220c5d.pth',
         interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=0.95),
     'cs3darknet_x.c2ns_in1k': _cfg(
         hf_hub_id='timm/',
-        model_id='cs3darknet_x.c2ns_in1k',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_x_c2ns-4e4490aa.pth',
         interpolation='bicubic', crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
 
     'cs3darknet_focus_s.ra4_e3600_r256_in1k': _cfg(
         hf_hub_id='timm/',
-        model_id='cs3darknet_focus_s.ra4_e3600_r256_in1k',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
         interpolation='bicubic', test_input_size=(3, 320, 320), test_crop_pct=1.0),
     'cs3darknet_focus_m.c2ns_in1k': _cfg(
         hf_hub_id='timm/',
-        model_id='cs3darknet_focus_m.c2ns_in1k',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_focus_m_c2ns-e23bed41.pth',
         interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=0.95),
     'cs3darknet_focus_l.c2ns_in1k': _cfg(
         hf_hub_id='timm/',
-        model_id='cs3darknet_focus_l.c2ns_in1k',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_focus_l_c2ns-65ef8888.pth',
         interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=0.95),
     'cs3darknet_focus_x.untrained': _cfg(interpolation='bicubic'),
 
     'cs3sedarknet_l.c2ns_in1k': _cfg(
         hf_hub_id='timm/',
-        model_id='cs3sedarknet_l.c2ns_in1k',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3sedarknet_l_c2ns-e8d1dc13.pth',
         interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=0.95),
     'cs3sedarknet_x.c2ns_in1k': _cfg(
         hf_hub_id='timm/',
-        model_id='cs3sedarknet_x.c2ns_in1k',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3sedarknet_x_c2ns-b4d0abc0.pth',
         interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=1.0),
 
@@ -1097,12 +1083,10 @@ default_cfgs = generate_default_cfgs({
 
     'cs3edgenet_x.c2_in1k': _cfg(
         hf_hub_id='timm/',
-        model_id='cs3edgenet_x.c2_in1k',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3edgenet_x_c2-2e1610a9.pth',
         interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=1.0),
     'cs3se_edgenet_x.c2ns_in1k': _cfg(
         hf_hub_id='timm/',
-        model_id='cs3se_edgenet_x.c2ns_in1k',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3se_edgenet_x_c2ns-76f8e3ac.pth',
         interpolation='bicubic', crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0),
 })
