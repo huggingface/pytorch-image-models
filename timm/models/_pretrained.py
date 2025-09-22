@@ -58,6 +58,20 @@ class PretrainedCfg:
     def has_weights(self):
         return self.url or self.file or self.hf_hub_id
 
+    def __getattribute__(self, name):
+        if name == 'license': # Intercept license access to set it in case it was not set anywhere else.
+            license_value = super().__getattribute__('license')
+
+            if license_value is None:
+                from ._hub import _get_license_from_hf_hub
+                license_value = _get_license_from_hf_hub(hf_hub_id=self.hf_hub_id)
+
+                self.license = license_value
+
+            return license_value
+
+        return super().__getattribute__(name)
+
     def to_dict(self, remove_source=False, remove_null=True):
         return filter_pretrained_cfg(
             asdict(self),
