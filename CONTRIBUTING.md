@@ -13,7 +13,7 @@ A few specific differences from Google style (or black)
 2. Hanging indents are always preferred, please avoid aligning arguments with closing brackets or braces.
 
 Example, from Google guide, but this is a NO here:
-```
+```python
    # Aligned with opening delimiter.
    foo = long_function_name(var_one, var_two,
                             var_three, var_four)
@@ -29,7 +29,7 @@ Example, from Google guide, but this is a NO here:
 ```
 This is YES:
 
-```
+```python
    # 4-space hanging indent; nothing on first line,
    # closing parenthesis on a new line.
    foo = long_function_name(
@@ -49,15 +49,40 @@ This is YES:
    }
 ```
 
+While preferred `timm` style is *mostly* compatible with Black / Ruff. Since I've been following PEP 8 style since before Black was a thing, there's one area I can't agree on, function arg indents. From a Black example this:
+```python
+def very_important_function(
+    template: str,
+    *variables,
+    file: os.PathLike,
+    engine: str,
+    header: bool = True,
+    debug: bool = False,
+):
+    with open(file, "w") as f:
+        ...
+```
+
+Should according to PEP 8 (https://peps.python.org/pep-0008/#indentation) have an extra level of indent on the args:
+
+```python
+def very_important_function(
+        template: str,
+        *variables,
+        file: os.PathLike,
+        engine: str,
+        header: bool = True,
+        debug: bool = False,
+):
+    with open(file, "w") as f:
+        ...
+```
+
+I do like sadface though. So please don't run Black on existing files and convert all of the arg indents. Thanks!
+
 When there is discrepancy in a given source file (there are many origins for various bits of code and not all have been updated to what I consider current goal), please follow the style in a given file.
 
-In general, if you add new code, formatting it with black using the following options should result in a style that is compatible with the rest of the code base:
-
-```
-black --skip-string-normalization --line-length 120 <path-to-file>
-```
-
-Avoid formatting code that is unrelated to your PR though.
+Please avoid formatting code that is unrelated to your PR.
 
 PR with pure formatting / style fixes will be accepted but only in isolation from functional changes, best to ask before starting such a change.
 
