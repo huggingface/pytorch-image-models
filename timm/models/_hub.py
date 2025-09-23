@@ -535,17 +535,17 @@ def _get_safe_alternatives(filename: str) -> Iterable[str]:
         yield filename[:-4] + ".safetensors"
 
 
-def _get_license_from_hf_hub(hf_hub_id: str | None) -> str | None:
+def _get_license_from_hf_hub(model_id: str | None, hf_hub_id: str | None) -> str | None:
     """Retrieve license information for a model from Hugging Face Hub.
 
     Fetches the license field from the model card metadata on Hugging Face Hub
-    for the specified model. This function is called lazily when the license
-    attribute is accessed on PretrainedCfg objects that don't have an explicit
-    license set.
+    for the specified model. Returns None if the model is not found, if
+    huggingface_hub is not installed, or if the model is marked as "untrained".
 
     Args:
-        hf_hub_id: The Hugging Face Hub model ID (e.g., 'organization/model').
-            If None or empty, returns None as license cannot be determined.
+        model_id: The model identifier/name. In the case of None we assume an untrained model.
+        hf_hub_id: The Hugging Face Hub organization/user ID. If it is None,
+            we will return None as we cannot infer the license terms.
 
     Returns:
         The license string in lowercase if found, None otherwise.
@@ -559,17 +559,17 @@ def _get_license_from_hf_hub(hf_hub_id: str | None) -> str | None:
         _logger.warning(msg=msg)
         return None
 
-    if hf_hub_id is None or hf_hub_id == "timm/":
+    if not (model_id and hf_hub_id):
         return None
 
+    repo_id: str = hf_hub_id + model_id
+
     try:
-        info = model_info(repo_id=hf_hub_id)
+        info = model_info(repo_id=repo_id)
 
     except RepositoryNotFoundError:
         # TODO: any wish what happens here? @rwightman
-        return None
-
-    except Exception as _:
+        print(repo_id)
         return None
 
     license = info.card_data.get("license").lower() if info.card_data else None
