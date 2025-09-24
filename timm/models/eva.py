@@ -1285,7 +1285,7 @@ def _pe_cfg(url: str = '', **kwargs) -> Dict[str, Any]:
         'crop_pct': 1.0, 'interpolation': 'bicubic', 'fixed_input_size': True,
         'mean': (0.5, 0.5, 0.5), 'std': (0.5, 0.5, 0.5),
         'first_conv': 'patch_embed.proj', 'classifier': 'head',
-        'license': 'custom', **kwargs
+        'license': 'apache-2.0', **kwargs
     }
 
 

@@ -420,6 +420,7 @@ def _cfg(url='', **kwargs):
         'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'patch_embed.conv', 'classifier': 'head',
+        'license': 'apache-2.0',
         **kwargs
     }
 

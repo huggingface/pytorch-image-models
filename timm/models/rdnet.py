@@ -480,6 +480,7 @@ def _cfg(url='', **kwargs):
         "paper_ids": "arXiv:2403.19588",
         "paper_name": "DenseNets Reloaded: Paradigm Shift Beyond ResNets and ViTs",
         "origin_url": "https://github.com/naver-ai/rdnet",
+        "license": "apache-2.0",
         **kwargs,
     }
 

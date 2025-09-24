@@ -842,7 +842,8 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         mean=(0., 0., 0.), std=(1., 1., 1.),
         input_size=(3, 768, 768),
-        num_classes=0),
+        num_classes=0,
+        license='gemma'),
 
     # WIP classification configs for testing
     'mobilenetv5_base.untrained': _cfg(

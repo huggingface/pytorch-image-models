@@ -899,6 +899,7 @@ def _cfg(url: str = '', **kwargs: Any) -> Dict[str, Any]:
         'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
         'first_conv': 'stem.conv', 'classifier': 'head.fc',
+        'license': 'apache-2.0',
         **kwargs
     }
 

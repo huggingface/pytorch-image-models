@@ -118,7 +118,7 @@ def _cfg(url='', **kwargs):
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
         'crop_pct': .96, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD, 'classifier': 'head',
-        'first_conv': 'stem.0',
+        'first_conv': 'stem.0', 'license': 'mit',
         **kwargs
     }
 

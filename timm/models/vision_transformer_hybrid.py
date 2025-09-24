@@ -170,6 +170,7 @@ def _cfg(url='', **kwargs):
         'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
         'mean': (0.5, 0.5, 0.5), 'std': (0.5, 0.5, 0.5),
         'first_conv': 'patch_embed.backbone.stem.conv', 'classifier': 'head',
+        'license': 'apache-2.0',
         **kwargs
     }
 
@@ -241,6 +242,7 @@ default_cfgs = generate_default_cfgs({
     'vit_base_mci_224.apple_mclip_lt': _cfg(
         hf_hub_id='apple/mobileclip_b_lt_timm',
         url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_blt.pt',
+        license=None,
         num_classes=512,
         mean=(0., 0., 0.), std=(1., 1., 1.), first_conv='patch_embed.backbone.0.conv',
     ),

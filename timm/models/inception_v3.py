@@ -468,7 +468,7 @@ def _cfg(url='', **kwargs):
         'num_classes': 1000, 'input_size': (3, 299, 299), 'pool_size': (8, 8),
         'crop_pct': 0.875, 'interpolation': 'bicubic',
         'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
-        'first_conv': 'Conv2d_1a_3x3.conv', 'classifier': 'fc',
+        'first_conv': 'Conv2d_1a_3x3.conv', 'classifier': 'fc', 'license': 'apache-2.0',
         **kwargs
     }
 

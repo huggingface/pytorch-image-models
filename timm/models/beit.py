@@ -773,6 +773,7 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
         'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
         'mean': (0.5, 0.5, 0.5), 'std': (0.5, 0.5, 0.5),
         'first_conv': 'patch_embed.proj', 'classifier': 'head',
+        'license': 'apache-2.0',
         **kwargs
     }
 

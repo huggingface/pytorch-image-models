@@ -928,14 +928,15 @@ def _cfg(url='', **kwargs):
         'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'conv1', 'classifier': 'classifier',
+        'license': 'mit',
         **kwargs
     }
 
 
 default_cfgs = generate_default_cfgs({
-    'hrnet_w18_small.gluon_in1k': _cfg(hf_hub_id='timm/', interpolation='bicubic'),
+    'hrnet_w18_small.gluon_in1k': _cfg(hf_hub_id='timm/', interpolation='bicubic', license='apache-2.0'),
     'hrnet_w18_small.ms_in1k': _cfg(hf_hub_id='timm/'),
-    'hrnet_w18_small_v2.gluon_in1k': _cfg(hf_hub_id='timm/', interpolation='bicubic'),
+    'hrnet_w18_small_v2.gluon_in1k': _cfg(hf_hub_id='timm/', interpolation='bicubic', license='apache-2.0'),
     'hrnet_w18_small_v2.ms_in1k': _cfg(hf_hub_id='timm/'),
     'hrnet_w18.ms_aug_in1k': _cfg(
         hf_hub_id='timm/',

@@ -558,6 +558,7 @@ def _cfg(url='', **kwargs):
         'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'stem.conv1.c',
         'classifier': ('head.head.l', 'head.head_dist.l'),
+        'license': 'apache-2.0',
         **kwargs,
     }
 

@@ -1473,6 +1473,7 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
         'std': IMAGENET_INCEPTION_STD,
         'first_conv': 'patch_embed.proj',
         'classifier': 'head',
+        'license': 'apache-2.0',
         **kwargs,
     }
 
@@ -1870,17 +1871,21 @@ default_cfgs = {
 
     'vit_base_patch32_clip_224.laion400m_e32': _cfg(
         hf_hub_id='timm/',
+        license='mit',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
     'vit_base_patch16_clip_224.laion400m_e32': _cfg(
         hf_hub_id='timm/',
+        license='mit',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
     'vit_base_patch16_plus_clip_240.laion400m_e32': _cfg(
         hf_hub_id='timm/',
+        license='mit',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 240, 240), crop_pct=1.0, num_classes=640),
     'vit_large_patch14_clip_224.laion400m_e32': _cfg(
         hf_hub_id='timm/',
+        license='mit',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
 
     'vit_base_patch32_clip_224.datacompxl': _cfg(
@@ -2554,6 +2559,7 @@ default_cfgs = {
 
     'vit_intern300m_patch14_448.ogvl_dist': _cfg(
         hf_hub_id='timm/',
+        license='mit',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD,
         input_size=(3, 448, 448), crop_pct=1.0, num_classes=0,
     ),

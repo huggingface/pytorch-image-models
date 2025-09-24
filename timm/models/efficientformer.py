@@ -625,6 +625,7 @@ def _cfg(url='', **kwargs):
         'crop_pct': .95, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'stem.conv1', 'classifier': ('head', 'head_dist'),
+        'license': 'apache-2.0',
         **kwargs
     }
 

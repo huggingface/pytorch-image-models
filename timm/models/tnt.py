@@ -499,6 +499,7 @@ def _cfg(url='', **kwargs):
         'paper_ids': 'arXiv:2103.00112',
         'paper_name': 'Transformer in Transformer',
         'origin_url': 'https://github.com/huawei-noah/Efficient-AI-Backbones/tree/master/tnt_pytorch',
+        'license': 'apache-2.0',
         **kwargs
     }
 

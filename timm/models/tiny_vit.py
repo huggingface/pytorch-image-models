@@ -717,6 +717,7 @@ def _cfg(url='', **kwargs):
         'pool_size': (7, 7),
         'input_size': (3, 224, 224),
         'crop_pct': 0.95,
+        'license': 'apache-2.0',
         **kwargs,
     }
 

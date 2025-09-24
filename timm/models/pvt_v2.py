@@ -532,6 +532,7 @@ def _cfg(url='', **kwargs):
         'crop_pct': 0.9, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'patch_embed.proj', 'classifier': 'head', 'fixed_input_size': False,
+        'license': 'apache-2.0',
         **kwargs
     }
 

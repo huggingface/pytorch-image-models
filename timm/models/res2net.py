@@ -139,6 +139,7 @@ def _cfg(url='', **kwargs):
         'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'conv1', 'classifier': 'fc',
+        'license': 'unknown',
         **kwargs
     }
 

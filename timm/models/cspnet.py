@@ -1010,7 +1010,7 @@ def _cfg(url='', **kwargs):
         'num_classes': 1000, 'input_size': (3, 256, 256), 'pool_size': (8, 8),
         'crop_pct': 0.887, 'interpolation': 'bilinear',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'stem.conv1.conv', 'classifier': 'head.fc',
+        'first_conv': 'stem.conv1.conv', 'classifier': 'head.fc', 'license': 'apache-2.0',
         **kwargs
     }
 
