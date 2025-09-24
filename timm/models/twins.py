@@ -20,7 +20,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import Mlp, DropPath, to_2tuple, trunc_normal_, use_fused_attn
+from timm.layers import Mlp, DropPath, to_2tuple, trunc_normal_, use_fused_attn, calculate_drop_path_rates
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_module
@@ -326,7 +326,7 @@ class Twins(nn.Module):
 
         self.blocks = nn.ModuleList()
         self.feature_info = []
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]  # stochastic depth decay rule
+        dpr = calculate_drop_path_rates(drop_path_rate, sum(depths))  # stochastic depth decay rule
         cur = 0
         for k in range(len(depths)):
             _block = nn.ModuleList([block_cls(

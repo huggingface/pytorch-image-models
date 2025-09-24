@@ -20,7 +20,7 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, to_2tuple, trunc_normal_, Mlp, LayerNorm2d, get_norm_layer, use_fused_attn
+from timm.layers import DropPath, calculate_drop_path_rates, to_2tuple, trunc_normal_, Mlp, LayerNorm2d, get_norm_layer, use_fused_attn
 from timm.layers import NormMlpClassifierHead, ClassifierHead
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
@@ -555,7 +555,7 @@ class DaVit(nn.Module):
         self.stem = Stem(in_chans, embed_dims[0], norm_layer=norm_layer)
         in_chs = embed_dims[0]
 
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dpr = calculate_drop_path_rates(drop_path_rate, depths, stagewise=True)
         stages = []
         for i in range(num_stages):
             out_chs = embed_dims[i]

@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, trunc_normal_, ConvMlp, get_norm_layer, get_act_layer, use_fused_attn
+from timm.layers import DropPath, calculate_drop_path_rates, trunc_normal_, ConvMlp, get_norm_layer, get_act_layer, use_fused_attn
 from timm.layers import ClassifierHead
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
@@ -498,7 +498,7 @@ class NextViT(nn.Module):
         in_chs = out_chs = stem_chs[-1]
         stages = []
         idx = 0
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dpr = calculate_drop_path_rates(drop_path_rate, depths, stagewise=True)
         for stage_idx in range(len(depths)):
             stage = NextStage(
                 in_chs=in_chs,

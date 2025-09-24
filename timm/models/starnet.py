@@ -16,7 +16,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, SelectAdaptivePool2d, Linear, LayerType, trunc_normal_
+from timm.layers import DropPath, SelectAdaptivePool2d, Linear, LayerType, trunc_normal_, calculate_drop_path_rates
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
@@ -103,7 +103,7 @@ class StarNet(nn.Module):
         prev_chs = stem_chs
 
         # build stages
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))] # stochastic depth
+        dpr = calculate_drop_path_rates(drop_path_rate, sum(depths)) # stochastic depth
         stages = []
         cur = 0
         for i_layer in range(len(depths)):

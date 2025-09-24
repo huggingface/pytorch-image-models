@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import trunc_normal_, DropPath, to_2tuple, get_padding, SelectAdaptivePool2d
+from timm.layers import trunc_normal_, DropPath, calculate_drop_path_rates, to_2tuple, get_padding, SelectAdaptivePool2d
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
@@ -283,7 +283,7 @@ class MetaNeXt(nn.Module):
             norm_layer(dims[0])
         )
 
-        dp_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dp_rates = calculate_drop_path_rates(drop_path_rate, depths, stagewise=True)
         prev_chs = dims[0]
         curr_stride = 4
         dilation = 1

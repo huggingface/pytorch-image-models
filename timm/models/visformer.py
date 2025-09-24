@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import to_2tuple, trunc_normal_, DropPath, PatchEmbed, LayerNorm2d, create_classifier, use_fused_attn
+from timm.layers import to_2tuple, trunc_normal_, DropPath, calculate_drop_path_rates, PatchEmbed, LayerNorm2d, create_classifier, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
 from ._registry import register_model, generate_default_cfgs
@@ -202,7 +202,7 @@ class Visformer(nn.Module):
         self.use_pos_embed = use_pos_embed
         self.grad_checkpointing = False
 
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]
+        dpr = calculate_drop_path_rates(drop_path_rate, depth)
         # stage 1
         if self.vit_stem:
             self.stem = None

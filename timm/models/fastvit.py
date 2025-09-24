@@ -14,7 +14,7 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from timm.layers import (
-    DropPath,
+    DropPath, calculate_drop_path_rates,
     trunc_normal_,
     create_conv2d,
     ConvNormAct,
@@ -1156,7 +1156,7 @@ class FastVit(nn.Module):
         # Build the main stages of the network architecture
         prev_dim = embed_dims[0]
         scale = 1
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(layers)).split(layers)]
+        dpr = calculate_drop_path_rates(drop_path_rate, layers, stagewise=True)
         stages = []
         for i in range(len(layers)):
             downsample = downsamples[i] or prev_dim != embed_dims[i]

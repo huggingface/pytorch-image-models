@@ -16,7 +16,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import trunc_normal_tf_, DropPath, LayerNorm2d, Mlp, create_conv2d, \
+from timm.layers import trunc_normal_tf_, DropPath, calculate_drop_path_rates, LayerNorm2d, Mlp, create_conv2d, \
     NormMlpClassifierHead, ClassifierHead
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
@@ -343,7 +343,7 @@ class EdgeNeXt(nn.Module):
 
         curr_stride = 4
         stages = []
-        dp_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dp_rates = calculate_drop_path_rates(drop_path_rate, depths, stagewise=True)
         in_chs = dims[0]
         for i in range(4):
             stride = 2 if curr_stride == 2 or i > 0 else 1

@@ -12,7 +12,7 @@ import torch
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import trunc_normal_, DropPath, LayerNorm, LayerScale, ClNormMlpClassifierHead, get_act_layer
+from timm.layers import trunc_normal_, DropPath, calculate_drop_path_rates, LayerNorm, LayerScale, ClNormMlpClassifierHead, get_act_layer
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
@@ -338,7 +338,7 @@ class MambaOut(nn.Module):
             norm_layer=norm_layer,
         )
         prev_dim = dims[0]
-        dp_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dp_rates = calculate_drop_path_rates(drop_path_rate, depths, stagewise=True)
         cur = 0
         curr_stride = 4
         self.stages = nn.Sequential()

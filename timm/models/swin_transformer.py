@@ -23,7 +23,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, ClassifierHead, to_2tuple, to_ntuple, trunc_normal_, \
+from timm.layers import PatchEmbed, Mlp, DropPath, calculate_drop_path_rates, ClassifierHead, to_2tuple, to_ntuple, trunc_normal_, \
     use_fused_attn, resize_rel_pos_bias_table, resample_patch_embed, ndgrid
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
@@ -689,7 +689,7 @@ class SwinTransformer(nn.Module):
             window_size = (window_size,) * self.num_layers
         assert len(window_size) == self.num_layers
         mlp_ratio = to_ntuple(self.num_layers)(mlp_ratio)
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dpr = calculate_drop_path_rates(drop_path_rate, depths, stagewise=True)
         layers = []
         in_dim = embed_dim[0]
         scale = 1

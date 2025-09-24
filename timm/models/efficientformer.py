@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, trunc_normal_, to_2tuple, Mlp, ndgrid
+from timm.layers import DropPath, calculate_drop_path_rates, trunc_normal_, to_2tuple, Mlp, ndgrid
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
@@ -385,7 +385,7 @@ class EfficientFormer(nn.Module):
         # stochastic depth decay rule
         self.num_stages = len(depths)
         last_stage = self.num_stages - 1
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dpr = calculate_drop_path_rates(drop_path_rate, depths, stagewise=True)
         downsamples = downsamples or (False,) + (True,) * (self.num_stages - 1)
         stages = []
         self.feature_info = []

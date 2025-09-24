@@ -27,7 +27,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, to_2tuple, trunc_normal_, _assert
+from timm.layers import DropPath, calculate_drop_path_rates, to_2tuple, trunc_normal_, _assert
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._registry import register_model, generate_default_cfgs
@@ -346,7 +346,7 @@ class CrossVit(nn.Module):
         self.pos_drop = nn.Dropout(p=pos_drop_rate)
 
         total_depth = sum([sum(x[-2:]) for x in depth])
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, total_depth)]  # stochastic depth decay rule
+        dpr = calculate_drop_path_rates(drop_path_rate, total_depth)  # stochastic depth decay rule
         dpr_ptr = 0
         self.blocks = nn.ModuleList()
         for idx, block_cfg in enumerate(depth):

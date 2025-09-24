@@ -18,7 +18,7 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import ConvNormAct, SeparableConvNormAct, BatchNormAct2d, ClassifierHead, DropPath, \
-    create_attn, create_norm_act_layer
+    create_attn, create_norm_act_layer, calculate_drop_path_rates
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
@@ -214,7 +214,7 @@ class VovNet(nn.Module):
         current_stride = stem_stride
 
         # OSA stages
-        stage_dpr = torch.split(torch.linspace(0, drop_path_rate, sum(block_per_stage)), block_per_stage)
+        stage_dpr = calculate_drop_path_rates(drop_path_rate, block_per_stage, stagewise=True)
         in_ch_list = stem_chs[-1:] + stage_out_chs[:-1]
         stage_args = dict(residual=cfg["residual"], depthwise=cfg["depthwise"], attn=cfg["attn"], **conv_kwargs)
         stages = []

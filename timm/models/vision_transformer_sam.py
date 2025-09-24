@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, PatchDropout, LayerNorm2d, ClassifierHead, NormMlpClassifierHead, \
+from timm.layers import PatchEmbed, Mlp, DropPath, calculate_drop_path_rates, PatchDropout, LayerNorm2d, ClassifierHead, NormMlpClassifierHead, \
     Format, resample_abs_pos_embed_nhwc, RotaryEmbeddingCat, apply_rot_embed_cat, to_2tuple, use_fused_attn
 from torch.jit import Final
 
@@ -449,7 +449,7 @@ class VisionTransformerSAM(nn.Module):
             self.rope_window = None
 
         # stochastic depth decay rule
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]
+        dpr = calculate_drop_path_rates(drop_path_rate, depth)
         self.blocks = nn.Sequential(*[
             block_fn(
                 dim=embed_dim,

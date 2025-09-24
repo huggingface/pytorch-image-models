@@ -12,7 +12,7 @@ from typing import List, Optional, Tuple, Union
 import torch
 import torch.nn as nn
 
-from timm.layers import SpaceToDepth, BlurPool2d, ClassifierHead, SEModule, ConvNormAct, DropPath
+from timm.layers import SpaceToDepth, BlurPool2d, ClassifierHead, SEModule, ConvNormAct, DropPath, calculate_drop_path_rates
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint, checkpoint_seq
@@ -136,7 +136,7 @@ class TResNet(nn.Module):
             self.inplanes = self.inplanes // 8 * 8
             self.planes = self.planes // 8 * 8
 
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(layers)).split(layers)]
+        dpr = calculate_drop_path_rates(drop_path_rate, layers, stagewise=True)
         conv1 = ConvNormAct(in_chans * 16, self.planes, stride=1, kernel_size=3, act_layer=act_layer)
         layer1 = self._make_layer(
             Bottleneck if v2 else BasicBlock,

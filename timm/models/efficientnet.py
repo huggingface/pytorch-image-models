@@ -1434,6 +1434,12 @@ default_cfgs = generate_default_cfgs({
     'efficientnet_b3_g8_gn.untrained': _cfg(
         input_size=(3, 288, 288), pool_size=(9, 9), test_input_size=(3, 320, 320), crop_pct=1.0),
     'efficientnet_blur_b0.untrained': _cfg(),
+    'efficientnet_h_b5.untrained': _cfg(
+        url='', input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0),
+    'efficientnet_x_b3.untrained': _cfg(
+        url='', input_size=(3, 288, 288), pool_size=(9, 9), crop_pct=0.95),
+    'efficientnet_x_b5.untrained': _cfg(
+        url='', input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0),
 
     'efficientnet_es.ra_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_es_ra-f111e99c.pth',
@@ -2708,7 +2714,7 @@ def efficientnet_x_b3(pretrained=False, **kwargs) -> EfficientNet:
     """ EfficientNet-B3 """
     # NOTE for train, drop_rate should be 0.3, drop_path_rate should be 0.2
     model = _gen_efficientnet_x(
-        'efficientnet_b3', channel_multiplier=1.2, depth_multiplier=1.4, pretrained=pretrained, **kwargs)
+        'efficientnet_x_b3', channel_multiplier=1.2, depth_multiplier=1.4, pretrained=pretrained, **kwargs)
     return model
 
 
@@ -2716,7 +2722,7 @@ def efficientnet_x_b3(pretrained=False, **kwargs) -> EfficientNet:
 def efficientnet_x_b5(pretrained=False, **kwargs) -> EfficientNet:
     """ EfficientNet-B5 """
     model = _gen_efficientnet_x(
-        'efficientnet_b5', channel_multiplier=1.6, depth_multiplier=2.2, pretrained=pretrained, **kwargs)
+        'efficientnet_x_b5', channel_multiplier=1.6, depth_multiplier=2.2, pretrained=pretrained, **kwargs)
     return model
 
 
@@ -2724,7 +2730,7 @@ def efficientnet_x_b5(pretrained=False, **kwargs) -> EfficientNet:
 def efficientnet_h_b5(pretrained=False, **kwargs) -> EfficientNet:
     """ EfficientNet-B5 """
     model = _gen_efficientnet_x(
-        'efficientnet_b5', channel_multiplier=1.92, depth_multiplier=2.2, version=2, pretrained=pretrained, **kwargs)
+        'efficientnet_h_b5', channel_multiplier=1.92, depth_multiplier=2.2, version=2, pretrained=pretrained, **kwargs)
     return model
 
 

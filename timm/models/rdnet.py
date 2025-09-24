@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, NormMlpClassifierHead, ClassifierHead, EffectiveSEModule, \
+from timm.layers import DropPath, calculate_drop_path_rates, NormMlpClassifierHead, ClassifierHead, EffectiveSEModule, \
     make_divisible, get_act_layer, get_norm_layer
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
@@ -213,7 +213,7 @@ class RDNet(nn.Module):
         self.num_stages = len(growth_rates)
         curr_stride = stem_stride
         num_features = num_init_features
-        dp_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(num_blocks_list)).split(num_blocks_list)]
+        dp_rates = calculate_drop_path_rates(drop_path_rate, num_blocks_list, stagewise=True)
 
         dense_stages = []
         for i in range(self.num_stages):
