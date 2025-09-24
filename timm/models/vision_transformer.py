@@ -1737,7 +1737,9 @@ default_cfgs = {
     'vit_medium_patch16_gap_384.sw_in12k_ft_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 384, 384), crop_pct=0.95, crop_mode='squash'),
-    'vit_base_patch16_gap_224': _cfg(),
+    'vit_betwixt_patch16_gap_256.untrained': _cfg(
+        input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_base_patch16_gap_224.untrained': _cfg(),
 
     # CLIP pretrained image tower and related fine-tuned weights
     'vit_base_patch32_clip_224.laion2b_ft_in12k_in1k': _cfg(
