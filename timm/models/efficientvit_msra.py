@@ -672,6 +672,7 @@ def _cfg(url='', **kwargs):
         'classifier': 'head.linear',
         'fixed_input_size': True,
         'pool_size': (4, 4),
+        'license': 'mit',
         **kwargs,
     }
 

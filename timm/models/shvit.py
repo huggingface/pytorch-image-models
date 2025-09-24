@@ -498,6 +498,7 @@ def _cfg(url: str = '', **kwargs: Any) -> Dict[str, Any]:
         'crop_pct': 0.875, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'patch_embed.0.c', 'classifier': 'head.l',
+        'license': 'mit',
         'paper_ids': 'arXiv:2401.16456',
         'paper_name': 'SHViT: Single-Head Vision Transformer with Memory Efficient Macro Design',
         'origin_url': 'https://github.com/ysj9909/SHViT',

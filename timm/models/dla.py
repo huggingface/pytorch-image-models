@@ -492,7 +492,7 @@ def _cfg(url='', **kwargs):
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'base_layer.0', 'classifier': 'fc',
+        'first_conv': 'base_layer.0', 'classifier': 'fc', 'license': 'bsd-3-clause',
         **kwargs
     }
 
@@ -508,8 +508,8 @@ default_cfgs = generate_default_cfgs({
     'dla102x.in1k': _cfg(hf_hub_id='timm/'),
     'dla102x2.in1k': _cfg(hf_hub_id='timm/'),
     'dla169.in1k': _cfg(hf_hub_id='timm/'),
-    'dla60_res2net.in1k': _cfg(hf_hub_id='timm/'),
-    'dla60_res2next.in1k': _cfg(hf_hub_id='timm/'),
+    'dla60_res2net.in1k': _cfg(hf_hub_id='timm/', license='unknown'),
+    'dla60_res2next.in1k': _cfg(hf_hub_id='timm/', license='unknown'),
 })
 
 

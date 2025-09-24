@@ -426,6 +426,7 @@ def _cfg(url: str = '', **kwargs: Any) -> Dict[str, Any]:
         'paper_ids': 'arXiv:2303.03667',
         'paper_name': "Run, Don't Walk: Chasing Higher FLOPS for Faster Neural Networks",
         'origin_url': 'https://github.com/JierunChen/FasterNet',
+        'license': 'apache-2.0',
         **kwargs
     }
 

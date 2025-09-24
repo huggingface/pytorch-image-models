@@ -2432,6 +2432,7 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
         'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'stem.conv', 'classifier': 'head.fc',
+        'license': 'apache-2.0',
         **kwargs
     }
 
@@ -2451,6 +2452,7 @@ def _cfgr(url: str = '', **kwargs) -> Dict[str, Any]:
         'crop_pct': 0.9, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'stem.conv1.conv', 'classifier': 'head.fc',
+        'license': 'apache-2.0',
         **kwargs
     }
 
@@ -2604,26 +2606,31 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         crop_pct=0.875,
         first_conv=('stem.conv_kxk.0.conv', 'stem.conv_scale.conv'),
+        license='other',
     ),
     'mobileone_s1.apple_in1k': _cfg(
         hf_hub_id='timm/',
         crop_pct=0.9,
         first_conv=('stem.conv_kxk.0.conv', 'stem.conv_scale.conv'),
+        license='other',
     ),
     'mobileone_s2.apple_in1k': _cfg(
         hf_hub_id='timm/',
         crop_pct=0.9,
         first_conv=('stem.conv_kxk.0.conv', 'stem.conv_scale.conv'),
+        license='other',
     ),
     'mobileone_s3.apple_in1k': _cfg(
         hf_hub_id='timm/',
         crop_pct=0.9,
         first_conv=('stem.conv_kxk.0.conv', 'stem.conv_scale.conv'),
+        license='other',
     ),
     'mobileone_s4.apple_in1k': _cfg(
         hf_hub_id='timm/',
         crop_pct=0.9,
         first_conv=('stem.conv_kxk.0.conv', 'stem.conv_scale.conv'),
+        license='other',
     ),
 
     # original attention pool head variants
@@ -2632,48 +2639,56 @@ default_cfgs = generate_default_cfgs({
         num_classes=1024, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         fixed_input_size=True, input_size=(3, 224, 224), pool_size=(7, 7),
         classifier='head.proj',
+        license='mit',
     ),
     'resnet101_clip.openai': _cfgr(
         hf_hub_id='timm/',
         num_classes=512, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         fixed_input_size=True, input_size=(3, 224, 224), pool_size=(7, 7),
         classifier='head.proj',
+        license='mit',
     ),
     'resnet50x4_clip.openai': _cfgr(
         hf_hub_id='timm/',
         num_classes=640, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         fixed_input_size=True, input_size=(3, 288, 288), pool_size=(9, 9),
         classifier='head.proj',
+        license='mit',
     ),
     'resnet50x16_clip.openai': _cfgr(
         hf_hub_id='timm/',
         num_classes=768, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         fixed_input_size=True, input_size=(3, 384, 384), pool_size=(12, 12),
         classifier='head.proj',
+        license='mit',
     ),
     'resnet50x64_clip.openai': _cfgr(
         hf_hub_id='timm/',
         num_classes=1024, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         fixed_input_size=True, input_size=(3, 448, 448), pool_size=(14, 14),
         classifier='head.proj',
+        license='mit',
     ),
     'resnet50_clip.cc12m': _cfgr(
         hf_hub_id='timm/',
         num_classes=1024, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         fixed_input_size=True, input_size=(3, 224, 224), pool_size=(7, 7),
         classifier='head.proj',
+        license='mit',
     ),
     'resnet50_clip.yfcc15m': _cfgr(
         hf_hub_id='timm/',
         num_classes=1024, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         fixed_input_size=True, input_size=(3, 224, 224), pool_size=(7, 7),
         classifier='head.proj',
+        license='mit',
     ),
     'resnet101_clip.yfcc15m': _cfgr(
         hf_hub_id='timm/',
         num_classes=512, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         fixed_input_size=True, input_size=(3, 224, 224), pool_size=(7, 7),
         classifier='head.proj',
+        license='mit',
     ),
 
     # avg-pool w/ optional standard classifier head variants
@@ -2681,41 +2696,49 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         num_classes=0, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 224, 224), pool_size=(7, 7),
+        license='mit',
     ),
     'resnet101_clip_gap.openai': _cfgr(
         hf_hub_id='timm/',
         num_classes=0, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 224, 224), pool_size=(7, 7),
+        license='mit',
     ),
     'resnet50x4_clip_gap.openai': _cfgr(
         hf_hub_id='timm/',
         num_classes=0, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 288, 288), pool_size=(9, 9),
+        license='mit',
     ),
     'resnet50x16_clip_gap.openai': _cfgr(
         hf_hub_id='timm/',
         num_classes=0, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 384, 384), pool_size=(12, 12),
+        license='mit',
     ),
     'resnet50x64_clip_gap.openai': _cfgr(
         hf_hub_id='timm/',
         num_classes=0, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 448, 448), pool_size=(14, 14),
+        license='mit',
     ),
     'resnet50_clip_gap.cc12m': _cfgr(
         hf_hub_id='timm/',
         num_classes=0, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 224, 224), pool_size=(7, 7),
+        license='mit',
     ),
     'resnet50_clip_gap.yfcc15m': _cfgr(
         hf_hub_id='timm/',
         num_classes=0, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 224, 224), pool_size=(7, 7),
+        license='mit',
     ),
     'resnet101_clip_gap.yfcc15m': _cfgr(
         hf_hub_id='timm/',
         num_classes=0, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 224, 224), pool_size=(7, 7),
+        license='mit',
     ),
 
     'resnet50_mlp.untrained': _cfgr(

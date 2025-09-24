@@ -434,6 +434,7 @@ default_cfgs = generate_default_cfgs({
         'crop_pct': 0.875, 'interpolation': 'bicubic',
         'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
         'first_conv': 'features.0.conv', 'classifier': 'last_linear',
+        'license': 'apache-2.0',
     }
 })
 

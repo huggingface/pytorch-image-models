@@ -389,6 +389,7 @@ def _cfg(url='', **kwargs):
         'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': (0., 0., 0.), 'std': (1., 1., 1.),
         'first_conv': 'body.conv1.conv', 'classifier': 'head.fc',
+        'license': 'apache-2.0',
         **kwargs
     }
 

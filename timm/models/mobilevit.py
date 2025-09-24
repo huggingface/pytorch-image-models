@@ -595,6 +595,7 @@ def _cfg(url='', **kwargs):
         'mean': (0., 0., 0.), 'std': (1., 1., 1.),
         'first_conv': 'stem.conv', 'classifier': 'head.fc',
         'fixed_input_size': False,
+        'license': 'other',
         **kwargs
     }
 

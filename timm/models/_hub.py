@@ -568,8 +568,13 @@ def _get_license_from_hf_hub(model_id: str | None, hf_hub_id: str | None) -> str
         info = model_info(repo_id=repo_id)
 
     except RepositoryNotFoundError:
-        # TODO: any wish what happens here? @rwightman
-        print(repo_id)
+        msg = f"Repository {repo_id} was not found. Manual inspection of license needed."
+        _logger.warning(msg=msg)
+        return None
+
+    except Exception as _:
+        msg = f"Error for {repo_id}. Manual inspection of license needed."
+        _logger.warning(msg=msg)
         return None
 
     license = info.card_data.get("license").lower() if info.card_data else None

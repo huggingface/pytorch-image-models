@@ -448,6 +448,7 @@ default_cfgs = generate_default_cfgs({
         'num_classes': 1000,
         'first_conv': 'conv_0.conv',
         'classifier': 'last_linear',
+        'license': 'apache-2.0',
     },
 })
 

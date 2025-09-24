@@ -336,6 +336,7 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
         'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'features.0', 'classifier': 'head.fc',
+        'license': 'bsd-3-clause',
         **kwargs
     }
 

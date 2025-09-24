@@ -330,7 +330,7 @@ def _cfg(url='', **kwargs):
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bicubic',
         'mean': IMAGENET_DPN_MEAN, 'std': IMAGENET_DPN_STD,
-        'first_conv': 'features.conv1_1.conv', 'classifier': 'classifier',
+        'first_conv': 'features.conv1_1.conv', 'classifier': 'classifier', 'license': 'apache-2.0',
         **kwargs
     }
 

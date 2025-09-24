@@ -1083,6 +1083,7 @@ def _cfg(url='', **kwargs):
         'first_conv': 'stem.in_conv.conv',
         'classifier': 'head.classifier.4',
         'crop_pct': 0.95,
+        'license': 'apache-2.0',
         'input_size': (3, 224, 224),
         'pool_size': (7, 7),
         **kwargs,

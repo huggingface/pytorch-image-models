@@ -366,6 +366,7 @@ default_cfgs = generate_default_cfgs({
         'crop_pct': 0.8975, 'interpolation': 'bicubic',
         'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
         'first_conv': 'conv2d_1a.conv', 'classifier': 'classif',
+        'license': 'apache-2.0',
     },
     # As per https://arxiv.org/abs/1705.07204 and
     # ported from http://download.tensorflow.org/models/ens_adv_inception_resnet_v2_2017_08_18.tar.gz
@@ -375,6 +376,7 @@ default_cfgs = generate_default_cfgs({
         'crop_pct': 0.8975, 'interpolation': 'bicubic',
         'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
         'first_conv': 'conv2d_1a.conv', 'classifier': 'classif',
+        'license': 'apache-2.0',
     }
 })
 

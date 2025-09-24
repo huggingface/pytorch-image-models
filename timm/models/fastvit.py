@@ -1431,6 +1431,7 @@ def _cfg(url="", **kwargs):
         "crop_pct": 0.9,
         "interpolation": "bicubic",
         "mean": IMAGENET_DEFAULT_MEAN,
+        "license": "other",
         "std": IMAGENET_DEFAULT_STD,
         'first_conv': ('stem.0.conv_kxk.0.conv', 'stem.0.conv_scale.conv'),
         "classifier": "head.fc",
@@ -1481,21 +1482,21 @@ default_cfgs = generate_default_cfgs({
         url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_s0.pt',
         crop_pct=0.95,
         num_classes=512,  # CLIP proj dim
-        mean=(0., 0., 0.), std=(1., 1., 1.)
+        mean=(0., 0., 0.), std=(1., 1., 1.), license=None,
     ),
     "fastvit_mci1.apple_mclip": _cfg(
         hf_hub_id='apple/mobileclip_s1_timm',
         url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_s1.pt',
         crop_pct=0.95,
         num_classes=512,  # CLIP proj dim
-        mean=(0., 0., 0.), std=(1., 1., 1.)
+        mean=(0., 0., 0.), std=(1., 1., 1.), license=None,
     ),
     "fastvit_mci2.apple_mclip": _cfg(
         hf_hub_id='apple/mobileclip_s2_timm',
         url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_s2.pt',
         crop_pct=0.95,
         num_classes=512,  # CLIP proj dim
-        mean=(0., 0., 0.), std=(1., 1., 1.)
+        mean=(0., 0., 0.), std=(1., 1., 1.), license=None,
     ),
 
     "fastvit_mci0.apple_mclip2_dfndr2b": _cfg(

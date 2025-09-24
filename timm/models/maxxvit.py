@@ -2151,7 +2151,7 @@ def _cfg(url: str = '', **kwargs: Any) -> Dict[str, Any]:
         'mean': (0.5, 0.5, 0.5), 'std': (0.5, 0.5, 0.5),
         'first_conv': 'stem.conv1', 'classifier': 'head.fc',
         'fixed_input_size': True,
-        **kwargs
+        'license': 'apache-2.0', **kwargs
     }
 
 

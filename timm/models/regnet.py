@@ -1033,7 +1033,7 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
         'test_input_size': (3, 288, 288), 'crop_pct': 0.95, 'test_crop_pct': 1.0,
         'interpolation': 'bicubic', 'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'stem.conv', 'classifier': 'head.fc',
-        **kwargs
+        'license': 'apache-2.0', **kwargs
     }
 
 

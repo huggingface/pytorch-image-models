@@ -488,7 +488,8 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'features.conv0', 'classifier': 'classifier', **kwargs,
+        'first_conv': 'features.conv0', 'classifier': 'classifier', 'license': 'apache-2.0',
+        **kwargs,
     }
 
 

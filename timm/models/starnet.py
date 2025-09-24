@@ -280,7 +280,7 @@ def _cfg(url: str = '', **kwargs: Any) -> Dict[str, Any]:
         'first_conv': 'stem.0.conv', 'classifier': 'head',
         'paper_ids': 'arXiv:2403.19967',
         'paper_name': 'Rewrite the Stars',
-        'origin_url': 'https://github.com/ma-xu/Rewrite-the-Stars',
+        'origin_url': 'https://github.com/ma-xu/Rewrite-the-Stars', 'license': 'apache-2.0',
         **kwargs
     }
 

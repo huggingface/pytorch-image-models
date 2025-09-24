@@ -592,6 +592,7 @@ def _cfg(url: str = '', **kwargs: Any) -> Dict[str, Any]:
         'crop_pct': .95, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'stem.0', 'classifier': ('head', 'head_dist'),
+        'license': 'apache-2.0',
         'paper_ids': 'arXiv:2303.15446',
         'paper_name': 'SwiftFormer: Efficient Additive Attention for Transformer-based Real-time Mobile Vision Applications',
         'origin_url': 'https://github.com/Amshaker/SwiftFormer',
