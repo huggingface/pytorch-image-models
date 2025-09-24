@@ -962,6 +962,7 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
         'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'patch_embed.proj',
         'classifier': 'head.fc',
+        'license': 'apache-2.0',
         **kwargs,
     }
 
