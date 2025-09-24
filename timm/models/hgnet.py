@@ -13,7 +13,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import SelectAdaptivePool2d, DropPath, create_conv2d
+from timm.layers import SelectAdaptivePool2d, DropPath, calculate_drop_path_rates, create_conv2d
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._registry import register_model, generate_default_cfgs
@@ -448,7 +448,7 @@ class HighPerfGpuNet(nn.Module):
         stages = []
         self.feature_info = []
         block_depths = [c[3] for c in stages_cfg]
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(block_depths)).split(block_depths)]
+        dpr = calculate_drop_path_rates(drop_path_rate, block_depths, stagewise=True)
         for i, stage_config in enumerate(stages_cfg):
             in_chs, mid_chs, out_chs, block_num, downsample, light_block, kernel_size, layer_num = stage_config
             stages += [HighPerfGpuStage(

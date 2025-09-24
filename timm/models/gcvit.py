@@ -27,7 +27,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, to_2tuple, to_ntuple, Mlp, ClassifierHead, LayerNorm2d, \
+from timm.layers import DropPath, calculate_drop_path_rates, to_2tuple, to_ntuple, Mlp, ClassifierHead, LayerNorm2d, \
     get_attn, get_act_layer, get_norm_layer, RelPosBias, _assert
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
@@ -419,7 +419,7 @@ class GlobalContextVit(nn.Module):
             norm_layer=norm_layer
         )
 
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dpr = calculate_drop_path_rates(drop_path_rate, depths, stagewise=True)
         stages = []
         for i in range(num_stages):
             last_stage = i == num_stages - 1

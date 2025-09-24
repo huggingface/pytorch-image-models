@@ -37,7 +37,7 @@ from torch import Tensor
 from torch.jit import Final
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import trunc_normal_, DropPath, SelectAdaptivePool2d, GroupNorm1, LayerNorm, LayerNorm2d, Mlp, \
+from timm.layers import trunc_normal_, DropPath, calculate_drop_path_rates, SelectAdaptivePool2d, GroupNorm1, LayerNorm, LayerNorm2d, Mlp, \
     use_fused_attn
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
@@ -524,7 +524,7 @@ class MetaFormer(nn.Module):
 
         stages = []
         prev_dim = dims[0]
-        dp_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dp_rates = calculate_drop_path_rates(drop_path_rate, depths, stagewise=True)
         for i in range(self.num_stages):
             stages += [MetaFormerStage(
                 prev_dim,

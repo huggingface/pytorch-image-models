@@ -38,7 +38,7 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import GroupNormAct, BatchNormAct2d, EvoNorm2dS0, FilterResponseNormTlu2d, ClassifierHead, \
-    DropPath, AvgPool2dSame, create_pool2d, StdConv2d, create_conv2d, get_act_layer, get_norm_act_layer, make_divisible
+    DropPath, calculate_drop_path_rates, AvgPool2dSame, create_pool2d, StdConv2d, create_conv2d, get_act_layer, get_norm_act_layer, make_divisible
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq, named_apply, adapt_input_conv
@@ -566,7 +566,7 @@ class ResNetV2(nn.Module):
         prev_chs = stem_chs
         curr_stride = 4
         dilation = 1
-        block_dprs = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(layers)).split(layers)]
+        block_dprs = calculate_drop_path_rates(drop_path_rate, layers, stagewise=True)
         if preact:
             block_fn = PreActBasic if basic else PreActBottleneck
         else:

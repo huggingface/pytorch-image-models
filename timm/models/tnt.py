@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from timm.layers import Mlp, DropPath, trunc_normal_, _assert, to_2tuple, resample_abs_pos_embed
+from timm.layers import Mlp, DropPath, calculate_drop_path_rates, trunc_normal_, _assert, to_2tuple, resample_abs_pos_embed
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint
@@ -273,7 +273,7 @@ class TNT(nn.Module):
         self.pixel_pos = nn.Parameter(torch.zeros(1, inner_dim, new_patch_size[0], new_patch_size[1]))
         self.pos_drop = nn.Dropout(p=pos_drop_rate)
 
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
+        dpr = calculate_drop_path_rates(drop_path_rate, depth)  # stochastic depth decay rule
         blocks = []
         for i in range(depth):
             blocks.append(Block(

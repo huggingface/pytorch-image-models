@@ -310,7 +310,7 @@ def _cfg(url='', **kwargs):
 
 default_cfgs = generate_default_cfgs({
     'vitamin_small_224.datacomp1b_clip_ltt': _cfg(
-        hf_hub_id='jienengchen/ViTamin-S-LTT', num_classes=384),
+        hf_hub_id='jienengchen/ViTamin-S-LTT', num_classes=768),
     'vitamin_small_224.datacomp1b_clip': _cfg(
         hf_hub_id='jienengchen/ViTamin-S', num_classes=384),
     'vitamin_base_224.datacomp1b_clip_ltt': _cfg(

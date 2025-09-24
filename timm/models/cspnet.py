@@ -20,7 +20,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import ClassifierHead, ConvNormAct, DropPath, get_attn, create_act_layer, make_divisible
+from timm.layers import ClassifierHead, ConvNormAct, DropPath, calculate_drop_path_rates, get_attn, create_act_layer, make_divisible
 from ._builder import build_model_with_cfg
 from ._manipulate import named_apply, MATCH_PREV_GROUP
 from ._registry import register_model, generate_default_cfgs
@@ -569,7 +569,7 @@ def create_csp_stages(
     cfg_dict = asdict(cfg.stages)
     num_stages = len(cfg.stages.depth)
     cfg_dict['block_dpr'] = [None] * num_stages if not drop_path_rate else \
-        [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(cfg.stages.depth)).split(cfg.stages.depth)]
+        calculate_drop_path_rates(drop_path_rate, cfg.stages.depth, stagewise=True)
     stage_args = [dict(zip(cfg_dict.keys(), values)) for values in zip(*cfg_dict.values())]
     block_kwargs = dict(
         act_layer=cfg.act_layer,

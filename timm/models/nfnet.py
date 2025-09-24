@@ -25,7 +25,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import ClassifierHead, DropPath, AvgPool2dSame, ScaledStdConv2d, ScaledStdConv2dSame, \
+from timm.layers import ClassifierHead, DropPath, calculate_drop_path_rates, AvgPool2dSame, ScaledStdConv2d, ScaledStdConv2dSame, \
     get_act_layer, get_act_fn, get_attn, make_divisible
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_module
@@ -426,7 +426,7 @@ class NormFreeNet(nn.Module):
         )
 
         self.feature_info = [stem_feat]
-        drop_path_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(cfg.depths)).split(cfg.depths)]
+        drop_path_rates = calculate_drop_path_rates(drop_path_rate, cfg.depths, stagewise=True)
         prev_chs = stem_chs
         net_stride = stem_stride
         dilation = 1

@@ -78,7 +78,7 @@ from timm.layers import (
     GluMlp,
     SwiGLU,
     LayerNorm,
-    DropPath,
+    DropPath, calculate_drop_path_rates,
     PatchDropoutWithIndices,
     create_rope_embed,
     apply_rot_embed_cat,
@@ -365,7 +365,7 @@ class EvaBlockPostNorm(nn.Module):
             attn_type: str = 'eva',
             rotate_half: bool = False,
             swiglu_mlp: bool = False,
-            swiglu_aligh_to: int = 0,
+            swiglu_align_to: int = 0,
             scale_mlp: bool = False,
             scale_attn_inner: bool = False,
             num_prefix_tokens: int = 1,
@@ -425,6 +425,7 @@ class EvaBlockPostNorm(nn.Module):
                     hidden_features=hidden_features,
                     norm_layer=norm_layer if scale_mlp else None,
                     drop=proj_drop,
+                    align_to=swiglu_align_to,
                 )
             else:
                 # w/o any extra norm, an impl with packed fc1 weights is used, matches existing GluMLP
@@ -637,7 +638,7 @@ class Eva(nn.Module):
 
         self.norm_pre = norm_layer(embed_dim) if activate_pre_norm else nn.Identity()
 
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
+        dpr = calculate_drop_path_rates(drop_path_rate, depth)  # stochastic depth decay rule
         block_fn = EvaBlockPostNorm if use_post_norm else EvaBlock
         self.blocks = nn.ModuleList([
             block_fn(

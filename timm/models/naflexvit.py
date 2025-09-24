@@ -39,6 +39,7 @@ from timm.layers import (
     get_norm_layer,
     apply_keep_indices_nlc,
     disable_compiler,
+    calculate_drop_path_rates,
 )
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
@@ -1182,7 +1183,7 @@ class NaFlexVit(nn.Module):
             self.patch_drop = None
 
         # Transformer blocks
-        dpr = [x.item() for x in torch.linspace(0, cfg.drop_path_rate, cfg.depth)]  # stochastic depth decay rule
+        dpr = calculate_drop_path_rates(cfg.drop_path_rate, cfg.depth)  # stochastic depth decay rule
         # Create transformer blocks
         self.blocks = nn.Sequential(*[
             block_fn(

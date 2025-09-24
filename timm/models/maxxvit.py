@@ -45,7 +45,7 @@ from torch import nn
 from torch.jit import Final
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import Mlp, ConvMlp, DropPath, LayerNorm, ClassifierHead, NormMlpClassifierHead
+from timm.layers import Mlp, ConvMlp, DropPath, calculate_drop_path_rates, LayerNorm, ClassifierHead, NormMlpClassifierHead
 from timm.layers import create_attn, get_act_layer, get_norm_layer, get_norm_act_layer, create_conv2d, create_pool2d
 from timm.layers import trunc_normal_tf_, to_2tuple, extend_tuple, make_divisible, _assert
 from timm.layers import RelPosMlp, RelPosBias, RelPosBiasTf, use_fused_attn, resize_rel_pos_bias_table
@@ -1341,7 +1341,7 @@ class MaxxVit(nn.Module):
 
         num_stages = len(cfg.embed_dim)
         assert len(cfg.depths) == num_stages
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(cfg.depths)).split(cfg.depths)]
+        dpr = calculate_drop_path_rates(drop_path_rate, cfg.depths, stagewise=True)
         in_chs = self.stem.out_chs
         stages = []
         for i in range(num_stages):

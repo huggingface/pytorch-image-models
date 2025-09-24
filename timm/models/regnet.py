@@ -32,7 +32,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import ClassifierHead, AvgPool2dSame, ConvNormAct, SEModule, DropPath, GroupNormAct
+from timm.layers import ClassifierHead, AvgPool2dSame, ConvNormAct, SEModule, DropPath, GroupNormAct, calculate_drop_path_rates
 from timm.layers import get_act_layer, get_norm_act_layer, create_conv2d, make_divisible
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
@@ -657,11 +657,7 @@ class RegNet(nn.Module):
                 net_stride *= stride
             stage_strides.append(stride)
             stage_dilations.append(dilation)
-        dpr_tensor = torch.linspace(0, drop_path_rate, sum(stage_depths))
-        split_indices = torch.cumsum(torch.tensor(stage_depths[:-1]), dim=0)
-        stage_dpr = torch.tensor_split(dpr_tensor, split_indices.tolist())
-        stage_dpr = [dpr.tolist() for dpr in stage_dpr]
-
+        stage_dpr = calculate_drop_path_rates(drop_path_rate, stage_depths, stagewise=True)
         # Adjust the compatibility of ws and gws
         stage_widths, stage_gs = adjust_widths_groups_comp(
             stage_widths, stage_br, stage_gs, min_ratio=cfg.group_min_ratio)

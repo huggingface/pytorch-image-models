@@ -18,7 +18,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import LayerNorm2d, NormMlpClassifierHead, DropPath,\
-    trunc_normal_, resize_rel_pos_bias_table_levit, use_fused_attn
+    trunc_normal_, resize_rel_pos_bias_table_levit, use_fused_attn, calculate_drop_path_rates
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_module
@@ -449,7 +449,7 @@ class TinyVit(nn.Module):
         )
 
         # stochastic depth rate rule
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
+        dpr = calculate_drop_path_rates(drop_path_rate, sum(depths))
 
         # build stages
         self.stages = nn.Sequential()

@@ -42,7 +42,7 @@ from .create_attn import get_attn, create_attn
 from .create_conv2d import create_conv2d
 from .create_norm import get_norm_layer, create_norm_layer
 from .create_norm_act import get_norm_act_layer, create_norm_act_layer, get_norm_act_layer
-from .drop import DropBlock2d, DropPath, drop_block_2d, drop_path
+from .drop import DropBlock2d, DropPath, drop_block_2d, drop_path, calculate_drop_path_rates
 from .eca import EcaModule, CecaModule, EfficientChannelAttn, CircularEfficientChannelAttn
 from .evo_norm import (
     EvoNorm2dB0,

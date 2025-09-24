@@ -417,9 +417,7 @@ class CoaT(nn.Module):
         self.crpe3 = ConvRelPosEnc(head_chs=embed_dims[2] // num_heads, num_heads=num_heads, window=crpe_window)
         self.crpe4 = ConvRelPosEnc(head_chs=embed_dims[3] // num_heads, num_heads=num_heads, window=crpe_window)
 
-        # Disable stochastic depth.
         dpr = drop_path_rate
-        assert dpr == 0.0
         skwargs = dict(
             num_heads=num_heads,
             qkv_bias=qkv_bias,

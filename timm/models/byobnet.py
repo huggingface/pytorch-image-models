@@ -39,7 +39,7 @@ import torch.nn as nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from timm.layers import (
     ClassifierHead, NormMlpClassifierHead, ConvNormAct, BatchNormAct2d, EvoNorm2dS0a,
-    AttentionPool2d, RotAttentionPool2d, DropPath, AvgPool2dSame,
+    AttentionPool2d, RotAttentionPool2d, DropPath, calculate_drop_path_rates, AvgPool2dSame,
     create_conv2d, get_act_layer, get_norm_act_layer, get_attn, make_divisible, to_2tuple,
 )
 from ._builder import build_model_with_cfg
@@ -1212,7 +1212,7 @@ def create_byob_stages(
     feature_info = []
     block_cfgs = [expand_blocks_cfg(s) for s in cfg.blocks]
     depths = [sum([bc.d for bc in stage_bcs]) for stage_bcs in block_cfgs]
-    dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+    dpr = calculate_drop_path_rates(drop_path_rate, depths, stagewise=True)
     dilation = 1
     net_stride = stem_feat['reduction']
     prev_chs = stem_feat['num_chs']

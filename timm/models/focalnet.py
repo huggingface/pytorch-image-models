@@ -24,7 +24,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import Mlp, DropPath, LayerNorm2d, trunc_normal_, ClassifierHead, NormMlpClassifierHead
+from timm.layers import Mlp, DropPath, LayerNorm2d, trunc_normal_, ClassifierHead, NormMlpClassifierHead, calculate_drop_path_rates
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import named_apply, checkpoint
@@ -378,7 +378,7 @@ class FocalNet(nn.Module):
         )
         in_dim = embed_dim[0]
 
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]  # stochastic depth decay rule
+        dpr = calculate_drop_path_rates(drop_path_rate, sum(depths))  # stochastic depth decay rule
         layers = []
         for i_layer in range(self.num_layers):
             out_dim = embed_dim[i_layer]

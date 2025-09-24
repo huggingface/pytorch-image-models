@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, ClNormMlpClassifierHead, LayerScale, \
+from timm.layers import PatchEmbed, Mlp, DropPath, calculate_drop_path_rates, ClNormMlpClassifierHead, LayerScale, \
     get_norm_layer, get_act_layer, init_weight_jax, init_weight_vit, to_2tuple, use_fused_attn
 
 from ._builder import build_model_with_cfg
@@ -325,7 +325,7 @@ class HieraDet(nn.Module):
         self.pos_embed = nn.Parameter(torch.zeros(1, embed_dim, *self.global_pos_size))
         self.pos_embed_window = nn.Parameter(torch.zeros(1, embed_dim, self.window_spec[0], self.window_spec[0]))
 
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
+        dpr = calculate_drop_path_rates(drop_path_rate, depth)  # stochastic depth decay rule
         cur_stage = 0
         self.blocks = nn.Sequential()
         self.feature_info = []

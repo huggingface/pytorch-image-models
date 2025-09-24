@@ -26,7 +26,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, create_classifier, trunc_normal_, _assert
+from timm.layers import PatchEmbed, Mlp, DropPath, calculate_drop_path_rates, create_classifier, trunc_normal_, _assert
 from timm.layers import create_conv2d, create_pool2d, to_ntuple, use_fused_attn, LayerNorm
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
@@ -346,7 +346,7 @@ class Nest(nn.Module):
 
         # Build up each hierarchical level
         levels = []
-        dp_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dp_rates = calculate_drop_path_rates(drop_path_rate, depths, stagewise=True)
         prev_dim = None
         curr_stride = 4
         for i in range(len(self.num_blocks)):

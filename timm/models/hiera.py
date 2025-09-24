@@ -31,7 +31,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, Mlp, LayerScale, ClNormMlpClassifierHead, use_fused_attn, \
+from timm.layers import DropPath, calculate_drop_path_rates, Mlp, LayerScale, ClNormMlpClassifierHead, use_fused_attn, \
     _assert, get_norm_layer, to_2tuple, init_weight_vit, init_weight_jax
 
 from ._registry import generate_default_cfgs, register_model
@@ -515,7 +515,7 @@ class Hiera(nn.Module):
         # Transformer blocks
         cur_stage = 0
         depth = sum(stages)
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
+        dpr = calculate_drop_path_rates(drop_path_rate, depth)  # stochastic depth decay rule
         self.blocks = nn.ModuleList()
         self.feature_info = []
         for i in range(depth):

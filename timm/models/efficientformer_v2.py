@@ -23,7 +23,7 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import create_conv2d, create_norm_layer, get_act_layer, get_norm_layer, ConvNormAct
-from timm.layers import DropPath, trunc_normal_, to_2tuple, to_ntuple, ndgrid
+from timm.layers import DropPath, calculate_drop_path_rates, trunc_normal_, to_2tuple, to_ntuple, ndgrid
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
@@ -543,7 +543,7 @@ class EfficientFormerV2(nn.Module):
         stride = 4
 
         num_stages = len(depths)
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dpr = calculate_drop_path_rates(drop_path_rate, depths, stagewise=True)
         downsamples = downsamples or (False,) + (True,) * (len(depths) - 1)
         mlp_ratios = to_ntuple(num_stages)(mlp_ratios)
         stages = []

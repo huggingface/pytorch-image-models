@@ -20,7 +20,7 @@ import torch
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import trunc_normal_, to_2tuple
+from timm.layers import trunc_normal_, to_2tuple, calculate_drop_path_rates
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._registry import register_model, generate_default_cfgs
@@ -184,7 +184,7 @@ class PoolingVisionTransformer(nn.Module):
 
         transformers = []
         # stochastic depth decay rule
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depth)).split(depth)]
+        dpr = calculate_drop_path_rates(drop_path_rate, depth, stagewise=True)
         prev_dim = embed_dim
         for i in range(len(depth)):
             pool = None

@@ -55,6 +55,7 @@ from timm.layers import (
     LayerNorm,
     RmsNorm,
     DropPath,
+    calculate_drop_path_rates,
     PatchDropout,
     trunc_normal_,
     lecun_normal_,
@@ -578,7 +579,7 @@ class VisionTransformer(nn.Module):
             self.patch_drop = nn.Identity()
         self.norm_pre = norm_layer(embed_dim) if pre_norm else nn.Identity()
 
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
+        dpr = calculate_drop_path_rates(drop_path_rate, depth)  # stochastic depth decay rule
         self.blocks = nn.Sequential(*[
             block_fn(
                 dim=embed_dim,
@@ -2965,7 +2966,7 @@ def vit_betwixt_patch16_gap_256(pretrained: bool = False, **kwargs) -> VisionTra
         patch_size=16, embed_dim=640, depth=12, num_heads=10, class_token=False,
         global_pool='avg', qkv_bias=False, init_values=1e-6, fc_norm=False)
     model = _create_vision_transformer(
-        'vit_medium_patch16_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+        'vit_betwixt_patch16_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 

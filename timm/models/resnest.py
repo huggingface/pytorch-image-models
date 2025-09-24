@@ -45,9 +45,8 @@ class ResNestBottleneck(nn.Module):
     ):
         super(ResNestBottleneck, self).__init__()
         assert reduce_first == 1  # not supported
-        assert attn_layer is None  # not supported
-        assert aa_layer is None  # TODO not yet supported
-        assert drop_path is None  # TODO not yet supported
+        assert attn_layer is None, 'attn_layer is not supported'  # not supported
+        assert aa_layer is None, 'aa_layer is not supported'  # TODO not yet supported
 
         group_width = int(planes * (base_width / 64.)) * cardinality
         first_dilation = first_dilation or dilation
@@ -83,6 +82,7 @@ class ResNestBottleneck(nn.Module):
         self.bn3 = norm_layer(planes*4)
         self.act3 = act_layer(inplace=True)
         self.downsample = downsample
+        self.drop_path = drop_path
 
     def zero_init_last(self):
         if getattr(self.bn3, 'weight', None) is not None:
@@ -108,6 +108,9 @@ class ResNestBottleneck(nn.Module):
 
         out = self.conv3(out)
         out = self.bn3(out)
+
+        if self.drop_path is not None:
+            x = self.drop_path(x)
 
         if self.downsample is not None:
             shortcut = self.downsample(x)

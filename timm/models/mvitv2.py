@@ -23,7 +23,7 @@ import torch
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import Mlp, DropPath, trunc_normal_tf_, get_norm_layer, to_2tuple
+from timm.layers import Mlp, DropPath, calculate_drop_path_rates, trunc_normal_tf_, get_norm_layer, to_2tuple
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
@@ -749,7 +749,7 @@ class MultiScaleVit(nn.Module):
         num_stages = len(cfg.embed_dim)
         feat_size = patch_dims
         curr_stride = max(cfg.patch_stride)
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(cfg.depths)).split(cfg.depths)]
+        dpr = calculate_drop_path_rates(drop_path_rate, cfg.depths, stagewise=True)
         self.stages = nn.ModuleList()
         self.feature_info = []
         for i in range(num_stages):

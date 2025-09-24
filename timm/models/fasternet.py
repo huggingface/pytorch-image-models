@@ -23,7 +23,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import SelectAdaptivePool2d, Linear, DropPath, trunc_normal_, LayerType
+from timm.layers import SelectAdaptivePool2d, Linear, DropPath, trunc_normal_, LayerType, calculate_drop_path_rates
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
@@ -216,7 +216,7 @@ class FasterNet(nn.Module):
             norm_layer=norm_layer if patch_norm else nn.Identity,
         )
         # stochastic depth decay rule
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
+        dpr = calculate_drop_path_rates(drop_path_rate, sum(depths))
 
         # build layers
         stages_list = []
