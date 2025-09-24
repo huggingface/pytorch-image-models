@@ -150,7 +150,7 @@ class DepthwiseSeparableConv(nn.Module):
         if s2d == 1:
             sd_chs = int(in_chs * 4)
             self.conv_s2d = create_conv2d(in_chs, sd_chs, kernel_size=2, stride=2, padding='same')
-            self.bn_s2d = norm_act_layer(sd_chs, sd_chs)
+            self.bn_s2d = norm_act_layer(sd_chs)
             dw_kernel_size = (dw_kernel_size + 1) // 2
             dw_pad_type = 'same' if dw_kernel_size == 2 else pad_type
             in_chs = sd_chs
