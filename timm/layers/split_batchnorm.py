@@ -17,13 +17,25 @@ import torch.nn as nn
 
 class SplitBatchNorm2d(torch.nn.BatchNorm2d):
 
-    def __init__(self, num_features, eps=1e-5, momentum=0.1, affine=True,
-                 track_running_stats=True, num_splits=2):
+    def __init__(
+            self,
+            num_features,
+            eps=1e-5,
+            momentum=0.1,
+            affine=True,
+            track_running_stats=True,
+            num_splits=2,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__(num_features, eps, momentum, affine, track_running_stats)
         assert num_splits > 1, 'Should have at least one aux BN layer (num_splits at least 2)'
         self.num_splits = num_splits
         self.aux_bn = nn.ModuleList([
-            nn.BatchNorm2d(num_features, eps, momentum, affine, track_running_stats) for _ in range(num_splits - 1)])
+            nn.BatchNorm2d(num_features, eps, momentum, affine, track_running_stats, **dd)
+            for _ in range(num_splits - 1)
+        ])
 
     def forward(self, input: torch.Tensor):
         if self.training:  # aux BN only relevant while training

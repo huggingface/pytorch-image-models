@@ -32,7 +32,10 @@ class AttentionPoolLatent(nn.Module):
             norm_layer: Optional[Type[nn.Module]] = None,
             act_layer: Optional[Type[nn.Module]] = nn.GELU,
             drop: float = 0.0,
+            device = None,
+            dtype = None
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         embed_dim = embed_dim or in_features
         out_features = out_features or in_features
@@ -46,28 +49,28 @@ class AttentionPoolLatent(nn.Module):
 
         if pos_embed == 'abs':
             assert feat_size is not None
-            self.pos_embed = nn.Parameter(torch.zeros(feat_size, in_features))
+            self.pos_embed = nn.Parameter(torch.zeros(feat_size, in_features, **dd))
         else:
             self.pos_embed = None
 
         self.latent_dim = latent_dim or embed_dim
         self.latent_len = latent_len
-        self.latent = nn.Parameter(torch.zeros(1, self.latent_len, embed_dim))
+        self.latent = nn.Parameter(torch.zeros(1, self.latent_len, embed_dim, **dd))
 
-        self.q = nn.Linear(embed_dim, embed_dim, bias=qkv_bias)
-        self.kv = nn.Linear(embed_dim, embed_dim * 2, bias=qkv_bias)
+        self.q = nn.Linear(embed_dim, embed_dim, bias=qkv_bias, **dd)
+        self.kv = nn.Linear(embed_dim, embed_dim * 2, bias=qkv_bias, **dd)
         if qk_norm:
             qk_norm_layer = norm_layer or nn.LayerNorm
-            self.q_norm = qk_norm_layer(self.head_dim)
-            self.k_norm = qk_norm_layer(self.head_dim)
+            self.q_norm = qk_norm_layer(self.head_dim, **dd)
+            self.k_norm = qk_norm_layer(self.head_dim, **dd)
         else:
             self.q_norm = nn.Identity()
             self.k_norm = nn.Identity()
-        self.proj = nn.Linear(embed_dim, embed_dim)
+        self.proj = nn.Linear(embed_dim, embed_dim, **dd)
         self.proj_drop = nn.Dropout(drop)
 
-        self.norm = norm_layer(out_features) if norm_layer is not None else nn.Identity()
-        self.mlp = Mlp(embed_dim, int(embed_dim * mlp_ratio), act_layer=act_layer)
+        self.norm = norm_layer(out_features, **dd) if norm_layer is not None else nn.Identity()
+        self.mlp = Mlp(embed_dim, int(embed_dim * mlp_ratio), act_layer=act_layer, **dd)
 
         self.init_weights()
 

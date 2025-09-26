@@ -40,7 +40,10 @@ class HybridEmbed(nn.Module):
             output_fmt: Optional[str] = None,
             strict_img_size: bool = True,
             dynamic_img_pad: bool = False,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         assert isinstance(backbone, nn.Module)
         self.backbone = backbone
@@ -58,6 +61,7 @@ class HybridEmbed(nn.Module):
             patch_size=patch_size,
             feature_size=feature_size,
             feature_ratio=feature_ratio,
+            **dd,
         )
 
         if output_fmt is not None:
@@ -79,6 +83,7 @@ class HybridEmbed(nn.Module):
                 kernel_size=patch_size,
                 stride=patch_size,
                 bias=bias,
+                **dd,
             )
         else:
             assert self.feature_dim == embed_dim, \
@@ -92,6 +97,8 @@ class HybridEmbed(nn.Module):
             feature_size: Optional[Union[int, Tuple[int, int]]] = None,
             feature_ratio: Optional[Union[int, Tuple[int, int]]] = None,
             feature_dim: Optional[int] = None,
+            device=None,
+            dtype=None,
     ):
         img_size = to_2tuple(img_size)
         patch_size = to_2tuple(patch_size)
@@ -101,7 +108,8 @@ class HybridEmbed(nn.Module):
                 training = self.backbone.training
                 if training:
                     self.backbone.eval()
-                o = self.backbone(torch.zeros(1, self.in_chans, img_size[0], img_size[1]))
+                # FIXME whatif meta device?
+                o = self.backbone(torch.zeros(1, self.in_chans, img_size[0], img_size[1], device=device, dtype=dtype))
                 if isinstance(o, (list, tuple)):
                     o = o[-1]  # last feature if backbone outputs list/tuple of features
                 feature_size = o.shape[-2:]
@@ -142,6 +150,8 @@ class HybridEmbed(nn.Module):
                     kernel_size=new_patch_size,
                     stride=new_patch_size,
                     bias=self.proj.bias is not None,
+                    device=self.proj.device,
+                    dtype=self.proj.dtype,
                 )
                 new_proj.weight.copy_(resample_patch_embed(self.proj.weight, new_patch_size, verbose=True))
                 if self.proj.bias is not None:
@@ -165,6 +175,7 @@ class HybridEmbed(nn.Module):
                 feature_size=feature_size,
                 feature_ratio=feature_ratio,
                 feature_dim=feature_dim,
+                # FIXME device/dtype?
             )
 
     def feat_ratio(self, as_scalar=True) -> Union[Tuple[int, int], int]:
@@ -225,6 +236,8 @@ class HybridEmbedWithSize(HybridEmbed):
             embed_dim: int = 768,
             bias=True,
             proj=True,
+            device=None,
+            dtype=None,
     ):
         super().__init__(
             backbone=backbone,
@@ -236,6 +249,8 @@ class HybridEmbedWithSize(HybridEmbed):
             embed_dim=embed_dim,
             bias=bias,
             proj=proj,
+            device=device,
+            dtype=dtype,
         )
 
     @torch.jit.ignore

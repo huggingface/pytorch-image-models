@@ -43,8 +43,8 @@ def build_sincos2d_pos_embed(
         temperature: float = 10000.,
         reverse_coord: bool = False,
         interleave_sin_cos: bool = False,
+        device: Optional[torch.device] = None,
         dtype: torch.dtype = torch.float32,
-        device: Optional[torch.device] = None
 ) -> torch.Tensor:
     """
 
@@ -96,8 +96,8 @@ def build_fourier_pos_embed(
         ref_feat_shape: Optional[List[int]] = None,
         grid_offset: float = 0.,
         grid_indexing: str = 'ij',
-        dtype: torch.dtype = torch.float32,
         device: Optional[torch.device] = None,
+        dtype: torch.dtype = torch.float32,
 ) -> List[torch.Tensor]:
     """
 
@@ -164,7 +164,7 @@ def build_fourier_pos_embed(
     grid = grid.unsqueeze(-1)
     pos = grid * bands
 
-    pos_sin, pos_cos = pos.sin().to(dtype=dtype), pos.cos().to(dtype)
+    pos_sin, pos_cos = pos.sin().to(dtype=dtype), pos.cos().to(dtype=dtype)
     out = [grid, pos_sin, pos_cos] if include_grid else [pos_sin, pos_cos]
     return out
 
@@ -177,6 +177,8 @@ class FourierEmbed(nn.Module):
             num_bands: int = 64,
             concat_grid=True,
             keep_spatial=False,
+            device=None,
+            dtype=None,
     ):
         super().__init__()
         self.max_res = max_res
@@ -331,8 +333,8 @@ def build_rotary_pos_embed(
         ref_feat_shape: Optional[List[int]] = None,
         grid_offset: float = 0.,
         grid_indexing: str = 'ij',
-        dtype: torch.dtype = torch.float32,
         device: Optional[torch.device] = None,
+        dtype: torch.dtype = torch.float32,
 ):
     """
 
@@ -347,8 +349,8 @@ def build_rotary_pos_embed(
         ref_feat_shape: Reference feature shape for resize / fine-tune.
         grid_offset: Constant offset to add to grid for non-pixel freq.
         grid_indexing: Indexing mode for meshgrid ('ij' or 'xy')
-        dtype: Output dtype.
         device: Output device.
+        dtype: Output dtype.
 
     Returns:
 
@@ -398,6 +400,8 @@ class RotaryEmbedding(nn.Module):
             ref_feat_shape: Optional[List[int]] = None,
             grid_offset: float = 0.,
             grid_indexing: str = 'ij',
+            device=None,
+            dtype=None,
     ):
         super().__init__()
         self.dim = dim
@@ -511,6 +515,8 @@ class RotaryEmbeddingCat(nn.Module):
             ref_feat_shape: Optional[List[int]] = None,
             grid_offset: float = 0.,
             grid_indexing: str = 'ij',
+            device=None,
+            dtype=None,
     ):
         super().__init__()
         self.dim = dim
@@ -741,6 +747,8 @@ class RotaryEmbeddingMixed(nn.Module):
             temperature: float = 10.0,
             feat_shape: Optional[List[int]] = None,
             grid_indexing: str = 'xy',
+            device=None,
+            dtype=None,
     ):
         """Initialize rotary embeddings.
 
@@ -769,6 +777,8 @@ class RotaryEmbeddingMixed(nn.Module):
             num_heads,
             temperature=temperature,
             rotate=True,
+            device=device,
+            dtype=dtype,
         )  # (2, depth, num_heads, head_dim//2)
         self.freqs = nn.Parameter(freqs)
 
@@ -784,7 +794,7 @@ class RotaryEmbeddingMixed(nn.Module):
         t_x, t_y = get_mixed_grid(
             feat_shape,
             grid_indexing=self.grid_indexing,
-            device=self.freqs.device
+            device=self.freqs.device,
         )
         return t_x, t_y
 
@@ -956,6 +966,8 @@ class RotaryEmbeddingDinoV3(nn.Module):
             shift_coords: Optional[float] = None,
             jitter_coords: Optional[float] = None,  # interpreted as factor J >= 1
             rescale_coords: Optional[float] = None,  # interpreted as factor R >= 1
+            device=None,
+            dtype=None,
     ):
         super().__init__()
 

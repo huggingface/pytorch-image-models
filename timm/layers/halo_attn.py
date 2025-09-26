@@ -16,7 +16,7 @@ The attention mechanism works but it's slow as implemented.
 
 Hacked together by / Copyright 2021 Ross Wightman
 """
-from typing import List
+from typing import List, Optional, Tuple, Union
 
 import torch
 from torch import nn
@@ -64,19 +64,36 @@ class PosEmbedRel(nn.Module):
     Originally from: `Attention Augmented Convolutional Networks` - https://arxiv.org/abs/1904.09925
 
     """
-    def __init__(self, block_size, win_size, dim_head, scale):
+    def __init__(
+            self,
+            block_size: int,
+            win_size: int,
+            dim_head: int,
+            scale: float,
+            device=None,
+            dtype=None,
+    ):
         """
         Args:
-            block_size (int): block size
-            win_size (int): neighbourhood window size
-            dim_head (int): attention head dim
-            scale (float): scale factor (for init)
+            block_size: block size
+            win_size: neighbourhood window size
+            dim_head: attention head dim
+            scale: scale factor (for init)
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.block_size = block_size
         self.dim_head = dim_head
-        self.height_rel = nn.Parameter(torch.randn(win_size * 2 - 1, dim_head) * scale)
-        self.width_rel = nn.Parameter(torch.randn(win_size * 2 - 1, dim_head) * scale)
+        self.scale = scale
+
+        self.height_rel = nn.Parameter(torch.empty(win_size * 2 - 1, dim_head, **dd))
+        self.width_rel = nn.Parameter(torch.empty(win_size * 2 - 1, dim_head, **dd))
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        torch.nn.init.normal_(self.height_rel, std=self.scale)
+        torch.nn.init.normal_(self.width_rel, std=self.scale)
 
     def forward(self, q):
         B, BB, HW, _ = q.shape
@@ -123,8 +140,23 @@ class HaloAttn(nn.Module):
         scale_pos_embed (bool): scale the position embedding as well as Q @ K
     """
     def __init__(
-            self, dim, dim_out=None, feat_size=None, stride=1, num_heads=8, dim_head=None, block_size=8, halo_size=3,
-            qk_ratio=1.0, qkv_bias=False, avg_down=False, scale_pos_embed=False):
+            self,
+            dim: int,
+            dim_out: Optional[int] = None,
+            feat_size: Optional[Tuple[int, int]] = None,
+            stride: int = 1,
+            num_heads: int = 8,
+            dim_head: Optional[int] = None,
+            block_size: int = 8,
+            halo_size: int = 3,
+            qk_ratio: float = 1.0,
+            qkv_bias: bool = False,
+            avg_down: bool = False,
+            scale_pos_embed: bool = False,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         dim_out = dim_out or dim
         assert dim_out % num_heads == 0
@@ -149,11 +181,16 @@ class HaloAttn(nn.Module):
         # FIXME not clear if this stride behaviour is what the paper intended
         # Also, the paper mentions using a 3D conv for dealing with the blocking/gather, and leaving
         # data in unfolded block form. I haven't wrapped my head around how that'd look.
-        self.q = nn.Conv2d(dim, self.dim_out_qk, 1, stride=self.block_stride, bias=qkv_bias)
-        self.kv = nn.Conv2d(dim, self.dim_out_qk + self.dim_out_v, 1, bias=qkv_bias)
+        self.q = nn.Conv2d(dim, self.dim_out_qk, 1, stride=self.block_stride, bias=qkv_bias, **dd)
+        self.kv = nn.Conv2d(dim, self.dim_out_qk + self.dim_out_v, 1, bias=qkv_bias, **dd)
 
         self.pos_embed = PosEmbedRel(
-            block_size=self.block_size_ds, win_size=self.win_size, dim_head=self.dim_head_qk, scale=self.scale)
+            block_size=self.block_size_ds,
+            win_size=self.win_size,
+            dim_head=self.dim_head_qk,
+            scale=self.scale,
+            **dd,
+        )
 
         self.pool = nn.AvgPool2d(2, 2) if use_avg_pool else nn.Identity()
 

@@ -262,15 +262,18 @@ class GeGluMlp(nn.Module):
             norm_layer = None,
             bias = True,
             drop = 0.0,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         norm_layer = partial(get_norm_layer(norm_layer or 'layernorm'), eps=1e-6)
 
-        self.norm = norm_layer(in_features)
-        self.w0 = nn.Linear(in_features, hidden_features, bias=bias)
+        self.norm = norm_layer(in_features, **dd)
+        self.w0 = nn.Linear(in_features, hidden_features, bias=bias, **dd)
         self.act = create_act_layer(act_layer)
-        self.w1 = nn.Linear(in_features, hidden_features, bias=bias)
-        self.w2 = nn.Linear(hidden_features, in_features, bias=bias)
+        self.w1 = nn.Linear(in_features, hidden_features, bias=bias, **dd)
+        self.w2 = nn.Linear(hidden_features, in_features, bias=bias, **dd)
 
     def forward(self, x):
         x = self.norm(x)

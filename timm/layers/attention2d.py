@@ -33,8 +33,11 @@ class MultiQueryAttentionV2(nn.Module):
             value_dim: int = 64,
             attn_drop: float = 0.,
             proj_drop: float = 0.,
+            device=None,
+            dtype=None,
     ):
         """Initializer."""
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         dim_out = dim_out or dim
         self.num_heads = num_heads
@@ -42,12 +45,21 @@ class MultiQueryAttentionV2(nn.Module):
         self.value_dim = value_dim
         self.scale = key_dim ** -0.5
 
-        self.query_proj = nn.Parameter(torch.randn([self.num_heads, self.key_dim, dim]))
-        self.key_proj = nn.Parameter(torch.randn([dim, self.key_dim]))
-        self.value_proj = nn.Parameter(torch.randn([dim, self.value_dim]))
+        self.query_proj = nn.Parameter(torch.empty((self.num_heads, self.key_dim, dim), **dd))
+        self.key_proj = nn.Parameter(torch.empty((dim, self.key_dim), **dd))
+        self.value_proj = nn.Parameter(torch.empty((dim, self.value_dim), **dd))
         self.attn_drop = nn.Dropout(attn_drop)
-        self.out_proj = nn.Parameter(torch.randn([dim_out, self.num_heads, self.value_dim]))
+        self.out_proj = nn.Parameter(torch.empty((dim_out, self.num_heads, self.value_dim), **dd))
         self.proj_drop = nn.Dropout(proj_drop)
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        scale = self.key_proj.shape[0] ** -0.5
+        nn.init.normal_(self.query_proj, std=scale)
+        nn.init.normal_(self.key_proj, std=scale)
+        nn.init.normal_(self.value_proj, std=scale)
+        nn.init.normal_(self.out_proj, std=self.out_proj.shape[0] ** -0.5)
 
     def _reshape_input(self, t):
         """Reshapes a tensor to three dimensions, keeping the first and last."""
@@ -108,6 +120,8 @@ class MultiQueryAttention2d(nn.Module):
             proj_drop: float = 0.,
             norm_layer: Type[nn.Module] = nn.BatchNorm2d,
             use_bias: bool = False,
+            device=None,
+            dtype=None,
     ):
         """Initializer.
 
@@ -119,6 +133,7 @@ class MultiQueryAttention2d(nn.Module):
           kv_stride: Key and value stride size.
           dw_kernel_size: Spatial dimension of the depthwise kernel.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         dim_out = dim_out or dim
         self.num_heads = num_heads
@@ -149,6 +164,7 @@ class MultiQueryAttention2d(nn.Module):
             self.num_heads * self.key_dim,
             kernel_size=1,
             bias=use_bias,
+            **dd,
         ))
 
         self.key = nn.Sequential()
@@ -161,6 +177,7 @@ class MultiQueryAttention2d(nn.Module):
                 dilation=dilation,
                 padding=padding,
                 depthwise=True,
+                **dd,
             ))
             self.key.add_module('norm', norm_layer(dim))
         self.key.add_module('proj', create_conv2d(
@@ -169,6 +186,7 @@ class MultiQueryAttention2d(nn.Module):
             kernel_size=1,
             padding=padding,
             bias=use_bias,
+            **dd,
         ))
 
         self.value = nn.Sequential()
@@ -181,6 +199,7 @@ class MultiQueryAttention2d(nn.Module):
                 dilation=dilation,
                 padding=padding,
                 depthwise=True,
+                **dd,
             ))
             self.value.add_module('norm', norm_layer(dim))
         self.value.add_module('proj', create_conv2d(
@@ -188,22 +207,29 @@ class MultiQueryAttention2d(nn.Module):
             self.value_dim,
             kernel_size=1,
             bias=use_bias,
+            **dd,
         ))
 
         self.attn_drop = nn.Dropout(attn_drop)
 
         self.output = nn.Sequential()
         if self.has_query_strides:
-            self.output.add_module('upsample', nn.Upsample(scale_factor=self.query_strides, mode='bilinear', align_corners=False))
+            self.output.add_module('upsample', nn.Upsample(
+                scale_factor=self.query_strides,
+                mode='bilinear',
+                align_corners=False
+            ))
         self.output.add_module('proj', create_conv2d(
             self.value_dim * self.num_heads,
             dim_out,
             kernel_size=1,
             bias=use_bias,
+            **dd,
         ))
-        self.output.add_module('drop',  nn.Dropout(proj_drop))
+        self.output.add_module('drop', nn.Dropout(proj_drop))
 
         self.einsum = False
+        self.init_weights()
 
     def init_weights(self):
         # using xavier appeared to improve stability for mobilenetv4 hybrid w/ this layer
@@ -304,8 +330,11 @@ class Attention2d(nn.Module):
             expand_first: bool = False,
             head_first: bool = False,
             attn_drop: float = 0.,
-            proj_drop: float = 0.
+            proj_drop: float = 0.,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         dim_out = dim_out or dim
         dim_attn = dim_out if expand_first else dim
@@ -314,9 +343,9 @@ class Attention2d(nn.Module):
         self.head_first = head_first
         self.fused_attn = use_fused_attn()
 
-        self.qkv = nn.Conv2d(dim, dim_attn * 3, 1, bias=bias)
+        self.qkv = nn.Conv2d(dim, dim_attn * 3, 1, bias=bias, **dd)
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Conv2d(dim_attn, dim_out, 1, bias=bias)
+        self.proj = nn.Conv2d(dim_attn, dim_out, 1, bias=bias, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, x, attn_mask: Optional[torch.Tensor] = None):

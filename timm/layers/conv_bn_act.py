@@ -32,10 +32,13 @@ class ConvNormAct(nn.Module):
             conv_kwargs: Optional[Dict[str, Any]] = None,
             norm_kwargs: Optional[Dict[str, Any]] = None,
             act_kwargs: Optional[Dict[str, Any]] = None,
+            device=None,
+            dtype=None,
     ):
         super(ConvNormAct, self).__init__()
-        conv_kwargs = conv_kwargs or {}
-        norm_kwargs = norm_kwargs or {}
+        dd = {'device': device, 'dtype': dtype}
+        conv_kwargs = {**dd, **(conv_kwargs or {})}
+        norm_kwargs = {**dd, **(norm_kwargs or {})}
         act_kwargs = act_kwargs or {}
         use_aa = aa_layer is not None and stride > 1
 
@@ -69,7 +72,14 @@ class ConvNormAct(nn.Module):
                 norm_kwargs['drop_layer'] = drop_layer
                 self.bn.add_module('drop', drop_layer())
 
-        self.aa = create_aa(aa_layer, out_channels, stride=stride, enable=use_aa, noop=None)
+        self.aa = create_aa(
+            aa_layer,
+            out_channels,
+            stride=stride,
+            enable=use_aa,
+            noop=None,
+            **dd,
+        )
 
     @property
     def in_channels(self):
