@@ -448,7 +448,7 @@ def _cfg(url='', **kwargs):
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'layer0.conv1', 'classifier': 'last_linear',
+        'first_conv': 'layer0.conv1', 'classifier': 'last_linear', 'license': 'apache-2.0',
         **kwargs
     }
 

@@ -280,7 +280,8 @@ default_cfgs = generate_default_cfgs({
         'std': (0.5, 0.5, 0.5),
         'num_classes': 1000,
         'first_conv': 'conv1',
-        'classifier': 'fc'
+        'classifier': 'fc',
+        'license': 'apache-2.0',
         # The resize parameter of the validation transform should be 333, and make sure to center crop at 299x299
     }
 })

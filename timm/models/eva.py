@@ -1305,7 +1305,7 @@ def _dinov3_cfg(url: str = '', **kwargs) -> Dict[str, Any]:
         'crop_pct': 1.0, 'interpolation': 'bicubic', 'fixed_input_size': True,
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'patch_embed.proj', 'classifier': 'head',
-        'license': 'dinov3', **kwargs
+        'license': 'dinov3-license', **kwargs
     }
 
 default_cfgs = generate_default_cfgs({
@@ -2567,7 +2567,7 @@ def vit_large_patch16_rope_ape_224(pretrained: bool = False, **kwargs) -> Eva:
         rope_grid_indexing='xy',
         rope_temperature=100.0,
     )
-    
+
     model = _create_eva('vit_large_patch16_rope_ape_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 

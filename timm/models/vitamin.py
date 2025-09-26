@@ -325,7 +325,7 @@ def _cfg(url='', **kwargs):
         'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
         'mean': OPENAI_CLIP_MEAN, 'std': OPENAI_CLIP_STD,
         'first_conv': 'patch_embed.backbone.stem.conv1',
-        'classifier': 'head',
+        'classifier': 'head', 'license': 'mit',
         **kwargs
     }
 

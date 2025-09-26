@@ -578,4 +578,11 @@ def _get_license_from_hf_hub(model_id: str | None, hf_hub_id: str | None) -> str
         return None
 
     license = info.card_data.get("license").lower() if info.card_data else None
+
+    if license == 'other':
+        name = info.card_data.get("license_name", None)
+
+        if name is not None:
+            return name
+
     return license
