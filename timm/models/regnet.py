@@ -1195,37 +1195,37 @@ default_cfgs = generate_default_cfgs({
 
     'regnety_320.seer_ft_in1k': _cfgtv2(
         hf_hub_id='timm/',
-        license='other', origin_url='https://github.com/facebookresearch/vissl',
+        license='seer-license', origin_url='https://github.com/facebookresearch/vissl',
         url='https://dl.fbaipublicfiles.com/vissl/model_zoo/seer_finetuned/seer_regnet32_finetuned_in1k_model_final_checkpoint_phase78.torch',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0),
     'regnety_640.seer_ft_in1k': _cfgtv2(
         hf_hub_id='timm/',
-        license='other', origin_url='https://github.com/facebookresearch/vissl',
+        license='seer-license', origin_url='https://github.com/facebookresearch/vissl',
         url='https://dl.fbaipublicfiles.com/vissl/model_zoo/seer_finetuned/seer_regnet64_finetuned_in1k_model_final_checkpoint_phase78.torch',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0),
     'regnety_1280.seer_ft_in1k': _cfgtv2(
         hf_hub_id='timm/',
-        license='other', origin_url='https://github.com/facebookresearch/vissl',
+        license='seer-license', origin_url='https://github.com/facebookresearch/vissl',
         url='https://dl.fbaipublicfiles.com/vissl/model_zoo/seer_finetuned/seer_regnet128_finetuned_in1k_model_final_checkpoint_phase78.torch',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0),
     'regnety_2560.seer_ft_in1k': _cfgtv2(
         hf_hub_id='timm/',
-        license='other', origin_url='https://github.com/facebookresearch/vissl',
+        license='seer-license', origin_url='https://github.com/facebookresearch/vissl',
         url='https://dl.fbaipublicfiles.com/vissl/model_zoo/seer_finetuned/seer_regnet256_finetuned_in1k_model_final_checkpoint_phase38.torch',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0),
 
     'regnety_320.seer': _cfgtv2(
         hf_hub_id='timm/',
         url='https://dl.fbaipublicfiles.com/vissl/model_zoo/seer_regnet32d/seer_regnet32gf_model_iteration244000.torch',
-        num_classes=0, license='other', origin_url='https://github.com/facebookresearch/vissl'),
+        num_classes=0, license='seer-license', origin_url='https://github.com/facebookresearch/vissl'),
     'regnety_640.seer': _cfgtv2(
         hf_hub_id='timm/',
         url='https://dl.fbaipublicfiles.com/vissl/model_zoo/seer_regnet64/seer_regnet64gf_model_final_checkpoint_phase0.torch',
-        num_classes=0, license='other', origin_url='https://github.com/facebookresearch/vissl'),
+        num_classes=0, license='seer-license', origin_url='https://github.com/facebookresearch/vissl'),
     'regnety_1280.seer': _cfgtv2(
         hf_hub_id='timm/',
         url='https://dl.fbaipublicfiles.com/vissl/model_zoo/swav_ig1b_regnet128Gf_cnstant_bs32_node16_sinkhorn10_proto16k_syncBN64_warmup8k/model_final_checkpoint_phase0.torch',
-        num_classes=0, license='other', origin_url='https://github.com/facebookresearch/vissl'),
+        num_classes=0, license='seer-license', origin_url='https://github.com/facebookresearch/vissl'),
     # FIXME invalid weight <-> model match, mistake on their end
     #'regnety_2560.seer': _cfgtv2(
     #    url='https://dl.fbaipublicfiles.com/vissl/model_zoo/swav_ig1b_cosine_rg256gf_noBNhead_wd1e5_fairstore_bs16_node64_sinkhorn10_proto16k_apex_syncBN64_warmup8k/model_final_checkpoint_phase0.torch',

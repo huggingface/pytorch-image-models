@@ -1113,25 +1113,25 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         crop_pct=1.0,
         num_classes=0,
-        license='dinov3',
+        license='dinov3-license',
     ),
     'convnext_small.dinov3_lvd1689m': _cfg(
         hf_hub_id='timm/',
         crop_pct=1.0,
         num_classes=0,
-        license='dinov3',
+        license='dinov3-license',
     ),
     'convnext_base.dinov3_lvd1689m': _cfg(
         hf_hub_id='timm/',
         crop_pct=1.0,
         num_classes=0,
-        license='dinov3',
+        license='dinov3-license',
     ),
     'convnext_large.dinov3_lvd1689m': _cfg(
         hf_hub_id='timm/',
         crop_pct=1.0,
         num_classes=0,
-        license='dinov3',
+        license='dinov3-license',
     ),
 
     "test_convnext.r160_in1k": _cfg(
