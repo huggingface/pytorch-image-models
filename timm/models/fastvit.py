@@ -1431,10 +1431,10 @@ def _cfg(url="", **kwargs):
         "crop_pct": 0.9,
         "interpolation": "bicubic",
         "mean": IMAGENET_DEFAULT_MEAN,
-        "license": "other",
+        "license": "fastvit-license",
         "std": IMAGENET_DEFAULT_STD,
         'first_conv': ('stem.0.conv_kxk.0.conv', 'stem.0.conv_scale.conv'),
-        "classifier": "head.fc", "license": "fastvit-license",
+        "classifier": "head.fc",
         **kwargs,
     }
 
