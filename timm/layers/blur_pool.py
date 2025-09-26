@@ -36,7 +36,10 @@ class BlurPool2d(nn.Module):
             filt_size: int = 3,
             stride: int = 2,
             pad_mode: str = 'reflect',
+            device=None,
+            dtype=None
     ) -> None:
+        dd = {'device': device, 'dtype': dtype}
         super(BlurPool2d, self).__init__()
         assert filt_size > 1
         self.channels = channels
@@ -48,7 +51,7 @@ class BlurPool2d(nn.Module):
         # (0.5 + 0.5 x)^N => coefficients = C(N,k) / 2^N,  k = 0..N
         coeffs = torch.tensor(
             [comb(filt_size - 1, k) for k in range(filt_size)],
-            dtype=torch.float32,
+            **dd,
         ) / (2 ** (filt_size - 1))  # normalise so coefficients sum to 1
         blur_filter = (coeffs[:, None] * coeffs[None, :])[None, None, :, :]
         if channels is not None:
@@ -71,7 +74,9 @@ def create_aa(
         channels: Optional[int] = None,
         stride: int = 2,
         enable: bool = True,
-        noop: Optional[Type[nn.Module]] = nn.Identity
+        noop: Optional[Type[nn.Module]] = nn.Identity,
+        device=None,
+        dtype=None,
 ) -> nn.Module:
     """ Anti-aliasing """
     if not aa_layer or not enable:
@@ -82,9 +87,9 @@ def create_aa(
         if aa_layer == 'avg' or aa_layer == 'avgpool':
             aa_layer = nn.AvgPool2d
         elif aa_layer == 'blur' or aa_layer == 'blurpool':
-            aa_layer = BlurPool2d
+            aa_layer = partial(BlurPool2d, device=device, dtype=dtype)
         elif aa_layer == 'blurpc':
-            aa_layer = partial(BlurPool2d, pad_mode='constant')
+            aa_layer = partial(BlurPool2d, pad_mode='constant', device=device, dtype=dtype)
 
         else:
             assert False, f"Unknown anti-aliasing layer ({aa_layer})."

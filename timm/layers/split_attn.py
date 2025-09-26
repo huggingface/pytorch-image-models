@@ -33,9 +33,26 @@ class RadixSoftmax(nn.Module):
 class SplitAttn(nn.Module):
     """Split-Attention (aka Splat)
     """
-    def __init__(self, in_channels, out_channels=None, kernel_size=3, stride=1, padding=None,
-                 dilation=1, groups=1, bias=False, radix=2, rd_ratio=0.25, rd_channels=None, rd_divisor=8,
-                 act_layer=nn.ReLU, norm_layer=None, drop_layer=None, **kwargs):
+    def __init__(
+            self,
+            in_channels,
+            out_channels=None,
+            kernel_size=3,
+            stride=1,
+            padding=None,
+            dilation=1,
+            groups=1,
+            bias=False,
+            radix=2,
+            rd_ratio=0.25,
+            rd_channels=None,
+            rd_divisor=8,
+            act_layer=nn.ReLU,
+            norm_layer=None,
+            drop_layer=None,
+            **kwargs,
+    ):
+        dd = {'device': kwargs.pop('device', None), 'dtype': kwargs.pop('dtype', None)}
         super(SplitAttn, self).__init__()
         out_channels = out_channels or in_channels
         self.radix = radix
@@ -47,15 +64,24 @@ class SplitAttn(nn.Module):
 
         padding = kernel_size // 2 if padding is None else padding
         self.conv = nn.Conv2d(
-            in_channels, mid_chs, kernel_size, stride, padding, dilation,
-            groups=groups * radix, bias=bias, **kwargs)
-        self.bn0 = norm_layer(mid_chs) if norm_layer else nn.Identity()
+            in_channels,
+            mid_chs,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            groups=groups * radix,
+            bias=bias,
+            **kwargs,
+            **dd,
+        )
+        self.bn0 = norm_layer(mid_chs, **dd) if norm_layer else nn.Identity()
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
         self.act0 = act_layer(inplace=True)
-        self.fc1 = nn.Conv2d(out_channels, attn_chs, 1, groups=groups)
-        self.bn1 = norm_layer(attn_chs) if norm_layer else nn.Identity()
+        self.fc1 = nn.Conv2d(out_channels, attn_chs, 1, groups=groups, **dd)
+        self.bn1 = norm_layer(attn_chs, **dd) if norm_layer else nn.Identity()
         self.act1 = act_layer(inplace=True)
-        self.fc2 = nn.Conv2d(attn_chs, mid_chs, 1, groups=groups)
+        self.fc2 = nn.Conv2d(attn_chs, mid_chs, 1, groups=groups, **dd)
         self.rsoftmax = RadixSoftmax(radix, groups)
 
     def forward(self, x):

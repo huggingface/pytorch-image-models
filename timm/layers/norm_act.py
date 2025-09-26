@@ -218,21 +218,24 @@ class FrozenBatchNormAct2d(torch.nn.Module):
     """
 
     def __init__(
-        self,
-        num_features: int,
-        eps: float = 1e-5,
-        apply_act: bool = True,
-        act_layer: LayerType = nn.ReLU,
-        act_kwargs: Dict[str, Any] = None,
-        inplace: bool = True,
-        drop_layer: Optional[Type[nn.Module]] = None,
+            self,
+            num_features: int,
+            eps: float = 1e-5,
+            apply_act: bool = True,
+            act_layer: LayerType = nn.ReLU,
+            act_kwargs: Dict[str, Any] = None,
+            inplace: bool = True,
+            drop_layer: Optional[Type[nn.Module]] = None,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.eps = eps
-        self.register_buffer("weight", torch.ones(num_features))
-        self.register_buffer("bias", torch.zeros(num_features))
-        self.register_buffer("running_mean", torch.zeros(num_features))
-        self.register_buffer("running_var", torch.ones(num_features))
+        self.register_buffer("weight", torch.ones(num_features, **dd))
+        self.register_buffer("bias", torch.zeros(num_features, **dd))
+        self.register_buffer("running_mean", torch.zeros(num_features, **dd))
+        self.register_buffer("running_var", torch.ones(num_features, **dd))
 
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
         self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
@@ -380,12 +383,16 @@ class GroupNormAct(nn.GroupNorm):
             act_kwargs: Dict[str, Any] = None,
             inplace: bool = True,
             drop_layer: Optional[Type[nn.Module]] = None,
+            device=None,
+            dtype=None,
     ):
         super(GroupNormAct, self).__init__(
             _num_groups(num_channels, num_groups, group_size),
             num_channels,
             eps=eps,
             affine=affine,
+            device=device,
+            dtype=dtype,
         )
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
         self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
@@ -415,8 +422,10 @@ class GroupNorm1Act(nn.GroupNorm):
             act_kwargs: Dict[str, Any] = None,
             inplace: bool = True,
             drop_layer: Optional[Type[nn.Module]] = None,
+            device=None,
+            dtype=None,
     ):
-        super(GroupNorm1Act, self).__init__(1, num_channels, eps=eps, affine=affine)
+        super(GroupNorm1Act, self).__init__(1, num_channels, eps=eps, affine=affine, device=device, dtype=dtype)
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
         self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
 
@@ -633,8 +642,9 @@ class RmsNormAct2d(RmsNorm2d):
             act_kwargs: Dict[str, Any] = None,
             inplace: bool = True,
             drop_layer: Optional[Type[nn.Module]] = None,
+            **kwargs,
     ):
-        super().__init__(channels=num_channels, eps=eps, affine=affine)
+        super().__init__(channels=num_channels, eps=eps, affine=affine, **kwargs)
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
         self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
         self._fast_norm = is_fast_norm()
@@ -666,8 +676,9 @@ class RmsNormAct2dFp32(RmsNorm2d):
             act_kwargs: Dict[str, Any] = None,
             inplace: bool = True,
             drop_layer: Optional[Type[nn.Module]] = None,
+            **kwargs,
     ):
-        super().__init__(channels=num_channels, eps=eps, affine=affine)
+        super().__init__(channels=num_channels, eps=eps, affine=affine, **kwargs)
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
         self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
 

@@ -43,10 +43,20 @@ class Conv2dSame(nn.Conv2d):
             dilation=1,
             groups=1,
             bias=True,
+            device=None,
+            dtype=None,
     ):
         super(Conv2dSame, self).__init__(
-            in_channels, out_channels, kernel_size,
-            stride, 0, dilation, groups, bias,
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            0,  # padding
+            dilation,
+            groups,
+            bias,
+            device=device,
+            dtype=dtype,
         )
 
     def forward(self, x):
@@ -73,10 +83,20 @@ class Conv2dSameExport(nn.Conv2d):
             dilation=1,
             groups=1,
             bias=True,
+            device=None,
+            dtype=None,
     ):
         super(Conv2dSameExport, self).__init__(
-            in_channels, out_channels, kernel_size,
-            stride, 0, dilation, groups, bias,
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            0,  # padding
+            dilation,
+            groups,
+            bias,
+            device=device,
+            dtype=dtype,
         )
         self.pad = None
         self.pad_input_size = (0, 0)

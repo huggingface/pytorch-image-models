@@ -44,7 +44,10 @@ class RotAttentionPool2d(nn.Module):
             pool_type: str = 'token',
             class_token: bool = False,
             drop_rate: float = 0.,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         assert pool_type in ('', 'token')
         self.embed_dim = embed_dim = embed_dim or in_features
@@ -64,20 +67,20 @@ class RotAttentionPool2d(nn.Module):
         self.fused_attn = use_fused_attn()
 
         if class_token:
-            self.cls_token = nn.Parameter(torch.zeros(1, embed_dim))
+            self.cls_token = nn.Parameter(torch.zeros(1, embed_dim, **dd))
         else:
             self.cls_token = None
 
         if qkv_separate:
-            self.q = nn.Linear(in_features, embed_dim, bias=qkv_bias)
-            self.k = nn.Linear(in_features, embed_dim, bias=qkv_bias)
-            self.v = nn.Linear(in_features, embed_dim, bias=qkv_bias)
+            self.q = nn.Linear(in_features, embed_dim, bias=qkv_bias, **dd)
+            self.k = nn.Linear(in_features, embed_dim, bias=qkv_bias, **dd)
+            self.v = nn.Linear(in_features, embed_dim, bias=qkv_bias, **dd)
             self.qkv = None
         else:
-            self.qkv = nn.Linear(in_features, embed_dim * 3, bias=qkv_bias)
+            self.qkv = nn.Linear(in_features, embed_dim * 3, bias=qkv_bias, **dd)
         self.drop = nn.Dropout(drop_rate)
-        self.proj = nn.Linear(embed_dim, self.out_features)
-        self.pos_embed = RotaryEmbedding(self.head_dim, in_pixels=False, ref_feat_shape=ref_feat_size)
+        self.proj = nn.Linear(embed_dim, self.out_features, **dd)
+        self.pos_embed = RotaryEmbedding(self.head_dim, in_pixels=False, ref_feat_shape=ref_feat_size, **dd)
 
     def init_weights(self, zero_init_last: bool = False):
         if self.qkv is None:
@@ -171,7 +174,10 @@ class AttentionPool2d(nn.Module):
             pool_type: str = 'token',
             class_token: bool = False,
             drop_rate: float = 0.,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         assert pool_type in ('', 'token')
         self.embed_dim = embed_dim = embed_dim or in_features
@@ -192,21 +198,21 @@ class AttentionPool2d(nn.Module):
         self.fused_attn = use_fused_attn()
 
         if class_token:
-            self.cls_token = nn.Parameter(torch.zeros(1, embed_dim))
+            self.cls_token = nn.Parameter(torch.zeros(1, embed_dim, **dd))
         else:
             self.cls_token = None
 
         if qkv_separate:
-            self.q = nn.Linear(in_features, embed_dim, bias=qkv_bias)
-            self.k = nn.Linear(in_features, embed_dim, bias=qkv_bias)
-            self.v = nn.Linear(in_features, embed_dim, bias=qkv_bias)
+            self.q = nn.Linear(in_features, embed_dim, bias=qkv_bias, **dd)
+            self.k = nn.Linear(in_features, embed_dim, bias=qkv_bias, **dd)
+            self.v = nn.Linear(in_features, embed_dim, bias=qkv_bias, **dd)
             self.qkv = None
         else:
             self.q = self.k = self.v = None
-            self.qkv = nn.Linear(in_features, embed_dim * 3, bias=qkv_bias)
+            self.qkv = nn.Linear(in_features, embed_dim * 3, bias=qkv_bias, **dd)
         self.drop = nn.Dropout(drop_rate)
-        self.proj = nn.Linear(embed_dim, self.out_features)
-        self.pos_embed = nn.Parameter(torch.zeros(self.seq_len + 1, in_features))
+        self.proj = nn.Linear(embed_dim, self.out_features, **dd)
+        self.pos_embed = nn.Parameter(torch.zeros(self.seq_len + 1, in_features, **dd))
 
         self.init_weights()
 

@@ -41,7 +41,10 @@ class PatchEmbed(nn.Module):
             bias: bool = True,
             strict_img_size: bool = True,
             dynamic_img_pad: bool = False,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.patch_size = to_2tuple(patch_size)
         self.img_size, self.grid_size, self.num_patches = self._init_img_size(img_size)
@@ -56,8 +59,8 @@ class PatchEmbed(nn.Module):
         self.strict_img_size = strict_img_size
         self.dynamic_img_pad = dynamic_img_pad
 
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size, bias=bias)
-        self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
+        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size, bias=bias, **dd)
+        self.norm = norm_layer(embed_dim, **dd) if norm_layer else nn.Identity()
 
     def _init_img_size(self, img_size: Union[int, Tuple[int, int]]):
         assert self.patch_size
@@ -84,6 +87,8 @@ class PatchEmbed(nn.Module):
                     kernel_size=new_patch_size,
                     stride=new_patch_size,
                     bias=self.proj.bias is not None,
+                    device=self.proj.weight.device,
+                    dtype=self.proj.weight.dtype,
                 )
                 new_proj.weight.copy_(resample_patch_embed(self.proj.weight, new_patch_size, verbose=True))
                 if self.proj.bias is not None:
@@ -152,6 +157,8 @@ class PatchEmbedWithSize(PatchEmbed):
             flatten: bool = True,
             output_fmt: Optional[str] = None,
             bias: bool = True,
+            device=None,
+            dtype=None,
     ):
         super().__init__(
             img_size=img_size,
@@ -162,6 +169,8 @@ class PatchEmbedWithSize(PatchEmbed):
             flatten=flatten,
             output_fmt=output_fmt,
             bias=bias,
+            device=device,
+            dtype=dtype,
         )
 
     def forward(self, x) -> Tuple[torch.Tensor, List[int]]:
@@ -255,12 +264,12 @@ DTYPE_INTERMEDIATE = torch.float32
 
 
 def _compute_resize_matrix(
-    old_size: Tuple[int, int],
-    new_size: Tuple[int, int],
-    interpolation: str,
-    antialias: bool,
-    device: torch.device,
-    dtype: torch.dtype = DTYPE_INTERMEDIATE
+        old_size: Tuple[int, int],
+        new_size: Tuple[int, int],
+        interpolation: str,
+        antialias: bool,
+        device: torch.device,
+        dtype: torch.dtype = DTYPE_INTERMEDIATE
 ) -> torch.Tensor:
     """Computes the resize matrix basis vectors and interpolates them to new_size."""
     old_h, old_w = old_size
@@ -282,11 +291,11 @@ def _compute_resize_matrix(
 
 
 def _apply_resampling(
-    patch_embed: torch.Tensor,
-    pinv_matrix: torch.Tensor,
-    new_size_tuple: Tuple[int, int],
-    orig_dtype: torch.dtype,
-    intermediate_dtype: torch.dtype = DTYPE_INTERMEDIATE
+        patch_embed: torch.Tensor,
+        pinv_matrix: torch.Tensor,
+        new_size_tuple: Tuple[int, int],
+        orig_dtype: torch.dtype,
+        intermediate_dtype: torch.dtype = DTYPE_INTERMEDIATE
 ) -> torch.Tensor:
     """ Simplified resampling w/o vmap use.
     As proposed by https://github.com/stas-sl
@@ -335,10 +344,10 @@ class PatchEmbedResamplerFixedOrigSize(nn.Module):
     caching the pseudoinverse matrix based on the target size.
     """
     def __init__(
-        self,
-        orig_size: Tuple[int, int],
-        interpolation: str = 'bicubic',
-        antialias: bool = True
+            self,
+            orig_size: Tuple[int, int],
+            interpolation: str = 'bicubic',
+            antialias: bool = True
     ):
         """
         Args:
@@ -356,10 +365,10 @@ class PatchEmbedResamplerFixedOrigSize(nn.Module):
         self._pinv_cache_map: Dict[Tuple[int, int], str] = {}
 
     def _get_or_create_pinv_matrix(
-        self,
-        new_size: Tuple[int, int],
-        device: torch.device,
-        dtype: torch.dtype = DTYPE_INTERMEDIATE
+            self,
+            new_size: Tuple[int, int],
+            device: torch.device,
+            dtype: torch.dtype = DTYPE_INTERMEDIATE
     ) -> torch.Tensor:
         """Retrieves the cached pinv matrix or computes and caches it for the given new_size."""
         cache_key = new_size
@@ -438,12 +447,12 @@ class PatchEmbedInterpolator(nn.Module):
     """
 
     def __init__(
-        self,
-        base_patch_size: Tuple[int, int],
-        in_chans: int = 3,
-        embed_dim: int = 768,
-        interpolation: str = 'bicubic',
-        antialias: bool = True,
+            self,
+            base_patch_size: Tuple[int, int],
+            in_chans: int = 3,
+            embed_dim: int = 768,
+            interpolation: str = 'bicubic',
+            antialias: bool = True,
     ):
         super().__init__()
         self.base_patch_size = base_patch_size
@@ -453,9 +462,9 @@ class PatchEmbedInterpolator(nn.Module):
         self.antialias = antialias
 
     def resample_linear_weight(
-        self,
-        weight: torch.Tensor,
-        target_patch_size: Tuple[int, int],
+            self,
+            weight: torch.Tensor,
+            target_patch_size: Tuple[int, int],
     ) -> torch.Tensor:
         """Resample linear patch embedding weights for a new patch size.
 
@@ -495,9 +504,9 @@ class PatchEmbedInterpolator(nn.Module):
         return weight_resampled
 
     def resample_conv_weight(
-        self,
-        weight: torch.Tensor,
-        target_patch_size: Tuple[int, int],
+            self,
+            weight: torch.Tensor,
+            target_patch_size: Tuple[int, int],
     ) -> torch.Tensor:
         """Resample conv2d patch embedding weights for a new patch size.
 
@@ -523,12 +532,12 @@ class PatchEmbedInterpolator(nn.Module):
         return weight_resampled
 
     def forward(
-        self,
-        patches: torch.Tensor,
-        proj_weight: torch.Tensor,
-        proj_bias: Optional[torch.Tensor] = None,
-        patch_size: Optional[Tuple[int, int]] = None,
-        is_linear: bool = True,
+            self,
+            patches: torch.Tensor,
+            proj_weight: torch.Tensor,
+            proj_bias: Optional[torch.Tensor] = None,
+            patch_size: Optional[Tuple[int, int]] = None,
+            is_linear: bool = True,
     ) -> torch.Tensor:
         """Apply patch embedding with dynamic weight resampling.
 
