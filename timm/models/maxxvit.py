@@ -45,10 +45,33 @@ from torch import nn
 from torch.jit import Final
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import Mlp, ConvMlp, DropPath, calculate_drop_path_rates, LayerNorm, ClassifierHead, NormMlpClassifierHead
-from timm.layers import create_attn, get_act_layer, get_norm_layer, get_norm_act_layer, create_conv2d, create_pool2d
-from timm.layers import trunc_normal_tf_, to_2tuple, extend_tuple, make_divisible, _assert
-from timm.layers import RelPosMlp, RelPosBias, RelPosBiasTf, use_fused_attn, resize_rel_pos_bias_table
+from timm.layers import (
+    Mlp,
+    ConvMlp,
+    DropPath,
+    calculate_drop_path_rates,
+    LayerNorm,
+    LayerScale,
+    LayerScale2d,
+    ClassifierHead,
+    NormMlpClassifierHead,
+    create_attn,
+    get_act_layer,
+    get_norm_layer,
+    get_norm_act_layer,
+    create_conv2d,
+    create_pool2d,
+    trunc_normal_tf_,
+    to_2tuple,
+    extend_tuple,
+    make_divisible,
+    _assert,
+    RelPosMlp,
+    RelPosBias,
+    RelPosBiasTf,
+    use_fused_attn,
+    resize_rel_pos_bias_table,
+)
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
@@ -157,7 +180,9 @@ class Attention2d(nn.Module):
             head_first: bool = True,
             rel_pos_cls: Optional[Callable] = None,
             attn_drop: float = 0.,
-            proj_drop: float = 0.
+            proj_drop: float = 0.,
+            device=None,
+            dtype=None,
     ):
         """
         Args:
@@ -171,6 +196,7 @@ class Attention2d(nn.Module):
             attn_drop: Attention dropout rate.
             proj_drop: Projection dropout rate.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         dim_out = dim_out or dim
         dim_attn = dim_out if expand_first else dim
@@ -180,10 +206,10 @@ class Attention2d(nn.Module):
         self.scale = dim_head ** -0.5
         self.fused_attn = use_fused_attn()
 
-        self.qkv = nn.Conv2d(dim, dim_attn * 3, 1, bias=bias)
-        self.rel_pos = rel_pos_cls(num_heads=self.num_heads) if rel_pos_cls else None
+        self.qkv = nn.Conv2d(dim, dim_attn * 3, 1, bias=bias, **dd)
+        self.rel_pos = rel_pos_cls(num_heads=self.num_heads, **dd) if rel_pos_cls else None
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Conv2d(dim_attn, dim_out, 1, bias=bias)
+        self.proj = nn.Conv2d(dim_attn, dim_out, 1, bias=bias, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, x: torch.Tensor, shared_rel_pos: Optional[torch.Tensor] = None) -> torch.Tensor:
@@ -238,7 +264,9 @@ class AttentionCl(nn.Module):
             head_first: bool = True,
             rel_pos_cls: Optional[Callable] = None,
             attn_drop: float = 0.,
-            proj_drop: float = 0.
+            proj_drop: float = 0.,
+            device=None,
+            dtype=None,
     ):
         """
         Args:
@@ -252,6 +280,7 @@ class AttentionCl(nn.Module):
             attn_drop: Attention dropout rate.
             proj_drop: Projection dropout rate.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         dim_out = dim_out or dim
         dim_attn = dim_out if expand_first and dim_out > dim else dim
@@ -262,10 +291,10 @@ class AttentionCl(nn.Module):
         self.scale = dim_head ** -0.5
         self.fused_attn = use_fused_attn()
 
-        self.qkv = nn.Linear(dim, dim_attn * 3, bias=bias)
-        self.rel_pos = rel_pos_cls(num_heads=self.num_heads) if rel_pos_cls else None
+        self.qkv = nn.Linear(dim, dim_attn * 3, bias=bias, **dd)
+        self.rel_pos = rel_pos_cls(num_heads=self.num_heads, **dd) if rel_pos_cls else None
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim_attn, dim_out, bias=bias)
+        self.proj = nn.Linear(dim_attn, dim_out, bias=bias, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, x: torch.Tensor, shared_rel_pos: Optional[torch.Tensor] = None) -> torch.Tensor:
@@ -306,44 +335,6 @@ class AttentionCl(nn.Module):
         return x
 
 
-class LayerScale(nn.Module):
-    """Per-channel scaling layer."""
-
-    def __init__(self, dim: int, init_values: float = 1e-5, inplace: bool = False):
-        """
-        Args:
-            dim: Number of channels.
-            init_values: Initial scaling value.
-            inplace: Whether to perform inplace operations.
-        """
-        super().__init__()
-        self.inplace = inplace
-        self.gamma = nn.Parameter(init_values * torch.ones(dim))
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        gamma = self.gamma
-        return x.mul_(gamma) if self.inplace else x * gamma
-
-
-class LayerScale2d(nn.Module):
-    """Per-channel scaling layer for 2D tensors."""
-
-    def __init__(self, dim: int, init_values: float = 1e-5, inplace: bool = False):
-        """
-        Args:
-            dim: Number of channels.
-            init_values: Initial scaling value.
-            inplace: Whether to perform inplace operations.
-        """
-        super().__init__()
-        self.inplace = inplace
-        self.gamma = nn.Parameter(init_values * torch.ones(dim))
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        gamma = self.gamma.view(1, -1, 1, 1)
-        return x.mul_(gamma) if self.inplace else x * gamma
-
-
 class Downsample2d(nn.Module):
     """A downsample pooling module supporting several maxpool and avgpool modes.
 
@@ -360,6 +351,8 @@ class Downsample2d(nn.Module):
             pool_type: str = 'avg2',
             padding: str = '',
             bias: bool = True,
+            device=None,
+            dtype=None,
     ):
         """
         Args:
@@ -382,7 +375,7 @@ class Downsample2d(nn.Module):
             self.pool = create_pool2d('avg', 2, padding=padding or 0)
 
         if dim != dim_out:
-            self.expand = nn.Conv2d(dim, dim_out, 1, bias=bias)
+            self.expand = nn.Conv2d(dim, dim_out, 1, bias=bias, device=device, dtype=dtype)
         else:
             self.expand = nn.Identity()
 
@@ -436,6 +429,8 @@ class TransformerBlock2d(nn.Module):
             rel_pos_cls: Optional[Callable] = None,
             cfg: MaxxVitTransformerCfg = MaxxVitTransformerCfg(),
             drop_path: float = 0.,
+            device=None,
+            dtype=None,
     ):
         """
         Args:
@@ -446,20 +441,21 @@ class TransformerBlock2d(nn.Module):
             cfg: Transformer block configuration.
             drop_path: Drop path rate.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         norm_layer = partial(get_norm_layer(cfg.norm_layer), eps=cfg.norm_eps)
         act_layer = get_act_layer(cfg.act_layer)
 
         if stride == 2:
-            self.shortcut = Downsample2d(dim, dim_out, pool_type=cfg.pool_type, bias=cfg.shortcut_bias)
+            self.shortcut = Downsample2d(dim, dim_out, pool_type=cfg.pool_type, bias=cfg.shortcut_bias, **dd)
             self.norm1 = nn.Sequential(OrderedDict([
-                ('norm', norm_layer(dim)),
-                ('down', Downsample2d(dim, dim, pool_type=cfg.pool_type)),
+                ('norm', norm_layer(dim, **dd)),
+                ('down', Downsample2d(dim, dim, pool_type=cfg.pool_type, **dd)),
             ]))
         else:
             assert dim == dim_out
             self.shortcut = nn.Identity()
-            self.norm1 = norm_layer(dim)
+            self.norm1 = norm_layer(dim, **dd)
 
         self.attn = Attention2d(
             dim,
@@ -469,18 +465,21 @@ class TransformerBlock2d(nn.Module):
             bias=cfg.attn_bias,
             rel_pos_cls=rel_pos_cls,
             attn_drop=cfg.attn_drop,
-            proj_drop=cfg.proj_drop
+            proj_drop=cfg.proj_drop,
+            **dd,
         )
-        self.ls1 = LayerScale2d(dim_out, init_values=cfg.init_values) if cfg.init_values else nn.Identity()
+        self.ls1 = LayerScale2d(dim_out, init_values=cfg.init_values, **dd) if cfg.init_values else nn.Identity()
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-        self.norm2 = norm_layer(dim_out)
+        self.norm2 = norm_layer(dim_out, **dd)
         self.mlp = ConvMlp(
             in_features=dim_out,
             hidden_features=int(dim_out * cfg.expand_ratio),
             act_layer=act_layer,
-            drop=cfg.proj_drop)
-        self.ls2 = LayerScale2d(dim_out, init_values=cfg.init_values) if cfg.init_values else nn.Identity()
+            drop=cfg.proj_drop,
+            **dd,
+        )
+        self.ls2 = LayerScale2d(dim_out, init_values=cfg.init_values, **dd) if cfg.init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def init_weights(self, scheme: str = '') -> None:
@@ -536,7 +535,9 @@ class MbConvBlock(nn.Module):
             stride: int = 1,
             dilation: Tuple[int, int] = (1, 1),
             cfg: MaxxVitConvCfg = MaxxVitConvCfg(),
-            drop_path: float = 0.
+            drop_path: float = 0.,
+            device=None,
+            dtype=None,
     ):
         """
         Args:
@@ -547,6 +548,7 @@ class MbConvBlock(nn.Module):
             cfg: Convolution block configuration.
             drop_path: Drop path rate.
         """
+        dd = {'device': device, 'dtype': dtype}
         super(MbConvBlock, self).__init__()
         norm_act_layer = partial(get_norm_act_layer(cfg.norm_layer, cfg.act_layer), eps=cfg.norm_eps)
         mid_chs = make_divisible((out_chs if cfg.expand_output else in_chs) * cfg.expand_ratio)
@@ -554,7 +556,7 @@ class MbConvBlock(nn.Module):
 
         if stride == 2:
             self.shortcut = Downsample2d(
-                in_chs, out_chs, pool_type=cfg.pool_type, bias=cfg.output_bias, padding=cfg.padding)
+                in_chs, out_chs, pool_type=cfg.pool_type, bias=cfg.output_bias, padding=cfg.padding, **dd)
         else:
             self.shortcut = nn.Identity()
 
@@ -570,17 +572,24 @@ class MbConvBlock(nn.Module):
         else:
             stride_2, dilation_2 = stride, dilation[0]
 
-        self.pre_norm = norm_act_layer(in_chs, apply_act=cfg.pre_norm_act)
+        self.pre_norm = norm_act_layer(in_chs, apply_act=cfg.pre_norm_act, **dd)
         if stride_pool > 1:
-            self.down = Downsample2d(in_chs, in_chs, pool_type=cfg.downsample_pool_type, padding=cfg.padding)
+            self.down = Downsample2d(in_chs, in_chs, pool_type=cfg.downsample_pool_type, padding=cfg.padding, **dd)
         else:
             self.down = nn.Identity()
-        self.conv1_1x1 = create_conv2d(in_chs, mid_chs, 1, stride=stride_1)
-        self.norm1 = norm_act_layer(mid_chs)
+        self.conv1_1x1 = create_conv2d(in_chs, mid_chs, 1, stride=stride_1, **dd)
+        self.norm1 = norm_act_layer(mid_chs, **dd)
 
         self.conv2_kxk = create_conv2d(
-            mid_chs, mid_chs, cfg.kernel_size,
-            stride=stride_2, dilation=dilation_2, groups=groups, padding=cfg.padding)
+            mid_chs,
+            mid_chs,
+            cfg.kernel_size,
+            stride=stride_2,
+            dilation=dilation_2,
+            groups=groups,
+            padding=cfg.padding,
+            **dd,
+        )
 
         attn_kwargs = {}
         if isinstance(cfg.attn_layer, str):
@@ -590,15 +599,15 @@ class MbConvBlock(nn.Module):
 
         # two different orderings for SE and norm2 (due to some weights and trials using SE before norm2)
         if cfg.attn_early:
-            self.se_early = create_attn(cfg.attn_layer, mid_chs, **attn_kwargs)
-            self.norm2 = norm_act_layer(mid_chs)
+            self.se_early = create_attn(cfg.attn_layer, mid_chs, **attn_kwargs, **dd)
+            self.norm2 = norm_act_layer(mid_chs, **dd)
             self.se = None
         else:
             self.se_early = None
-            self.norm2 = norm_act_layer(mid_chs)
-            self.se = create_attn(cfg.attn_layer, mid_chs, **attn_kwargs)
+            self.norm2 = norm_act_layer(mid_chs, **dd)
+            self.se = create_attn(cfg.attn_layer, mid_chs, **attn_kwargs, **dd)
 
-        self.conv3_1x1 = create_conv2d(mid_chs, out_chs, 1, bias=cfg.output_bias)
+        self.conv3_1x1 = create_conv2d(mid_chs, out_chs, 1, bias=cfg.output_bias, **dd)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def init_weights(self, scheme: str = '') -> None:
@@ -639,7 +648,9 @@ class ConvNeXtBlock(nn.Module):
             dilation: Tuple[int, int] = (1, 1),
             cfg: MaxxVitConvCfg = MaxxVitConvCfg(),
             conv_mlp: bool = True,
-            drop_path: float = 0.
+            drop_path: float = 0.,
+            device=None,
+            dtype=None,
     ):
         """
         Args:
@@ -652,6 +663,7 @@ class ConvNeXtBlock(nn.Module):
             conv_mlp: Whether to use convolutional MLP.
             drop_path: Drop path rate.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         out_chs = out_chs or in_chs
         act_layer = get_act_layer(cfg.act_layer)
@@ -665,9 +677,9 @@ class ConvNeXtBlock(nn.Module):
         self.use_conv_mlp = conv_mlp
 
         if stride == 2:
-            self.shortcut = Downsample2d(in_chs, out_chs)
+            self.shortcut = Downsample2d(in_chs, out_chs, **dd)
         elif in_chs != out_chs:
-            self.shortcut = nn.Conv2d(in_chs, out_chs, kernel_size=1, bias=cfg.output_bias)
+            self.shortcut = nn.Conv2d(in_chs, out_chs, kernel_size=1, bias=cfg.output_bias, **dd)
         else:
             self.shortcut = nn.Identity()
 
@@ -680,19 +692,32 @@ class ConvNeXtBlock(nn.Module):
             stride_dw = stride
 
         if stride_pool == 2:
-            self.down = Downsample2d(in_chs, in_chs, pool_type=cfg.downsample_pool_type)
+            self.down = Downsample2d(in_chs, in_chs, pool_type=cfg.downsample_pool_type, **dd)
         else:
             self.down = nn.Identity()
 
         self.conv_dw = create_conv2d(
-            in_chs, out_chs, kernel_size=kernel_size, stride=stride_dw, dilation=dilation[1],
-            depthwise=True, bias=cfg.output_bias)
-        self.norm = norm_layer(out_chs)
-        self.mlp = mlp_layer(out_chs, int(cfg.expand_ratio * out_chs), bias=cfg.output_bias, act_layer=act_layer)
+            in_chs,
+            out_chs,
+            kernel_size=kernel_size,
+            stride=stride_dw,
+            dilation=dilation[1],
+            depthwise=True,
+            bias=cfg.output_bias,
+            **dd,
+        )
+        self.norm = norm_layer(out_chs, **dd)
+        self.mlp = mlp_layer(
+            out_chs,
+            int(cfg.expand_ratio * out_chs),
+            bias=cfg.output_bias,
+            act_layer=act_layer,
+            **dd,
+        )
         if conv_mlp:
-            self.ls = LayerScale2d(out_chs, cfg.init_values) if cfg.init_values else nn.Identity()
+            self.ls = LayerScale2d(out_chs, cfg.init_values, **dd) if cfg.init_values else nn.Identity()
         else:
-            self.ls = LayerScale(out_chs, cfg.init_values) if cfg.init_values else nn.Identity()
+            self.ls = LayerScale(out_chs, cfg.init_values, **dd) if cfg.init_values else nn.Identity()
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -778,7 +803,10 @@ class PartitionAttentionCl(nn.Module):
             partition_type: str = 'block',
             cfg: MaxxVitTransformerCfg = MaxxVitTransformerCfg(),
             drop_path: float = 0.,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         norm_layer = partial(get_norm_layer(cfg.norm_layer_cl), eps=cfg.norm_eps)  # NOTE this block is channels-last
         act_layer = get_act_layer(cfg.act_layer)
@@ -787,7 +815,7 @@ class PartitionAttentionCl(nn.Module):
         self.partition_size = to_2tuple(cfg.window_size if self.partition_block else cfg.grid_size)
         rel_pos_cls = get_rel_pos_cls(cfg, self.partition_size)
 
-        self.norm1 = norm_layer(dim)
+        self.norm1 = norm_layer(dim, **dd)
         self.attn = AttentionCl(
             dim,
             dim,
@@ -797,17 +825,20 @@ class PartitionAttentionCl(nn.Module):
             rel_pos_cls=rel_pos_cls,
             attn_drop=cfg.attn_drop,
             proj_drop=cfg.proj_drop,
+            **dd,
         )
-        self.ls1 = LayerScale(dim, init_values=cfg.init_values) if cfg.init_values else nn.Identity()
+        self.ls1 = LayerScale(dim, init_values=cfg.init_values, **dd) if cfg.init_values else nn.Identity()
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-        self.norm2 = norm_layer(dim)
+        self.norm2 = norm_layer(dim, **dd)
         self.mlp = Mlp(
             in_features=dim,
             hidden_features=int(dim * cfg.expand_ratio),
             act_layer=act_layer,
-            drop=cfg.proj_drop)
-        self.ls2 = LayerScale(dim, init_values=cfg.init_values) if cfg.init_values else nn.Identity()
+            drop=cfg.proj_drop,
+            **dd,
+        )
+        self.ls2 = LayerScale(dim, init_values=cfg.init_values, **dd) if cfg.init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def _partition_attn(self, x):
@@ -842,6 +873,8 @@ class ParallelPartitionAttention(nn.Module):
             dim: int,
             cfg: MaxxVitTransformerCfg = MaxxVitTransformerCfg(),
             drop_path: float = 0.,
+            device=None,
+            dtype=None,
     ):
         """
         Args:
@@ -849,6 +882,7 @@ class ParallelPartitionAttention(nn.Module):
             cfg: Transformer block configuration.
             drop_path: Drop path rate.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         assert dim % 2 == 0
         norm_layer = partial(get_norm_layer(cfg.norm_layer_cl), eps=cfg.norm_eps)  # NOTE this block is channels-last
@@ -858,7 +892,7 @@ class ParallelPartitionAttention(nn.Module):
         self.partition_size = to_2tuple(cfg.window_size)
         rel_pos_cls = get_rel_pos_cls(cfg, self.partition_size)
 
-        self.norm1 = norm_layer(dim)
+        self.norm1 = norm_layer(dim, **dd)
         self.attn_block = AttentionCl(
             dim,
             dim // 2,
@@ -868,6 +902,7 @@ class ParallelPartitionAttention(nn.Module):
             rel_pos_cls=rel_pos_cls,
             attn_drop=cfg.attn_drop,
             proj_drop=cfg.proj_drop,
+            **dd,
         )
         self.attn_grid = AttentionCl(
             dim,
@@ -878,18 +913,21 @@ class ParallelPartitionAttention(nn.Module):
             rel_pos_cls=rel_pos_cls,
             attn_drop=cfg.attn_drop,
             proj_drop=cfg.proj_drop,
+            **dd,
         )
-        self.ls1 = LayerScale(dim, init_values=cfg.init_values) if cfg.init_values else nn.Identity()
+        self.ls1 = LayerScale(dim, init_values=cfg.init_values, **dd) if cfg.init_values else nn.Identity()
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-        self.norm2 = norm_layer(dim)
+        self.norm2 = norm_layer(dim, **dd)
         self.mlp = Mlp(
             in_features=dim,
             hidden_features=int(dim * cfg.expand_ratio),
             out_features=dim,
             act_layer=act_layer,
-            drop=cfg.proj_drop)
-        self.ls2 = LayerScale(dim, init_values=cfg.init_values) if cfg.init_values else nn.Identity()
+            drop=cfg.proj_drop,
+            **dd,
+        )
+        self.ls2 = LayerScale(dim, init_values=cfg.init_values, **dd) if cfg.init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def _partition_attn(self, x: torch.Tensor) -> torch.Tensor:
@@ -963,6 +1001,8 @@ class PartitionAttention2d(nn.Module):
             partition_type: str = 'block',
             cfg: MaxxVitTransformerCfg = MaxxVitTransformerCfg(),
             drop_path: float = 0.,
+            device=None,
+            dtype=None,
     ):
         """
         Args:
@@ -971,6 +1011,7 @@ class PartitionAttention2d(nn.Module):
             cfg: Transformer block configuration.
             drop_path: Drop path rate.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         norm_layer = partial(get_norm_layer(cfg.norm_layer), eps=cfg.norm_eps)  # NOTE this block is channels-last
         act_layer = get_act_layer(cfg.act_layer)
@@ -979,7 +1020,7 @@ class PartitionAttention2d(nn.Module):
         self.partition_size = to_2tuple(cfg.window_size if self.partition_block else cfg.grid_size)
         rel_pos_cls = get_rel_pos_cls(cfg, self.partition_size)
 
-        self.norm1 = norm_layer(dim)
+        self.norm1 = norm_layer(dim, **dd)
         self.attn = Attention2d(
             dim,
             dim,
@@ -989,17 +1030,20 @@ class PartitionAttention2d(nn.Module):
             rel_pos_cls=rel_pos_cls,
             attn_drop=cfg.attn_drop,
             proj_drop=cfg.proj_drop,
+            **dd,
         )
-        self.ls1 = LayerScale2d(dim, init_values=cfg.init_values) if cfg.init_values else nn.Identity()
+        self.ls1 = LayerScale2d(dim, init_values=cfg.init_values, **dd) if cfg.init_values else nn.Identity()
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-        self.norm2 = norm_layer(dim)
+        self.norm2 = norm_layer(dim, **dd)
         self.mlp = ConvMlp(
             in_features=dim,
             hidden_features=int(dim * cfg.expand_ratio),
             act_layer=act_layer,
-            drop=cfg.proj_drop)
-        self.ls2 = LayerScale2d(dim, init_values=cfg.init_values) if cfg.init_values else nn.Identity()
+            drop=cfg.proj_drop,
+            **dd,
+        )
+        self.ls2 = LayerScale2d(dim, init_values=cfg.init_values, **dd) if cfg.init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def _partition_attn(self, x: torch.Tensor) -> torch.Tensor:
@@ -1034,6 +1078,8 @@ class MaxxVitBlock(nn.Module):
             conv_cfg: MaxxVitConvCfg = MaxxVitConvCfg(),
             transformer_cfg: MaxxVitTransformerCfg = MaxxVitTransformerCfg(),
             drop_path: float = 0.,
+            device=None,
+            dtype=None,
     ):
         """Initialize MaxxVitBlock.
 
@@ -1045,13 +1091,14 @@ class MaxxVitBlock(nn.Module):
             transformer_cfg: Configuration for transformer blocks.
             drop_path: Drop path rate.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.nchw_attn = transformer_cfg.use_nchw_attn
 
         conv_cls = ConvNeXtBlock if conv_cfg.block_type == 'convnext' else MbConvBlock
-        self.conv = conv_cls(dim, dim_out, stride=stride, cfg=conv_cfg, drop_path=drop_path)
+        self.conv = conv_cls(dim, dim_out, stride=stride, cfg=conv_cfg, drop_path=drop_path, **dd)
 
-        attn_kwargs = dict(dim=dim_out, cfg=transformer_cfg, drop_path=drop_path)
+        attn_kwargs = dict(dim=dim_out, cfg=transformer_cfg, drop_path=drop_path, **dd)
         partition_layer = PartitionAttention2d if self.nchw_attn else PartitionAttentionCl
         self.attn_block = None if transformer_cfg.no_block_attn else partition_layer(**attn_kwargs)
         self.attn_grid = partition_layer(partition_type='grid', **attn_kwargs)
@@ -1091,6 +1138,8 @@ class ParallelMaxxVitBlock(nn.Module):
             conv_cfg: MaxxVitConvCfg = MaxxVitConvCfg(),
             transformer_cfg: MaxxVitTransformerCfg = MaxxVitTransformerCfg(),
             drop_path: float = 0.,
+            device=None,
+            dtype=None,
     ):
         """
         Args:
@@ -1102,16 +1151,17 @@ class ParallelMaxxVitBlock(nn.Module):
             transformer_cfg: Transformer block configuration.
             drop_path: Drop path rate.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
 
         conv_cls = ConvNeXtBlock if conv_cfg.block_type == 'convnext' else MbConvBlock
         if num_conv > 1:
-            convs = [conv_cls(dim, dim_out, stride=stride, cfg=conv_cfg, drop_path=drop_path)]
-            convs += [conv_cls(dim_out, dim_out, cfg=conv_cfg, drop_path=drop_path)] * (num_conv - 1)
+            convs = [conv_cls(dim, dim_out, stride=stride, cfg=conv_cfg, drop_path=drop_path, **dd)]
+            convs += [conv_cls(dim_out, dim_out, cfg=conv_cfg, drop_path=drop_path, **dd)] * (num_conv - 1)
             self.conv = nn.Sequential(*convs)
         else:
-            self.conv = conv_cls(dim, dim_out, stride=stride, cfg=conv_cfg, drop_path=drop_path)
-        self.attn = ParallelPartitionAttention(dim=dim_out, cfg=transformer_cfg, drop_path=drop_path)
+            self.conv = conv_cls(dim, dim_out, stride=stride, cfg=conv_cfg, drop_path=drop_path, **dd)
+        self.attn = ParallelPartitionAttention(dim=dim_out, cfg=transformer_cfg, drop_path=drop_path, **dd)
 
     def init_weights(self, scheme: str = '') -> None:
         named_apply(partial(_init_transformer, scheme=scheme), self.attn)
@@ -1139,6 +1189,8 @@ class MaxxVitStage(nn.Module):
             transformer_cfg: MaxxVitTransformerCfg = MaxxVitTransformerCfg(),
             conv_cfg: MaxxVitConvCfg = MaxxVitConvCfg(),
             drop_path: Union[float, List[float]] = 0.,
+            device=None,
+            dtype=None,
     ):
         """
         Args:
@@ -1152,6 +1204,7 @@ class MaxxVitStage(nn.Module):
             conv_cfg: Convolution block configuration.
             drop_path: Drop path rate(s).
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.grad_checkpointing = False
 
@@ -1168,6 +1221,7 @@ class MaxxVitStage(nn.Module):
                     stride=block_stride,
                     cfg=conv_cfg,
                     drop_path=drop_path[i],
+                    **dd,
                 )]
             elif t == 'T':
                 rel_pos_cls = get_rel_pos_cls(transformer_cfg, feat_size)
@@ -1178,6 +1232,7 @@ class MaxxVitStage(nn.Module):
                     rel_pos_cls=rel_pos_cls,
                     cfg=transformer_cfg,
                     drop_path=drop_path[i],
+                    **dd,
                 )]
             elif t == 'M':
                 blocks += [MaxxVitBlock(
@@ -1187,6 +1242,7 @@ class MaxxVitStage(nn.Module):
                     conv_cfg=conv_cfg,
                     transformer_cfg=transformer_cfg,
                     drop_path=drop_path[i],
+                    **dd,
                 )]
             elif t == 'PM':
                 blocks += [ParallelMaxxVitBlock(
@@ -1196,6 +1252,7 @@ class MaxxVitStage(nn.Module):
                     conv_cfg=conv_cfg,
                     transformer_cfg=transformer_cfg,
                     drop_path=drop_path[i],
+                    **dd,
                 )]
             in_chs = out_chs
         self.blocks = nn.Sequential(*blocks)
@@ -1221,6 +1278,8 @@ class Stem(nn.Module):
             act_layer: str = 'gelu',
             norm_layer: str = 'batchnorm2d',
             norm_eps: float = 1e-5,
+            device=None,
+            dtype=None,
     ):
         """
         Args:
@@ -1233,6 +1292,7 @@ class Stem(nn.Module):
             norm_layer: Normalization layer.
             norm_eps: Normalization epsilon.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         if not isinstance(out_chs, (list, tuple)):
             out_chs = to_2tuple(out_chs)
@@ -1241,9 +1301,9 @@ class Stem(nn.Module):
         self.out_chs = out_chs[-1]
         self.stride = 2
 
-        self.conv1 = create_conv2d(in_chs, out_chs[0], kernel_size, stride=2, padding=padding, bias=bias)
-        self.norm1 = norm_act_layer(out_chs[0])
-        self.conv2 = create_conv2d(out_chs[0], out_chs[1], kernel_size, stride=1, padding=padding, bias=bias)
+        self.conv1 = create_conv2d(in_chs, out_chs[0], kernel_size, stride=2, padding=padding, bias=bias, **dd)
+        self.norm1 = norm_act_layer(out_chs[0], **dd)
+        self.conv2 = create_conv2d(out_chs[0], out_chs[1], kernel_size, stride=1, padding=padding, bias=bias, **dd)
 
     def init_weights(self, scheme: str = '') -> None:
         named_apply(partial(_init_conv, scheme=scheme), self)
@@ -1301,6 +1361,8 @@ class MaxxVit(nn.Module):
             global_pool: str = 'avg',
             drop_rate: float = 0.,
             drop_path_rate: float = 0.,
+            device=None,
+            dtype=None,
             **kwargs: Any,
     ):
         """
@@ -1315,6 +1377,7 @@ class MaxxVit(nn.Module):
             **kwargs: Additional keyword arguments to overlay on config.
         """
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         img_size = to_2tuple(img_size)
         if kwargs:
             cfg = _overlay_kwargs(cfg, **kwargs)
@@ -1334,6 +1397,7 @@ class MaxxVit(nn.Module):
             act_layer=cfg.conv_cfg.act_layer,
             norm_layer=cfg.conv_cfg.norm_layer,
             norm_eps=cfg.conv_cfg.norm_eps,
+            **dd,
         )
         stride = self.stem.stride
         self.feature_info += [dict(num_chs=self.stem.out_chs, reduction=2, module='stem')]
@@ -1357,6 +1421,7 @@ class MaxxVit(nn.Module):
                 transformer_cfg=transformer_cfg,
                 feat_size=feat_size,
                 drop_path=dpr[i],
+                **dd,
             )]
             stride *= stage_stride
             in_chs = out_chs
@@ -1374,12 +1439,19 @@ class MaxxVit(nn.Module):
                 pool_type=global_pool,
                 drop_rate=drop_rate,
                 norm_layer=final_norm_layer,
+                **dd,
             )
         else:
             # standard classifier head w/ norm, pooling, fc classifier
             self.head_hidden_size = self.num_features
-            self.norm = final_norm_layer(self.num_features)
-            self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=drop_rate)
+            self.norm = final_norm_layer(self.num_features, **dd)
+            self.head = ClassifierHead(
+                self.num_features,
+                num_classes,
+                pool_type=global_pool,
+                drop_rate=drop_rate,
+                **dd,
+            )
 
         # Weight init (default PyTorch init works well for AdamW if scheme not set)
         assert cfg.weight_init in ('', 'normal', 'trunc_normal', 'xavier_normal', 'vit_eff')
