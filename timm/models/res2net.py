@@ -35,8 +35,11 @@ class Bottle2neck(nn.Module):
             act_layer=nn.ReLU,
             norm_layer=None,
             attn_layer=None,
+            device=None,
+            dtype=None,
             **_,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super(Bottle2neck, self).__init__()
         self.scale = scale
         self.is_first = stride > 1 or downsample is not None
@@ -46,16 +49,24 @@ class Bottle2neck(nn.Module):
         outplanes = planes * self.expansion
         first_dilation = first_dilation or dilation
 
-        self.conv1 = nn.Conv2d(inplanes, width * scale, kernel_size=1, bias=False)
-        self.bn1 = norm_layer(width * scale)
+        self.conv1 = nn.Conv2d(inplanes, width * scale, kernel_size=1, bias=False, **dd)
+        self.bn1 = norm_layer(width * scale, **dd)
 
         convs = []
         bns = []
         for i in range(self.num_scales):
             convs.append(nn.Conv2d(
-                width, width, kernel_size=3, stride=stride, padding=first_dilation,
-                dilation=first_dilation, groups=cardinality, bias=False))
-            bns.append(norm_layer(width))
+                width,
+                width,
+                kernel_size=3,
+                stride=stride,
+                padding=first_dilation,
+                dilation=first_dilation,
+                groups=cardinality,
+                bias=False,
+                **dd,
+            ))
+            bns.append(norm_layer(width, **dd))
         self.convs = nn.ModuleList(convs)
         self.bns = nn.ModuleList(bns)
         if self.is_first:
@@ -64,9 +75,9 @@ class Bottle2neck(nn.Module):
         else:
             self.pool = None
 
-        self.conv3 = nn.Conv2d(width * scale, outplanes, kernel_size=1, bias=False)
-        self.bn3 = norm_layer(outplanes)
-        self.se = attn_layer(outplanes) if attn_layer is not None else None
+        self.conv3 = nn.Conv2d(width * scale, outplanes, kernel_size=1, bias=False, **dd)
+        self.bn3 = norm_layer(outplanes, **dd)
+        self.se = attn_layer(outplanes, **dd) if attn_layer is not None else None
 
         self.relu = act_layer(inplace=True)
         self.downsample = downsample

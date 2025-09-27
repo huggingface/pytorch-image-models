@@ -87,15 +87,29 @@ class BasicBlock(nn.Module):
         use_aa = aa_layer is not None and (stride == 2 or first_dilation != dilation)
 
         self.conv1 = nn.Conv2d(
-            inplanes, first_planes, kernel_size=3, stride=1 if use_aa else stride, padding=first_dilation,
-            dilation=first_dilation, bias=False, **dd)
+            inplanes,
+            first_planes,
+            kernel_size=3,
+            stride=1 if use_aa else stride,
+            padding=first_dilation,
+            dilation=first_dilation,
+            bias=False,
+            **dd,
+        )
         self.bn1 = norm_layer(first_planes, **dd)
         self.drop_block = drop_block() if drop_block is not None else nn.Identity()
         self.act1 = act_layer(inplace=True)
         self.aa = create_aa(aa_layer, channels=first_planes, stride=stride, enable=use_aa, **dd)
 
         self.conv2 = nn.Conv2d(
-            first_planes, outplanes, kernel_size=3, padding=dilation, dilation=dilation, bias=False, **dd)
+            first_planes,
+            outplanes,
+            kernel_size=3,
+            padding=dilation,
+            dilation=dilation,
+            bias=False,
+            **dd,
+        )
         self.bn2 = norm_layer(outplanes, **dd)
 
         self.se = create_attn(attn_layer, outplanes, **dd)
@@ -196,8 +210,16 @@ class Bottleneck(nn.Module):
         self.act1 = act_layer(inplace=True)
 
         self.conv2 = nn.Conv2d(
-            first_planes, width, kernel_size=3, stride=1 if use_aa else stride,
-            padding=first_dilation, dilation=first_dilation, groups=cardinality, bias=False, **dd)
+            first_planes,
+            width,
+            kernel_size=3,
+            stride=1 if use_aa else stride,
+            padding=first_dilation,
+            dilation=first_dilation,
+            groups=cardinality,
+            bias=False,
+            **dd,
+        )
         self.bn2 = norm_layer(width, **dd)
         self.drop_block = drop_block() if drop_block is not None else nn.Identity()
         self.act2 = act_layer(inplace=True)
