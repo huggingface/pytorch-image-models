@@ -40,11 +40,14 @@ class SelectiveKernelBasic(nn.Module):
             aa_layer=None,
             drop_block=None,
             drop_path=None,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super(SelectiveKernelBasic, self).__init__()
 
         sk_kwargs = sk_kwargs or {}
-        conv_kwargs = dict(act_layer=act_layer, norm_layer=norm_layer)
+        conv_kwargs = dict(act_layer=act_layer, norm_layer=norm_layer, **dd)
         assert cardinality == 1, 'BasicBlock only supports cardinality of 1'
         assert base_width == 64, 'BasicBlock doest not support changing base width'
         first_planes = planes // reduce_first
@@ -52,11 +55,24 @@ class SelectiveKernelBasic(nn.Module):
         first_dilation = first_dilation or dilation
 
         self.conv1 = SelectiveKernel(
-            inplanes, first_planes, stride=stride, dilation=first_dilation,
-            aa_layer=aa_layer, drop_layer=drop_block, **conv_kwargs, **sk_kwargs)
+            inplanes,
+            first_planes,
+            stride=stride,
+            dilation=first_dilation,
+            aa_layer=aa_layer,
+            drop_layer=drop_block,
+            **conv_kwargs,
+            **sk_kwargs,
+        )
         self.conv2 = ConvNormAct(
-            first_planes, outplanes, kernel_size=3, dilation=dilation, apply_act=False, **conv_kwargs)
-        self.se = create_attn(attn_layer, outplanes)
+            first_planes,
+            outplanes,
+            kernel_size=3,
+            dilation=dilation,
+            apply_act=False,
+            **conv_kwargs,
+        )
+        self.se = create_attn(attn_layer, outplanes, **dd)
         self.act = act_layer(inplace=True)
         self.downsample = downsample
         self.drop_path = drop_path
@@ -101,11 +117,14 @@ class SelectiveKernelBottleneck(nn.Module):
             aa_layer=None,
             drop_block=None,
             drop_path=None,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super(SelectiveKernelBottleneck, self).__init__()
 
         sk_kwargs = sk_kwargs or {}
-        conv_kwargs = dict(act_layer=act_layer, norm_layer=norm_layer)
+        conv_kwargs = dict(act_layer=act_layer, norm_layer=norm_layer, **dd)
         width = int(math.floor(planes * (base_width / 64)) * cardinality)
         first_planes = width // reduce_first
         outplanes = planes * self.expansion
@@ -113,10 +132,18 @@ class SelectiveKernelBottleneck(nn.Module):
 
         self.conv1 = ConvNormAct(inplanes, first_planes, kernel_size=1, **conv_kwargs)
         self.conv2 = SelectiveKernel(
-            first_planes, width, stride=stride, dilation=first_dilation, groups=cardinality,
-            aa_layer=aa_layer, drop_layer=drop_block, **conv_kwargs, **sk_kwargs)
+            first_planes,
+            width,
+            stride=stride,
+            dilation=first_dilation,
+            groups=cardinality,
+            aa_layer=aa_layer,
+            drop_layer=drop_block,
+            **conv_kwargs,
+            **sk_kwargs,
+        )
         self.conv3 = ConvNormAct(width, outplanes, kernel_size=1, apply_act=False, **conv_kwargs)
-        self.se = create_attn(attn_layer, outplanes)
+        self.se = create_attn(attn_layer, outplanes, **dd)
         self.act = act_layer(inplace=True)
         self.downsample = downsample
         self.drop_path = drop_path
