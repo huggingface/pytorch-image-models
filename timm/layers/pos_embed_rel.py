@@ -22,12 +22,16 @@ def gen_relative_position_index(
         q_size: Tuple[int, int],
         k_size: Optional[Tuple[int, int]] = None,
         class_token: bool = False,
+        device=None,
 ) -> torch.Tensor:
     # Adapted with significant modifications from Swin / BeiT codebases
     # get pair-wise relative position index for each token inside the window
     assert k_size is None, 'Different q & k sizes not currently supported'  # FIXME
 
-    coords = torch.stack(ndgrid(torch.arange(q_size[0]), torch.arange(q_size[1]))).flatten(1)  # 2, Wh, Ww
+    coords = torch.stack(ndgrid(
+        torch.arange(q_size[0], device=device),
+        torch.arange(q_size[1], device=device),
+    )).flatten(1)  # 2, Wh, Ww
     relative_coords = coords[:, :, None] - coords[:, None, :]  # 2, Wh*Ww, Wh*Ww
     relative_coords = relative_coords.permute(1, 2, 0)  # Qh*Qw, Kh*Kw, 2
     relative_coords[:, :, 0] += q_size[0] - 1  # shift to start from 0
@@ -140,9 +144,9 @@ def resize_rel_pos_bias_table_levit(
             position_bias_table.permute(1, 0).view(1, nH1, S1, S1),
             size=(S2, S2),
             mode=interpolation,
-            antialias=antialias)
-        relative_position_bias_table_resized = \
-            relative_position_bias_table_resized.view(nH2, L2).permute(1, 0)
+            antialias=antialias,
+        )
+        relative_position_bias_table_resized = relative_position_bias_table_resized.view(nH2, L2).permute(1, 0)
         relative_position_bias_table_resized.to(orig_dtype)
         return relative_position_bias_table_resized
     else:
@@ -270,7 +274,15 @@ class RelPosBias(nn.Module):
     Adapted from Swin-V1 relative position bias impl, modularized.
     """
 
-    def __init__(self, window_size, num_heads, prefix_tokens=0):
+    def __init__(
+            self,
+            window_size: Tuple[int, int],
+            num_heads: int,
+            prefix_tokens: int = 0,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         assert prefix_tokens <= 1
         self.window_size = window_size
@@ -278,10 +290,10 @@ class RelPosBias(nn.Module):
         self.bias_shape = (self.window_area + prefix_tokens,) * 2 + (num_heads,)
 
         num_relative_distance = (2 * window_size[0] - 1) * (2 * window_size[1] - 1) + 3 * prefix_tokens
-        self.relative_position_bias_table = nn.Parameter(torch.zeros(num_relative_distance, num_heads))
+        self.relative_position_bias_table = nn.Parameter(torch.empty(num_relative_distance, num_heads, **dd))
         self.register_buffer(
             "relative_position_index",
-            gen_relative_position_index(self.window_size, class_token=prefix_tokens > 0).view(-1),
+            gen_relative_position_index(self.window_size, class_token=prefix_tokens > 0, device=device).view(-1),
             persistent=False,
         )
 
@@ -304,11 +316,13 @@ def gen_relative_log_coords(
         win_size: Tuple[int, int],
         pretrained_win_size: Tuple[int, int] = (0, 0),
         mode='swin',
+        device=None,
+        dtype=None,
 ):
     assert mode in ('swin', 'cr')
     # as per official swin-v2 impl, supporting timm specific 'cr' log coords as well
-    relative_coords_h = torch.arange(-(win_size[0] - 1), win_size[0]).to(torch.float32)
-    relative_coords_w = torch.arange(-(win_size[1] - 1), win_size[1]).to(torch.float32)
+    relative_coords_h = torch.arange(-(win_size[0] - 1), win_size[0], device=device).to(torch.float32)
+    relative_coords_w = torch.arange(-(win_size[1] - 1), win_size[1], device=device).to(torch.float32)
     relative_coords_table = torch.stack(ndgrid(relative_coords_h, relative_coords_w))
     relative_coords_table = relative_coords_table.permute(1, 2, 0).contiguous()  # 2*Wh-1, 2*Ww-1, 2
     if mode == 'swin':
@@ -326,7 +340,7 @@ def gen_relative_log_coords(
         relative_coords_table = torch.sign(relative_coords_table) * torch.log(
             1.0 + relative_coords_table.abs())
 
-    return relative_coords_table
+    return relative_coords_table.to(dtype)
 
 
 class RelPosMlp(nn.Module):
@@ -337,13 +351,16 @@ class RelPosMlp(nn.Module):
     """
     def __init__(
             self,
-            window_size,
-            num_heads=8,
-            hidden_dim=128,
-            prefix_tokens=0,
-            mode='cr',
-            pretrained_window_size=(0, 0)
+            window_size: Tuple[int, int],
+            num_heads: int = 8,
+            hidden_dim: int = 128,
+            prefix_tokens: int = 0,
+            mode: str = 'cr',
+            pretrained_window_size: Tuple[int, int] = (0, 0),
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.window_size = window_size
         self.window_area = self.window_size[0] * self.window_size[1]
@@ -365,19 +382,22 @@ class RelPosMlp(nn.Module):
             out_features=num_heads,
             act_layer=nn.ReLU,
             bias=mlp_bias,
-            drop=(0.125, 0.)
+            drop=(0.125, 0.),
+            **dd,
         )
 
         self.register_buffer(
             "relative_position_index",
-            gen_relative_position_index(window_size).view(-1),
-            persistent=False)
+            gen_relative_position_index(window_size, device=device).view(-1),
+            persistent=False,
+        )
 
         # get relative_coords_table
         self.register_buffer(
             "rel_coords_log",
-            gen_relative_log_coords(window_size, pretrained_window_size, mode=mode),
-            persistent=False)
+            gen_relative_log_coords(window_size, pretrained_window_size, mode=mode, **dd),
+            persistent=False,
+        )
 
     def get_bias(self) -> torch.Tensor:
         relative_position_bias = self.mlp(self.rel_coords_log)
@@ -399,6 +419,8 @@ class RelPosMlp(nn.Module):
 def generate_lookup_tensor(
         length: int,
         max_relative_position: Optional[int] = None,
+        device=None,
+        dtype=None,
 ):
     """Generate a one_hot lookup tensor to reindex embeddings along one dimension.
 
@@ -415,7 +437,7 @@ def generate_lookup_tensor(
         max_relative_position = length - 1
     # Return the cached lookup tensor, otherwise compute it and cache it.
     vocab_size = 2 * max_relative_position + 1
-    ret = torch.zeros(length, length, vocab_size)
+    ret = torch.zeros(length, length, vocab_size, device=device, dtype=dtype)
     for i in range(length):
         for x in range(length):
             v = x - i + max_relative_position
@@ -459,7 +481,15 @@ class RelPosBiasTf(nn.Module):
     Adapted from:
      https://github.com/google-research/maxvit/blob/2e06a7f1f70c76e64cd3dabe5cd1b8c1a23c9fb7/maxvit/models/attention_utils.py
     """
-    def __init__(self, window_size, num_heads, prefix_tokens=0):
+    def __init__(
+            self,
+            window_size: Tuple[int, int],
+            num_heads: int,
+            prefix_tokens: int = 0,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         assert prefix_tokens <= 1
         self.window_size = window_size
@@ -469,9 +499,9 @@ class RelPosBiasTf(nn.Module):
         vocab_height = 2 * window_size[0] - 1
         vocab_width = 2 * window_size[1] - 1
         self.bias_shape = (self.num_heads, vocab_height, vocab_width)
-        self.relative_position_bias_table = nn.Parameter(torch.zeros(self.bias_shape))
-        self.register_buffer('height_lookup', generate_lookup_tensor(window_size[0]), persistent=False)
-        self.register_buffer('width_lookup', generate_lookup_tensor(window_size[1]), persistent=False)
+        self.relative_position_bias_table = nn.Parameter(torch.empty(self.bias_shape, **dd))
+        self.register_buffer('height_lookup', generate_lookup_tensor(window_size[0], device=device), persistent=False)
+        self.register_buffer('width_lookup', generate_lookup_tensor(window_size[1], device=device), persistent=False)
         self.init_weights()
 
     def init_weights(self):

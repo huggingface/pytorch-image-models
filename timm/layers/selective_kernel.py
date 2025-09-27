@@ -4,6 +4,8 @@ Paper: Selective Kernel Networks (https://arxiv.org/abs/1903.06586)
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
+from typing import List, Optional, Tuple, Type, Union
+
 import torch
 from torch import nn as nn
 
@@ -20,18 +22,28 @@ def _kernel_valid(k):
 
 
 class SelectiveKernelAttn(nn.Module):
-    def __init__(self, channels, num_paths=2, attn_channels=32, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):
+    def __init__(
+            self,
+            channels: int,
+            num_paths: int = 2,
+            attn_channels: int = 32,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            device=None,
+            dtype=None,
+    ):
         """ Selective Kernel Attention Module
 
         Selective Kernel attention mechanism factored out into its own module.
 
         """
+        dd = {'device': device, 'dtype': dtype}
         super(SelectiveKernelAttn, self).__init__()
         self.num_paths = num_paths
-        self.fc_reduce = nn.Conv2d(channels, attn_channels, kernel_size=1, bias=False)
-        self.bn = norm_layer(attn_channels)
+        self.fc_reduce = nn.Conv2d(channels, attn_channels, kernel_size=1, bias=False, **dd)
+        self.bn = norm_layer(attn_channels, **dd)
         self.act = act_layer(inplace=True)
-        self.fc_select = nn.Conv2d(attn_channels, channels * num_paths, kernel_size=1, bias=False)
+        self.fc_select = nn.Conv2d(attn_channels, channels * num_paths, kernel_size=1, bias=False, **dd)
 
     def forward(self, x):
         _assert(x.shape[1] == self.num_paths, '')
@@ -48,9 +60,26 @@ class SelectiveKernelAttn(nn.Module):
 
 class SelectiveKernel(nn.Module):
 
-    def __init__(self, in_channels, out_channels=None, kernel_size=None, stride=1, dilation=1, groups=1,
-                 rd_ratio=1./16, rd_channels=None, rd_divisor=8, keep_3x3=True, split_input=True,
-                 act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, aa_layer=None, drop_layer=None):
+    def __init__(
+            self,
+            in_channels: int,
+            out_channels: Optional[int] = None,
+            kernel_size: Optional[Union[int, List[int]]] = None,
+            stride: int = 1,
+            dilation: int = 1,
+            groups: int = 1,
+            rd_ratio: float = 1./16,
+            rd_channels: Optional[int] = None,
+            rd_divisor: int = 8,
+            keep_3x3: bool = True,
+            split_input: bool = True,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            norm_layer: Type[nn.Module]= nn.BatchNorm2d,
+            aa_layer: Optional[Type[nn.Module]] = None,
+            drop_layer: Optional[Type[nn.Module]] = None,
+            device=None,
+            dtype=None,
+    ):
         """ Selective Kernel Convolution Module
 
         As described in Selective Kernel Networks (https://arxiv.org/abs/1903.06586) with some modifications.
@@ -61,21 +90,22 @@ class SelectiveKernel(nn.Module):
         a noteworthy increase in performance over similar param count models without this attention layer. -Ross W
 
         Args:
-            in_channels (int):  module input (feature) channel count
-            out_channels (int):  module output (feature) channel count
-            kernel_size (int, list): kernel size for each convolution branch
-            stride (int): stride for convolutions
-            dilation (int): dilation for module as a whole, impacts dilation of each branch
-            groups (int): number of groups for each branch
-            rd_ratio (int, float): reduction factor for attention features
-            keep_3x3 (bool): keep all branch convolution kernels as 3x3, changing larger kernels for dilations
-            split_input (bool): split input channels evenly across each convolution branch, keeps param count lower,
+            in_channels:  module input (feature) channel count
+            out_channels:  module output (feature) channel count
+            kernel_size: kernel size for each convolution branch
+            stride: stride for convolutions
+            dilation: dilation for module as a whole, impacts dilation of each branch
+            groups: number of groups for each branch
+            rd_ratio: reduction factor for attention features
+            keep_3x3: keep all branch convolution kernels as 3x3, changing larger kernels for dilations
+            split_input: split input channels evenly across each convolution branch, keeps param count lower,
                 can be viewed as grouping by path, output expands to module out_channels count
-            act_layer (nn.Module): activation layer to use
-            norm_layer (nn.Module): batchnorm/norm layer to use
-            aa_layer (nn.Module): anti-aliasing module
-            drop_layer (nn.Module): spatial drop module in convs (drop block, etc)
+            act_layer: activation layer to use
+            norm_layer: batchnorm/norm layer to use
+            aa_layer: anti-aliasing module
+            drop_layer: spatial drop module in convs (drop block, etc)
         """
+        dd = {'device': device, 'dtype': dtype}
         super(SelectiveKernel, self).__init__()
         out_channels = out_channels or in_channels
         kernel_size = kernel_size or [3, 5]  # default to one 3x3 and one 5x5 branch. 5x5 -> 3x3 + dilation
@@ -98,13 +128,13 @@ class SelectiveKernel(nn.Module):
 
         conv_kwargs = dict(
             stride=stride, groups=groups, act_layer=act_layer, norm_layer=norm_layer,
-            aa_layer=aa_layer, drop_layer=drop_layer)
+            aa_layer=aa_layer, drop_layer=drop_layer, **dd)
         self.paths = nn.ModuleList([
             ConvNormAct(in_channels, out_channels, kernel_size=k, dilation=d, **conv_kwargs)
             for k, d in zip(kernel_size, dilation)])
 
         attn_channels = rd_channels or make_divisible(out_channels * rd_ratio, divisor=rd_divisor)
-        self.attn = SelectiveKernelAttn(out_channels, self.num_paths, attn_channels)
+        self.attn = SelectiveKernelAttn(out_channels, self.num_paths, attn_channels, **dd)
 
     def forward(self, x):
         if self.split_input:

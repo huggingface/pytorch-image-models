@@ -7,6 +7,8 @@ Official code consulted as reference: https://github.com/xvjiarui/GCNet
 
 Hacked together by / Copyright 2021 Ross Wightman
 """
+from typing import Optional, Tuple, Type, Union
+
 from torch import nn as nn
 import torch.nn.functional as F
 
@@ -18,26 +20,41 @@ from .norm import LayerNorm2d
 
 class GlobalContext(nn.Module):
 
-    def __init__(self, channels, use_attn=True, fuse_add=False, fuse_scale=True, init_last_zero=False,
-                 rd_ratio=1./8, rd_channels=None, rd_divisor=1, act_layer=nn.ReLU, gate_layer='sigmoid'):
+    def __init__(
+            self,
+            channels: int,
+            use_attn: bool = True,
+            fuse_add: bool = False,
+            fuse_scale: bool = True,
+            init_last_zero: bool = False,
+            rd_ratio: float = 1./8,
+            rd_channels: Optional[int] = None,
+            rd_divisor: int = 1,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            gate_layer: Union[str, Type[nn.Module]] = 'sigmoid',
+            device=None,
+            dtype=None
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super(GlobalContext, self).__init__()
         act_layer = get_act_layer(act_layer)
 
-        self.conv_attn = nn.Conv2d(channels, 1, kernel_size=1, bias=True) if use_attn else None
+        self.conv_attn = nn.Conv2d(channels, 1, kernel_size=1, bias=True, **dd) if use_attn else None
 
         if rd_channels is None:
             rd_channels = make_divisible(channels * rd_ratio, rd_divisor, round_limit=0.)
         if fuse_add:
-            self.mlp_add = ConvMlp(channels, rd_channels, act_layer=act_layer, norm_layer=LayerNorm2d)
+            self.mlp_add = ConvMlp(channels, rd_channels, act_layer=act_layer, norm_layer=LayerNorm2d, **dd)
         else:
             self.mlp_add = None
         if fuse_scale:
-            self.mlp_scale = ConvMlp(channels, rd_channels, act_layer=act_layer, norm_layer=LayerNorm2d)
+            self.mlp_scale = ConvMlp(channels, rd_channels, act_layer=act_layer, norm_layer=LayerNorm2d, **dd)
         else:
             self.mlp_scale = None
 
         self.gate = create_act_layer(gate_layer)
         self.init_last_zero = init_last_zero
+
         self.reset_parameters()
 
     def reset_parameters(self):

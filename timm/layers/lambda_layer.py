@@ -20,6 +20,8 @@ https://github.com/lucidrains/lambda-networks
 
 Hacked together by / Copyright 2021 Ross Wightman
 """
+from typing import Optional, Tuple
+
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -55,19 +57,31 @@ class LambdaLayer(nn.Module):
       * as seen above, attn_ratio determines the ratio of q and k relative to the output if dim_head not set
 
     Args:
-        dim (int): input dimension to the module
-        dim_out (int): output dimension of the module, same as dim if not set
-        feat_size (Tuple[int, int]): size of input feature_map for relative pos variant H, W
-        stride (int): output stride of the module, avg pool used if stride == 2
-        num_heads (int): parallel attention heads.
-        dim_head (int): dimension of query and key heads, calculated from dim_out * attn_ratio // num_heads if not set
-        r (int): local lambda convolution radius. Use lambda conv if set, else relative pos if not. (default: 9)
-        qk_ratio (float): ratio of q and k dimensions to output dimension when dim_head not set. (default: 1.0)
-        qkv_bias (bool): add bias to q, k, and v projections
+        dim: input dimension to the module
+        dim_out: output dimension of the module, same as dim if not set
+        feat_size: size of input feature_map for relative pos variant H, W
+        stride: output stride of the module, avg pool used if stride == 2
+        num_heads: parallel attention heads.
+        dim_head: dimension of query and key heads, calculated from dim_out * attn_ratio // num_heads if not set
+        r: local lambda convolution radius. Use lambda conv if set, else relative pos if not. (default: 9)
+        qk_ratio: ratio of q and k dimensions to output dimension when dim_head not set. (default: 1.0)
+        qkv_bias: add bias to q, k, and v projections
     """
     def __init__(
-            self, dim, dim_out=None, feat_size=None, stride=1, num_heads=4, dim_head=16, r=9,
-            qk_ratio=1.0, qkv_bias=False):
+            self,
+            dim: int,
+            dim_out: Optional[int] = None,
+            feat_size: Optional[Tuple[int, int]] = None,
+            stride: int = 1,
+            num_heads: int = 4,
+            dim_head: int = 16,
+            r: int = 9,
+            qk_ratio: float = 1.0,
+            qkv_bias: bool = False,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         dim_out = dim_out or dim
         assert dim_out % num_heads == 0, ' should be divided by num_heads'
@@ -78,13 +92,16 @@ class LambdaLayer(nn.Module):
         self.qkv = nn.Conv2d(
             dim,
             num_heads * self.dim_qk + self.dim_qk + self.dim_v,
-            kernel_size=1, bias=qkv_bias)
-        self.norm_q = nn.BatchNorm2d(num_heads * self.dim_qk)
-        self.norm_v = nn.BatchNorm2d(self.dim_v)
+            kernel_size=1,
+            bias=qkv_bias,
+            **dd,
+        )
+        self.norm_q = nn.BatchNorm2d(num_heads * self.dim_qk, **dd)
+        self.norm_v = nn.BatchNorm2d(self.dim_v, **dd)
 
         if r is not None:
             # local lambda convolution for pos
-            self.conv_lambda = nn.Conv3d(1, self.dim_qk, (r, r, 1), padding=(r // 2, r // 2, 0))
+            self.conv_lambda = nn.Conv3d(1, self.dim_qk, (r, r, 1), padding=(r // 2, r // 2, 0), **dd)
             self.pos_emb = None
             self.rel_pos_indices = None
         else:
@@ -93,7 +110,7 @@ class LambdaLayer(nn.Module):
             feat_size = to_2tuple(feat_size)
             rel_size = [2 * s - 1 for s in feat_size]
             self.conv_lambda = None
-            self.pos_emb = nn.Parameter(torch.zeros(rel_size[0], rel_size[1], self.dim_qk))
+            self.pos_emb = nn.Parameter(torch.empty(rel_size[0], rel_size[1], self.dim_qk, **dd))
             self.register_buffer('rel_pos_indices', rel_pos_indices(feat_size), persistent=False)
 
         self.pool = nn.AvgPool2d(2, 2) if stride == 2 else nn.Identity()

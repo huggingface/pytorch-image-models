@@ -168,7 +168,14 @@ class SpatialGatingUnit(nn.Module):
 
     Based on: `Pay Attention to MLPs` - https://arxiv.org/abs/2105.08050
     """
-    def __init__(self, dim: int, seq_len: int, norm_layer: type = nn.LayerNorm) -> None:
+    def __init__(
+            self,
+            dim: int,
+            seq_len: int,
+            norm_layer: type = nn.LayerNorm,
+            device=None,
+            dtype=None,
+    ) -> None:
         """Initialize Spatial Gating Unit.
 
         Args:
@@ -176,10 +183,11 @@ class SpatialGatingUnit(nn.Module):
             seq_len: Sequence length.
             norm_layer: Normalization layer.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         gate_dim = dim // 2
-        self.norm = norm_layer(gate_dim)
-        self.proj = nn.Linear(seq_len, seq_len)
+        self.norm = norm_layer(gate_dim, **dd)
+        self.proj = nn.Linear(seq_len, seq_len, **dd)
 
     def init_weights(self) -> None:
         """Initialize weights for projection gate."""

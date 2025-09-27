@@ -41,8 +41,21 @@ class CondConv2d(nn.Module):
     """
     __constants__ = ['in_channels', 'out_channels', 'dynamic_padding']
 
-    def __init__(self, in_channels, out_channels, kernel_size=3,
-                 stride=1, padding='', dilation=1, groups=1, bias=False, num_experts=4):
+    def __init__(
+            self,
+            in_channels,
+            out_channels,
+            kernel_size=3,
+            stride=1,
+            padding='',
+            dilation=1,
+            groups=1,
+            bias=False,
+            num_experts=4,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super(CondConv2d, self).__init__()
 
         self.in_channels = in_channels
@@ -61,11 +74,11 @@ class CondConv2d(nn.Module):
         weight_num_param = 1
         for wd in self.weight_shape:
             weight_num_param *= wd
-        self.weight = torch.nn.Parameter(torch.Tensor(self.num_experts, weight_num_param))
+        self.weight = torch.nn.Parameter(torch.empty(self.num_experts, weight_num_param, **dd))
 
         if bias:
             self.bias_shape = (self.out_channels,)
-            self.bias = torch.nn.Parameter(torch.Tensor(self.num_experts, self.out_channels))
+            self.bias = torch.nn.Parameter(torch.empty(self.num_experts, self.out_channels, **dd))
         else:
             self.register_parameter('bias', None)
 

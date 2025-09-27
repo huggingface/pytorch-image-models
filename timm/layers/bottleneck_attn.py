@@ -14,7 +14,7 @@ This impl is a WIP but given that it is based on the ref gist likely not too far
 
 Hacked together by / Copyright 2021 Ross Wightman
 """
-from typing import List
+from typing import List, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -58,12 +58,28 @@ class PosEmbedRel(nn.Module):
     As per: https://gist.github.com/aravindsrinivas/56359b79f0ce4449bcb04ab4b56a57a2
     Originally from: `Attention Augmented Convolutional Networks` - https://arxiv.org/abs/1904.09925
     """
-    def __init__(self, feat_size, dim_head, scale):
+    def __init__(
+            self,
+            feat_size: Tuple[int, int],
+            dim_head: int,
+            scale: float,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.height, self.width = to_2tuple(feat_size)
         self.dim_head = dim_head
-        self.height_rel = nn.Parameter(torch.randn(self.height * 2 - 1, dim_head) * scale)
-        self.width_rel = nn.Parameter(torch.randn(self.width * 2 - 1, dim_head) * scale)
+        self.scale = scale
+
+        self.height_rel = nn.Parameter(torch.empty(self.height * 2 - 1, dim_head, **dd))
+        self.width_rel = nn.Parameter(torch.empty(self.width * 2 - 1, dim_head, **dd))
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        torch.nn.init.normal_(self.height_rel, std=self.scale)
+        torch.nn.init.normal_(self.width_rel, std=self.scale)
 
     def forward(self, q):
         B, HW, _ = q.shape
@@ -104,8 +120,20 @@ class BottleneckAttn(nn.Module):
         scale_pos_embed (bool): scale the position embedding as well as Q @ K
     """
     def __init__(
-            self, dim, dim_out=None, feat_size=None, stride=1, num_heads=4, dim_head=None,
-            qk_ratio=1.0, qkv_bias=False, scale_pos_embed=False):
+            self,
+            dim: int,
+            dim_out: Optional[int] = None,
+            feat_size: Optional[Tuple[int, int]] = None,
+            stride: int = 1,
+            num_heads: int = 4,
+            dim_head: Optional[int] = None,
+            qk_ratio: float = 1.0,
+            qkv_bias: bool = False,
+            scale_pos_embed: bool = False,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         assert feat_size is not None, 'A concrete feature size matching expected input (H, W) is required'
         dim_out = dim_out or dim
@@ -118,10 +146,10 @@ class BottleneckAttn(nn.Module):
         self.scale = self.dim_head_qk ** -0.5
         self.scale_pos_embed = scale_pos_embed
 
-        self.qkv = nn.Conv2d(dim, self.dim_out_qk * 2 + self.dim_out_v, 1, bias=qkv_bias)
+        self.qkv = nn.Conv2d(dim, self.dim_out_qk * 2 + self.dim_out_v, 1, bias=qkv_bias, **dd)
 
         # NOTE I'm only supporting relative pos embedding for now
-        self.pos_embed = PosEmbedRel(feat_size, dim_head=self.dim_head_qk, scale=self.scale)
+        self.pos_embed = PosEmbedRel(feat_size, dim_head=self.dim_head_qk, scale=self.scale, **dd)
 
         self.pool = nn.AvgPool2d(2, 2) if stride == 2 else nn.Identity()
 

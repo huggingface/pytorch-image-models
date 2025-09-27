@@ -36,6 +36,8 @@ class Attention(nn.Module):
             attn_drop: float = 0.,
             proj_drop: float = 0.,
             norm_layer: Optional[Type[nn.Module]] = None,
+            device=None,
+            dtype=None
     ) -> None:
         """Initialize the Attention module.
 
@@ -50,6 +52,7 @@ class Attention(nn.Module):
             norm_layer: Normalization layer constructor for QK normalization if enabled
         """
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         assert dim % num_heads == 0, 'dim should be divisible by num_heads'
         if qk_norm or scale_norm:
             assert norm_layer is not None, 'norm_layer must be provided if qk_norm or scale_norm is True'
@@ -58,12 +61,12 @@ class Attention(nn.Module):
         self.scale = self.head_dim ** -0.5
         self.fused_attn = use_fused_attn()
 
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
-        self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
-        self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias, **dd)
+        self.q_norm = norm_layer(self.head_dim, **dd) if qk_norm else nn.Identity()
+        self.k_norm = norm_layer(self.head_dim, **dd) if qk_norm else nn.Identity()
         self.attn_drop = nn.Dropout(attn_drop)
-        self.norm = norm_layer(dim) if scale_norm else nn.Identity()
-        self.proj = nn.Linear(dim, dim, bias=proj_bias)
+        self.norm = norm_layer(dim, **dd) if scale_norm else nn.Identity()
+        self.proj = nn.Linear(dim, dim, bias=proj_bias, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(
@@ -122,6 +125,8 @@ class AttentionRope(nn.Module):
             scale_norm: bool = False,
             proj_bias: bool = True,
             rotate_half: bool = False,
+            device=None,
+            dtype=None,
     ):
         """Initialize the Attention module.
 
@@ -140,6 +145,7 @@ class AttentionRope(nn.Module):
             rotate_half: Use 'half' ROPE layout instead of default 'interleaved'
         """
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         if scale_norm or qk_norm:
             assert norm_layer is not None, 'norm_layer must be provided if qk_norm or scale_norm is True'
         self.num_heads = num_heads
@@ -153,19 +159,19 @@ class AttentionRope(nn.Module):
         self.rotate_half = rotate_half
 
         if qkv_fused:
-            self.qkv = nn.Linear(dim, attn_dim * 3, bias=qkv_bias)
+            self.qkv = nn.Linear(dim, attn_dim * 3, bias=qkv_bias, **dd)
             self.q_proj = self.k_proj = self.v_proj = None
         else:
             self.qkv = None
-            self.q_proj = nn.Linear(dim, attn_dim, bias=qkv_bias)
-            self.k_proj = nn.Linear(dim, attn_dim, bias=qkv_bias)
-            self.v_proj = nn.Linear(dim, attn_dim, bias=qkv_bias)
+            self.q_proj = nn.Linear(dim, attn_dim, bias=qkv_bias, **dd)
+            self.k_proj = nn.Linear(dim, attn_dim, bias=qkv_bias, **dd)
+            self.v_proj = nn.Linear(dim, attn_dim, bias=qkv_bias, **dd)
 
-        self.q_norm = norm_layer(head_dim) if qk_norm else nn.Identity()
-        self.k_norm = norm_layer(head_dim) if qk_norm else nn.Identity()
+        self.q_norm = norm_layer(head_dim, **dd) if qk_norm else nn.Identity()
+        self.k_norm = norm_layer(head_dim, **dd) if qk_norm else nn.Identity()
         self.attn_drop = nn.Dropout(attn_drop)
-        self.norm = norm_layer(attn_dim) if scale_norm else nn.Identity()
-        self.proj = nn.Linear(attn_dim, dim, bias=proj_bias)
+        self.norm = norm_layer(attn_dim, **dd) if scale_norm else nn.Identity()
+        self.proj = nn.Linear(attn_dim, dim, bias=proj_bias, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(

@@ -4,6 +4,8 @@ Based on `Filter Response Normalization Layer` - https://arxiv.org/abs/1911.0973
 
 Hacked together by / Copyright 2021 Ross Wightman
 """
+from typing import Optional, Type
+
 import torch
 import torch.nn as nn
 
@@ -17,14 +19,25 @@ def inv_instance_rms(x, eps: float = 1e-5):
 
 
 class FilterResponseNormTlu2d(nn.Module):
-    def __init__(self, num_features, apply_act=True, eps=1e-5, rms=True, **_):
+    def __init__(
+            self,
+            num_features: int,
+            apply_act: bool = True,
+            eps: float = 1e-5,
+            rms: bool = True,
+            device=None,
+            dtype=None,
+            **_,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super(FilterResponseNormTlu2d, self).__init__()
         self.apply_act = apply_act  # apply activation (non-linearity)
         self.rms = rms
         self.eps = eps
-        self.weight = nn.Parameter(torch.ones(num_features))
-        self.bias = nn.Parameter(torch.zeros(num_features))
-        self.tau = nn.Parameter(torch.zeros(num_features)) if apply_act else None
+        self.weight = nn.Parameter(torch.empty(num_features, **dd))
+        self.bias = nn.Parameter(torch.empty(num_features, **dd))
+        self.tau = nn.Parameter(torch.empty(num_features, **dd)) if apply_act else None
+
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -43,7 +56,19 @@ class FilterResponseNormTlu2d(nn.Module):
 
 
 class FilterResponseNormAct2d(nn.Module):
-    def __init__(self, num_features, apply_act=True, act_layer=nn.ReLU, inplace=None, rms=True, eps=1e-5, **_):
+    def __init__(
+            self,
+            num_features: int,
+            apply_act: bool = True,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            inplace: Optional[bool] = None,
+            rms: bool = True,
+            eps: float = 1e-5,
+            device=None,
+            dtype=None,
+            **_,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super(FilterResponseNormAct2d, self).__init__()
         if act_layer is not None and apply_act:
             self.act = create_act_layer(act_layer, inplace=inplace)
@@ -51,8 +76,9 @@ class FilterResponseNormAct2d(nn.Module):
             self.act = nn.Identity()
         self.rms = rms
         self.eps = eps
-        self.weight = nn.Parameter(torch.ones(num_features))
-        self.bias = nn.Parameter(torch.zeros(num_features))
+        self.weight = nn.Parameter(torch.empty(num_features, **dd))
+        self.bias = nn.Parameter(torch.empty(num_features, **dd))
+
         self.reset_parameters()
 
     def reset_parameters(self):

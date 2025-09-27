@@ -11,6 +11,7 @@ NOTE: extent=0 + extra_params=False is equivalent to Squeeze-and-Excitation
 
 Hacked together by / Copyright 2021 Ross Wightman
 """
+from typing import Optional, Tuple, Type, Union
 import math
 
 from torch import nn as nn
@@ -26,9 +27,23 @@ class GatherExcite(nn.Module):
     """ Gather-Excite Attention Module
     """
     def __init__(
-            self, channels, feat_size=None, extra_params=False, extent=0, use_mlp=True,
-            rd_ratio=1./16, rd_channels=None,  rd_divisor=1, add_maxpool=False,
-            act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, gate_layer='sigmoid'):
+            self,
+            channels: int,
+            feat_size: Optional[Tuple[int, int]] = None,
+            extra_params: bool = False,
+            extent: int = 0,
+            use_mlp: bool = True,
+            rd_ratio: float = 1./16,
+            rd_channels: Optional[int] = None,
+            rd_divisor: int = 1,
+            add_maxpool: bool = False,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            gate_layer: Union[str, Type[nn.Module]] = 'sigmoid',
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super(GatherExcite, self).__init__()
         self.add_maxpool = add_maxpool
         act_layer = get_act_layer(act_layer)
@@ -38,18 +53,18 @@ class GatherExcite(nn.Module):
             if extent == 0:
                 assert feat_size is not None, 'spatial feature size must be specified for global extent w/ params'
                 self.gather.add_module(
-                    'conv1', create_conv2d(channels, channels, kernel_size=feat_size, stride=1, depthwise=True))
+                    'conv1', create_conv2d(channels, channels, kernel_size=feat_size, stride=1, depthwise=True, *dd))
                 if norm_layer:
-                    self.gather.add_module(f'norm1', nn.BatchNorm2d(channels))
+                    self.gather.add_module(f'norm1', nn.BatchNorm2d(channels, *dd))
             else:
                 assert extent % 2 == 0
                 num_conv = int(math.log2(extent))
                 for i in range(num_conv):
                     self.gather.add_module(
                         f'conv{i + 1}',
-                        create_conv2d(channels, channels, kernel_size=3, stride=2, depthwise=True))
+                        create_conv2d(channels, channels, kernel_size=3, stride=2, depthwise=True, *dd))
                     if norm_layer:
-                        self.gather.add_module(f'norm{i + 1}', nn.BatchNorm2d(channels))
+                        self.gather.add_module(f'norm{i + 1}', nn.BatchNorm2d(channels, *dd))
                     if i != num_conv - 1:
                         self.gather.add_module(f'act{i + 1}', act_layer(inplace=True))
         else:
@@ -64,7 +79,7 @@ class GatherExcite(nn.Module):
 
         if not rd_channels:
             rd_channels = make_divisible(channels * rd_ratio, rd_divisor, round_limit=0.)
-        self.mlp = ConvMlp(channels, rd_channels, act_layer=act_layer) if use_mlp else nn.Identity()
+        self.mlp = ConvMlp(channels, rd_channels, act_layer=act_layer, *dd) if use_mlp else nn.Identity()
         self.gate = create_act_layer(gate_layer)
 
     def forward(self, x):

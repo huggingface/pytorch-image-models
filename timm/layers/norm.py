@@ -216,7 +216,7 @@ class RmsNorm(nn.Module):
             device=None,
             dtype=None,
     ) -> None:
-        factory_kwargs = {'device': device, 'dtype': dtype}
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         normalized_shape = channels
         if isinstance(normalized_shape, numbers.Integral):
@@ -228,7 +228,7 @@ class RmsNorm(nn.Module):
         self._fast_norm = is_fast_norm()  # can't script unless we have these flags here (no globals)
 
         if self.elementwise_affine:
-            self.weight = nn.Parameter(torch.empty(self.normalized_shape, **factory_kwargs))
+            self.weight = nn.Parameter(torch.empty(self.normalized_shape, **dd))
         else:
             self.register_parameter('weight', None)
 
@@ -264,7 +264,7 @@ class RmsNormFp32(nn.Module):
             device=None,
             dtype=None,
     ) -> None:
-        factory_kwargs = {'device': device, 'dtype': dtype}
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         normalized_shape = channels
         if isinstance(normalized_shape, numbers.Integral):
@@ -275,7 +275,7 @@ class RmsNormFp32(nn.Module):
         self.elementwise_affine = affine
 
         if self.elementwise_affine:
-            self.weight = nn.Parameter(torch.empty(self.normalized_shape, **factory_kwargs))
+            self.weight = nn.Parameter(torch.empty(self.normalized_shape, **dd))
         else:
             self.register_parameter('weight', None)
 
@@ -312,7 +312,7 @@ class RmsNorm2d(nn.Module):
             device=None,
             dtype=None,
     ) -> None:
-        factory_kwargs = {'device': device, 'dtype': dtype}
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         normalized_shape = channels
         if isinstance(normalized_shape, numbers.Integral):
@@ -324,7 +324,7 @@ class RmsNorm2d(nn.Module):
         self._fast_norm = is_fast_norm()  # can't script unless we have these flags here (no globals)
 
         if self.elementwise_affine:
-            self.weight = nn.Parameter(torch.empty(self.normalized_shape, **factory_kwargs))
+            self.weight = nn.Parameter(torch.empty(self.normalized_shape, **dd))
         else:
             self.register_parameter('weight', None)
 
@@ -364,7 +364,7 @@ class RmsNorm2dFp32(nn.Module):
             device=None,
             dtype=None,
     ) -> None:
-        factory_kwargs = {'device': device, 'dtype': dtype}
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         normalized_shape = channels
         if isinstance(normalized_shape, numbers.Integral):
@@ -375,7 +375,7 @@ class RmsNorm2dFp32(nn.Module):
         self.elementwise_affine = affine
 
         if self.elementwise_affine:
-            self.weight = nn.Parameter(torch.empty(self.normalized_shape, **factory_kwargs))
+            self.weight = nn.Parameter(torch.empty(self.normalized_shape, **dd))
         else:
             self.register_parameter('weight', None)
 
@@ -408,7 +408,7 @@ class SimpleNorm(nn.Module):
             device=None,
             dtype=None,
     ) -> None:
-        factory_kwargs = {'device': device, 'dtype': dtype}
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         normalized_shape = channels
         if isinstance(normalized_shape, numbers.Integral):
@@ -420,7 +420,7 @@ class SimpleNorm(nn.Module):
         self._fast_norm = is_fast_norm()  # can't script unless we have these flags here (no globals)
 
         if self.elementwise_affine:
-            self.weight = nn.Parameter(torch.empty(self.normalized_shape, **factory_kwargs))
+            self.weight = nn.Parameter(torch.empty(self.normalized_shape, **dd))
         else:
             self.register_parameter('weight', None)
 
@@ -454,7 +454,7 @@ class SimpleNormFp32(nn.Module):
             device=None,
             dtype=None,
     ) -> None:
-        factory_kwargs = {'device': device, 'dtype': dtype}
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         normalized_shape = channels
         if isinstance(normalized_shape, numbers.Integral):
@@ -465,7 +465,7 @@ class SimpleNormFp32(nn.Module):
         self.elementwise_affine = affine
 
         if self.elementwise_affine:
-            self.weight = nn.Parameter(torch.empty(self.normalized_shape, **factory_kwargs))
+            self.weight = nn.Parameter(torch.empty(self.normalized_shape, **dd))
         else:
             self.register_parameter('weight', None)
 
@@ -498,7 +498,7 @@ class SimpleNorm2d(nn.Module):
             device=None,
             dtype=None,
     ) -> None:
-        factory_kwargs = {'device': device, 'dtype': dtype}
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         normalized_shape = channels
         if isinstance(normalized_shape, numbers.Integral):
@@ -510,7 +510,7 @@ class SimpleNorm2d(nn.Module):
         self._fast_norm = is_fast_norm()  # can't script unless we have these flags here (no globals)
 
         if self.elementwise_affine:
-            self.weight = nn.Parameter(torch.empty(self.normalized_shape, **factory_kwargs))
+            self.weight = nn.Parameter(torch.empty(self.normalized_shape, **dd))
         else:
             self.register_parameter('weight', None)
 
@@ -546,7 +546,7 @@ class SimpleNorm2dFp32(nn.Module):
             device=None,
             dtype=None,
     ) -> None:
-        factory_kwargs = {'device': device, 'dtype': dtype}
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         normalized_shape = channels
         if isinstance(normalized_shape, numbers.Integral):
@@ -557,7 +557,7 @@ class SimpleNorm2dFp32(nn.Module):
         self.elementwise_affine = affine
 
         if self.elementwise_affine:
-            self.weight = nn.Parameter(torch.empty(self.normalized_shape, **factory_kwargs))
+            self.weight = nn.Parameter(torch.empty(self.normalized_shape, **dd))
         else:
             self.register_parameter('weight', None)
 

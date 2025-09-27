@@ -10,6 +10,8 @@ Paper: `CenterMask : Real-Time Anchor-Free Instance Segmentation` - https://arxi
 
 Hacked together by / Copyright 2021 Ross Wightman
 """
+from typing import Optional, Tuple, Type, Union
+
 from torch import nn as nn
 
 from .create_act import create_act_layer
@@ -26,16 +28,28 @@ class SEModule(nn.Module):
         * customizable activation, normalization, and gate layer
     """
     def __init__(
-            self, channels, rd_ratio=1. / 16, rd_channels=None, rd_divisor=8, add_maxpool=False,
-            bias=True, act_layer=nn.ReLU, norm_layer=None, gate_layer='sigmoid'):
+            self,
+            channels: int,
+            rd_ratio: float = 1. / 16,
+            rd_channels: Optional[int] = None,
+            rd_divisor: int = 8,
+            add_maxpool: bool = False,
+            bias: bool = True,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            norm_layer: Optional[Type[nn.Module]] = None,
+            gate_layer: Union[str, Type[nn.Module]] = 'sigmoid',
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super(SEModule, self).__init__()
         self.add_maxpool = add_maxpool
         if not rd_channels:
             rd_channels = make_divisible(channels * rd_ratio, rd_divisor, round_limit=0.)
-        self.fc1 = nn.Conv2d(channels, rd_channels, kernel_size=1, bias=bias)
-        self.bn = norm_layer(rd_channels) if norm_layer else nn.Identity()
+        self.fc1 = nn.Conv2d(channels, rd_channels, kernel_size=1, bias=bias, **dd)
+        self.bn = norm_layer(rd_channels, **dd) if norm_layer else nn.Identity()
         self.act = create_act_layer(act_layer, inplace=True)
-        self.fc2 = nn.Conv2d(rd_channels, channels, kernel_size=1, bias=bias)
+        self.fc2 = nn.Conv2d(rd_channels, channels, kernel_size=1, bias=bias, **dd)
         self.gate = create_act_layer(gate_layer)
 
     def forward(self, x):
@@ -56,10 +70,18 @@ class EffectiveSEModule(nn.Module):
     """ 'Effective Squeeze-Excitation
     From `CenterMask : Real-Time Anchor-Free Instance Segmentation` - https://arxiv.org/abs/1911.06667
     """
-    def __init__(self, channels, add_maxpool=False, gate_layer='hard_sigmoid', **_):
+    def __init__(
+            self,
+            channels: int,
+            add_maxpool: bool = False,
+            gate_layer: Union[str, Type[nn.Module]] = 'hard_sigmoid',
+            device=None,
+            dtype=None,
+            **_,
+    ):
         super(EffectiveSEModule, self).__init__()
         self.add_maxpool = add_maxpool
-        self.fc = nn.Conv2d(channels, channels, kernel_size=1, padding=0)
+        self.fc = nn.Conv2d(channels, channels, kernel_size=1, padding=0, device=device, dtype=dtype)
         self.gate = create_act_layer(gate_layer)
 
     def forward(self, x):
@@ -84,14 +106,24 @@ class SqueezeExciteCl(nn.Module):
         * customizable activation, normalization, and gate layer
     """
     def __init__(
-            self, channels, rd_ratio=1. / 16, rd_channels=None, rd_divisor=8,
-            bias=True, act_layer=nn.ReLU, gate_layer='sigmoid'):
+            self,
+            channels: int,
+            rd_ratio: float = 1. / 16,
+            rd_channels: Optional[int] = None,
+            rd_divisor: int = 8,
+            bias: bool = True,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            gate_layer: Union[str, Type[nn.Module]] = 'sigmoid',
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         if not rd_channels:
             rd_channels = make_divisible(channels * rd_ratio, rd_divisor, round_limit=0.)
-        self.fc1 = nn.Linear(channels, rd_channels, bias=bias)
+        self.fc1 = nn.Linear(channels, rd_channels, bias=bias, **dd)
         self.act = create_act_layer(act_layer, inplace=True)
-        self.fc2 = nn.Linear(rd_channels, channels, bias=bias)
+        self.fc2 = nn.Linear(rd_channels, channels, bias=bias, **dd)
         self.gate = create_act_layer(gate_layer)
 
     def forward(self, x):

@@ -121,6 +121,8 @@ class EvaAttention(nn.Module):
             qk_norm: bool = False,
             scale_norm: bool = True,
             rotate_half: bool = False,
+            device=None,
+            dtype=None,
     ):
         """
         Args:
@@ -139,6 +141,7 @@ class EvaAttention(nn.Module):
             scale_norm: Enable normalization (scaling) of attention output with norm_layer
             rotate_half: Use half rotation layout instead of interleaved
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         if scale_norm or qk_norm:
             assert norm_layer is not None, 'norm_layer must be provided if qk_norm or scale_norm is True'
@@ -154,25 +157,25 @@ class EvaAttention(nn.Module):
         self.rotate_half = rotate_half
 
         if qkv_fused:
-            self.qkv = nn.Linear(dim, attn_dim * 3, bias=False)
+            self.qkv = nn.Linear(dim, attn_dim * 3, bias=False, **dd)
             self.q_proj = self.k_proj = self.v_proj = None
             if qkv_bias:
-                self.q_bias = nn.Parameter(torch.zeros(attn_dim))
-                self.register_buffer('k_bias', torch.zeros(attn_dim), persistent=False)
-                self.v_bias = nn.Parameter(torch.zeros(attn_dim))
+                self.q_bias = nn.Parameter(torch.zeros(attn_dim, **dd))
+                self.register_buffer('k_bias', torch.zeros(attn_dim, **dd), persistent=False)
+                self.v_bias = nn.Parameter(torch.zeros(attn_dim, **dd))
             else:
                 self.q_bias = self.k_bias = self.v_bias = None
         else:
-            self.q_proj = nn.Linear(dim, attn_dim, bias=qkv_bias)
-            self.k_proj = nn.Linear(dim, attn_dim, bias=False)
-            self.v_proj = nn.Linear(dim, attn_dim, bias=qkv_bias)
+            self.q_proj = nn.Linear(dim, attn_dim, bias=qkv_bias, **dd)
+            self.k_proj = nn.Linear(dim, attn_dim, bias=False, **dd)
+            self.v_proj = nn.Linear(dim, attn_dim, bias=qkv_bias, **dd)
             self.qkv = None
             self.q_bias = self.k_bias = self.v_bias = None
-        self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
-        self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
+        self.q_norm = norm_layer(self.head_dim, **dd) if qk_norm else nn.Identity()
+        self.k_norm = norm_layer(self.head_dim, **dd) if qk_norm else nn.Identity()
         self.attn_drop = nn.Dropout(attn_drop)
-        self.norm = norm_layer(attn_dim) if scale_norm else nn.Identity()
-        self.proj = nn.Linear(attn_dim, dim)
+        self.norm = norm_layer(attn_dim, **dd) if scale_norm else nn.Identity()
+        self.proj = nn.Linear(attn_dim, dim, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(
@@ -263,6 +266,8 @@ class EvaBlock(nn.Module):
             act_layer: Callable = nn.GELU,
             norm_layer: Callable = LayerNorm,
             attn_head_dim: Optional[int] = None,
+            device=None,
+            dtype=None,
             **kwargs,
     ):
         """ Initialize the EVA transformer block.
@@ -286,8 +291,10 @@ class EvaBlock(nn.Module):
             norm_layer: Normalization layer constructor
             attn_head_dim: Dimension of each attention head (if None, computed as dim // num_heads)
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.norm1 = norm_layer(dim)
+
+        self.norm1 = norm_layer(dim, **dd)
         attn_cls = AttentionRope if attn_type == 'rope' else EvaAttention
         self.attn = attn_cls(
             dim,
@@ -301,11 +308,12 @@ class EvaBlock(nn.Module):
             norm_layer=norm_layer,
             scale_norm=scale_attn_inner,
             rotate_half=rotate_half,
+            **dd,
         )
-        self.gamma_1 = nn.Parameter(init_values * torch.ones(dim)) if init_values is not None else None
+        self.gamma_1 = nn.Parameter(init_values * torch.ones(dim, **dd)) if init_values is not None else None
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-        self.norm2 = norm_layer(dim)
+        self.norm2 = norm_layer(dim, **dd)
         hidden_features = int(dim * mlp_ratio)
         if swiglu_mlp:
             if scale_mlp or swiglu_align_to:
@@ -316,6 +324,7 @@ class EvaBlock(nn.Module):
                     norm_layer=norm_layer if scale_mlp else None,
                     drop=proj_drop,
                     align_to=swiglu_align_to,
+                    **dd,
                 )
             else:
                 # w/o any extra norm, an impl with packed weights is used
@@ -326,6 +335,7 @@ class EvaBlock(nn.Module):
                     act_layer=nn.SiLU,
                     gate_last=False,
                     drop=proj_drop,
+                    **dd,
                 )
         else:
             self.mlp = Mlp(
@@ -334,8 +344,9 @@ class EvaBlock(nn.Module):
                 act_layer=act_layer,
                 norm_layer=norm_layer if scale_mlp else None,
                 drop=proj_drop,
+                **dd,
             )
-        self.gamma_2 = nn.Parameter(init_values * torch.ones(dim)) if init_values is not None else None
+        self.gamma_2 = nn.Parameter(init_values * torch.ones(dim, **dd)) if init_values is not None else None
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(
@@ -376,6 +387,8 @@ class EvaBlockPostNorm(nn.Module):
             act_layer: Callable = nn.GELU,
             norm_layer: Callable = nn.LayerNorm,
             attn_head_dim: Optional[int] = None,
+            device=None,
+            dtype=None,
     ):
         """ Initialize the post-norm EVA transformer block.
 
@@ -398,7 +411,9 @@ class EvaBlockPostNorm(nn.Module):
             norm_layer: Normalization layer constructor
             attn_head_dim: Dimension of each attention head (if None, computed as dim // num_heads)
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
+
         attn_cls = AttentionRope if attn_type == 'rope' else EvaAttention
         self.attn = attn_cls(
             dim,
@@ -412,8 +427,9 @@ class EvaBlockPostNorm(nn.Module):
             norm_layer=norm_layer,
             scale_norm=scale_attn_inner,
             rotate_half=rotate_half,
+            **dd,
         )
-        self.norm1 = norm_layer(dim)
+        self.norm1 = norm_layer(dim, **dd)
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         hidden_features = int(dim * mlp_ratio)
@@ -426,6 +442,7 @@ class EvaBlockPostNorm(nn.Module):
                     norm_layer=norm_layer if scale_mlp else None,
                     drop=proj_drop,
                     align_to=swiglu_align_to,
+                    **dd,
                 )
             else:
                 # w/o any extra norm, an impl with packed fc1 weights is used, matches existing GluMLP
@@ -436,6 +453,7 @@ class EvaBlockPostNorm(nn.Module):
                     act_layer=nn.SiLU,
                     gate_last=False,
                     drop=proj_drop,
+                    **dd,
                 )
         else:
             self.mlp = Mlp(
@@ -444,8 +462,9 @@ class EvaBlockPostNorm(nn.Module):
                 act_layer=act_layer,
                 norm_layer=norm_layer if scale_mlp else None,
                 drop=proj_drop,
+                **dd,
             )
-        self.norm2 = norm_layer(dim)
+        self.norm2 = norm_layer(dim, **dd)
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(
@@ -513,6 +532,8 @@ class Eva(nn.Module):
             dynamic_img_pad: bool = False,
             ref_feat_shape: Optional[Union[Tuple[int, int], int]] = None,
             head_init_scale: float = 0.001,
+            device=None,
+            dtype=None,
     ):
         """Initialize the EVA Vision Transformer model.
 
@@ -562,6 +583,7 @@ class Eva(nn.Module):
             head_init_scale: Initialization scale for classification head weights
         """
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         assert global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map')
         self.num_classes = num_classes
         self.global_pool = global_pool
@@ -594,16 +616,17 @@ class Eva(nn.Module):
             dynamic_img_pad=dynamic_img_pad,
             bias=not use_pre_transformer_norm,
             **embed_args,
+            **dd,
         )
         num_patches = self.patch_embed.num_patches
         r = self.patch_embed.feat_ratio() if hasattr(self.patch_embed, 'feat_ratio') else patch_size
 
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim)) if class_token else None
-        self.reg_token = nn.Parameter(torch.zeros(1, num_reg_tokens, embed_dim)) if num_reg_tokens else None
+        self.cls_token = nn.Parameter(torch.empty(1, 1, embed_dim, **dd)) if class_token else None
+        self.reg_token = nn.Parameter(torch.empty(1, num_reg_tokens, embed_dim, **dd)) if num_reg_tokens else None
         self.cls_embed = class_token and self.reg_token is None
 
         num_pos_tokens = num_patches if no_embed_class else num_patches + self.num_prefix_tokens
-        self.pos_embed = nn.Parameter(torch.zeros(1, num_pos_tokens, embed_dim)) if use_abs_pos_emb else None
+        self.pos_embed = nn.Parameter(torch.empty(1, num_pos_tokens, embed_dim, **dd)) if use_abs_pos_emb else None
         self.pos_drop = nn.Dropout(p=pos_drop_rate)
         if patch_drop_rate > 0:
             self.patch_drop = PatchDropoutWithIndices(patch_drop_rate, num_prefix_tokens=self.num_prefix_tokens)
@@ -621,6 +644,7 @@ class Eva(nn.Module):
                 feat_shape=None if dynamic_img_size else self.patch_embed.grid_size,
                 temperature=rope_temperature,
                 grid_indexing=rope_grid_indexing,
+                **dd,
             )
             if rope_type == 'mixed':
                 rope_kwargs.update(dict(depth=depth))
@@ -636,7 +660,7 @@ class Eva(nn.Module):
         else:
             self.rope = None
 
-        self.norm_pre = norm_layer(embed_dim) if activate_pre_norm else nn.Identity()
+        self.norm_pre = norm_layer(embed_dim, **dd) if activate_pre_norm else nn.Identity()
 
         dpr = calculate_drop_path_rates(drop_path_rate, depth)  # stochastic depth decay rule
         block_fn = EvaBlockPostNorm if use_post_norm else EvaBlock
@@ -659,12 +683,13 @@ class Eva(nn.Module):
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
                 init_values=init_values,
+                **dd,
             )
             for i in range(depth)])
         self.feature_info = [
             dict(module=f'blocks.{i}', num_chs=embed_dim, reduction=r) for i in range(depth)]
 
-        self.norm = norm_layer(embed_dim) if activate_post_norm else nn.Identity()
+        self.norm = norm_layer(embed_dim, **dd) if activate_post_norm else nn.Identity()
 
         if global_pool == 'map':
             self.attn_pool = AttentionPoolLatent(
@@ -673,13 +698,17 @@ class Eva(nn.Module):
                 mlp_ratio=attn_pool_mlp_ratio or mlp_ratio,
                 norm_layer=norm_layer,
                 act_layer=nn.GELU,
+                **dd,
             )
         else:
             self.attn_pool = None
-        self.fc_norm = norm_layer(embed_dim) if activate_fc_norm else nn.Identity()
+        self.fc_norm = norm_layer(embed_dim, **dd) if activate_fc_norm else nn.Identity()
         self.head_drop = nn.Dropout(drop_rate)
-        self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
+        self.init_weights(head_init_scale=head_init_scale)
+
+    def init_weights(self, head_init_scale=None):
         self.apply(self._init_weights)
         if self.pos_embed is not None:
             trunc_normal_(self.pos_embed, std=.02)
@@ -687,9 +716,8 @@ class Eva(nn.Module):
             trunc_normal_(self.cls_token, std=.02)
         if self.reg_token is not None:
             trunc_normal_(self.reg_token, std=.02)
-
         self.fix_init_weight()
-        if isinstance(self.head, nn.Linear):
+        if head_init_scale and isinstance(self.head, nn.Linear):
             trunc_normal_(self.head.weight, std=.02)
             self.head.weight.data.mul_(head_init_scale)
             self.head.bias.data.mul_(head_init_scale)

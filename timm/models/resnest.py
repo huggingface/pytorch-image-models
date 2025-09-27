@@ -42,7 +42,10 @@ class ResNestBottleneck(nn.Module):
             aa_layer=None,
             drop_block=None,
             drop_path=None,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super(ResNestBottleneck, self).__init__()
         assert reduce_first == 1  # not supported
         assert attn_layer is None, 'attn_layer is not supported'  # not supported
@@ -57,29 +60,47 @@ class ResNestBottleneck(nn.Module):
             avd_stride = 0
         self.radix = radix
 
-        self.conv1 = nn.Conv2d(inplanes, group_width, kernel_size=1, bias=False)
-        self.bn1 = norm_layer(group_width)
+        self.conv1 = nn.Conv2d(inplanes, group_width, kernel_size=1, bias=False, **dd)
+        self.bn1 = norm_layer(group_width, **dd)
         self.act1 = act_layer(inplace=True)
         self.avd_first = nn.AvgPool2d(3, avd_stride, padding=1) if avd_stride > 0 and avd_first else None
 
         if self.radix >= 1:
             self.conv2 = SplitAttn(
-                group_width, group_width, kernel_size=3, stride=stride, padding=first_dilation,
-                dilation=first_dilation, groups=cardinality, radix=radix, norm_layer=norm_layer, drop_layer=drop_block)
+                group_width,
+                group_width,
+                kernel_size=3,
+                stride=stride,
+                padding=first_dilation,
+                dilation=first_dilation,
+                groups=cardinality,
+                radix=radix,
+                norm_layer=norm_layer,
+                drop_layer=drop_block,
+                **dd,
+            )
             self.bn2 = nn.Identity()
             self.drop_block = nn.Identity()
             self.act2 = nn.Identity()
         else:
             self.conv2 = nn.Conv2d(
-                group_width, group_width, kernel_size=3, stride=stride, padding=first_dilation,
-                dilation=first_dilation, groups=cardinality, bias=False)
-            self.bn2 = norm_layer(group_width)
+                group_width,
+                group_width,
+                kernel_size=3,
+                stride=stride,
+                padding=first_dilation,
+                dilation=first_dilation,
+                groups=cardinality,
+                bias=False,
+                **dd,
+            )
+            self.bn2 = norm_layer(group_width, **dd)
             self.drop_block = drop_block() if drop_block is not None else nn.Identity()
             self.act2 = act_layer(inplace=True)
         self.avd_last = nn.AvgPool2d(3, avd_stride, padding=1) if avd_stride > 0 and not avd_first else None
 
-        self.conv3 = nn.Conv2d(group_width, planes * 4, kernel_size=1, bias=False)
-        self.bn3 = norm_layer(planes*4)
+        self.conv3 = nn.Conv2d(group_width, planes * 4, kernel_size=1, bias=False, **dd)
+        self.bn3 = norm_layer(planes * 4, **dd)
         self.act3 = act_layer(inplace=True)
         self.downsample = downsample
         self.drop_path = drop_path

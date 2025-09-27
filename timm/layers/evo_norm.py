@@ -23,7 +23,7 @@ GPU, similar train speeds for EvoNormS variants and BatchNorm.
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
-from typing import Sequence, Union
+from typing import Optional, Sequence, Type, Union
 
 import torch
 import torch.nn as nn
@@ -97,15 +97,26 @@ def group_rms(x, groups: int = 32, eps: float = 1e-5):
 
 
 class EvoNorm2dB0(nn.Module):
-    def __init__(self, num_features, apply_act=True, momentum=0.1, eps=1e-3, **_):
+    def __init__(
+            self,
+            num_features: int,
+            apply_act: bool = True,
+            momentum: float = 0.1,
+            eps: float = 1e-3,
+            device=None,
+            dtype=None,
+            **_
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.apply_act = apply_act  # apply activation (non-linearity)
         self.momentum = momentum
         self.eps = eps
-        self.weight = nn.Parameter(torch.ones(num_features))
-        self.bias = nn.Parameter(torch.zeros(num_features))
-        self.v = nn.Parameter(torch.ones(num_features)) if apply_act else None
-        self.register_buffer('running_var', torch.ones(num_features))
+        self.weight = nn.Parameter(torch.empty(num_features, **dd))
+        self.bias = nn.Parameter(torch.empty(num_features, **dd))
+        self.v = nn.Parameter(torch.empty(num_features, **dd)) if apply_act else None
+        self.register_buffer('running_var', torch.ones(num_features, **dd))
+
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -136,14 +147,25 @@ class EvoNorm2dB0(nn.Module):
 
 
 class EvoNorm2dB1(nn.Module):
-    def __init__(self, num_features, apply_act=True, momentum=0.1, eps=1e-5, **_):
+    def __init__(
+            self,
+            num_features: int,
+            apply_act: bool = True,
+            momentum: float = 0.1,
+            eps: float = 1e-5,
+            device=None,
+            dtype=None,
+            **_
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.apply_act = apply_act  # apply activation (non-linearity)
         self.momentum = momentum
         self.eps = eps
-        self.weight = nn.Parameter(torch.ones(num_features))
-        self.bias = nn.Parameter(torch.zeros(num_features))
-        self.register_buffer('running_var', torch.ones(num_features))
+        self.weight = nn.Parameter(torch.empty(num_features, **dd))
+        self.bias = nn.Parameter(torch.empty(num_features, **dd))
+        self.register_buffer('running_var', torch.ones(num_features, **dd))
+
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -171,14 +193,25 @@ class EvoNorm2dB1(nn.Module):
 
 
 class EvoNorm2dB2(nn.Module):
-    def __init__(self, num_features, apply_act=True, momentum=0.1, eps=1e-5, **_):
+    def __init__(
+            self,
+            num_features: int,
+            apply_act: bool = True,
+            momentum: float = 0.1,
+            eps: float = 1e-5,
+            device=None,
+            dtype=None,
+            **_
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.apply_act = apply_act  # apply activation (non-linearity)
         self.momentum = momentum
         self.eps = eps
-        self.weight = nn.Parameter(torch.ones(num_features))
-        self.bias = nn.Parameter(torch.zeros(num_features))
-        self.register_buffer('running_var', torch.ones(num_features))
+        self.weight = nn.Parameter(torch.empty(num_features, **dd))
+        self.bias = nn.Parameter(torch.empty(num_features, **dd))
+        self.register_buffer('running_var', torch.ones(num_features, **dd))
+
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -206,7 +239,18 @@ class EvoNorm2dB2(nn.Module):
 
 
 class EvoNorm2dS0(nn.Module):
-    def __init__(self, num_features, groups=32, group_size=None, apply_act=True, eps=1e-5, **_):
+    def __init__(
+            self,
+            num_features: int,
+            groups: int = 32,
+            group_size: Optional[int] = None,
+            apply_act: bool = True,
+            eps: float = 1e-5,
+            device=None,
+            dtype=None,
+            **_
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.apply_act = apply_act  # apply activation (non-linearity)
         if group_size:
@@ -215,9 +259,10 @@ class EvoNorm2dS0(nn.Module):
         else:
             self.groups = groups
         self.eps = eps
-        self.weight = nn.Parameter(torch.ones(num_features))
-        self.bias = nn.Parameter(torch.zeros(num_features))
-        self.v = nn.Parameter(torch.ones(num_features)) if apply_act else None
+        self.weight = nn.Parameter(torch.empty(num_features, **dd))
+        self.bias = nn.Parameter(torch.empty(num_features, **dd))
+        self.v = nn.Parameter(torch.empty(num_features, **dd)) if apply_act else None
+
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -237,9 +282,26 @@ class EvoNorm2dS0(nn.Module):
 
 
 class EvoNorm2dS0a(EvoNorm2dS0):
-    def __init__(self, num_features, groups=32, group_size=None, apply_act=True, eps=1e-3, **_):
+    def __init__(
+            self,
+            num_features: int,
+            groups: int = 32,
+            group_size: Optional[int] = None,
+            apply_act: bool = True,
+            eps: float = 1e-3,
+            device=None,
+            dtype=None,
+            **_
+    ):
         super().__init__(
-            num_features, groups=groups, group_size=group_size, apply_act=apply_act, eps=eps)
+            num_features,
+            groups=groups,
+            group_size=group_size,
+            apply_act=apply_act,
+            eps=eps,
+            device=device,
+            dtype=dtype,
+        )
 
     def forward(self, x):
         _assert(x.dim() == 4, 'expected 4D input')
@@ -255,8 +317,18 @@ class EvoNorm2dS0a(EvoNorm2dS0):
 
 class EvoNorm2dS1(nn.Module):
     def __init__(
-            self, num_features, groups=32, group_size=None,
-            apply_act=True, act_layer=None, eps=1e-5, **_):
+            self,
+            num_features: int,
+            groups: int = 32,
+            group_size: Optional[int] = None,
+            apply_act: bool = True,
+            act_layer: Optional[Type[nn.Module]] = None,
+            eps: float = 1e-5,
+            device=None,
+            dtype=None,
+            **_
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         act_layer = act_layer or nn.SiLU
         self.apply_act = apply_act  # apply activation (non-linearity)
@@ -271,8 +343,9 @@ class EvoNorm2dS1(nn.Module):
             self.groups = groups
         self.eps = eps
         self.pre_act_norm = False
-        self.weight = nn.Parameter(torch.ones(num_features))
-        self.bias = nn.Parameter(torch.zeros(num_features))
+        self.weight = nn.Parameter(torch.empty(num_features, **dd))
+        self.bias = nn.Parameter(torch.empty(num_features, **dd))
+
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -290,10 +363,27 @@ class EvoNorm2dS1(nn.Module):
 
 class EvoNorm2dS1a(EvoNorm2dS1):
     def __init__(
-            self, num_features, groups=32, group_size=None,
-            apply_act=True, act_layer=None, eps=1e-3, **_):
+            self,
+            num_features: int,
+            groups: int = 32,
+            group_size: Optional[int] = None,
+            apply_act: bool = True,
+            act_layer: Optional[Type[nn.Module]] = None,
+            eps: float = 1e-3,
+            device=None,
+            dtype=None,
+            **_
+    ):
         super().__init__(
-            num_features, groups=groups, group_size=group_size, apply_act=apply_act, act_layer=act_layer, eps=eps)
+            num_features,
+            groups=groups,
+            group_size=group_size,
+            apply_act=apply_act,
+            act_layer=act_layer,
+            eps=eps,
+            device=device,
+            dtype=dtype,
+        )
 
     def forward(self, x):
         _assert(x.dim() == 4, 'expected 4D input')
@@ -305,8 +395,18 @@ class EvoNorm2dS1a(EvoNorm2dS1):
 
 class EvoNorm2dS2(nn.Module):
     def __init__(
-            self, num_features, groups=32, group_size=None,
-            apply_act=True, act_layer=None, eps=1e-5, **_):
+            self,
+            num_features: int,
+            groups: int = 32,
+            group_size: Optional[int] = None,
+            apply_act: bool = True,
+            act_layer: Optional[Type[nn.Module]] = None,
+            eps: float = 1e-5,
+            device=None,
+            dtype=None,
+            **_
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         act_layer = act_layer or nn.SiLU
         self.apply_act = apply_act  # apply activation (non-linearity)
@@ -320,8 +420,9 @@ class EvoNorm2dS2(nn.Module):
         else:
             self.groups = groups
         self.eps = eps
-        self.weight = nn.Parameter(torch.ones(num_features))
-        self.bias = nn.Parameter(torch.zeros(num_features))
+        self.weight = nn.Parameter(torch.empty(num_features, **dd))
+        self.bias = nn.Parameter(torch.empty(num_features, **dd))
+
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -339,10 +440,27 @@ class EvoNorm2dS2(nn.Module):
 
 class EvoNorm2dS2a(EvoNorm2dS2):
     def __init__(
-            self, num_features, groups=32, group_size=None,
-            apply_act=True, act_layer=None, eps=1e-3, **_):
+            self,
+            num_features: int,
+            groups: int = 32,
+            group_size: Optional[int] = None,
+            apply_act: bool = True,
+            act_layer: Optional[Type[nn.Module]] = None,
+            eps: float = 1e-3,
+            device=None,
+            dtype=None,
+            **_
+    ):
         super().__init__(
-            num_features, groups=groups, group_size=group_size, apply_act=apply_act, act_layer=act_layer, eps=eps)
+            num_features,
+            groups=groups,
+            group_size=group_size,
+            apply_act=apply_act,
+            act_layer=act_layer,
+            eps=eps,
+            device=device,
+            dtype=dtype,
+        )
 
     def forward(self, x):
         _assert(x.dim() == 4, 'expected 4D input')
