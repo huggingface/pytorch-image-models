@@ -55,6 +55,8 @@ class BasicBlock(nn.Module):
             aa_layer: Optional[Type[nn.Module]] = None,
             drop_block: Optional[Type[nn.Module]] = None,
             drop_path: Optional[nn.Module] = None,
+            device=None,
+            dtype=None,
     ) -> None:
         """
         Args:
@@ -74,6 +76,7 @@ class BasicBlock(nn.Module):
             drop_block: DropBlock layer class.
             drop_path: Optional DropPath layer instance.
         """
+        dd = {'device': device, 'dtype': dtype}
         super(BasicBlock, self).__init__()
 
         assert cardinality == 1, 'BasicBlock only supports cardinality of 1'
@@ -85,17 +88,17 @@ class BasicBlock(nn.Module):
 
         self.conv1 = nn.Conv2d(
             inplanes, first_planes, kernel_size=3, stride=1 if use_aa else stride, padding=first_dilation,
-            dilation=first_dilation, bias=False)
-        self.bn1 = norm_layer(first_planes)
+            dilation=first_dilation, bias=False, **dd)
+        self.bn1 = norm_layer(first_planes, **dd)
         self.drop_block = drop_block() if drop_block is not None else nn.Identity()
         self.act1 = act_layer(inplace=True)
-        self.aa = create_aa(aa_layer, channels=first_planes, stride=stride, enable=use_aa)
+        self.aa = create_aa(aa_layer, channels=first_planes, stride=stride, enable=use_aa, **dd)
 
         self.conv2 = nn.Conv2d(
-            first_planes, outplanes, kernel_size=3, padding=dilation, dilation=dilation, bias=False)
-        self.bn2 = norm_layer(outplanes)
+            first_planes, outplanes, kernel_size=3, padding=dilation, dilation=dilation, bias=False, **dd)
+        self.bn2 = norm_layer(outplanes, **dd)
 
-        self.se = create_attn(attn_layer, outplanes)
+        self.se = create_attn(attn_layer, outplanes, **dd)
 
         self.act2 = act_layer(inplace=True)
         self.downsample = downsample
@@ -158,6 +161,8 @@ class Bottleneck(nn.Module):
             aa_layer: Optional[Type[nn.Module]] = None,
             drop_block: Optional[Type[nn.Module]] = None,
             drop_path: Optional[nn.Module] = None,
+            device=None,
+            dtype=None,
     ) -> None:
         """
         Args:
@@ -177,6 +182,7 @@ class Bottleneck(nn.Module):
             drop_block: DropBlock layer class.
             drop_path: Optional DropPath layer instance.
         """
+        dd = {'device': device, 'dtype': dtype}
         super(Bottleneck, self).__init__()
 
         width = int(math.floor(planes * (base_width / 64)) * cardinality)
@@ -185,22 +191,22 @@ class Bottleneck(nn.Module):
         first_dilation = first_dilation or dilation
         use_aa = aa_layer is not None and (stride == 2 or first_dilation != dilation)
 
-        self.conv1 = nn.Conv2d(inplanes, first_planes, kernel_size=1, bias=False)
-        self.bn1 = norm_layer(first_planes)
+        self.conv1 = nn.Conv2d(inplanes, first_planes, kernel_size=1, bias=False, **dd)
+        self.bn1 = norm_layer(first_planes, **dd)
         self.act1 = act_layer(inplace=True)
 
         self.conv2 = nn.Conv2d(
             first_planes, width, kernel_size=3, stride=1 if use_aa else stride,
-            padding=first_dilation, dilation=first_dilation, groups=cardinality, bias=False)
-        self.bn2 = norm_layer(width)
+            padding=first_dilation, dilation=first_dilation, groups=cardinality, bias=False, **dd)
+        self.bn2 = norm_layer(width, **dd)
         self.drop_block = drop_block() if drop_block is not None else nn.Identity()
         self.act2 = act_layer(inplace=True)
-        self.aa = create_aa(aa_layer, channels=width, stride=stride, enable=use_aa)
+        self.aa = create_aa(aa_layer, channels=width, stride=stride, enable=use_aa, **dd)
 
-        self.conv3 = nn.Conv2d(width, outplanes, kernel_size=1, bias=False)
-        self.bn3 = norm_layer(outplanes)
+        self.conv3 = nn.Conv2d(width, outplanes, kernel_size=1, bias=False, **dd)
+        self.bn3 = norm_layer(outplanes, **dd)
 
-        self.se = create_attn(attn_layer, outplanes)
+        self.se = create_attn(attn_layer, outplanes, **dd)
 
         self.act3 = act_layer(inplace=True)
         self.downsample = downsample
@@ -251,7 +257,10 @@ def downsample_conv(
         dilation: int = 1,
         first_dilation: Optional[int] = None,
         norm_layer: Optional[Type[nn.Module]] = None,
+        device=None,
+        dtype=None,
 ) -> nn.Module:
+    dd = {'device': device, 'dtype': dtype}
     norm_layer = norm_layer or nn.BatchNorm2d
     kernel_size = 1 if stride == 1 and dilation == 1 else kernel_size
     first_dilation = (first_dilation or dilation) if kernel_size > 1 else 1
@@ -259,8 +268,16 @@ def downsample_conv(
 
     return nn.Sequential(*[
         nn.Conv2d(
-            in_channels, out_channels, kernel_size, stride=stride, padding=p, dilation=first_dilation, bias=False),
-        norm_layer(out_channels)
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride=stride,
+            padding=p,
+            dilation=first_dilation,
+            bias=False,
+            **dd
+        ),
+        norm_layer(out_channels, **dd)
     ])
 
 
@@ -272,7 +289,10 @@ def downsample_avg(
         dilation: int = 1,
         first_dilation: Optional[int] = None,
         norm_layer: Optional[Type[nn.Module]] = None,
+        device=None,
+        dtype=None,
 ) -> nn.Module:
+    dd = {'device': device, 'dtype': dtype}
     norm_layer = norm_layer or nn.BatchNorm2d
     avg_stride = stride if dilation == 1 else 1
     if stride == 1 and dilation == 1:
@@ -283,8 +303,8 @@ def downsample_avg(
 
     return nn.Sequential(*[
         pool,
-        nn.Conv2d(in_channels, out_channels, 1, stride=1, padding=0, bias=False),
-        norm_layer(out_channels)
+        nn.Conv2d(in_channels, out_channels, 1, stride=1, padding=0, bias=False, **dd),
+        norm_layer(out_channels, **dd)
     ])
 
 
@@ -314,6 +334,8 @@ def make_blocks(
         avg_down: bool = False,
         drop_block_rate: float = 0.,
         drop_path_rate: float = 0.,
+        device=None,
+        dtype=None,
         **kwargs,
 ) -> Tuple[List[Tuple[str, nn.Module]], List[Dict[str, Any]]]:
     """Create ResNet stages with specified block configurations.
@@ -334,6 +356,7 @@ def make_blocks(
     Returns:
         Tuple of stage modules list and feature info list.
     """
+    dd = {'device': device, 'dtype': dtype}
     stages = []
     feature_info = []
     net_num_blocks = sum(block_repeats)
@@ -359,6 +382,7 @@ def make_blocks(
                 dilation=dilation,
                 first_dilation=prev_dilation,
                 norm_layer=kwargs.get('norm_layer'),
+                **dd,
             )
             downsample = downsample_avg(**down_kwargs) if avg_down else downsample_conv(**down_kwargs)
 
@@ -376,6 +400,7 @@ def make_blocks(
                 first_dilation=prev_dilation,
                 drop_path=DropPath(block_dpr) if block_dpr > 0. else None,
                 **block_kwargs,
+                **dd,
             ))
             prev_dilation = dilation
             inplanes = planes * block_fn.expansion
@@ -444,6 +469,8 @@ class ResNet(nn.Module):
             drop_block_rate: float = 0.,
             zero_init_last: bool = True,
             block_args: Optional[Dict[str, Any]] = None,
+            device=None,
+            dtype=None,
     ):
         """
         Args:
@@ -476,6 +503,7 @@ class ResNet(nn.Module):
             block_args (dict): Extra kwargs to pass through to block module
         """
         super(ResNet, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
         block_args = block_args or dict()
         assert output_stride in (8, 16, 32)
         self.num_classes = num_classes
@@ -493,25 +521,25 @@ class ResNet(nn.Module):
             if 'tiered' in stem_type:
                 stem_chs = (3 * (stem_width // 4), stem_width)
             self.conv1 = nn.Sequential(*[
-                nn.Conv2d(in_chans, stem_chs[0], 3, stride=2, padding=1, bias=False),
-                norm_layer(stem_chs[0]),
+                nn.Conv2d(in_chans, stem_chs[0], 3, stride=2, padding=1, bias=False, **dd),
+                norm_layer(stem_chs[0], **dd),
                 act_layer(inplace=True),
-                nn.Conv2d(stem_chs[0], stem_chs[1], 3, stride=1, padding=1, bias=False),
-                norm_layer(stem_chs[1]),
+                nn.Conv2d(stem_chs[0], stem_chs[1], 3, stride=1, padding=1, bias=False, **dd),
+                norm_layer(stem_chs[1], **dd),
                 act_layer(inplace=True),
-                nn.Conv2d(stem_chs[1], inplanes, 3, stride=1, padding=1, bias=False)])
+                nn.Conv2d(stem_chs[1], inplanes, 3, stride=1, padding=1, bias=False, **dd)])
         else:
-            self.conv1 = nn.Conv2d(in_chans, inplanes, kernel_size=7, stride=2, padding=3, bias=False)
-        self.bn1 = norm_layer(inplanes)
+            self.conv1 = nn.Conv2d(in_chans, inplanes, kernel_size=7, stride=2, padding=3, bias=False, **dd)
+        self.bn1 = norm_layer(inplanes, **dd)
         self.act1 = act_layer(inplace=True)
         self.feature_info = [dict(num_chs=inplanes, reduction=2, module='act1')]
 
         # Stem pooling. The name 'maxpool' remains for weight compatibility.
         if replace_stem_pool:
             self.maxpool = nn.Sequential(*filter(None, [
-                nn.Conv2d(inplanes, inplanes, 3, stride=1 if aa_layer else 2, padding=1, bias=False),
-                create_aa(aa_layer, channels=inplanes, stride=2) if aa_layer is not None else None,
-                norm_layer(inplanes),
+                nn.Conv2d(inplanes, inplanes, 3, stride=1 if aa_layer else 2, padding=1, bias=False, **dd),
+                create_aa(aa_layer, channels=inplanes, stride=2, **dd) if aa_layer is not None else None,
+                norm_layer(inplanes, **dd),
                 act_layer(inplace=True),
             ]))
         else:
@@ -521,7 +549,7 @@ class ResNet(nn.Module):
                 else:
                     self.maxpool = nn.Sequential(*[
                         nn.MaxPool2d(kernel_size=3, stride=1, padding=1),
-                        aa_layer(channels=inplanes, stride=2)])
+                        aa_layer(channels=inplanes, stride=2, **dd)])
             else:
                 self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
@@ -544,6 +572,7 @@ class ResNet(nn.Module):
             drop_block_rate=drop_block_rate,
             drop_path_rate=drop_path_rate,
             **block_args,
+            **dd,
         )
         for stage in stage_modules:
             self.add_module(*stage)  # layer1, layer2, etc
@@ -551,7 +580,7 @@ class ResNet(nn.Module):
 
         # Head (Pooling and Classifier)
         self.num_features = self.head_hidden_size = channels[-1] * block_fns[-1].expansion
-        self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
+        self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool, **dd)
 
         self.init_weights(zero_init_last=zero_init_last)
 
