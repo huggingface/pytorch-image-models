@@ -115,6 +115,8 @@ class DownsampleAvg(nn.Module):
             dilation: int = 1,
             first_dilation: Optional[int] = None,
             conv_layer: Callable = ScaledStdConv2d,
+            device=None,
+            dtype=None,
     ):
         """Initialize DownsampleAvg.
 
@@ -133,7 +135,7 @@ class DownsampleAvg(nn.Module):
             self.pool = avg_pool_fn(2, avg_stride, ceil_mode=True, count_include_pad=False)
         else:
             self.pool = nn.Identity()
-        self.conv = conv_layer(in_chs, out_chs, 1, stride=1)
+        self.conv = conv_layer(in_chs, out_chs, 1, stride=1, device=device, dtype=dtype)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass.
@@ -172,6 +174,8 @@ class NormFreeBlock(nn.Module):
             act_layer: Optional[Callable] = None,
             conv_layer: Callable = ScaledStdConv2d,
             drop_path_rate: float = 0.,
+            device=None,
+            dtype=None,
     ):
         """Initialize NormFreeBlock.
 
@@ -195,6 +199,7 @@ class NormFreeBlock(nn.Module):
             conv_layer: Convolution layer type.
             drop_path_rate: Stochastic depth drop rate.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         first_dilation = first_dilation or dilation
         out_chs = out_chs or in_chs
@@ -215,32 +220,33 @@ class NormFreeBlock(nn.Module):
                 dilation=dilation,
                 first_dilation=first_dilation,
                 conv_layer=conv_layer,
+                **dd,
             )
         else:
             self.downsample = None
 
         self.act1 = act_layer()
-        self.conv1 = conv_layer(in_chs, mid_chs, 1)
+        self.conv1 = conv_layer(in_chs, mid_chs, 1, **dd)
         self.act2 = act_layer(inplace=True)
-        self.conv2 = conv_layer(mid_chs, mid_chs, 3, stride=stride, dilation=first_dilation, groups=groups)
+        self.conv2 = conv_layer(mid_chs, mid_chs, 3, stride=stride, dilation=first_dilation, groups=groups, **dd)
         if extra_conv:
             self.act2b = act_layer(inplace=True)
-            self.conv2b = conv_layer(mid_chs, mid_chs, 3, stride=1, dilation=dilation, groups=groups)
+            self.conv2b = conv_layer(mid_chs, mid_chs, 3, stride=1, dilation=dilation, groups=groups, **dd)
         else:
             self.act2b = None
             self.conv2b = None
         if reg and attn_layer is not None:
-            self.attn = attn_layer(mid_chs)  # RegNet blocks apply attn btw conv2 & 3
+            self.attn = attn_layer(mid_chs, **dd)  # RegNet blocks apply attn btw conv2 & 3
         else:
             self.attn = None
         self.act3 = act_layer()
-        self.conv3 = conv_layer(mid_chs, out_chs, 1, gain_init=1. if skipinit else 0.)
+        self.conv3 = conv_layer(mid_chs, out_chs, 1, gain_init=1. if skipinit else 0., **dd)
         if not reg and attn_layer is not None:
-            self.attn_last = attn_layer(out_chs)  # ResNet blocks apply attn after conv3
+            self.attn_last = attn_layer(out_chs, **dd)  # ResNet blocks apply attn after conv3
         else:
             self.attn_last = None
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0 else nn.Identity()
-        self.skipinit_gain = nn.Parameter(torch.tensor(0.)) if skipinit else None
+        self.skipinit_gain = nn.Parameter(torch.tensor(0., **dd)) if skipinit else None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass.
@@ -283,6 +289,8 @@ def create_stem(
         conv_layer: Optional[Callable] = None,
         act_layer: Optional[Callable] = None,
         preact_feature: bool = True,
+        device=None,
+        dtype=None,
 ) -> Tuple[nn.Sequential, int, Dict[str, Any]]:
     """Create stem module for NFNet models.
 
@@ -297,6 +305,7 @@ def create_stem(
     Returns:
         Tuple of (stem_module, stem_stride, stem_feature_info).
     """
+    dd = {'device': device, 'dtype': dtype}
     stem_stride = 2
     stem_feature = dict(num_chs=out_chs, reduction=2, module='stem.conv')
     stem = OrderedDict()
@@ -318,16 +327,16 @@ def create_stem(
             stem_feature = dict(num_chs=out_chs // 2, reduction=2, module='stem.conv2')
         last_idx = len(stem_chs) - 1
         for i, (c, s) in enumerate(zip(stem_chs, strides)):
-            stem[f'conv{i + 1}'] = conv_layer(in_chs, c, kernel_size=3, stride=s)
+            stem[f'conv{i + 1}'] = conv_layer(in_chs, c, kernel_size=3, stride=s, **dd)
             if i != last_idx:
                 stem[f'act{i + 2}'] = act_layer(inplace=True)
             in_chs = c
     elif '3x3' in stem_type:
         # 3x3 stem conv as in RegNet
-        stem['conv'] = conv_layer(in_chs, out_chs, kernel_size=3, stride=2)
+        stem['conv'] = conv_layer(in_chs, out_chs, kernel_size=3, stride=2, **dd)
     else:
         # 7x7 stem conv as in ResNet
-        stem['conv'] = conv_layer(in_chs, out_chs, kernel_size=7, stride=2)
+        stem['conv'] = conv_layer(in_chs, out_chs, kernel_size=7, stride=2, **dd)
 
     if 'pool' in stem_type:
         stem['pool'] = nn.MaxPool2d(3, stride=2, padding=1)
@@ -387,6 +396,8 @@ class NormFreeNet(nn.Module):
             output_stride: int = 32,
             drop_rate: float = 0.,
             drop_path_rate: float = 0.,
+            device=None,
+            dtype=None,
             **kwargs: Any,
     ):
         """
@@ -401,6 +412,7 @@ class NormFreeNet(nn.Module):
             **kwargs: Extra kwargs overlayed onto cfg.
         """
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
@@ -423,6 +435,7 @@ class NormFreeNet(nn.Module):
             cfg.stem_type,
             conv_layer=conv_layer,
             act_layer=act_layer,
+            **dd,
         )
 
         self.feature_info = [stem_feat]
@@ -462,6 +475,7 @@ class NormFreeNet(nn.Module):
                     act_layer=act_layer,
                     conv_layer=conv_layer,
                     drop_path_rate=drop_path_rates[stage_idx][block_idx],
+                    **dd,
                 )]
                 if block_idx == 0:
                     expected_var = 1.  # expected var is reset after first block of each stage
@@ -475,7 +489,7 @@ class NormFreeNet(nn.Module):
         if cfg.num_features:
             # The paper NFRegNet models have an EfficientNet-like final head convolution.
             self.num_features = make_divisible(cfg.width_factor * cfg.num_features, cfg.ch_div)
-            self.final_conv = conv_layer(prev_chs, self.num_features, 1)
+            self.final_conv = conv_layer(prev_chs, self.num_features, 1, **dd)
             self.feature_info[-1] = dict(num_chs=self.num_features, reduction=net_stride, module=f'final_conv')
         else:
             self.num_features = prev_chs
@@ -488,6 +502,7 @@ class NormFreeNet(nn.Module):
             num_classes,
             pool_type=global_pool,
             drop_rate=self.drop_rate,
+            **dd,
         )
 
         for n, m in self.named_modules():
