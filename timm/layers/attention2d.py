@@ -151,14 +151,14 @@ class MultiQueryAttention2d(nn.Module):
             # FIXME dilation
             if padding == 'same':
                 self.query.add_module('down_pool', create_pool2d(
-                        'avg',
-                        kernel_size=self.query_strides,
-                        padding='same',
+                    'avg',
+                    kernel_size=self.query_strides,
+                    padding='same',
                 ))
             else:
                 # no pad if not 'same' as kern=stride=even
                 self.query.add_module('down_pool', nn.AvgPool2d(kernel_size=query_strides))
-            self.query.add_module('norm', norm_layer(dim))
+            self.query.add_module('norm', norm_layer(dim, **dd))
         self.query.add_module('proj', create_conv2d(
             dim,
             self.num_heads * self.key_dim,
@@ -179,7 +179,7 @@ class MultiQueryAttention2d(nn.Module):
                 depthwise=True,
                 **dd,
             ))
-            self.key.add_module('norm', norm_layer(dim))
+            self.key.add_module('norm', norm_layer(dim, **dd))
         self.key.add_module('proj', create_conv2d(
             dim,
             self.key_dim,
@@ -201,7 +201,7 @@ class MultiQueryAttention2d(nn.Module):
                 depthwise=True,
                 **dd,
             ))
-            self.value.add_module('norm', norm_layer(dim))
+            self.value.add_module('norm', norm_layer(dim, **dd))
         self.value.add_module('proj', create_conv2d(
             dim,
             self.value_dim,

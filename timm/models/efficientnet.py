@@ -96,7 +96,9 @@ class EfficientNet(nn.Module):
             round_chs_fn: Callable = round_channels,
             drop_rate: float = 0.,
             drop_path_rate: float = 0.,
-            global_pool: str = 'avg'
+            global_pool: str = 'avg',
+            device=None,
+            dtype=None,
     ) -> None:
         """Initialize EfficientNet model.
 
@@ -120,6 +122,7 @@ class EfficientNet(nn.Module):
             global_pool: Global pooling type.
         """
         super(EfficientNet, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
         act_layer = act_layer or nn.ReLU
         norm_layer = norm_layer or nn.BatchNorm2d
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
@@ -131,8 +134,8 @@ class EfficientNet(nn.Module):
         # Stem
         if not fix_stem:
             stem_size = round_chs_fn(stem_size)
-        self.conv_stem = create_conv2d(in_chans, stem_size, stem_kernel_size, stride=2, padding=pad_type)
-        self.bn1 = norm_act_layer(stem_size, inplace=True)
+        self.conv_stem = create_conv2d(in_chans, stem_size, stem_kernel_size, stride=2, padding=pad_type, **dd)
+        self.bn1 = norm_act_layer(stem_size, inplace=True, **dd)
 
         # Middle stages (IR/ER/DS Blocks)
         builder = EfficientNetBuilder(
@@ -144,6 +147,7 @@ class EfficientNet(nn.Module):
             aa_layer=aa_layer,
             se_layer=se_layer,
             drop_path_rate=drop_path_rate,
+            **dd,
         )
         self.blocks = nn.Sequential(*builder(stem_size, block_args))
         self.feature_info = builder.features
@@ -152,8 +156,8 @@ class EfficientNet(nn.Module):
 
         # Head + Pooling
         if num_features > 0:
-            self.conv_head = create_conv2d(head_chs, num_features, 1, padding=pad_type)
-            self.bn2 = norm_act_layer(num_features, inplace=True)
+            self.conv_head = create_conv2d(head_chs, num_features, 1, padding=pad_type, **dd)
+            self.bn2 = norm_act_layer(num_features, inplace=True, **dd)
             self.num_features = self.head_hidden_size = num_features
         else:
             self.conv_head = nn.Identity()
@@ -161,7 +165,11 @@ class EfficientNet(nn.Module):
             self.num_features = self.head_hidden_size = head_chs
 
         self.global_pool, self.classifier = create_classifier(
-            self.num_features, self.num_classes, pool_type=global_pool)
+            self.num_features,
+            self.num_classes,
+            pool_type=global_pool,
+            **dd,
+        )
 
         efficientnet_init_weights(self)
 
@@ -366,8 +374,11 @@ class EfficientNetFeatures(nn.Module):
             round_chs_fn: Callable = round_channels,
             drop_rate: float = 0.,
             drop_path_rate: float = 0.,
+            device=None,
+            dtype=None,
     ):
         super(EfficientNetFeatures, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
         act_layer = act_layer or nn.ReLU
         norm_layer = norm_layer or nn.BatchNorm2d
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
@@ -378,8 +389,8 @@ class EfficientNetFeatures(nn.Module):
         # Stem
         if not fix_stem:
             stem_size = round_chs_fn(stem_size)
-        self.conv_stem = create_conv2d(in_chans, stem_size, stem_kernel_size, stride=2, padding=pad_type)
-        self.bn1 = norm_act_layer(stem_size, inplace=True)
+        self.conv_stem = create_conv2d(in_chans, stem_size, stem_kernel_size, stride=2, padding=pad_type, **dd)
+        self.bn1 = norm_act_layer(stem_size, inplace=True, **dd)
 
         # Middle stages (IR/ER/DS Blocks)
         builder = EfficientNetBuilder(
@@ -392,6 +403,7 @@ class EfficientNetFeatures(nn.Module):
             se_layer=se_layer,
             drop_path_rate=drop_path_rate,
             feature_location=feature_location,
+            **dd,
         )
         self.blocks = nn.Sequential(*builder(stem_size, block_args))
         self.feature_info = FeatureInfo(builder.features, out_indices)

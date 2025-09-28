@@ -63,6 +63,8 @@ class MobileNetV3(nn.Module):
             drop_path_rate: float = 0.,
             layer_scale_init_value: Optional[float] = None,
             global_pool: str = 'avg',
+            device=None,
+            dtype=None,
     ):
         """Initialize MobileNetV3.
 
@@ -88,6 +90,7 @@ class MobileNetV3(nn.Module):
             global_pool: Type of pooling to use for global pooling features of the FC head.
         """
         super(MobileNetV3, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
         act_layer = act_layer or nn.ReLU
         norm_layer = norm_layer or nn.BatchNorm2d
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
@@ -99,8 +102,8 @@ class MobileNetV3(nn.Module):
         # Stem
         if not fix_stem:
             stem_size = round_chs_fn(stem_size)
-        self.conv_stem = create_conv2d(in_chans, stem_size, 3, stride=2, padding=pad_type)
-        self.bn1 = norm_act_layer(stem_size, inplace=True)
+        self.conv_stem = create_conv2d(in_chans, stem_size, 3, stride=2, padding=pad_type, **dd)
+        self.bn1 = norm_act_layer(stem_size, inplace=True, **dd)
 
         # Middle stages (IR/ER/DS Blocks)
         builder = EfficientNetBuilder(
@@ -114,6 +117,7 @@ class MobileNetV3(nn.Module):
             se_layer=se_layer,
             drop_path_rate=drop_path_rate,
             layer_scale_init_value=layer_scale_init_value,
+            **dd,
         )
         self.blocks = nn.Sequential(*builder(stem_size, block_args))
         self.feature_info = builder.features
@@ -126,16 +130,30 @@ class MobileNetV3(nn.Module):
         num_pooled_chs = self.num_features * self.global_pool.feat_mult()
         if head_norm:
             # mobilenet-v4 post-pooling PW conv is followed by a norm+act layer
-            self.conv_head = create_conv2d(num_pooled_chs, self.head_hidden_size, 1, padding=pad_type)  # never bias
-            self.norm_head = norm_act_layer(self.head_hidden_size)
+            self.conv_head = create_conv2d(
+                num_pooled_chs,
+                self.head_hidden_size,
+                1,
+                padding=pad_type,
+                bias=False,  #  never a bias
+                **dd,
+            )
+            self.norm_head = norm_act_layer(self.head_hidden_size, **dd)
             self.act2 = nn.Identity()
         else:
             # mobilenet-v3 and others only have an activation after final PW conv
-            self.conv_head = create_conv2d(num_pooled_chs, self.head_hidden_size, 1, padding=pad_type, bias=head_bias)
+            self.conv_head = create_conv2d(
+                num_pooled_chs,
+                self.head_hidden_size,
+                1,
+                padding=pad_type,
+                bias=head_bias,
+                **dd,
+            )
             self.norm_head = nn.Identity()
             self.act2 = act_layer(inplace=True)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        self.classifier = Linear(self.head_hidden_size, num_classes) if num_classes > 0 else nn.Identity()
+        self.classifier = Linear(self.head_hidden_size, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
         efficientnet_init_weights(self)
 
@@ -351,6 +369,8 @@ class MobileNetV3Features(nn.Module):
             drop_rate: float = 0.,
             drop_path_rate: float = 0.,
             layer_scale_init_value: Optional[float] = None,
+            device=None,
+            dtype=None,
     ):
         """Initialize MobileNetV3Features.
 
@@ -374,6 +394,7 @@ class MobileNetV3Features(nn.Module):
             layer_scale_init_value: Enable layer scale on compatible blocks if not None.
         """
         super(MobileNetV3Features, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
         act_layer = act_layer or nn.ReLU
         norm_layer = norm_layer or nn.BatchNorm2d
         se_layer = se_layer or SqueezeExcite
@@ -383,8 +404,8 @@ class MobileNetV3Features(nn.Module):
         # Stem
         if not fix_stem:
             stem_size = round_chs_fn(stem_size)
-        self.conv_stem = create_conv2d(in_chans, stem_size, 3, stride=2, padding=pad_type)
-        self.bn1 = norm_layer(stem_size)
+        self.conv_stem = create_conv2d(in_chans, stem_size, 3, stride=2, padding=pad_type, **dd)
+        self.bn1 = norm_layer(stem_size, **dd)
         self.act1 = act_layer(inplace=True)
 
         # Middle stages (IR/ER/DS Blocks)
@@ -400,6 +421,7 @@ class MobileNetV3Features(nn.Module):
             drop_path_rate=drop_path_rate,
             layer_scale_init_value=layer_scale_init_value,
             feature_location=feature_location,
+            **dd,
         )
         self.blocks = nn.Sequential(*builder(stem_size, block_args))
         self.feature_info = FeatureInfo(builder.features, out_indices)

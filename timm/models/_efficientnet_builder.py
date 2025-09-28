@@ -335,6 +335,8 @@ class EfficientNetBuilder:
             drop_path_rate: float = 0.,
             layer_scale_init_value: Optional[float] = None,
             feature_location: str = '',
+            device=None,
+            dtype=None,
     ):
         self.output_stride = output_stride
         self.pad_type = pad_type
@@ -357,6 +359,7 @@ class EfficientNetBuilder:
             feature_location = 'expansion'
         self.feature_location = feature_location
         assert feature_location in ('bottleneck', 'expansion', '')
+        self.dd = {'device': device, 'dtype': dtype}  # device/dtype factory kwargs
         self.verbose = _DEBUG_BUILDER
 
         # state updated during build, consumed by model
@@ -397,6 +400,8 @@ class EfficientNetBuilder:
                 ba['se_layer'] = partial(self.se_layer, rd_ratio=se_ratio)
             else:
                 ba['se_layer'] = self.se_layer
+
+        ba.update(self.dd)  # device/type factory kwargs
 
         if bt == 'ir':
             _log_info_if('  InvertedResidual {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
