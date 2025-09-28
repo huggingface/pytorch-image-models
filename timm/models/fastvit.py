@@ -63,6 +63,8 @@ class MobileOneBlock(nn.Module):
             use_scale_branch: bool = True,
             num_conv_branches: int = 1,
             act_layer: Type[nn.Module] = nn.GELU,
+            device=None,
+            dtype=None,
     ) -> None:
         """Construct a MobileOneBlock module.
 
@@ -79,6 +81,7 @@ class MobileOneBlock(nn.Module):
             use_scale_branch: Whether to use scale branch. Default: ``True``
             num_conv_branches: Number of linear conv branches.
         """
+        dd = {'device': device, 'dtype': dtype}
         super(MobileOneBlock, self).__init__()
         self.inference_mode = inference_mode
         self.groups = num_groups(group_size, in_chs)
@@ -90,7 +93,7 @@ class MobileOneBlock(nn.Module):
         self.num_conv_branches = num_conv_branches
 
         # Check if SE-ReLU is requested
-        self.se = SqueezeExcite(out_chs, rd_divisor=1) if use_se else nn.Identity()
+        self.se = SqueezeExcite(out_chs, rd_divisor=1, **dd) if use_se else nn.Identity()
 
         if inference_mode:
             self.reparam_conv = create_conv2d(
@@ -101,13 +104,14 @@ class MobileOneBlock(nn.Module):
                 dilation=dilation,
                 groups=self.groups,
                 bias=True,
+                **dd,
             )
         else:
             # Re-parameterizable skip connection
             self.reparam_conv = None
 
             self.identity = (
-                nn.BatchNorm2d(num_features=in_chs)
+                nn.BatchNorm2d(num_features=in_chs, **dd)
                 if out_chs == in_chs and stride == 1
                 else None
             )
@@ -122,6 +126,7 @@ class MobileOneBlock(nn.Module):
                         stride=self.stride,
                         groups=self.groups,
                         apply_act=False,
+                        **dd,
                     ) for _ in range(self.num_conv_branches)
                 ])
             else:
@@ -136,7 +141,8 @@ class MobileOneBlock(nn.Module):
                     kernel_size=1,
                     stride=self.stride,
                     groups=self.groups,
-                    apply_act=False
+                    apply_act=False,
+                    **dd,
                 )
 
         self.act = act_layer() if use_act else nn.Identity()
@@ -300,6 +306,8 @@ class ReparamLargeKernelConv(nn.Module):
             use_se: bool = False,
             act_layer: Optional[nn.Module] = None,
             inference_mode: bool = False,
+            device=None,
+            dtype=None,
     ) -> None:
         """Construct a ReparamLargeKernelConv module.
 
@@ -313,6 +321,7 @@ class ReparamLargeKernelConv(nn.Module):
             act_layer: Activation module. Default: ``nn.GELU``
             inference_mode: If True, instantiates model in inference mode. Default: ``False``
         """
+        dd = {'device': device, 'dtype': dtype}
         super(ReparamLargeKernelConv, self).__init__()
         self.stride = stride
         self.groups = num_groups(group_size, in_chs)
@@ -330,6 +339,7 @@ class ReparamLargeKernelConv(nn.Module):
                 dilation=1,
                 groups=self.groups,
                 bias=True,
+                **dd,
             )
         else:
             self.reparam_conv = None
@@ -340,6 +350,7 @@ class ReparamLargeKernelConv(nn.Module):
                 stride=self.stride,
                 groups=self.groups,
                 apply_act=False,
+                **dd,
             )
             if small_kernel is not None:
                 assert (
@@ -352,8 +363,9 @@ class ReparamLargeKernelConv(nn.Module):
                     stride=self.stride,
                     groups=self.groups,
                     apply_act=False,
+                    **dd,
                 )
-        self.se = SqueezeExcite(out_chs, rd_ratio=0.25) if use_se else nn.Identity()
+        self.se = SqueezeExcite(out_chs, rd_ratio=0.25, **dd) if use_se else nn.Identity()
         # FIXME output of this act was not used in original impl, likely due to bug
         self.act = act_layer() if act_layer is not None else nn.Identity()
 
@@ -437,6 +449,8 @@ def convolutional_stem(
         act_layer: Type[nn.Module] = nn.GELU,
         inference_mode: bool = False,
         use_scale_branch: bool = True,
+        device=None,
+        dtype=None,
 ) -> nn.Sequential:
     """Build convolutional stem with MobileOne blocks.
 
@@ -448,6 +462,7 @@ def convolutional_stem(
     Returns:
         nn.Sequential object with stem elements.
     """
+    dd = {'device': device, 'dtype': dtype}
     return nn.Sequential(
         MobileOneBlock(
             in_chs=in_chs,
@@ -457,6 +472,7 @@ def convolutional_stem(
             act_layer=act_layer,
             inference_mode=inference_mode,
             use_scale_branch=use_scale_branch,
+            **dd,
         ),
         MobileOneBlock(
             in_chs=out_chs,
@@ -467,6 +483,7 @@ def convolutional_stem(
             act_layer=act_layer,
             inference_mode=inference_mode,
             use_scale_branch=use_scale_branch,
+            **dd,
         ),
         MobileOneBlock(
             in_chs=out_chs,
@@ -476,6 +493,7 @@ def convolutional_stem(
             act_layer=act_layer,
             inference_mode=inference_mode,
             use_scale_branch=use_scale_branch,
+            **dd,
         ),
     )
 
@@ -495,6 +513,8 @@ class Attention(nn.Module):
             qkv_bias: bool = False,
             attn_drop: float = 0.0,
             proj_drop: float = 0.0,
+            device=None,
+            dtype=None,
     ) -> None:
         """Build MHSA module that can handle 3D or 4D input tensors.
 
@@ -505,6 +525,7 @@ class Attention(nn.Module):
             attn_drop: Dropout rate for attention tensor.
             proj_drop: Dropout rate for projection tensor.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         assert dim % head_dim == 0, "dim should be divisible by head_dim"
         self.head_dim = head_dim
@@ -512,9 +533,9 @@ class Attention(nn.Module):
         self.scale = head_dim ** -0.5
         self.fused_attn = use_fused_attn()
 
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias, **dd)
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
+        self.proj = nn.Linear(dim, dim, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -561,6 +582,8 @@ class PatchEmbed(nn.Module):
             lkc_use_act: bool = False,
             use_se: bool = False,
             inference_mode: bool = False,
+            device=None,
+            dtype=None,
     ) -> None:
         """Build patch embedding layer.
 
@@ -571,6 +594,7 @@ class PatchEmbed(nn.Module):
             embed_dim: Number of embedding dimensions.
             inference_mode: Flag to instantiate model in inference mode. Default: ``False``
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.proj = nn.Sequential(
             ReparamLargeKernelConv(
@@ -583,6 +607,7 @@ class PatchEmbed(nn.Module):
                 use_se=use_se,
                 act_layer=act_layer if lkc_use_act else None,  # NOTE original weights didn't use this act
                 inference_mode=inference_mode,
+                **dd,
             ),
             MobileOneBlock(
                 in_chs=embed_dim,
@@ -592,6 +617,7 @@ class PatchEmbed(nn.Module):
                 use_se=False,
                 act_layer=act_layer,
                 inference_mode=inference_mode,
+                **dd,
             )
         )
 
@@ -601,10 +627,10 @@ class PatchEmbed(nn.Module):
 
 
 class LayerScale2d(nn.Module):
-    def __init__(self, dim, init_values=1e-5, inplace=False):
+    def __init__(self, dim, init_values=1e-5, inplace=False, device=None, dtype=None):
         super().__init__()
         self.inplace = inplace
-        self.gamma = nn.Parameter(init_values * torch.ones(dim, 1, 1))
+        self.gamma = nn.Parameter(init_values * torch.ones(dim, 1, 1, device=device, dtype=dtype))
 
     def forward(self, x):
         return x.mul_(self.gamma) if self.inplace else x * self.gamma
@@ -623,6 +649,8 @@ class RepMixer(nn.Module):
             kernel_size=3,
             layer_scale_init_value=1e-5,
             inference_mode: bool = False,
+            device=None,
+            dtype=None,
     ):
         """Build RepMixer Module.
 
@@ -632,6 +660,7 @@ class RepMixer(nn.Module):
             layer_scale_init_value: Initial value for layer scale. Default: 1e-5
             inference_mode: If True, instantiates model in inference mode. Default: ``False``
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.dim = dim
         self.kernel_size = kernel_size
@@ -646,6 +675,7 @@ class RepMixer(nn.Module):
                 padding=self.kernel_size // 2,
                 groups=self.dim,
                 bias=True,
+                **dd,
             )
         else:
             self.reparam_conv = None
@@ -657,6 +687,7 @@ class RepMixer(nn.Module):
                 use_act=False,
                 use_scale_branch=False,
                 num_conv_branches=0,
+                **dd,
             )
             self.mixer = MobileOneBlock(
                 dim,
@@ -664,9 +695,10 @@ class RepMixer(nn.Module):
                 kernel_size,
                 group_size=1,
                 use_act=False,
+                **dd,
             )
             if layer_scale_init_value is not None:
-                self.layer_scale = LayerScale2d(dim, layer_scale_init_value)
+                self.layer_scale = LayerScale2d(dim, layer_scale_init_value, **dd)
             else:
                 self.layer_scale = nn.Identity()
 
@@ -732,6 +764,8 @@ class ConvMlp(nn.Module):
             out_chs: Optional[int] = None,
             act_layer: Type[nn.Module] = nn.GELU,
             drop: float = 0.0,
+            device=None,
+            dtype=None,
     ) -> None:
         """Build convolutional FFN module.
 
@@ -742,6 +776,7 @@ class ConvMlp(nn.Module):
             act_layer: Activation layer. Default: ``GELU``
             drop: Dropout rate. Default: ``0.0``.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         out_chs = out_chs or in_chs
         hidden_channels = hidden_channels or in_chs
@@ -751,10 +786,11 @@ class ConvMlp(nn.Module):
             kernel_size=7,
             groups=in_chs,
             apply_act=False,
+            **dd,
         )
-        self.fc1 = nn.Conv2d(in_chs, hidden_channels, kernel_size=1)
+        self.fc1 = nn.Conv2d(in_chs, hidden_channels, kernel_size=1, **dd)
         self.act = act_layer()
-        self.fc2 = nn.Conv2d(hidden_channels, out_chs, kernel_size=1)
+        self.fc2 = nn.Conv2d(hidden_channels, out_chs, kernel_size=1, **dd)
         self.drop = nn.Dropout(drop)
         self.apply(self._init_weights)
 
@@ -789,6 +825,8 @@ class RepConditionalPosEnc(nn.Module):
             dim_out: Optional[int] = None,
             spatial_shape: Union[int, Tuple[int, int]] = (7, 7),
             inference_mode=False,
+            device=None,
+            dtype=None,
     ) -> None:
         """Build reparameterizable conditional positional encoding
 
@@ -798,7 +836,8 @@ class RepConditionalPosEnc(nn.Module):
             spatial_shape: Spatial shape of kernel for positional encoding. Default: (7, 7)
             inference_mode: Flag to instantiate block in inference mode. Default: ``False``
         """
-        super(RepConditionalPosEnc, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         if isinstance(spatial_shape, int):
             spatial_shape = tuple([spatial_shape] * 2)
         assert isinstance(spatial_shape, Tuple), (
@@ -824,6 +863,7 @@ class RepConditionalPosEnc(nn.Module):
                 padding=spatial_shape[0] // 2,
                 groups=self.groups,
                 bias=True,
+                **dd,
             )
         else:
             self.reparam_conv = None
@@ -835,6 +875,7 @@ class RepConditionalPosEnc(nn.Module):
                 int(spatial_shape[0] // 2),
                 groups=self.groups,
                 bias=True,
+                **dd,
             )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -907,6 +948,8 @@ class RepMixerBlock(nn.Module):
             drop_path: float = 0.0,
             layer_scale_init_value: float = 1e-5,
             inference_mode: bool = False,
+            device=None,
+            dtype=None,
     ):
         """Build RepMixer Block.
 
@@ -920,7 +963,7 @@ class RepMixerBlock(nn.Module):
             layer_scale_init_value: Layer scale value at initialization. Default: 1e-5
             inference_mode: Flag to instantiate block in inference mode. Default: ``False``
         """
-
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
 
         self.token_mixer = RepMixer(
@@ -928,6 +971,7 @@ class RepMixerBlock(nn.Module):
             kernel_size=kernel_size,
             layer_scale_init_value=layer_scale_init_value,
             inference_mode=inference_mode,
+            **dd,
         )
 
         self.mlp = ConvMlp(
@@ -935,9 +979,10 @@ class RepMixerBlock(nn.Module):
             hidden_channels=int(dim * mlp_ratio),
             act_layer=act_layer,
             drop=proj_drop,
+            **dd,
         )
         if layer_scale_init_value is not None:
-            self.layer_scale = LayerScale2d(dim, layer_scale_init_value)
+            self.layer_scale = LayerScale2d(dim, layer_scale_init_value, **dd)
         else:
             self.layer_scale = nn.Identity()
         self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
@@ -964,6 +1009,8 @@ class AttentionBlock(nn.Module):
             proj_drop: float = 0.0,
             drop_path: float = 0.0,
             layer_scale_init_value: float = 1e-5,
+            device=None,
+            dtype=None,
     ):
         """Build Attention Block.
 
@@ -976,13 +1023,13 @@ class AttentionBlock(nn.Module):
             drop_path: Drop path rate. Default: 0.0
             layer_scale_init_value: Layer scale value at initialization. Default: 1e-5
         """
-
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
 
-        self.norm = norm_layer(dim)
-        self.token_mixer = Attention(dim=dim)
+        self.norm = norm_layer(dim, **dd)
+        self.token_mixer = Attention(dim=dim, **dd)
         if layer_scale_init_value is not None:
-            self.layer_scale_1 = LayerScale2d(dim, layer_scale_init_value)
+            self.layer_scale_1 = LayerScale2d(dim, layer_scale_init_value, **dd)
         else:
             self.layer_scale_1 = nn.Identity()
         self.drop_path1 = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
@@ -992,9 +1039,10 @@ class AttentionBlock(nn.Module):
             hidden_channels=int(dim * mlp_ratio),
             act_layer=act_layer,
             drop=proj_drop,
+            **dd,
         )
         if layer_scale_init_value is not None:
-            self.layer_scale_2 = LayerScale2d(dim, layer_scale_init_value)
+            self.layer_scale_2 = LayerScale2d(dim, layer_scale_init_value, **dd)
         else:
             self.layer_scale_2 = nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
@@ -1026,6 +1074,8 @@ class FastVitStage(nn.Module):
             layer_scale_init_value: Optional[float] = 1e-5,
             lkc_use_act=False,
             inference_mode=False,
+            device=None,
+            dtype=None,
     ):
         """FastViT stage.
 
@@ -1043,6 +1093,7 @@ class FastVitStage(nn.Module):
             inference_mode: Flag to instantiate block in inference mode.
         """
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.grad_checkpointing = False
 
         if downsample:
@@ -1055,13 +1106,14 @@ class FastVitStage(nn.Module):
                 act_layer=act_layer,
                 lkc_use_act=lkc_use_act,
                 inference_mode=inference_mode,
+                **dd,
             )
         else:
             assert dim == dim_out
             self.downsample = nn.Identity()
 
         if pos_emb_layer is not None:
-            self.pos_emb = pos_emb_layer(dim_out, inference_mode=inference_mode)
+            self.pos_emb = pos_emb_layer(dim_out, inference_mode=inference_mode, **dd)
         else:
             self.pos_emb = nn.Identity()
 
@@ -1077,6 +1129,7 @@ class FastVitStage(nn.Module):
                     drop_path=drop_path_rate[block_idx],
                     layer_scale_init_value=layer_scale_init_value,
                     inference_mode=inference_mode,
+                    **dd,
                 ))
             elif token_mixer_type == "attention":
                 blocks.append(AttentionBlock(
@@ -1087,6 +1140,7 @@ class FastVitStage(nn.Module):
                     proj_drop=proj_drop_rate,
                     drop_path=drop_path_rate[block_idx],
                     layer_scale_init_value=layer_scale_init_value,
+                    **dd,
                 ))
             else:
                 raise ValueError(
@@ -1137,8 +1191,11 @@ class FastVit(nn.Module):
             norm_layer: Type[nn.Module] = nn.BatchNorm2d,
             act_layer: Type[nn.Module] = nn.GELU,
             inference_mode: bool = False,
+            device=None,
+            dtype=None,
     ) -> None:
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = 0 if fork_feat else num_classes
         self.fork_feat = fork_feat
         self.global_pool = global_pool
@@ -1151,6 +1208,7 @@ class FastVit(nn.Module):
             act_layer,
             inference_mode,
             use_scale_branch=stem_use_scale_branch,
+            **dd,
         )
 
         # Build the main stages of the network architecture
@@ -1179,6 +1237,7 @@ class FastVit(nn.Module):
                 layer_scale_init_value=layer_scale_init_value,
                 lkc_use_act=lkc_use_act,
                 inference_mode=inference_mode,
+                **dd,
             )
             stages.append(stage)
             prev_dim = embed_dims[i]
@@ -1202,7 +1261,7 @@ class FastVit(nn.Module):
                     """
                     layer = nn.Identity()
                 else:
-                    layer = norm_layer(embed_dims[i_emb])
+                    layer = norm_layer(embed_dims[i_emb], **dd)
                 layer_name = f"norm{i_layer}"
                 self.add_module(layer_name, layer)
         else:
@@ -1218,12 +1277,14 @@ class FastVit(nn.Module):
                 use_se=True,
                 act_layer=act_layer,
                 num_conv_branches=1,
+                **dd,
             )
             self.head = ClassifierHead(
                 final_features,
                 num_classes,
                 pool_type=global_pool,
                 drop_rate=drop_rate,
+                **dd,
             )
 
         self.apply(self._init_weights)
