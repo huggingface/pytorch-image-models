@@ -6,7 +6,7 @@ MetaFormer (https://github.com/sail-sg/metaformer),
 InceptionNeXt (https://github.com/sail-sg/inceptionnext)
 """
 from collections import OrderedDict
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Type, Union
 
 import torch
 from torch import nn
@@ -31,25 +31,30 @@ class Stem(nn.Module):
             mid_norm: bool = True,
             act_layer=nn.GELU,
             norm_layer=LayerNorm,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.conv1 = nn.Conv2d(
             in_chs,
             out_chs // 2,
             kernel_size=3,
             stride=2,
-            padding=1
+            padding=1,
+            **dd,
         )
-        self.norm1 = norm_layer(out_chs // 2) if mid_norm else None
+        self.norm1 = norm_layer(out_chs // 2, **dd) if mid_norm else None
         self.act = act_layer()
         self.conv2 = nn.Conv2d(
             out_chs // 2,
             out_chs,
             kernel_size=3,
             stride=2,
-            padding=1
+            padding=1,
+            **dd,
         )
-        self.norm2 = norm_layer(out_chs)
+        self.norm2 = norm_layer(out_chs, **dd)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -71,15 +76,19 @@ class DownsampleNormFirst(nn.Module):
             in_chs=96,
             out_chs=198,
             norm_layer=LayerNorm,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.norm = norm_layer(in_chs)
+        self.norm = norm_layer(in_chs, **dd)
         self.conv = nn.Conv2d(
             in_chs,
             out_chs,
             kernel_size=3,
             stride=2,
-            padding=1
+            padding=1,
+            **dd,
         )
 
     def forward(self, x):
@@ -97,16 +106,20 @@ class Downsample(nn.Module):
             in_chs=96,
             out_chs=198,
             norm_layer=LayerNorm,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.conv = nn.Conv2d(
             in_chs,
             out_chs,
             kernel_size=3,
             stride=2,
-            padding=1
+            padding=1,
+            **dd,
         )
-        self.norm = norm_layer(out_chs)
+        self.norm = norm_layer(out_chs, **dd)
 
     def forward(self, x):
         x = x.permute(0, 3, 1, 2)
@@ -130,7 +143,10 @@ class MlpHead(nn.Module):
             norm_layer=LayerNorm,
             drop_rate=0.,
             bias=True,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         if mlp_ratio is not None:
             hidden_size = int(mlp_ratio * in_features)
@@ -140,19 +156,19 @@ class MlpHead(nn.Module):
         self.in_features = in_features
         self.hidden_size = hidden_size or in_features
 
-        self.norm = norm_layer(in_features)
+        self.norm = norm_layer(in_features, **dd)
         if hidden_size:
             self.pre_logits = nn.Sequential(OrderedDict([
-                ('fc', nn.Linear(in_features, hidden_size)),
+                ('fc', nn.Linear(in_features, hidden_size, **dd)),
                 ('act', act_layer()),
-                ('norm', norm_layer(hidden_size))
+                ('norm', norm_layer(hidden_size, **dd))
             ]))
             self.num_features = hidden_size
         else:
             self.num_features = in_features
             self.pre_logits = nn.Identity()
 
-        self.fc = nn.Linear(self.num_features, num_classes, bias=bias) if num_classes > 0 else nn.Identity()
+        self.fc = nn.Linear(self.num_features, num_classes, bias=bias, **dd) if num_classes > 0 else nn.Identity()
         self.head_dropout = nn.Dropout(drop_rate)
 
     def reset(self, num_classes: int, pool_type: Optional[str] = None, reset_other: bool = False):
@@ -195,12 +211,15 @@ class GatedConvBlock(nn.Module):
             norm_layer=LayerNorm,
             act_layer=nn.GELU,
             drop_path=0.,
+            device=None,
+            dtype=None,
             **kwargs
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.norm = norm_layer(dim)
+        self.norm = norm_layer(dim, **dd)
         hidden = int(expansion_ratio * dim)
-        self.fc1 = nn.Linear(dim, hidden * 2)
+        self.fc1 = nn.Linear(dim, hidden * 2, **dd)
         self.act = act_layer()
         conv_channels = int(conv_ratio * dim)
         self.split_indices = (hidden, hidden - conv_channels, conv_channels)
@@ -209,10 +228,11 @@ class GatedConvBlock(nn.Module):
             conv_channels,
             kernel_size=kernel_size,
             padding=kernel_size // 2,
-            groups=conv_channels
+            groups=conv_channels,
+            **dd,
         )
-        self.fc2 = nn.Linear(hidden, dim)
-        self.ls = LayerScale(dim) if ls_init_value is not None else nn.Identity()
+        self.fc2 = nn.Linear(hidden, dim, **dd)
+        self.ls = LayerScale(dim, **dd) if ls_init_value is not None else nn.Identity()
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x):
@@ -233,26 +253,29 @@ class MambaOutStage(nn.Module):
 
     def __init__(
             self,
-            dim,
+            dim: int,
             dim_out: Optional[int] = None,
             depth: int = 4,
-            expansion_ratio=8 / 3,
-            kernel_size=7,
-            conv_ratio=1.0,
+            expansion_ratio: float = 8 / 3,
+            kernel_size: int = 7,
+            conv_ratio: float = 1.0,
             downsample: str = '',
             ls_init_value: Optional[float] = None,
-            norm_layer=LayerNorm,
-            act_layer=nn.GELU,
-            drop_path=0.,
+            norm_layer: Type[nn.Module] = LayerNorm,
+            act_layer: Type[nn.Module] = nn.GELU,
+            drop_path: float = 0.,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         dim_out = dim_out or dim
         self.grad_checkpointing = False
 
         if downsample == 'conv':
-            self.downsample = Downsample(dim, dim_out, norm_layer=norm_layer)
+            self.downsample = Downsample(dim, dim_out, norm_layer=norm_layer, **dd)
         elif downsample == 'conv_nf':
-            self.downsample = DownsampleNormFirst(dim, dim_out, norm_layer=norm_layer)
+            self.downsample = DownsampleNormFirst(dim, dim_out, norm_layer=norm_layer, **dd)
         else:
             assert dim == dim_out
             self.downsample = nn.Identity()
@@ -267,6 +290,7 @@ class MambaOutStage(nn.Module):
                 norm_layer=norm_layer,
                 act_layer=act_layer,
                 drop_path=drop_path[j] if isinstance(drop_path, (list, tuple)) else drop_path,
+                **dd,
             )
             for j in range(depth)
         ])
@@ -299,24 +323,27 @@ class MambaOut(nn.Module):
 
     def __init__(
             self,
-            in_chans=3,
-            num_classes=1000,
-            global_pool='avg',
-            depths=(3, 3, 9, 3),
-            dims=(96, 192, 384, 576),
-            norm_layer=LayerNorm,
-            act_layer=nn.GELU,
-            conv_ratio=1.0,
-            expansion_ratio=8/3,
-            kernel_size=7,
-            stem_mid_norm=True,
-            ls_init_value=None,
-            downsample='conv',
-            drop_path_rate=0.,
-            drop_rate=0.,
-            head_fn='default',
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            global_pool: str = 'avg',
+            depths: Tuple[int, ...] = (3, 3, 9, 3),
+            dims: Tuple[int, ...] = (96, 192, 384, 576),
+            norm_layer: Type[nn.Module] = LayerNorm,
+            act_layer: Type[nn.Module] = nn.GELU,
+            conv_ratio: float = 1.0,
+            expansion_ratio: float = 8/3,
+            kernel_size: int = 7,
+            stem_mid_norm: bool = True,
+            ls_init_value: Optional[float] = None,
+            downsample: str = 'conv',
+            drop_path_rate: float = 0.,
+            drop_rate: float = 0.,
+            head_fn: str = 'default',
+            device=None,
+            dtype=None,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.output_fmt = 'NHWC'
@@ -336,6 +363,7 @@ class MambaOut(nn.Module):
             mid_norm=stem_mid_norm,
             act_layer=act_layer,
             norm_layer=norm_layer,
+            **dd,
         )
         prev_dim = dims[0]
         dp_rates = calculate_drop_path_rates(drop_path_rate, depths, stagewise=True)
@@ -358,6 +386,7 @@ class MambaOut(nn.Module):
                 norm_layer=norm_layer,
                 act_layer=act_layer,
                 drop_path=dp_rates[i],
+                **dd,
             )
             self.stages.append(stage)
             prev_dim = dim
@@ -373,6 +402,7 @@ class MambaOut(nn.Module):
                 pool_type=global_pool,
                 drop_rate=drop_rate,
                 norm_layer=norm_layer,
+                **dd,
             )
         else:
             # more typical norm -> pool -> fc -> act -> fc
@@ -383,6 +413,7 @@ class MambaOut(nn.Module):
                 pool_type=global_pool,
                 norm_layer=norm_layer,
                 drop_rate=drop_rate,
+                **dd,
             )
         self.num_features = prev_dim
         self.head_hidden_size = self.head.num_features
