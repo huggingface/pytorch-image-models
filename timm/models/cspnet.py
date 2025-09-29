@@ -14,7 +14,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 """
 from dataclasses import dataclass, asdict, replace
 from functools import partial
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -138,31 +138,41 @@ class BottleneckBlock(nn.Module):
 
     def __init__(
             self,
-            in_chs,
-            out_chs,
-            dilation=1,
-            bottle_ratio=0.25,
-            groups=1,
-            act_layer=nn.ReLU,
-            norm_layer=nn.BatchNorm2d,
-            attn_last=False,
-            attn_layer=None,
-            drop_block=None,
-            drop_path=0.
+            in_chs: int,
+            out_chs: int,
+            dilation: int = 1,
+            bottle_ratio: float = 0.25,
+            groups: int = 1,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            attn_last: bool = False,
+            attn_layer: Optional[Type[nn.Module]] = None,
+            drop_block: Optional[Type[nn.Module]] = None,
+            drop_path: float = 0.,
+            device=None,
+            dtype=None,
     ):
-        super(BottleneckBlock, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         mid_chs = int(round(out_chs * bottle_ratio))
         ckwargs = dict(act_layer=act_layer, norm_layer=norm_layer)
         attn_last = attn_layer is not None and attn_last
         attn_first = attn_layer is not None and not attn_last
 
-        self.conv1 = ConvNormAct(in_chs, mid_chs, kernel_size=1, **ckwargs)
+        self.conv1 = ConvNormAct(in_chs, mid_chs, kernel_size=1, **ckwargs, **dd)
         self.conv2 = ConvNormAct(
-            mid_chs, mid_chs, kernel_size=3, dilation=dilation, groups=groups,
-            drop_layer=drop_block, **ckwargs)
-        self.attn2 = attn_layer(mid_chs, act_layer=act_layer) if attn_first else nn.Identity()
-        self.conv3 = ConvNormAct(mid_chs, out_chs, kernel_size=1, apply_act=False, **ckwargs)
-        self.attn3 = attn_layer(out_chs, act_layer=act_layer) if attn_last else nn.Identity()
+            mid_chs,
+            mid_chs,
+            kernel_size=3,
+            dilation=dilation,
+            groups=groups,
+            drop_layer=drop_block,
+            **ckwargs,
+            **dd,
+        )
+        self.attn2 = attn_layer(mid_chs, act_layer=act_layer, **dd) if attn_first else nn.Identity()
+        self.conv3 = ConvNormAct(mid_chs, out_chs, kernel_size=1, apply_act=False, **ckwargs, **dd)
+        self.attn3 = attn_layer(out_chs, act_layer=act_layer, **dd) if attn_last else nn.Identity()
         self.drop_path = DropPath(drop_path) if drop_path else nn.Identity()
         self.act3 = create_act_layer(act_layer)
 
@@ -189,26 +199,36 @@ class DarkBlock(nn.Module):
 
     def __init__(
             self,
-            in_chs,
-            out_chs,
-            dilation=1,
-            bottle_ratio=0.5,
-            groups=1,
-            act_layer=nn.ReLU,
-            norm_layer=nn.BatchNorm2d,
-            attn_layer=None,
-            drop_block=None,
-            drop_path=0.
+            in_chs: int,
+            out_chs: int,
+            dilation: int = 1,
+            bottle_ratio: float = 0.5,
+            groups: int = 1,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            attn_layer: Optional[Type[nn.Module]] = None,
+            drop_block: Optional[Type[nn.Module]] = None,
+            drop_path: float = 0.,
+            device=None,
+            dtype=None,
     ):
-        super(DarkBlock, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         mid_chs = int(round(out_chs * bottle_ratio))
         ckwargs = dict(act_layer=act_layer, norm_layer=norm_layer)
 
-        self.conv1 = ConvNormAct(in_chs, mid_chs, kernel_size=1, **ckwargs)
-        self.attn = attn_layer(mid_chs, act_layer=act_layer) if attn_layer is not None else nn.Identity()
+        self.conv1 = ConvNormAct(in_chs, mid_chs, kernel_size=1, **ckwargs, **dd)
+        self.attn = attn_layer(mid_chs, act_layer=act_layer, **dd) if attn_layer is not None else nn.Identity()
         self.conv2 = ConvNormAct(
-            mid_chs, out_chs, kernel_size=3, dilation=dilation, groups=groups,
-            drop_layer=drop_block, **ckwargs)
+            mid_chs,
+            out_chs,
+            kernel_size=3,
+            dilation=dilation,
+            groups=groups,
+            drop_layer=drop_block,
+            **ckwargs,
+            **dd,
+        )
         self.drop_path = DropPath(drop_path) if drop_path else nn.Identity()
 
     def zero_init_last(self):
@@ -229,26 +249,36 @@ class EdgeBlock(nn.Module):
 
     def __init__(
             self,
-            in_chs,
-            out_chs,
-            dilation=1,
-            bottle_ratio=0.5,
-            groups=1,
-            act_layer=nn.ReLU,
-            norm_layer=nn.BatchNorm2d,
-            attn_layer=None,
-            drop_block=None,
-            drop_path=0.
+            in_chs: int,
+            out_chs: int,
+            dilation: int = 1,
+            bottle_ratio: float = 0.5,
+            groups: int = 1,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            attn_layer: Optional[Type[nn.Module]] = None,
+            drop_block: Optional[Type[nn.Module]] = None,
+            drop_path: float = 0.,
+            device=None,
+            dtype=None,
     ):
-        super(EdgeBlock, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         mid_chs = int(round(out_chs * bottle_ratio))
         ckwargs = dict(act_layer=act_layer, norm_layer=norm_layer)
 
         self.conv1 = ConvNormAct(
-            in_chs, mid_chs, kernel_size=3, dilation=dilation, groups=groups,
-            drop_layer=drop_block, **ckwargs)
-        self.attn = attn_layer(mid_chs, act_layer=act_layer) if attn_layer is not None else nn.Identity()
-        self.conv2 = ConvNormAct(mid_chs, out_chs, kernel_size=1, **ckwargs)
+            in_chs,
+            mid_chs,
+            kernel_size=3,
+            dilation=dilation,
+            groups=groups,
+            drop_layer=drop_block,
+            **ckwargs,
+            **dd,
+        )
+        self.attn = attn_layer(mid_chs, act_layer=act_layer, **dd) if attn_layer is not None else nn.Identity()
+        self.conv2 = ConvNormAct(mid_chs, out_chs, kernel_size=1, **ckwargs, **dd)
         self.drop_path = DropPath(drop_path) if drop_path else nn.Identity()
 
     def zero_init_last(self):
@@ -267,24 +297,27 @@ class CrossStage(nn.Module):
     """Cross Stage."""
     def __init__(
             self,
-            in_chs,
-            out_chs,
-            stride,
-            dilation,
-            depth,
-            block_ratio=1.,
-            bottle_ratio=1.,
-            expand_ratio=1.,
-            groups=1,
-            first_dilation=None,
-            avg_down=False,
-            down_growth=False,
-            cross_linear=False,
-            block_dpr=None,
-            block_fn=BottleneckBlock,
+            in_chs: int,
+            out_chs: int,
+            stride: int,
+            dilation: int,
+            depth: int,
+            block_ratio: float = 1.,
+            bottle_ratio: float = 1.,
+            expand_ratio: float = 1.,
+            groups: int = 1,
+            first_dilation: Optional[int] = None,
+            avg_down: bool = False,
+            down_growth: bool = False,
+            cross_linear: bool = False,
+            block_dpr: Optional[List[float]] = None,
+            block_fn: Type[nn.Module] = BottleneckBlock,
+            device=None,
+            dtype=None,
             **block_kwargs,
     ):
-        super(CrossStage, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         first_dilation = first_dilation or dilation
         down_chs = out_chs if down_growth else in_chs  # grow downsample channels to output channels
         self.expand_chs = exp_chs = int(round(out_chs * expand_ratio))
@@ -296,12 +329,20 @@ class CrossStage(nn.Module):
             if avg_down:
                 self.conv_down = nn.Sequential(
                     nn.AvgPool2d(2) if stride == 2 else nn.Identity(),  # FIXME dilation handling
-                    ConvNormAct(in_chs, out_chs, kernel_size=1, stride=1, groups=groups, **conv_kwargs)
+                    ConvNormAct(in_chs, out_chs, kernel_size=1, stride=1, groups=groups, **conv_kwargs, **dd)
                 )
             else:
                 self.conv_down = ConvNormAct(
-                    in_chs, down_chs, kernel_size=3, stride=stride, dilation=first_dilation, groups=groups,
-                    aa_layer=aa_layer, **conv_kwargs)
+                    in_chs,
+                    down_chs,
+                    kernel_size=3,
+                    stride=stride,
+                    dilation=first_dilation,
+                    groups=groups,
+                    aa_layer=aa_layer,
+                    **conv_kwargs,
+                    **dd,
+                )
             prev_chs = down_chs
         else:
             self.conv_down = nn.Identity()
@@ -310,7 +351,14 @@ class CrossStage(nn.Module):
         # FIXME this 1x1 expansion is pushed down into the cross and block paths in the darknet cfgs. Also,
         # there is also special case for the first stage for some of the model that results in uneven split
         # across the two paths. I did it this way for simplicity for now.
-        self.conv_exp = ConvNormAct(prev_chs, exp_chs, kernel_size=1, apply_act=not cross_linear, **conv_kwargs)
+        self.conv_exp = ConvNormAct(
+            prev_chs,
+            exp_chs,
+            kernel_size=1,
+            apply_act=not cross_linear,
+            **conv_kwargs,
+            **dd,
+        )
         prev_chs = exp_chs // 2  # output of conv_exp is always split in two
 
         self.blocks = nn.Sequential()
@@ -323,12 +371,13 @@ class CrossStage(nn.Module):
                 groups=groups,
                 drop_path=block_dpr[i] if block_dpr is not None else 0.,
                 **block_kwargs,
+                **dd,
             ))
             prev_chs = block_out_chs
 
         # transition convs
-        self.conv_transition_b = ConvNormAct(prev_chs, exp_chs // 2, kernel_size=1, **conv_kwargs)
-        self.conv_transition = ConvNormAct(exp_chs, out_chs, kernel_size=1, **conv_kwargs)
+        self.conv_transition_b = ConvNormAct(prev_chs, exp_chs // 2, kernel_size=1, **conv_kwargs, **dd)
+        self.conv_transition = ConvNormAct(exp_chs, out_chs, kernel_size=1, **conv_kwargs, **dd)
 
     def forward(self, x):
         x = self.conv_down(x)
@@ -346,24 +395,27 @@ class CrossStage3(nn.Module):
     """
     def __init__(
             self,
-            in_chs,
-            out_chs,
-            stride,
-            dilation,
-            depth,
-            block_ratio=1.,
-            bottle_ratio=1.,
-            expand_ratio=1.,
-            groups=1,
-            first_dilation=None,
-            avg_down=False,
-            down_growth=False,
-            cross_linear=False,
-            block_dpr=None,
-            block_fn=BottleneckBlock,
+            in_chs: int,
+            out_chs: int,
+            stride: int,
+            dilation: int,
+            depth: int,
+            block_ratio: float = 1.,
+            bottle_ratio: float = 1.,
+            expand_ratio: float = 1.,
+            groups: int = 1,
+            first_dilation: Optional[int] = None,
+            avg_down: bool = False,
+            down_growth: bool = False,
+            cross_linear: bool = False,
+            block_dpr: Optional[List[float]] = None,
+            block_fn: Type[nn.Module] = BottleneckBlock,
+            device=None,
+            dtype=None,
             **block_kwargs,
     ):
-        super(CrossStage3, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         first_dilation = first_dilation or dilation
         down_chs = out_chs if down_growth else in_chs  # grow downsample channels to output channels
         self.expand_chs = exp_chs = int(round(out_chs * expand_ratio))
@@ -375,19 +427,34 @@ class CrossStage3(nn.Module):
             if avg_down:
                 self.conv_down = nn.Sequential(
                     nn.AvgPool2d(2) if stride == 2 else nn.Identity(),  # FIXME dilation handling
-                    ConvNormAct(in_chs, out_chs, kernel_size=1, stride=1, groups=groups, **conv_kwargs)
+                    ConvNormAct(in_chs, out_chs, kernel_size=1, stride=1, groups=groups, **conv_kwargs, **dd)
                 )
             else:
                 self.conv_down = ConvNormAct(
-                    in_chs, down_chs, kernel_size=3, stride=stride, dilation=first_dilation, groups=groups,
-                    aa_layer=aa_layer, **conv_kwargs)
+                    in_chs,
+                    down_chs,
+                    kernel_size=3,
+                    stride=stride,
+                    dilation=first_dilation,
+                    groups=groups,
+                    aa_layer=aa_layer,
+                    **conv_kwargs,
+                    **dd,
+                )
             prev_chs = down_chs
         else:
             self.conv_down = None
             prev_chs = in_chs
 
         # expansion conv
-        self.conv_exp = ConvNormAct(prev_chs, exp_chs, kernel_size=1, apply_act=not cross_linear, **conv_kwargs)
+        self.conv_exp = ConvNormAct(
+            prev_chs,
+            exp_chs,
+            kernel_size=1,
+            apply_act=not cross_linear,
+            **conv_kwargs,
+            **dd,
+        )
         prev_chs = exp_chs // 2  # expanded output is split in 2 for blocks and cross stage
 
         self.blocks = nn.Sequential()
@@ -400,11 +467,12 @@ class CrossStage3(nn.Module):
                 groups=groups,
                 drop_path=block_dpr[i] if block_dpr is not None else 0.,
                 **block_kwargs,
+                **dd,
             ))
             prev_chs = block_out_chs
 
         # transition convs
-        self.conv_transition = ConvNormAct(exp_chs, out_chs, kernel_size=1, **conv_kwargs)
+        self.conv_transition = ConvNormAct(exp_chs, out_chs, kernel_size=1, **conv_kwargs, **dd)
 
     def forward(self, x):
         x = self.conv_down(x)
@@ -420,21 +488,22 @@ class DarkStage(nn.Module):
 
     def __init__(
             self,
-            in_chs,
-            out_chs,
-            stride,
-            dilation,
-            depth,
-            block_ratio=1.,
-            bottle_ratio=1.,
-            groups=1,
-            first_dilation=None,
-            avg_down=False,
-            block_fn=BottleneckBlock,
-            block_dpr=None,
+            in_chs: int,
+            out_chs: int,
+            stride: int,
+            dilation: int,
+            depth: int,
+            block_ratio: float = 1.,
+            bottle_ratio: float = 1.,
+            groups: int = 1,
+            first_dilation: Optional[int] = None,
+            avg_down: bool = False,
+            block_fn: Type[nn.Module] = BottleneckBlock,
+            block_dpr: Optional[List[float]] = None,
             **block_kwargs,
     ):
-        super(DarkStage, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         first_dilation = first_dilation or dilation
         conv_kwargs = dict(act_layer=block_kwargs.get('act_layer'), norm_layer=block_kwargs.get('norm_layer'))
         aa_layer = block_kwargs.pop('aa_layer', None)
@@ -442,12 +511,20 @@ class DarkStage(nn.Module):
         if avg_down:
             self.conv_down = nn.Sequential(
                 nn.AvgPool2d(2) if stride == 2 else nn.Identity(),   # FIXME dilation handling
-                ConvNormAct(in_chs, out_chs, kernel_size=1, stride=1, groups=groups, **conv_kwargs)
+                ConvNormAct(in_chs, out_chs, kernel_size=1, stride=1, groups=groups, **conv_kwargs, **dd)
             )
         else:
             self.conv_down = ConvNormAct(
-                in_chs, out_chs, kernel_size=3, stride=stride, dilation=first_dilation, groups=groups,
-                aa_layer=aa_layer, **conv_kwargs)
+                in_chs,
+                out_chs,
+                kernel_size=3,
+                stride=stride,
+                dilation=first_dilation,
+                groups=groups,
+                aa_layer=aa_layer,
+                **conv_kwargs,
+                **dd,
+            )
 
         prev_chs = out_chs
         block_out_chs = int(round(out_chs * block_ratio))
@@ -460,7 +537,8 @@ class DarkStage(nn.Module):
                 bottle_ratio=bottle_ratio,
                 groups=groups,
                 drop_path=block_dpr[i] if block_dpr is not None else 0.,
-                **block_kwargs
+                **block_kwargs,
+                **dd,
             ))
             prev_chs = block_out_chs
 
@@ -471,16 +549,19 @@ class DarkStage(nn.Module):
 
 
 def create_csp_stem(
-        in_chans=3,
-        out_chs=32,
-        kernel_size=3,
-        stride=2,
-        pool='',
-        padding='',
-        act_layer=nn.ReLU,
-        norm_layer=nn.BatchNorm2d,
-        aa_layer=None,
+        in_chans: int = 3,
+        out_chs: int = 32,
+        kernel_size: int = 3,
+        stride: int = 2,
+        pool: str = '',
+        padding: str = '',
+        act_layer: Type[nn.Module] = nn.ReLU,
+        norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+        aa_layer: Optional[Type[nn.Module]] = None,
+        device=None,
+        dtype=None,
 ):
+    dd = {'device': device, 'dtype': dtype}
     stem = nn.Sequential()
     feature_info = []
     if not isinstance(out_chs, (tuple, list)):
@@ -503,6 +584,7 @@ def create_csp_stem(
             padding=padding if i == 0 else '',
             act_layer=act_layer,
             norm_layer=norm_layer,
+            **dd,
         ))
         stem_stride *= conv_stride
         prev_chs = chs
@@ -513,7 +595,7 @@ def create_csp_stem(
             feature_info.append(prev_feat)
         if aa_layer is not None:
             stem.add_module('pool', nn.MaxPool2d(kernel_size=3, stride=1, padding=1))
-            stem.add_module('aa', aa_layer(channels=prev_chs, stride=2))
+            stem.add_module('aa', aa_layer(channels=prev_chs, stride=2, **dd))
             pool_name = 'aa'
         else:
             stem.add_module('pool', nn.MaxPool2d(kernel_size=3, stride=2, padding=1))
@@ -565,7 +647,10 @@ def create_csp_stages(
         drop_path_rate: float,
         output_stride: int,
         stem_feat: Dict[str, Any],
+        device=None,
+        dtype=None,
 ):
+    dd = {'device': device, 'dtype': dtype}
     cfg_dict = asdict(cfg.stages)
     num_stages = len(cfg.stages.depth)
     cfg_dict['block_dpr'] = [None] * num_stages if not drop_path_rate else \
@@ -605,6 +690,7 @@ def create_csp_stages(
             aa_layer=cfg.aa_layer,
             attn_layer=attn_fn,  # will be passed through stage as block_kwargs
             **block_kwargs,
+            **dd,
         )]
         prev_chs = stage_args['out_chs']
         prev_feat = dict(num_chs=prev_chs, reduction=net_stride, module=f'stages.{stage_idx}')
@@ -626,13 +712,15 @@ class CspNet(nn.Module):
     def __init__(
             self,
             cfg: CspModelCfg,
-            in_chans=3,
-            num_classes=1000,
-            output_stride=32,
-            global_pool='avg',
-            drop_rate=0.,
-            drop_path_rate=0.,
-            zero_init_last=True,
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            output_stride: int = 32,
+            global_pool: str = 'avg',
+            drop_rate: float = 0.,
+            drop_path_rate: float = 0.,
+            zero_init_last: bool = True,
+            device=None,
+            dtype=None,
             **kwargs,
     ):
         """
@@ -648,6 +736,7 @@ class CspNet(nn.Module):
             kwargs (dict): Extra kwargs overlayed onto cfg
         """
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         assert output_stride in (8, 16, 32)
@@ -661,7 +750,7 @@ class CspNet(nn.Module):
         self.feature_info = []
 
         # Construct the stem
-        self.stem, stem_feat_info = create_csp_stem(in_chans, **asdict(cfg.stem), **layer_args)
+        self.stem, stem_feat_info = create_csp_stem(in_chans, **asdict(cfg.stem), **layer_args, **dd)
         self.feature_info.extend(stem_feat_info[:-1])
 
         # Construct the stages
@@ -670,6 +759,7 @@ class CspNet(nn.Module):
             drop_path_rate=drop_path_rate,
             output_stride=output_stride,
             stem_feat=stem_feat_info[-1],
+            **dd,
         )
         prev_chs = stage_feat_info[-1]['num_chs']
         self.feature_info.extend(stage_feat_info)
@@ -681,6 +771,7 @@ class CspNet(nn.Module):
             num_classes=num_classes,
             pool_type=global_pool,
             drop_rate=drop_rate,
+            **dd,
         )
 
         named_apply(partial(_init_weights, zero_init_last=zero_init_last), self)
