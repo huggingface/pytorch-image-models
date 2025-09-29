@@ -341,7 +341,7 @@ class InceptionV4(nn.Module):
     def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
         self.num_classes = num_classes
         self.global_pool, self.last_linear = create_classifier(
-            self.num_features, self.num_classes, pool_type=global_pool, **dd)
+            self.num_features, self.num_classes, pool_type=global_pool)
 
     def forward_intermediates(
             self,
