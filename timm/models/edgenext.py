@@ -9,7 +9,7 @@ Modifications and additions for timm by / Copyright 2022, Ross Wightman
 """
 import math
 from functools import partial
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn.functional as F
@@ -29,9 +29,17 @@ __all__ = ['EdgeNeXt']  # model_registry will add each entrypoint fn to this
 
 @register_notrace_module  # reason: FX can't symbolically trace torch.arange in forward method
 class PositionalEncodingFourier(nn.Module):
-    def __init__(self, hidden_dim=32, dim=768, temperature=10000):
+    def __init__(
+            self,
+            hidden_dim: int = 32,
+            dim: int = 768,
+            temperature: float = 10000.,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.token_projection = nn.Conv2d(hidden_dim * 2, dim, kernel_size=1)
+        self.token_projection = nn.Conv2d(hidden_dim * 2, dim, kernel_size=1, **dd)
         self.scale = 2 * math.pi
         self.temperature = temperature
         self.hidden_dim = hidden_dim
@@ -67,25 +75,41 @@ class PositionalEncodingFourier(nn.Module):
 class ConvBlock(nn.Module):
     def __init__(
             self,
-            dim,
-            dim_out=None,
-            kernel_size=7,
-            stride=1,
-            conv_bias=True,
-            expand_ratio=4,
-            ls_init_value=1e-6,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6),
-            act_layer=nn.GELU, drop_path=0.,
+            dim: int,
+            dim_out: Optional[int] = None,
+            kernel_size: int = 7,
+            stride: int = 1,
+            conv_bias: bool = True,
+            expand_ratio: float = 4,
+            ls_init_value: float = 1e-6,
+            norm_layer: Type[nn.Module] = partial(nn.LayerNorm, eps=1e-6),
+            act_layer: Type[nn.Module] = nn.GELU,
+            drop_path: float = 0.,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         dim_out = dim_out or dim
         self.shortcut_after_dw = stride > 1 or dim != dim_out
 
         self.conv_dw = create_conv2d(
-            dim, dim_out, kernel_size=kernel_size, stride=stride, depthwise=True, bias=conv_bias)
-        self.norm = norm_layer(dim_out)
-        self.mlp = Mlp(dim_out, int(expand_ratio * dim_out), act_layer=act_layer)
-        self.gamma = nn.Parameter(ls_init_value * torch.ones(dim_out)) if ls_init_value > 0 else None
+            dim,
+            dim_out,
+            kernel_size=kernel_size,
+            stride=stride,
+            depthwise=True,
+            bias=conv_bias,
+            **dd,
+        )
+        self.norm = norm_layer(dim_out, **dd)
+        self.mlp = Mlp(
+            dim_out,
+            int(expand_ratio * dim_out),
+            act_layer=act_layer,
+            **dd,
+        )
+        self.gamma = nn.Parameter(ls_init_value * torch.ones(dim_out, **dd)) if ls_init_value > 0 else None
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x):
@@ -108,19 +132,22 @@ class ConvBlock(nn.Module):
 class CrossCovarianceAttn(nn.Module):
     def __init__(
             self,
-            dim,
-            num_heads=8,
-            qkv_bias=False,
-            attn_drop=0.,
-            proj_drop=0.
+            dim: int,
+            num_heads: int = 8,
+            qkv_bias: bool = False,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.num_heads = num_heads
-        self.temperature = nn.Parameter(torch.ones(num_heads, 1, 1))
+        self.temperature = nn.Parameter(torch.ones(num_heads, 1, 1, **dd))
 
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias, **dd)
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
+        self.proj = nn.Linear(dim, dim, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, x):
@@ -147,20 +174,23 @@ class CrossCovarianceAttn(nn.Module):
 class SplitTransposeBlock(nn.Module):
     def __init__(
             self,
-            dim,
-            num_scales=1,
-            num_heads=8,
-            expand_ratio=4,
-            use_pos_emb=True,
-            conv_bias=True,
-            qkv_bias=True,
-            ls_init_value=1e-6,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6),
-            act_layer=nn.GELU,
-            drop_path=0.,
-            attn_drop=0.,
-            proj_drop=0.
+            dim: int,
+            num_scales: int = 1,
+            num_heads: int = 8,
+            expand_ratio: float = 4,
+            use_pos_emb: bool = True,
+            conv_bias: bool = True,
+            qkv_bias: bool = True,
+            ls_init_value: float = 1e-6,
+            norm_layer: Type[nn.Module] = partial(nn.LayerNorm, eps=1e-6),
+            act_layer: Type[nn.Module] = nn.GELU,
+            drop_path: float = 0.,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         width = max(int(math.ceil(dim / num_scales)), int(math.floor(dim // num_scales)))
         self.width = width
@@ -168,20 +198,31 @@ class SplitTransposeBlock(nn.Module):
 
         convs = []
         for i in range(self.num_scales):
-            convs.append(create_conv2d(width, width, kernel_size=3, depthwise=True, bias=conv_bias))
+            convs.append(create_conv2d(width, width, kernel_size=3, depthwise=True, bias=conv_bias, **dd))
         self.convs = nn.ModuleList(convs)
 
         self.pos_embd = None
         if use_pos_emb:
-            self.pos_embd = PositionalEncodingFourier(dim=dim)
-        self.norm_xca = norm_layer(dim)
-        self.gamma_xca = nn.Parameter(ls_init_value * torch.ones(dim)) if ls_init_value > 0 else None
+            self.pos_embd = PositionalEncodingFourier(dim=dim, **dd)
+        self.norm_xca = norm_layer(dim, **dd)
+        self.gamma_xca = nn.Parameter(ls_init_value * torch.ones(dim, **dd)) if ls_init_value > 0 else None
         self.xca = CrossCovarianceAttn(
-            dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=proj_drop)
+            dim,
+            num_heads=num_heads,
+            qkv_bias=qkv_bias,
+            attn_drop=attn_drop,
+            proj_drop=proj_drop,
+            **dd,
+        )
 
-        self.norm = norm_layer(dim, eps=1e-6)
-        self.mlp = Mlp(dim, int(expand_ratio * dim), act_layer=act_layer)
-        self.gamma = nn.Parameter(ls_init_value * torch.ones(dim)) if ls_init_value > 0 else None
+        self.norm = norm_layer(dim, eps=1e-6, **dd)
+        self.mlp = Mlp(
+            dim,
+            int(expand_ratio * dim),
+            act_layer=act_layer,
+            **dd,
+        )
+        self.gamma = nn.Parameter(ls_init_value * torch.ones(dim, **dd)) if ls_init_value > 0 else None
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x):
@@ -223,24 +264,27 @@ class SplitTransposeBlock(nn.Module):
 class EdgeNeXtStage(nn.Module):
     def __init__(
             self,
-            in_chs,
-            out_chs,
-            stride=2,
-            depth=2,
-            num_global_blocks=1,
-            num_heads=4,
-            scales=2,
-            kernel_size=7,
-            expand_ratio=4,
-            use_pos_emb=False,
-            downsample_block=False,
-            conv_bias=True,
-            ls_init_value=1.0,
-            drop_path_rates=None,
-            norm_layer=LayerNorm2d,
-            norm_layer_cl=partial(nn.LayerNorm, eps=1e-6),
-            act_layer=nn.GELU
+            in_chs: int,
+            out_chs: int,
+            stride: int = 2,
+            depth: int = 2,
+            num_global_blocks: int = 1,
+            num_heads: int = 4,
+            scales: int = 2,
+            kernel_size: int = 7,
+            expand_ratio: float = 4,
+            use_pos_emb: bool = False,
+            downsample_block: bool = False,
+            conv_bias: float = True,
+            ls_init_value: float = 1.0,
+            drop_path_rates: Optional[List[float]] = None,
+            norm_layer: Type[nn.Module] = LayerNorm2d,
+            norm_layer_cl: Type[nn.Module] = partial(nn.LayerNorm, eps=1e-6),
+            act_layer: Type[nn.Module] = nn.GELU,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.grad_checkpointing = False
 
@@ -248,8 +292,8 @@ class EdgeNeXtStage(nn.Module):
             self.downsample = nn.Identity()
         else:
             self.downsample = nn.Sequential(
-                norm_layer(in_chs),
-                nn.Conv2d(in_chs, out_chs, kernel_size=2, stride=2, bias=conv_bias)
+                norm_layer(in_chs, **dd),
+                nn.Conv2d(in_chs, out_chs, kernel_size=2, stride=2, bias=conv_bias, **dd)
             )
             in_chs = out_chs
 
@@ -268,6 +312,7 @@ class EdgeNeXtStage(nn.Module):
                         drop_path=drop_path_rates[i],
                         norm_layer=norm_layer_cl,
                         act_layer=act_layer,
+                        **dd,
                     )
                 )
             else:
@@ -283,6 +328,7 @@ class EdgeNeXtStage(nn.Module):
                         drop_path=drop_path_rates[i],
                         norm_layer=norm_layer_cl,
                         act_layer=act_layer,
+                        **dd,
                     )
                 )
             in_chs = out_chs
@@ -300,28 +346,31 @@ class EdgeNeXtStage(nn.Module):
 class EdgeNeXt(nn.Module):
     def __init__(
             self,
-            in_chans=3,
-            num_classes=1000,
-            global_pool='avg',
-            dims=(24, 48, 88, 168),
-            depths=(3, 3, 9, 3),
-            global_block_counts=(0, 1, 1, 1),
-            kernel_sizes=(3, 5, 7, 9),
-            heads=(8, 8, 8, 8),
-            d2_scales=(2, 2, 3, 4),
-            use_pos_emb=(False, True, False, False),
-            ls_init_value=1e-6,
-            head_init_scale=1.,
-            expand_ratio=4,
-            downsample_block=False,
-            conv_bias=True,
-            stem_type='patch',
-            head_norm_first=False,
-            act_layer=nn.GELU,
-            drop_path_rate=0.,
-            drop_rate=0.,
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            global_pool: str = 'avg',
+            dims: Tuple[int, ...] = (24, 48, 88, 168),
+            depths: Tuple[int, ...] = (3, 3, 9, 3),
+            global_block_counts: Tuple[int, ...] = (0, 1, 1, 1),
+            kernel_sizes: Tuple[int, ...] = (3, 5, 7, 9),
+            heads: Tuple[int, ...] = (8, 8, 8, 8),
+            d2_scales: Tuple[int, ...] = (2, 2, 3, 4),
+            use_pos_emb: Tuple[bool, ...] = (False, True, False, False),
+            ls_init_value: float = 1e-6,
+            head_init_scale: float = 1.,
+            expand_ratio: float = 4,
+            downsample_block: bool = False,
+            conv_bias: bool = True,
+            stem_type: str = 'patch',
+            head_norm_first: bool = False,
+            act_layer: Type[nn.Module] = nn.GELU,
+            drop_path_rate: float = 0.,
+            drop_rate: float = 0.,
+            device=None,
+            dtype=None,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.global_pool = global_pool
         self.drop_rate = drop_rate
@@ -332,13 +381,13 @@ class EdgeNeXt(nn.Module):
         assert stem_type in ('patch', 'overlap')
         if stem_type == 'patch':
             self.stem = nn.Sequential(
-                nn.Conv2d(in_chans, dims[0], kernel_size=4, stride=4, bias=conv_bias),
-                norm_layer(dims[0]),
+                nn.Conv2d(in_chans, dims[0], kernel_size=4, stride=4, bias=conv_bias, **dd,),
+                norm_layer(dims[0], **dd),
             )
         else:
             self.stem = nn.Sequential(
-                nn.Conv2d(in_chans, dims[0], kernel_size=9, stride=4, padding=9 // 2, bias=conv_bias),
-                norm_layer(dims[0]),
+                nn.Conv2d(in_chans, dims[0], kernel_size=9, stride=4, padding=9 // 2, bias=conv_bias, **dd),
+                norm_layer(dims[0], **dd),
             )
 
         curr_stride = 4
@@ -367,6 +416,7 @@ class EdgeNeXt(nn.Module):
                 norm_layer=norm_layer,
                 norm_layer_cl=norm_layer_cl,
                 act_layer=act_layer,
+                **dd,
             ))
             # NOTE feature_info use currently assumes stage 0 == stride 1, rest are stride 2
             in_chs = dims[i]
@@ -376,12 +426,13 @@ class EdgeNeXt(nn.Module):
 
         self.num_features = self.head_hidden_size = dims[-1]
         if head_norm_first:
-            self.norm_pre = norm_layer(self.num_features)
+            self.norm_pre = norm_layer(self.num_features, **dd)
             self.head = ClassifierHead(
                 self.num_features,
                 num_classes,
                 pool_type=global_pool,
                 drop_rate=self.drop_rate,
+                **dd,
             )
         else:
             self.norm_pre = nn.Identity()
@@ -391,6 +442,7 @@ class EdgeNeXt(nn.Module):
                 pool_type=global_pool,
                 drop_rate=self.drop_rate,
                 norm_layer=norm_layer,
+                **dd,
             )
 
         named_apply(partial(_init_weights, head_init_scale=head_init_scale), self)

@@ -38,9 +38,22 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from timm.layers import (
-    ClassifierHead, NormMlpClassifierHead, ConvNormAct, BatchNormAct2d, EvoNorm2dS0a,
-    AttentionPool2d, RotAttentionPool2d, DropPath, calculate_drop_path_rates, AvgPool2dSame,
-    create_conv2d, get_act_layer, get_norm_act_layer, get_attn, make_divisible, to_2tuple,
+    ClassifierHead,
+    NormMlpClassifierHead,
+    ConvNormAct,
+    BatchNormAct2d,
+    EvoNorm2dS0a,
+    AttentionPool2d,
+    RotAttentionPool2d,
+    DropPath,
+    calculate_drop_path_rates,
+    AvgPool2dSame,
+    create_conv2d,
+    get_act_layer,
+    get_norm_act_layer,
+    get_attn,
+    make_divisible,
+    to_2tuple,
 )
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
@@ -253,6 +266,8 @@ class DownsampleAvg(nn.Module):
             dilation: int = 1,
             apply_act: bool = False,
             layers: Optional[LayerFn] = None,
+            device=None,
+            dtype=None,
     ):
         """Initialize DownsampleAvg.
 
@@ -264,15 +279,16 @@ class DownsampleAvg(nn.Module):
             apply_act: Whether to apply activation.
             layers: Layer factory functions.
         """
-        super(DownsampleAvg, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         layers = layers or LayerFn()
         avg_stride = stride if dilation == 1 else 1
         if stride > 1 or dilation > 1:
             avg_pool_fn = AvgPool2dSame if avg_stride == 1 and dilation > 1 else nn.AvgPool2d
-            self.pool = avg_pool_fn(2, avg_stride, ceil_mode=True, count_include_pad=False)
+            self.pool = avg_pool_fn(2, avg_stride, ceil_mode=True, count_include_pad=False, **dd)
         else:
             self.pool = nn.Identity()
-        self.conv = layers.conv_norm_act(in_chs, out_chs, 1, apply_act=apply_act)
+        self.conv = layers.conv_norm_act(in_chs, out_chs, 1, apply_act=apply_act, **dd)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass.
@@ -340,24 +356,39 @@ class BasicBlock(nn.Module):
             layers: LayerFn = None,
             drop_block: Callable = None,
             drop_path_rate: float = 0.,
+            device=None,
+            dtype=None,
     ):
-        super(BasicBlock, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         layers = layers or LayerFn()
         mid_chs = make_divisible(out_chs * bottle_ratio)
         groups = num_groups(group_size, mid_chs)
 
         self.shortcut = create_shortcut(
-            downsample, in_chs, out_chs,
-            stride=stride, dilation=dilation, apply_act=False, layers=layers,
+            downsample,
+            in_chs,
+            out_chs,
+            stride=stride,
+            dilation=dilation,
+            apply_act=False,
+            layers=layers,
+            **dd,
         )
 
-        self.conv1_kxk = layers.conv_norm_act(in_chs, mid_chs, kernel_size, stride=stride, dilation=dilation[0])
+        self.conv1_kxk = layers.conv_norm_act(in_chs, mid_chs, kernel_size, stride=stride, dilation=dilation[0], **dd)
         self.attn = nn.Identity() if attn_last or layers.attn is None else layers.attn(mid_chs)
         self.conv2_kxk = layers.conv_norm_act(
-            mid_chs, out_chs, kernel_size,
-            dilation=dilation[1], groups=groups, drop_layer=drop_block, apply_act=False,
+            mid_chs,
+            out_chs,
+            kernel_size,
+            dilation=dilation[1],
+            groups=groups,
+            drop_layer=drop_block,
+            apply_act=False,
+            **dd,
         )
-        self.attn_last = nn.Identity() if not attn_last or layers.attn is None else layers.attn(out_chs)
+        self.attn_last = nn.Identity() if not attn_last or layers.attn is None else layers.attn(out_chs, **dd)
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0. else nn.Identity()
         self.act = nn.Identity() if linear_out else layers.act(inplace=True)
 
@@ -401,32 +432,53 @@ class BottleneckBlock(nn.Module):
             layers: LayerFn = None,
             drop_block: Callable = None,
             drop_path_rate: float = 0.,
+            device=None,
+            dtype=None,
     ):
-        super(BottleneckBlock, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         layers = layers or LayerFn()
         mid_chs = make_divisible((in_chs if bottle_in else out_chs) * bottle_ratio)
         groups = num_groups(group_size, mid_chs)
 
         self.shortcut = create_shortcut(
-            downsample, in_chs, out_chs,
-            stride=stride, dilation=dilation, apply_act=False, layers=layers,
+            downsample,
+            in_chs,
+            out_chs,
+            stride=stride,
+            dilation=dilation,
+            apply_act=False,
+            layers=layers,
+            **dd,
         )
 
-        self.conv1_1x1 = layers.conv_norm_act(in_chs, mid_chs, 1)
+        self.conv1_1x1 = layers.conv_norm_act(in_chs, mid_chs, 1, **dd)
         self.conv2_kxk = layers.conv_norm_act(
-            mid_chs, mid_chs, kernel_size,
-            stride=stride, dilation=dilation[0], groups=groups, drop_layer=drop_block,
+            mid_chs,
+            mid_chs,
+            kernel_size,
+            stride=stride,
+            dilation=dilation[0],
+            groups=groups,
+            drop_layer=drop_block,
+            **dd,
         )
         if extra_conv:
             self.conv2b_kxk = layers.conv_norm_act(
-                mid_chs, mid_chs, kernel_size, dilation=dilation[1], groups=groups)
+                mid_chs,
+                mid_chs,
+                kernel_size,
+                dilation=dilation[1],
+                groups=groups,
+                **dd,
+            )
         else:
             self.conv2b_kxk = nn.Identity()
-        self.attn = nn.Identity() if attn_last or layers.attn is None else layers.attn(mid_chs)
-        self.conv3_1x1 = layers.conv_norm_act(mid_chs, out_chs, 1, apply_act=False)
-        self.attn_last = nn.Identity() if not attn_last or layers.attn is None else layers.attn(out_chs)
+        self.attn = nn.Identity() if attn_last or layers.attn is None else layers.attn(mid_chs, **dd)
+        self.conv3_1x1 = layers.conv_norm_act(mid_chs, out_chs, 1, apply_act=False, **dd)
+        self.attn_last = nn.Identity() if not attn_last or layers.attn is None else layers.attn(out_chs, **dd)
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0. else nn.Identity()
-        self.act = nn.Identity() if linear_out else layers.act(inplace=True)
+        self.act = nn.Identity() if linear_out else layers.act(inplace=True, **dd)
 
     def init_weights(self, zero_init_last: bool = False):
         if zero_init_last and self.shortcut is not None and getattr(self.conv3_1x1.bn, 'weight', None) is not None:
@@ -475,24 +527,40 @@ class DarkBlock(nn.Module):
             layers: LayerFn = None,
             drop_block: Callable = None,
             drop_path_rate: float = 0.,
+            device=None,
+            dtype=None,
     ):
-        super(DarkBlock, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         layers = layers or LayerFn()
         mid_chs = make_divisible(out_chs * bottle_ratio)
         groups = num_groups(group_size, mid_chs)
 
         self.shortcut = create_shortcut(
-            downsample, in_chs, out_chs,
-            stride=stride, dilation=dilation, apply_act=False, layers=layers,
+            downsample,
+            in_chs,
+            out_chs,
+            stride=stride,
+            dilation=dilation,
+            apply_act=False,
+            layers=layers,
+            **dd,
         )
 
-        self.conv1_1x1 = layers.conv_norm_act(in_chs, mid_chs, 1)
-        self.attn = nn.Identity() if attn_last or layers.attn is None else layers.attn(mid_chs)
+        self.conv1_1x1 = layers.conv_norm_act(in_chs, mid_chs, 1, **dd)
+        self.attn = nn.Identity() if attn_last or layers.attn is None else layers.attn(mid_chs, **dd)
         self.conv2_kxk = layers.conv_norm_act(
-            mid_chs, out_chs, kernel_size,
-            stride=stride, dilation=dilation[0], groups=groups, drop_layer=drop_block, apply_act=False,
+            mid_chs,
+            out_chs,
+            kernel_size,
+            stride=stride,
+            dilation=dilation[0],
+            groups=groups,
+            drop_layer=drop_block,
+            apply_act=False,
+            **dd,
         )
-        self.attn_last = nn.Identity() if not attn_last or layers.attn is None else layers.attn(out_chs)
+        self.attn_last = nn.Identity() if not attn_last or layers.attn is None else layers.attn(out_chs, **dd)
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0. else nn.Identity()
         self.act = nn.Identity() if linear_out else layers.act(inplace=True)
 
@@ -540,23 +608,38 @@ class EdgeBlock(nn.Module):
             layers: LayerFn = None,
             drop_block: Callable = None,
             drop_path_rate: float = 0.,
+            device=None,
+            dtype=None,
     ):
-        super(EdgeBlock, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         layers = layers or LayerFn()
         mid_chs = make_divisible(out_chs * bottle_ratio)
         groups = num_groups(group_size, mid_chs)
 
         self.shortcut = create_shortcut(
-            downsample, in_chs, out_chs,
-            stride=stride, dilation=dilation, apply_act=False, layers=layers,
+            downsample,
+            in_chs,
+            out_chs,
+            stride=stride,
+            dilation=dilation,
+            apply_act=False,
+            layers=layers,
+            **dd,
         )
         self.conv1_kxk = layers.conv_norm_act(
-            in_chs, mid_chs, kernel_size,
-            stride=stride, dilation=dilation[0], groups=groups, drop_layer=drop_block,
+            in_chs,
+            mid_chs,
+            kernel_size,
+            stride=stride,
+            dilation=dilation[0],
+            groups=groups,
+            drop_layer=drop_block,
+            **dd,
         )
-        self.attn = nn.Identity() if attn_last or layers.attn is None else layers.attn(mid_chs)
-        self.conv2_1x1 = layers.conv_norm_act(mid_chs, out_chs, 1, apply_act=False)
-        self.attn_last = nn.Identity() if not attn_last or layers.attn is None else layers.attn(out_chs)
+        self.attn = nn.Identity() if attn_last or layers.attn is None else layers.attn(mid_chs, **dd)
+        self.conv2_1x1 = layers.conv_norm_act(mid_chs, out_chs, 1, apply_act=False, **dd)
+        self.attn_last = nn.Identity() if not attn_last or layers.attn is None else layers.attn(out_chs, **dd)
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0. else nn.Identity()
         self.act = nn.Identity() if linear_out else layers.act(inplace=True)
 
@@ -598,9 +681,12 @@ class RepVggBlock(nn.Module):
             layers: LayerFn = None,
             drop_block: Callable = None,
             drop_path_rate: float = 0.,
-            inference_mode: bool = False
+            inference_mode: bool = False,
+            device=None,
+            dtype=None,
     ):
-        super(RepVggBlock, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.groups = groups = num_groups(group_size, in_chs)
         layers = layers or LayerFn()
 
@@ -613,19 +699,35 @@ class RepVggBlock(nn.Module):
                 dilation=dilation,
                 groups=groups,
                 bias=True,
+                **dd,
             )
         else:
             self.reparam_conv = None
             use_ident = in_chs == out_chs and stride == 1 and dilation[0] == dilation[1]
-            self.identity = layers.norm_act(out_chs, apply_act=False) if use_ident else None
+            self.identity = layers.norm_act(out_chs, apply_act=False, **dd) if use_ident else None
             self.conv_kxk = layers.conv_norm_act(
-                in_chs, out_chs, kernel_size,
-                stride=stride, dilation=dilation[0], groups=groups, drop_layer=drop_block, apply_act=False,
+                in_chs,
+                out_chs,
+                kernel_size,
+                stride=stride,
+                dilation=dilation[0],
+                groups=groups,
+                drop_layer=drop_block,
+                apply_act=False,
+                **dd,
             )
-            self.conv_1x1 = layers.conv_norm_act(in_chs, out_chs, 1, stride=stride, groups=groups, apply_act=False)
+            self.conv_1x1 = layers.conv_norm_act(
+                in_chs,
+                out_chs,
+                1,
+                stride=stride,
+                groups=groups,
+                apply_act=False,
+                **dd,
+            )
             self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0. and use_ident else nn.Identity()
 
-        self.attn = nn.Identity() if layers.attn is None else layers.attn(out_chs)
+        self.attn = nn.Identity() if layers.attn is None else layers.attn(out_chs, **dd)
         self.act = layers.act(inplace=True)
 
     def init_weights(self, zero_init_last: bool = False):
@@ -767,10 +869,13 @@ class MobileOneBlock(nn.Module):
             layers: LayerFn = None,
             drop_block: Callable = None,
             drop_path_rate: float = 0.,
+            device=None,
+            dtype=None,
     ) -> None:
         """ Construct a MobileOneBlock module.
         """
-        super(MobileOneBlock, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.num_conv_branches = num_conv_branches
         self.groups = groups = num_groups(group_size, in_chs)
         layers = layers or LayerFn()
@@ -783,31 +888,45 @@ class MobileOneBlock(nn.Module):
                 stride=stride,
                 dilation=dilation,
                 groups=groups,
-                bias=True)
+                bias=True,
+                **dd,
+            )
         else:
             self.reparam_conv = None
 
             # Re-parameterizable skip connection
             use_ident = in_chs == out_chs and stride == 1 and dilation[0] == dilation[1]
-            self.identity = layers.norm_act(out_chs, apply_act=False) if use_ident else None
+            self.identity = layers.norm_act(out_chs, apply_act=False, **dd) if use_ident else None
 
             # Re-parameterizable conv branches
             convs = []
             for _ in range(self.num_conv_branches):
                 convs.append(layers.conv_norm_act(
-                    in_chs, out_chs, kernel_size=kernel_size,
-                    stride=stride, groups=groups, apply_act=False))
+                    in_chs,
+                    out_chs,
+                    kernel_size=kernel_size,
+                    stride=stride,
+                    groups=groups,
+                    apply_act=False,
+                    **dd,
+                ))
             self.conv_kxk = nn.ModuleList(convs)
 
             # Re-parameterizable scale branch
             self.conv_scale = None
             if kernel_size > 1:
                 self.conv_scale = layers.conv_norm_act(
-                    in_chs, out_chs, kernel_size=1,
-                    stride=stride, groups=groups, apply_act=False)
+                    in_chs,
+                    out_chs,
+                    kernel_size=1,
+                    stride=stride,
+                    groups=groups,
+                    apply_act=False,
+                    **dd,
+                )
             self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0. and use_ident else nn.Identity()
 
-        self.attn = nn.Identity() if layers.attn is None else layers.attn(out_chs)
+        self.attn = nn.Identity() if layers.attn is None else layers.attn(out_chs, **dd)
         self.act = layers.act(inplace=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -953,31 +1072,46 @@ class SelfAttnBlock(nn.Module):
             layers: LayerFn = None,
             drop_block: Callable = None,
             drop_path_rate: float = 0.,
+            device=None,
+            dtype=None,
     ):
-        super(SelfAttnBlock, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         assert layers is not None
         mid_chs = make_divisible((in_chs if bottle_in else out_chs) * bottle_ratio)
         groups = num_groups(group_size, mid_chs)
 
         self.shortcut = create_shortcut(
-            downsample, in_chs, out_chs,
-            stride=stride, dilation=dilation, apply_act=False, layers=layers,
+            downsample,
+            in_chs,
+            out_chs,
+            stride=stride,
+            dilation=dilation,
+            apply_act=False,
+            layers=layers,
+            **dd,
         )
 
-        self.conv1_1x1 = layers.conv_norm_act(in_chs, mid_chs, 1)
+        self.conv1_1x1 = layers.conv_norm_act(in_chs, mid_chs, 1, **dd)
         if extra_conv:
             self.conv2_kxk = layers.conv_norm_act(
-                mid_chs, mid_chs, kernel_size,
-                stride=stride, dilation=dilation[0], groups=groups, drop_layer=drop_block,
+                mid_chs,
+                mid_chs,
+                kernel_size,
+                stride=stride,
+                dilation=dilation[0],
+                groups=groups,
+                drop_layer=drop_block,
+                **dd,
             )
             stride = 1  # striding done via conv if enabled
         else:
             self.conv2_kxk = nn.Identity()
         opt_kwargs = {} if feat_size is None else dict(feat_size=feat_size)
         # FIXME need to dilate self attn to have dilated network support, moop moop
-        self.self_attn = layers.self_attn(mid_chs, stride=stride, **opt_kwargs)
-        self.post_attn = layers.norm_act(mid_chs) if post_attn_na else nn.Identity()
-        self.conv3_1x1 = layers.conv_norm_act(mid_chs, out_chs, 1, apply_act=False)
+        self.self_attn = layers.self_attn(mid_chs, stride=stride, **opt_kwargs, **dd)
+        self.post_attn = layers.norm_act(mid_chs, **dd) if post_attn_na else nn.Identity()
+        self.conv3_1x1 = layers.conv_norm_act(mid_chs, out_chs, 1, apply_act=False, **dd)
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0. else nn.Identity()
         self.act = nn.Identity() if linear_out else layers.act(inplace=True)
 
@@ -1035,7 +1169,10 @@ class Stem(nn.Sequential):
             num_act: Optional[int] = None,
             chs_decay: float = 0.5,
             layers: LayerFn = None,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         assert stride in (2, 4)
         layers = layers or LayerFn()
@@ -1066,7 +1203,7 @@ class Stem(nn.Sequential):
             if i > 0 and s > 1:
                 last_feat_idx = i - 1
                 self.feature_info.append(dict(num_chs=prev_chs, reduction=curr_stride, module=prev_feat, stage=0))
-            self.add_module(conv_name, layer_fn(prev_chs, ch, kernel_size=kernel_size, stride=s))
+            self.add_module(conv_name, layer_fn(prev_chs, ch, kernel_size=kernel_size, stride=s, **dd))
             prev_chs = ch
             curr_stride *= s
             prev_feat = conv_name
@@ -1107,38 +1244,41 @@ def create_byob_stem(
         pool_type: str = '',
         feat_prefix: str = 'stem',
         layers: LayerFn = None,
+        device=None,
+        dtype=None,
 ):
+    dd = {'device': device, 'dtype': dtype}
     layers = layers or LayerFn()
     assert stem_type in ('', 'quad', 'quad2', 'tiered', 'deep', 'rep', 'one', '7x7', '3x3')
     if 'quad' in stem_type:
         # based on NFNet stem, stack of 4 3x3 convs
         num_act = 2 if 'quad2' in stem_type else None
-        stem = Stem(in_chs, out_chs, num_rep=4, num_act=num_act, pool=pool_type, layers=layers)
+        stem = Stem(in_chs, out_chs, num_rep=4, num_act=num_act, pool=pool_type, layers=layers, **dd)
     elif 'tiered' in stem_type:
         # 3x3 stack of 3 convs as in my ResNet-T
-        stem = Stem(in_chs, (3 * out_chs // 8, out_chs // 2, out_chs), pool=pool_type, layers=layers)
+        stem = Stem(in_chs, (3 * out_chs // 8, out_chs // 2, out_chs), pool=pool_type, layers=layers, **dd)
     elif 'deep' in stem_type:
         # 3x3 stack of 3 convs as in ResNet-D
-        stem = Stem(in_chs, out_chs, num_rep=3, chs_decay=1.0, pool=pool_type, layers=layers)
+        stem = Stem(in_chs, out_chs, num_rep=3, chs_decay=1.0, pool=pool_type, layers=layers, **dd)
     elif 'rep' in stem_type:
-        stem = RepVggBlock(in_chs, out_chs, stride=2, layers=layers)
+        stem = RepVggBlock(in_chs, out_chs, stride=2, layers=layers, **dd)
     elif 'one' in stem_type:
-        stem = MobileOneBlock(in_chs, out_chs, kernel_size=3, stride=2, layers=layers)
+        stem = MobileOneBlock(in_chs, out_chs, kernel_size=3, stride=2, layers=layers, **dd)
     elif '7x7' in stem_type:
         # 7x7 stem conv as in ResNet
         if pool_type:
-            stem = Stem(in_chs, out_chs, 7, num_rep=1, pool=pool_type, layers=layers)
+            stem = Stem(in_chs, out_chs, 7, num_rep=1, pool=pool_type, layers=layers, **dd)
         else:
-            stem = layers.conv_norm_act(in_chs, out_chs, 7, stride=2)
+            stem = layers.conv_norm_act(in_chs, out_chs, 7, stride=2, **dd)
     else:
         if isinstance(out_chs, (tuple, list)):
-            stem = Stem(in_chs, out_chs, 3, pool=pool_type, layers=layers)
+            stem = Stem(in_chs, out_chs, 3, pool=pool_type, layers=layers, **dd)
         else:
             # 3x3 stem conv as in RegNet is the default
             if pool_type:
-                stem = Stem(in_chs, out_chs, 3, num_rep=1, pool=pool_type, layers=layers)
+                stem = Stem(in_chs, out_chs, 3, num_rep=1, pool=pool_type, layers=layers, **dd)
             else:
-                stem = layers.conv_norm_act(in_chs, out_chs, 3, stride=2)
+                stem = layers.conv_norm_act(in_chs, out_chs, 3, stride=2, **dd)
 
     if isinstance(stem, Stem):
         feature_info = [dict(f, module='.'.join([feat_prefix, f['module']])) for f in stem.feature_info]
@@ -1207,6 +1347,8 @@ def create_byob_stages(
         feat_size: Optional[int] = None,
         layers: Optional[LayerFn] = None,
         block_kwargs_fn: Optional[Callable] = update_block_kwargs,
+        device=None,
+        dtype=None,
 ):
     layers = layers or LayerFn()
     feature_info = []
@@ -1244,6 +1386,8 @@ def create_byob_stages(
                 downsample=cfg.downsample,
                 drop_path_rate=dpr[stage_idx][block_idx],
                 layers=layers,
+                device=device,
+                dtype=dtype,
             )
             if block_cfg.type in ('self_attn',):
                 # add feat_size arg for blocks that support/need it
@@ -1295,6 +1439,8 @@ class ByobNet(nn.Module):
             drop_rate: float = 0.,
             drop_path_rate: float = 0.,
             zero_init_last: bool = True,
+            device=None,
+            dtype=None,
             **kwargs,
     ):
         """
@@ -1311,6 +1457,7 @@ class ByobNet(nn.Module):
             **kwargs: Extra kwargs overlayed onto cfg.
         """
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
@@ -1333,6 +1480,7 @@ class ByobNet(nn.Module):
             stem_type=cfg.stem_type,
             pool_type=cfg.stem_pool,
             layers=stem_layers,
+            **dd,
         )
         self.feature_info.extend(stem_feat[:-1])
         feat_size = reduce_feat_size(feat_size, stride=stem_feat[-1]['reduction'])
@@ -1344,6 +1492,7 @@ class ByobNet(nn.Module):
             stem_feat[-1],
             layers=stage_layers,
             feat_size=feat_size,
+            **dd,
         )
         self.feature_info.extend(stage_feat[:-1])
         reduction = stage_feat[-1]['reduction']
@@ -1351,7 +1500,7 @@ class ByobNet(nn.Module):
         prev_chs = stage_feat[-1]['num_chs']
         if cfg.num_features:
             self.num_features = int(round(cfg.width_factor * cfg.num_features))
-            self.final_conv = stage_layers.conv_norm_act(prev_chs, self.num_features, 1)
+            self.final_conv = stage_layers.conv_norm_act(prev_chs, self.num_features, 1, **dd)
         else:
             self.num_features = prev_chs
             self.final_conv = nn.Identity()
@@ -1372,6 +1521,7 @@ class ByobNet(nn.Module):
                 norm_layer=cfg.norm_layer,
                 act_layer=cfg.act_layer,
                 drop_rate=self.drop_rate,
+                **dd,
             )
             self.head_hidden_size = self.head.hidden_size
         elif cfg.head_type == 'attn_abs':
@@ -1386,6 +1536,7 @@ class ByobNet(nn.Module):
                 pool_type=global_pool,
                 drop_rate=self.drop_rate,
                 qkv_separate=True,
+                **dd,
             )
             self.head_hidden_size = self.head.embed_dim
         elif cfg.head_type == 'attn_rot':
@@ -1400,6 +1551,7 @@ class ByobNet(nn.Module):
                 pool_type=global_pool,
                 drop_rate=self.drop_rate,
                 qkv_separate=True,
+                **dd,
             )
             self.head_hidden_size = self.head.embed_dim
         else:
@@ -1411,6 +1563,7 @@ class ByobNet(nn.Module):
                 num_classes,
                 pool_type=global_pool,
                 drop_rate=self.drop_rate,
+                **dd,
             )
         self.global_pool = global_pool
 
