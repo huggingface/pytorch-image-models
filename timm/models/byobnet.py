@@ -285,7 +285,7 @@ class DownsampleAvg(nn.Module):
         avg_stride = stride if dilation == 1 else 1
         if stride > 1 or dilation > 1:
             avg_pool_fn = AvgPool2dSame if avg_stride == 1 and dilation > 1 else nn.AvgPool2d
-            self.pool = avg_pool_fn(2, avg_stride, ceil_mode=True, count_include_pad=False, **dd)
+            self.pool = avg_pool_fn(2, avg_stride, ceil_mode=True, count_include_pad=False)
         else:
             self.pool = nn.Identity()
         self.conv = layers.conv_norm_act(in_chs, out_chs, 1, apply_act=apply_act, **dd)
