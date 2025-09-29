@@ -12,13 +12,22 @@ Based on Apache 2.0 licensed code at https://github.com/snap-research/EfficientF
 
 Modifications and timm support by / Copyright 2022, Ross Wightman
 """
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, calculate_drop_path_rates, trunc_normal_, to_2tuple, Mlp, ndgrid
+from timm.layers import (
+    DropPath,
+    LayerScale,
+    LayerScale2d,
+    Mlp,
+    calculate_drop_path_rates,
+    trunc_normal_,
+    to_2tuple,
+    ndgrid,
+)
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
@@ -45,12 +54,15 @@ class Attention(torch.nn.Module):
 
     def __init__(
             self,
-            dim=384,
-            key_dim=32,
-            num_heads=8,
-            attn_ratio=4,
-            resolution=7
+            dim: int = 384,
+            key_dim: int = 32,
+            num_heads: int = 8,
+            attn_ratio: float = 4,
+            resolution: int = 7,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.num_heads = num_heads
         self.scale = key_dim ** -0.5
@@ -60,14 +72,17 @@ class Attention(torch.nn.Module):
         self.val_attn_dim = self.val_dim * num_heads
         self.attn_ratio = attn_ratio
 
-        self.qkv = nn.Linear(dim, self.key_attn_dim * 2 + self.val_attn_dim)
-        self.proj = nn.Linear(self.val_attn_dim, dim)
+        self.qkv = nn.Linear(dim, self.key_attn_dim * 2 + self.val_attn_dim, **dd)
+        self.proj = nn.Linear(self.val_attn_dim, dim, **dd)
 
         resolution = to_2tuple(resolution)
-        pos = torch.stack(ndgrid(torch.arange(resolution[0]), torch.arange(resolution[1]))).flatten(1)
+        pos = torch.stack(ndgrid(
+            torch.arange(resolution[0], device=device, dtype=torch.long),
+            torch.arange(resolution[1], device=device, dtype=torch.long)
+        )).flatten(1)
         rel_pos = (pos[..., :, None] - pos[..., None, :]).abs()
         rel_pos = (rel_pos[0] * resolution[1]) + rel_pos[1]
-        self.attention_biases = torch.nn.Parameter(torch.zeros(num_heads, resolution[0] * resolution[1]))
+        self.attention_biases = torch.nn.Parameter(torch.zeros(num_heads, resolution[0] * resolution[1], **dd))
         self.register_buffer('attention_bias_idxs', rel_pos)
         self.attention_bias_cache = {}  # per-device attention_biases cache (data-parallel compat)
 
@@ -102,15 +117,24 @@ class Attention(torch.nn.Module):
 
 
 class Stem4(nn.Sequential):
-    def __init__(self, in_chs, out_chs, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):
+    def __init__(
+            self,
+            in_chs: int,
+            out_chs: int,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.stride = 4
 
-        self.add_module('conv1', nn.Conv2d(in_chs, out_chs // 2, kernel_size=3, stride=2, padding=1))
-        self.add_module('norm1', norm_layer(out_chs // 2))
+        self.add_module('conv1', nn.Conv2d(in_chs, out_chs // 2, kernel_size=3, stride=2, padding=1, **dd))
+        self.add_module('norm1', norm_layer(out_chs // 2, **dd))
         self.add_module('act1', act_layer())
-        self.add_module('conv2', nn.Conv2d(out_chs // 2, out_chs, kernel_size=3, stride=2, padding=1))
-        self.add_module('norm2', norm_layer(out_chs))
+        self.add_module('conv2', nn.Conv2d(out_chs // 2, out_chs, kernel_size=3, stride=2, padding=1, **dd))
+        self.add_module('norm2', norm_layer(out_chs, **dd))
         self.add_module('act2', act_layer())
 
 
@@ -121,12 +145,23 @@ class Downsample(nn.Module):
     Output: tensor in shape [B, C, H/stride, W/stride]
     """
 
-    def __init__(self, in_chs, out_chs, kernel_size=3, stride=2, padding=None, norm_layer=nn.BatchNorm2d):
+    def __init__(
+            self,
+            in_chs: int,
+            out_chs: int,
+            kernel_size: int = 3,
+            stride: int = 2,
+            padding: Optional[int] = None,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         if padding is None:
             padding = kernel_size // 2
-        self.conv = nn.Conv2d(in_chs, out_chs, kernel_size=kernel_size, stride=stride, padding=padding)
-        self.norm = norm_layer(out_chs)
+        self.conv = nn.Conv2d(in_chs, out_chs, kernel_size=kernel_size, stride=stride, padding=padding, **dd)
+        self.norm = norm_layer(out_chs, **dd)
 
     def forward(self, x):
         x = self.conv(x)
@@ -150,7 +185,7 @@ class Pooling(nn.Module):
     --pool_size: pooling size
     """
 
-    def __init__(self, pool_size=3):
+    def __init__(self, pool_size: int = 3):
         super().__init__()
         self.pool = nn.AvgPool2d(pool_size, stride=1, padding=pool_size // 2, count_include_pad=False)
 
@@ -166,21 +201,24 @@ class ConvMlpWithNorm(nn.Module):
 
     def __init__(
             self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            act_layer=nn.GELU,
-            norm_layer=nn.BatchNorm2d,
-            drop=0.
+            in_features: int,
+            hidden_features: Optional[int] = None,
+            out_features: Optional[int] = None,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            drop: float = 0.,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
-        self.fc1 = nn.Conv2d(in_features, hidden_features, 1)
-        self.norm1 = norm_layer(hidden_features) if norm_layer is not None else nn.Identity()
+        self.fc1 = nn.Conv2d(in_features, hidden_features, 1, **dd)
+        self.norm1 = norm_layer(hidden_features, **dd) if norm_layer is not None else nn.Identity()
         self.act = act_layer()
-        self.fc2 = nn.Conv2d(hidden_features, out_features, 1)
-        self.norm2 = norm_layer(out_features) if norm_layer is not None else nn.Identity()
+        self.fc2 = nn.Conv2d(hidden_features, out_features, 1, **dd)
+        self.norm2 = norm_layer(out_features, **dd) if norm_layer is not None else nn.Identity()
         self.drop = nn.Dropout(drop)
 
     def forward(self, x):
@@ -194,76 +232,63 @@ class ConvMlpWithNorm(nn.Module):
         return x
 
 
-class LayerScale(nn.Module):
-    def __init__(self, dim, init_values=1e-5, inplace=False):
-        super().__init__()
-        self.inplace = inplace
-        self.gamma = nn.Parameter(init_values * torch.ones(dim))
-
-    def forward(self, x):
-        return x.mul_(self.gamma) if self.inplace else x * self.gamma
-
-
 class MetaBlock1d(nn.Module):
 
     def __init__(
             self,
-            dim,
-            mlp_ratio=4.,
-            act_layer=nn.GELU,
-            norm_layer=nn.LayerNorm,
-            proj_drop=0.,
-            drop_path=0.,
-            layer_scale_init_value=1e-5
+            dim: int,
+            mlp_ratio: float = 4.,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            proj_drop: float = 0.,
+            drop_path: float = 0.,
+            layer_scale_init_value: float = 1e-5,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.norm1 = norm_layer(dim)
-        self.token_mixer = Attention(dim)
-        self.norm2 = norm_layer(dim)
+        self.norm1 = norm_layer(dim, **dd)
+        self.token_mixer = Attention(dim, **dd)
+        self.ls1 = LayerScale(dim, layer_scale_init_value, **dd)
+        self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
+        self.norm2 = norm_layer(dim, **dd)
         self.mlp = Mlp(
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
             drop=proj_drop,
+            **dd,
         )
-
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.ls1 = LayerScale(dim, layer_scale_init_value)
-        self.ls2 = LayerScale(dim, layer_scale_init_value)
+        self.ls2 = LayerScale(dim, layer_scale_init_value, **dd)
+        self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x):
-        x = x + self.drop_path(self.ls1(self.token_mixer(self.norm1(x))))
-        x = x + self.drop_path(self.ls2(self.mlp(self.norm2(x))))
+        x = x + self.drop_path1(self.ls1(self.token_mixer(self.norm1(x))))
+        x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
         return x
-
-
-class LayerScale2d(nn.Module):
-    def __init__(self, dim, init_values=1e-5, inplace=False):
-        super().__init__()
-        self.inplace = inplace
-        self.gamma = nn.Parameter(init_values * torch.ones(dim))
-
-    def forward(self, x):
-        gamma = self.gamma.view(1, -1, 1, 1)
-        return x.mul_(gamma) if self.inplace else x * gamma
 
 
 class MetaBlock2d(nn.Module):
 
     def __init__(
             self,
-            dim,
-            pool_size=3,
-            mlp_ratio=4.,
-            act_layer=nn.GELU,
-            norm_layer=nn.BatchNorm2d,
-            proj_drop=0.,
-            drop_path=0.,
-            layer_scale_init_value=1e-5
+            dim: int,
+            pool_size: int = 3,
+            mlp_ratio: float = 4.,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            proj_drop: float = 0.,
+            drop_path: float = 0.,
+            layer_scale_init_value: float = 1e-5,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.token_mixer = Pooling(pool_size=pool_size)
-        self.ls1 = LayerScale2d(dim, layer_scale_init_value)
+        self.ls1 = LayerScale2d(dim, layer_scale_init_value, **dd)
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         self.mlp = ConvMlpWithNorm(
@@ -272,8 +297,9 @@ class MetaBlock2d(nn.Module):
             act_layer=act_layer,
             norm_layer=norm_layer,
             drop=proj_drop,
+            **dd,
         )
-        self.ls2 = LayerScale2d(dim, layer_scale_init_value)
+        self.ls2 = LayerScale2d(dim, layer_scale_init_value, **dd)
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x):
@@ -286,25 +312,28 @@ class EfficientFormerStage(nn.Module):
 
     def __init__(
             self,
-            dim,
-            dim_out,
-            depth,
-            downsample=True,
-            num_vit=1,
-            pool_size=3,
-            mlp_ratio=4.,
-            act_layer=nn.GELU,
-            norm_layer=nn.BatchNorm2d,
-            norm_layer_cl=nn.LayerNorm,
-            proj_drop=.0,
-            drop_path=0.,
-            layer_scale_init_value=1e-5,
+            dim: int,
+            dim_out: int,
+            depth: int ,
+            downsample: bool = True,
+            num_vit: int = 1,
+            pool_size: int = 3,
+            mlp_ratio: float = 4.,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            norm_layer_cl: Type[nn.Module] = nn.LayerNorm,
+            proj_drop: float = .0,
+            drop_path: float = 0.,
+            layer_scale_init_value: float = 1e-5,
+            device=None,
+            dtype=None,
 ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.grad_checkpointing = False
 
         if downsample:
-            self.downsample = Downsample(in_chs=dim, out_chs=dim_out, norm_layer=norm_layer)
+            self.downsample = Downsample(in_chs=dim, out_chs=dim_out, norm_layer=norm_layer, **dd)
             dim = dim_out
         else:
             assert dim == dim_out
@@ -326,6 +355,7 @@ class EfficientFormerStage(nn.Module):
                         proj_drop=proj_drop,
                         drop_path=drop_path[block_idx],
                         layer_scale_init_value=layer_scale_init_value,
+                        **dd,
                     ))
             else:
                 blocks.append(
@@ -338,6 +368,7 @@ class EfficientFormerStage(nn.Module):
                         proj_drop=proj_drop,
                         drop_path=drop_path[block_idx],
                         layer_scale_init_value=layer_scale_init_value,
+                        **dd,
                     ))
                 if num_vit and num_vit == remain_idx:
                     blocks.append(Flat())
@@ -357,29 +388,32 @@ class EfficientFormer(nn.Module):
 
     def __init__(
             self,
-            depths,
-            embed_dims=None,
-            in_chans=3,
-            num_classes=1000,
-            global_pool='avg',
-            downsamples=None,
-            num_vit=0,
-            mlp_ratios=4,
-            pool_size=3,
-            layer_scale_init_value=1e-5,
-            act_layer=nn.GELU,
-            norm_layer=nn.BatchNorm2d,
-            norm_layer_cl=nn.LayerNorm,
-            drop_rate=0.,
-            proj_drop_rate=0.,
-            drop_path_rate=0.,
+            depths: Tuple[int, ...] = (3, 2, 6, 4),
+            embed_dims: Tuple[int, ...] = (48, 96, 224, 448),
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            global_pool: str = 'avg',
+            downsamples: Optional[Tuple[bool, ...]] = None,
+            num_vit: int = 0,
+            mlp_ratios: float = 4,
+            pool_size: int = 3,
+            layer_scale_init_value: float = 1e-5,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            norm_layer_cl: Type[nn.Module] = nn.LayerNorm,
+            drop_rate: float = 0.,
+            proj_drop_rate: float = 0.,
+            drop_path_rate: float = 0.,
+            device=None,
+            dtype=None,
             **kwargs
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.global_pool = global_pool
 
-        self.stem = Stem4(in_chans, embed_dims[0], norm_layer=norm_layer)
+        self.stem = Stem4(in_chans, embed_dims[0], norm_layer=norm_layer, **dd)
         prev_dim = embed_dims[0]
 
         # stochastic depth decay rule
@@ -404,6 +438,7 @@ class EfficientFormer(nn.Module):
                 proj_drop=proj_drop_rate,
                 drop_path=dpr[i],
                 layer_scale_init_value=layer_scale_init_value,
+                **dd,
             )
             prev_dim = embed_dims[i]
             stages.append(stage)
@@ -412,11 +447,11 @@ class EfficientFormer(nn.Module):
 
         # Classifier head
         self.num_features = self.head_hidden_size = embed_dims[-1]
-        self.norm = norm_layer_cl(self.num_features)
+        self.norm = norm_layer_cl(self.num_features, **dd)
         self.head_drop = nn.Dropout(drop_rate)
-        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
         # assuming model is always distilled (valid for current checkpoints, will split def if that changes)
-        self.head_dist = nn.Linear(embed_dims[-1], num_classes) if num_classes > 0 else nn.Identity()
+        self.head_dist = nn.Linear(embed_dims[-1], num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.distilled_training = False  # must set this True to train w/ distillation token
 
         self.apply(self._init_weights)

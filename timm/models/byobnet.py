@@ -478,7 +478,7 @@ class BottleneckBlock(nn.Module):
         self.conv3_1x1 = layers.conv_norm_act(mid_chs, out_chs, 1, apply_act=False, **dd)
         self.attn_last = nn.Identity() if not attn_last or layers.attn is None else layers.attn(out_chs, **dd)
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0. else nn.Identity()
-        self.act = nn.Identity() if linear_out else layers.act(inplace=True, **dd)
+        self.act = nn.Identity() if linear_out else layers.act(inplace=True)
 
     def init_weights(self, zero_init_last: bool = False):
         if zero_init_last and self.shortcut is not None and getattr(self.conv3_1x1.bn, 'weight', None) is not None:

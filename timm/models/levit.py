@@ -25,7 +25,7 @@ Modifications and additions for timm hacked together by / Copyright 2021, Ross W
 # Copyright 2020 Ross Wightman, Apache-2.0 License
 from collections import OrderedDict
 from functools import partial
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -42,10 +42,22 @@ __all__ = ['Levit']
 
 class ConvNorm(nn.Module):
     def __init__(
-            self, in_chs, out_chs, kernel_size=1, stride=1, padding=0, dilation=1, groups=1, bn_weight_init=1):
+            self,
+            in_chs: int,
+            out_chs: int,
+            kernel_size: int = 1,
+            stride: int = 1,
+            padding: int = 0,
+            dilation: int = 1,
+            groups: int = 1,
+            bn_weight_init: float = 1,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.linear = nn.Conv2d(in_chs, out_chs, kernel_size, stride, padding, dilation, groups, bias=False)
-        self.bn = nn.BatchNorm2d(out_chs)
+        self.linear = nn.Conv2d(in_chs, out_chs, kernel_size, stride, padding, dilation, groups, bias=False, **dd)
+        self.bn = nn.BatchNorm2d(out_chs, **dd)
 
         nn.init.constant_(self.bn.weight, bn_weight_init)
 
@@ -67,10 +79,18 @@ class ConvNorm(nn.Module):
 
 
 class LinearNorm(nn.Module):
-    def __init__(self, in_features, out_features, bn_weight_init=1):
+    def __init__(
+            self,
+            in_features: int,
+            out_features: int,
+            bn_weight_init: float = 1,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.linear = nn.Linear(in_features, out_features, bias=False)
-        self.bn = nn.BatchNorm1d(out_features)
+        self.linear = nn.Linear(in_features, out_features, bias=False, **dd)
+        self.bn = nn.BatchNorm1d(out_features, **dd)
 
         nn.init.constant_(self.bn.weight, bn_weight_init)
 
@@ -91,11 +111,21 @@ class LinearNorm(nn.Module):
 
 
 class NormLinear(nn.Module):
-    def __init__(self, in_features, out_features, bias=True, std=0.02, drop=0.):
+    def __init__(
+            self,
+            in_features: int,
+            out_features: int,
+            bias: bool = True,
+            std: float = 0.02,
+            drop: float = 0.,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.bn = nn.BatchNorm1d(in_features)
+        self.bn = nn.BatchNorm1d(in_features, **dd)
         self.drop = nn.Dropout(drop)
-        self.linear = nn.Linear(in_features, out_features, bias=bias)
+        self.linear = nn.Linear(in_features, out_features, bias=bias, **dd)
 
         trunc_normal_(self.linear.weight, std=std)
         if self.linear.bias is not None:
@@ -121,33 +151,56 @@ class NormLinear(nn.Module):
 
 
 class Stem8(nn.Sequential):
-    def __init__(self, in_chs, out_chs, act_layer):
+    def __init__(
+            self,
+            in_chs: int,
+            out_chs: int,
+            act_layer: Type[nn.Module],
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.stride = 8
 
-        self.add_module('conv1', ConvNorm(in_chs, out_chs // 4, 3, stride=2, padding=1))
+        self.add_module('conv1', ConvNorm(in_chs, out_chs // 4, 3, stride=2, padding=1, **dd))
         self.add_module('act1', act_layer())
-        self.add_module('conv2', ConvNorm(out_chs // 4, out_chs // 2, 3, stride=2, padding=1))
+        self.add_module('conv2', ConvNorm(out_chs // 4, out_chs // 2, 3, stride=2, padding=1, **dd))
         self.add_module('act2', act_layer())
-        self.add_module('conv3', ConvNorm(out_chs // 2, out_chs, 3, stride=2, padding=1))
+        self.add_module('conv3', ConvNorm(out_chs // 2, out_chs, 3, stride=2, padding=1, **dd))
 
 
 class Stem16(nn.Sequential):
-    def __init__(self, in_chs, out_chs, act_layer):
+    def __init__(
+            self,
+            in_chs: int,
+            out_chs: int,
+            act_layer: Type[nn.Module],
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.stride = 16
 
-        self.add_module('conv1', ConvNorm(in_chs, out_chs // 8, 3, stride=2, padding=1))
+        self.add_module('conv1', ConvNorm(in_chs, out_chs // 8, 3, stride=2, padding=1, **dd))
         self.add_module('act1', act_layer())
-        self.add_module('conv2', ConvNorm(out_chs // 8, out_chs // 4, 3, stride=2, padding=1))
+        self.add_module('conv2', ConvNorm(out_chs // 8, out_chs // 4, 3, stride=2, padding=1, **dd))
         self.add_module('act2', act_layer())
-        self.add_module('conv3', ConvNorm(out_chs // 4, out_chs // 2, 3, stride=2, padding=1))
+        self.add_module('conv3', ConvNorm(out_chs // 4, out_chs // 2, 3, stride=2, padding=1, **dd))
         self.add_module('act3', act_layer())
-        self.add_module('conv4', ConvNorm(out_chs // 2, out_chs, 3, stride=2, padding=1))
+        self.add_module('conv4', ConvNorm(out_chs // 2, out_chs, 3, stride=2, padding=1, **dd))
 
 
 class Downsample(nn.Module):
-    def __init__(self, stride, resolution, use_pool=False):
+    def __init__(
+            self,
+            stride: int,
+            resolution: Union[int, Tuple[int, int]],
+            use_pool: bool = False,
+            device=None,
+            dtype=None,
+    ):
         super().__init__()
         self.stride = stride
         self.resolution = to_2tuple(resolution)
@@ -168,14 +221,17 @@ class Attention(nn.Module):
 
     def __init__(
             self,
-            dim,
-            key_dim,
-            num_heads=8,
-            attn_ratio=4.,
-            resolution=14,
-            use_conv=False,
-            act_layer=nn.SiLU,
+            dim: int,
+            key_dim: int,
+            num_heads: int = 8,
+            attn_ratio: float = 4.,
+            resolution: Union[int, Tuple[int, int]] = 14,
+            use_conv: bool = False,
+            act_layer: Type[nn.Module] = nn.SiLU,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         ln_layer = ConvNorm if use_conv else LinearNorm
         resolution = to_2tuple(resolution)
@@ -188,14 +244,14 @@ class Attention(nn.Module):
         self.val_dim = int(attn_ratio * key_dim)
         self.val_attn_dim = int(attn_ratio * key_dim) * num_heads
 
-        self.qkv = ln_layer(dim, self.val_attn_dim + self.key_attn_dim * 2)
+        self.qkv = ln_layer(dim, self.val_attn_dim + self.key_attn_dim * 2, **dd)
         self.proj = nn.Sequential(OrderedDict([
             ('act', act_layer()),
-            ('ln', ln_layer(self.val_attn_dim, dim, bn_weight_init=0))
+            ('ln', ln_layer(self.val_attn_dim, dim, bn_weight_init=0, **dd))
         ]))
 
-        self.attention_biases = nn.Parameter(torch.zeros(num_heads, resolution[0] * resolution[1]))
-        pos = torch.stack(ndgrid(torch.arange(resolution[0]), torch.arange(resolution[1]))).flatten(1)
+        self.attention_biases = nn.Parameter(torch.zeros(num_heads, resolution[0] * resolution[1], **dd))
+        pos = torch.stack(ndgrid(torch.arange(resolution[0], **dd), torch.arange(resolution[1], **dd))).flatten(1)
         rel_pos = (pos[..., :, None] - pos[..., None, :]).abs()
         rel_pos = (rel_pos[0] * resolution[1]) + rel_pos[1]
         self.register_buffer('attention_bias_idxs', rel_pos, persistent=False)
@@ -247,17 +303,20 @@ class AttentionDownsample(nn.Module):
 
     def __init__(
             self,
-            in_dim,
-            out_dim,
-            key_dim,
-            num_heads=8,
-            attn_ratio=2.0,
-            stride=2,
-            resolution=14,
-            use_conv=False,
-            use_pool=False,
-            act_layer=nn.SiLU,
+            in_dim: int,
+            out_dim: int,
+            key_dim: int,
+            num_heads: int = 8,
+            attn_ratio: float = 2.0,
+            stride: int = 2,
+            resolution: Union[int, Tuple[int, int]] = 14,
+            use_conv: bool = False,
+            use_pool: bool = False,
+            act_layer: Type[nn.Module] = nn.SiLU,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         resolution = to_2tuple(resolution)
 
@@ -278,23 +337,26 @@ class AttentionDownsample(nn.Module):
                 kernel_size=3 if use_pool else 1, padding=1 if use_pool else 0, count_include_pad=False)
         else:
             ln_layer = LinearNorm
-            sub_layer = partial(Downsample, resolution=resolution, use_pool=use_pool)
+            sub_layer = partial(Downsample, resolution=resolution, use_pool=use_pool, **dd)
 
-        self.kv = ln_layer(in_dim, self.val_attn_dim + self.key_attn_dim)
+        self.kv = ln_layer(in_dim, self.val_attn_dim + self.key_attn_dim, **dd)
         self.q = nn.Sequential(OrderedDict([
             ('down', sub_layer(stride=stride)),
-            ('ln', ln_layer(in_dim, self.key_attn_dim))
+            ('ln', ln_layer(in_dim, self.key_attn_dim, **dd))
         ]))
         self.proj = nn.Sequential(OrderedDict([
             ('act', act_layer()),
-            ('ln', ln_layer(self.val_attn_dim, out_dim))
+            ('ln', ln_layer(self.val_attn_dim, out_dim, **dd))
         ]))
 
-        self.attention_biases = nn.Parameter(torch.zeros(num_heads, resolution[0] * resolution[1]))
-        k_pos = torch.stack(ndgrid(torch.arange(resolution[0]), torch.arange(resolution[1]))).flatten(1)
+        self.attention_biases = nn.Parameter(torch.zeros(num_heads, resolution[0] * resolution[1], **dd))
+        k_pos = torch.stack(ndgrid(
+            torch.arange(resolution[0], **dd),
+            torch.arange(resolution[1], **dd),
+        )).flatten(1)
         q_pos = torch.stack(ndgrid(
-            torch.arange(0, resolution[0], step=stride),
-            torch.arange(0, resolution[1], step=stride)
+            torch.arange(0, resolution[0], step=stride, **dd),
+            torch.arange(0, resolution[1], step=stride, **dd)
         )).flatten(1)
         rel_pos = (q_pos[..., :, None] - k_pos[..., None, :]).abs()
         rel_pos = (rel_pos[0] * resolution[1]) + rel_pos[1]
@@ -348,22 +410,25 @@ class LevitMlp(nn.Module):
     """
     def __init__(
             self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            use_conv=False,
-            act_layer=nn.SiLU,
-            drop=0.
+            in_features: int,
+            hidden_features: Optional[int] = None,
+            out_features: Optional[int] = None,
+            use_conv: bool = False,
+            act_layer: Type[nn.Module] = nn.SiLU,
+            drop: float = 0.,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
         ln_layer = ConvNorm if use_conv else LinearNorm
 
-        self.ln1 = ln_layer(in_features, hidden_features)
+        self.ln1 = ln_layer(in_features, hidden_features, **dd)
         self.act = act_layer()
         self.drop = nn.Dropout(drop)
-        self.ln2 = ln_layer(hidden_features, out_features, bn_weight_init=0)
+        self.ln2 = ln_layer(hidden_features, out_features, bn_weight_init=0, **dd)
 
     def forward(self, x):
         x = self.ln1(x)
@@ -376,19 +441,22 @@ class LevitMlp(nn.Module):
 class LevitDownsample(nn.Module):
     def __init__(
             self,
-            in_dim,
-            out_dim,
-            key_dim,
-            num_heads=8,
-            attn_ratio=4.,
-            mlp_ratio=2.,
-            act_layer=nn.SiLU,
-            attn_act_layer=None,
-            resolution=14,
-            use_conv=False,
-            use_pool=False,
-            drop_path=0.,
+            in_dim: int,
+            out_dim: int,
+            key_dim: int,
+            num_heads: int = 8,
+            attn_ratio: float = 4.,
+            mlp_ratio: float = 2.,
+            act_layer: Type[nn.Module] = nn.SiLU,
+            attn_act_layer: Optional[Type[nn.Module]] = None,
+            resolution: Union[int, Tuple[int, int]] = 14,
+            use_conv: bool = False,
+            use_pool: bool = False,
+            drop_path: float = 0.,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         attn_act_layer = attn_act_layer or act_layer
 
@@ -402,13 +470,15 @@ class LevitDownsample(nn.Module):
             resolution=resolution,
             use_conv=use_conv,
             use_pool=use_pool,
+            **dd,
         )
 
         self.mlp = LevitMlp(
             out_dim,
             int(out_dim * mlp_ratio),
             use_conv=use_conv,
-            act_layer=act_layer
+            act_layer=act_layer,
+            **dd,
         )
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
@@ -421,17 +491,20 @@ class LevitDownsample(nn.Module):
 class LevitBlock(nn.Module):
     def __init__(
             self,
-            dim,
-            key_dim,
-            num_heads=8,
-            attn_ratio=4.,
-            mlp_ratio=2.,
-            resolution=14,
-            use_conv=False,
-            act_layer=nn.SiLU,
-            attn_act_layer=None,
-            drop_path=0.,
+            dim: int,
+            key_dim: int,
+            num_heads: int = 8,
+            attn_ratio: float = 4.,
+            mlp_ratio: float = 2.,
+            resolution: Union[int, Tuple[int, int]] = 14,
+            use_conv: bool = False,
+            act_layer: Type[nn.Module] = nn.SiLU,
+            attn_act_layer: Optional[Type[nn.Module]] = None,
+            drop_path: float = 0.,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         attn_act_layer = attn_act_layer or act_layer
 
@@ -443,6 +516,7 @@ class LevitBlock(nn.Module):
             resolution=resolution,
             use_conv=use_conv,
             act_layer=attn_act_layer,
+            **dd,
             )
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
@@ -450,7 +524,8 @@ class LevitBlock(nn.Module):
             dim,
             int(dim * mlp_ratio),
             use_conv=use_conv,
-            act_layer=act_layer
+            act_layer=act_layer,
+            **dd,
         )
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
@@ -463,20 +538,23 @@ class LevitBlock(nn.Module):
 class LevitStage(nn.Module):
     def __init__(
             self,
-            in_dim,
-            out_dim,
-            key_dim,
-            depth=4,
-            num_heads=8,
-            attn_ratio=4.0,
-            mlp_ratio=4.0,
-            act_layer=nn.SiLU,
-            attn_act_layer=None,
-            resolution=14,
-            downsample='',
-            use_conv=False,
-            drop_path=0.,
+            in_dim: int,
+            out_dim: int,
+            key_dim: int,
+            depth: int = 4,
+            num_heads: int = 8,
+            attn_ratio: float = 4.0,
+            mlp_ratio: float = 4.0,
+            act_layer: Type[nn.Module] = nn.SiLU,
+            attn_act_layer: Optional[Type[nn.Module]] = None,
+            resolution: Union[int, Tuple[int, int]] = 14,
+            downsample: str = '',
+            use_conv: bool = False,
+            drop_path: float = 0.,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         resolution = to_2tuple(resolution)
 
@@ -493,6 +571,7 @@ class LevitStage(nn.Module):
                 resolution=resolution,
                 use_conv=use_conv,
                 drop_path=drop_path,
+                **dd,
             )
             resolution = [(r - 1) // 2 + 1 for r in resolution]
         else:
@@ -512,6 +591,7 @@ class LevitStage(nn.Module):
                 resolution=resolution,
                 use_conv=use_conv,
                 drop_path=drop_path,
+                **dd,
             )]
         self.blocks = nn.Sequential(*blocks)
 
@@ -530,26 +610,30 @@ class Levit(nn.Module):
 
     def __init__(
             self,
-            img_size=224,
-            in_chans=3,
-            num_classes=1000,
-            embed_dim=(192,),
-            key_dim=64,
-            depth=(12,),
-            num_heads=(3,),
-            attn_ratio=2.,
-            mlp_ratio=2.,
-            stem_backbone=None,
-            stem_stride=None,
-            stem_type='s16',
-            down_op='subsample',
-            act_layer='hard_swish',
-            attn_act_layer=None,
-            use_conv=False,
-            global_pool='avg',
-            drop_rate=0.,
-            drop_path_rate=0.):
+            img_size: Union[int, Tuple[int, int]] = 224,
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            embed_dim: Tuple[int, ...] = (192,),
+            key_dim: int = 64,
+            depth: Tuple[int, ...] = (12,),
+            num_heads: Union[int, Tuple[int, ...]] = (3,),
+            attn_ratio: Union[float, Tuple[float, ...]] = 2.,
+            mlp_ratio: Union[float, Tuple[float, ...]] = 2.,
+            stem_backbone: Optional[nn.Module] = None,
+            stem_stride: Optional[int] = None,
+            stem_type: str = 's16',
+            down_op: str = 'subsample',
+            act_layer: str = 'hard_swish',
+            attn_act_layer: Optional[str] = None,
+            use_conv: bool = False,
+            global_pool: str = 'avg',
+            drop_rate: float = 0.,
+            drop_path_rate: float = 0.,
+            device=None,
+            dtype=None,
+    ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         act_layer = get_act_layer(act_layer)
         attn_act_layer = get_act_layer(attn_act_layer or act_layer)
         self.use_conv = use_conv
@@ -574,9 +658,9 @@ class Levit(nn.Module):
         else:
             assert stem_type in ('s16', 's8')
             if stem_type == 's16':
-                self.stem = Stem16(in_chans, embed_dim[0], act_layer=act_layer)
+                self.stem = Stem16(in_chans, embed_dim[0], act_layer=act_layer, **dd)
             else:
-                self.stem = Stem8(in_chans, embed_dim[0], act_layer=act_layer)
+                self.stem = Stem8(in_chans, embed_dim[0], act_layer=act_layer, **dd)
             stride = self.stem.stride
         resolution = tuple([i // p for i, p in zip(to_2tuple(img_size), to_2tuple(stride))])
 
@@ -597,7 +681,8 @@ class Levit(nn.Module):
                 resolution=resolution,
                 use_conv=use_conv,
                 downsample=down_op if stage_stride == 2 else '',
-                drop_path=drop_path_rate
+                drop_path=drop_path_rate,
+                **dd,
             )]
             stride *= stage_stride
             resolution = tuple([(r - 1) // stage_stride + 1 for r in resolution])
@@ -606,7 +691,7 @@ class Levit(nn.Module):
         self.stages = nn.Sequential(*stages)
 
         # Classifier head
-        self.head = NormLinear(embed_dim[-1], num_classes, drop=drop_rate) if num_classes > 0 else nn.Identity()
+        self.head = NormLinear(embed_dim[-1], num_classes, drop=drop_rate, **dd) if num_classes > 0 else nn.Identity()
 
     @torch.jit.ignore
     def no_weight_decay(self):
@@ -726,7 +811,8 @@ class Levit(nn.Module):
 class LevitDistilled(Levit):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.head_dist = NormLinear(self.num_features, self.num_classes) if self.num_classes > 0 else nn.Identity()
+        dd = {'device': kwargs.get('device', None), 'dtype': kwargs.get('dtype', None)}
+        self.head_dist = NormLinear(self.num_features, self.num_classes, **dd) if self.num_classes > 0 else nn.Identity()
         self.distilled_training = False  # must set this True to train w/ distillation token
 
     @torch.jit.ignore
