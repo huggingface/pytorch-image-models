@@ -3,6 +3,7 @@
  https://github.com/Cadene/pretrained-models.pytorch
 """
 from functools import partial
+from typing import Optional, Type
 
 import torch
 import torch.nn as nn
@@ -17,12 +18,22 @@ __all__ = ['NASNetALarge']
 
 class ActConvBn(nn.Module):
 
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=''):
-        super(ActConvBn, self).__init__()
+    def __init__(
+            self,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: int,
+            stride: int = 1,
+            padding: str = '',
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.act = nn.ReLU()
         self.conv = create_conv2d(
-            in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding)
-        self.bn = nn.BatchNorm2d(out_channels, eps=0.001, momentum=0.1)
+            in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, **dd)
+        self.bn = nn.BatchNorm2d(out_channels, eps=0.001, momentum=0.1, **dd)
 
     def forward(self, x):
         x = self.act(x)
@@ -33,13 +44,34 @@ class ActConvBn(nn.Module):
 
 class SeparableConv2d(nn.Module):
 
-    def __init__(self, in_channels, out_channels, kernel_size, stride, padding=''):
-        super(SeparableConv2d, self).__init__()
+    def __init__(
+            self,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: int,
+            stride: int,
+            padding: str = '',
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.depthwise_conv2d = create_conv2d(
-            in_channels, in_channels, kernel_size=kernel_size,
-            stride=stride, padding=padding, groups=in_channels)
+            in_channels,
+            in_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            groups=in_channels,
+            **dd,
+        )
         self.pointwise_conv2d = create_conv2d(
-            in_channels, out_channels, kernel_size=1, padding=0)
+            in_channels,
+            out_channels,
+            kernel_size=1,
+            padding=0,
+            **dd,
+        )
 
     def forward(self, x):
         x = self.depthwise_conv2d(x)
@@ -49,17 +81,28 @@ class SeparableConv2d(nn.Module):
 
 class BranchSeparables(nn.Module):
 
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, pad_type='', stem_cell=False):
-        super(BranchSeparables, self).__init__()
+    def __init__(
+            self,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: int,
+            stride: int = 1,
+            pad_type: str = '',
+            stem_cell: bool = False,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         middle_channels = out_channels if stem_cell else in_channels
         self.act_1 = nn.ReLU()
         self.separable_1 = SeparableConv2d(
-            in_channels, middle_channels, kernel_size, stride=stride, padding=pad_type)
-        self.bn_sep_1 = nn.BatchNorm2d(middle_channels, eps=0.001, momentum=0.1)
+            in_channels, middle_channels, kernel_size, stride=stride, padding=pad_type, **dd)
+        self.bn_sep_1 = nn.BatchNorm2d(middle_channels, eps=0.001, momentum=0.1, **dd)
         self.act_2 = nn.ReLU(inplace=True)
         self.separable_2 = SeparableConv2d(
-            middle_channels, out_channels, kernel_size, stride=1, padding=pad_type)
-        self.bn_sep_2 = nn.BatchNorm2d(out_channels, eps=0.001, momentum=0.1)
+            middle_channels, out_channels, kernel_size, stride=1, padding=pad_type, **dd)
+        self.bn_sep_2 = nn.BatchNorm2d(out_channels, eps=0.001, momentum=0.1, **dd)
 
     def forward(self, x):
         x = self.act_1(x)
@@ -72,24 +115,37 @@ class BranchSeparables(nn.Module):
 
 
 class CellStem0(nn.Module):
-    def __init__(self, stem_size, num_channels=42, pad_type=''):
-        super(CellStem0, self).__init__()
+    def __init__(
+            self,
+            stem_size: int,
+            num_channels: int = 42,
+            pad_type: str = '',
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.num_channels = num_channels
         self.stem_size = stem_size
-        self.conv_1x1 = ActConvBn(self.stem_size, self.num_channels, 1, stride=1)
+        self.conv_1x1 = ActConvBn(self.stem_size, self.num_channels, 1, stride=1, **dd)
 
-        self.comb_iter_0_left = BranchSeparables(self.num_channels, self.num_channels, 5, 2, pad_type)
-        self.comb_iter_0_right = BranchSeparables(self.stem_size, self.num_channels, 7, 2, pad_type, stem_cell=True)
+        self.comb_iter_0_left = BranchSeparables(
+            self.num_channels, self.num_channels, 5, 2, pad_type, **dd)
+        self.comb_iter_0_right = BranchSeparables(
+            self.stem_size, self.num_channels, 7, 2, pad_type, stem_cell=True, **dd)
 
         self.comb_iter_1_left = create_pool2d('max', 3, 2, padding=pad_type)
-        self.comb_iter_1_right = BranchSeparables(self.stem_size, self.num_channels, 7, 2, pad_type, stem_cell=True)
+        self.comb_iter_1_right = BranchSeparables(
+            self.stem_size, self.num_channels, 7, 2, pad_type, stem_cell=True, **dd)
 
         self.comb_iter_2_left = create_pool2d('avg', 3, 2, count_include_pad=False, padding=pad_type)
-        self.comb_iter_2_right = BranchSeparables(self.stem_size, self.num_channels, 5, 2, pad_type, stem_cell=True)
+        self.comb_iter_2_right = BranchSeparables(
+            self.stem_size, self.num_channels, 5, 2, pad_type, stem_cell=True, **dd)
 
         self.comb_iter_3_right = create_pool2d('avg', 3, 1, count_include_pad=False, padding=pad_type)
 
-        self.comb_iter_4_left = BranchSeparables(self.num_channels, self.num_channels, 3, 1, pad_type)
+        self.comb_iter_4_left = BranchSeparables(
+            self.num_channels, self.num_channels, 3, 1, pad_type, **dd)
         self.comb_iter_4_right = create_pool2d('max', 3, 2, padding=pad_type)
 
     def forward(self, x):
@@ -120,36 +176,44 @@ class CellStem0(nn.Module):
 
 class CellStem1(nn.Module):
 
-    def __init__(self, stem_size, num_channels, pad_type=''):
-        super(CellStem1, self).__init__()
+    def __init__(
+            self,
+            stem_size: int,
+            num_channels: int,
+            pad_type: str = '',
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.num_channels = num_channels
         self.stem_size = stem_size
-        self.conv_1x1 = ActConvBn(2 * self.num_channels, self.num_channels, 1, stride=1)
+        self.conv_1x1 = ActConvBn(2 * self.num_channels, self.num_channels, 1, stride=1, **dd)
 
         self.act = nn.ReLU()
         self.path_1 = nn.Sequential()
         self.path_1.add_module('avgpool', nn.AvgPool2d(1, stride=2, count_include_pad=False))
-        self.path_1.add_module('conv', nn.Conv2d(self.stem_size, self.num_channels // 2, 1, stride=1, bias=False))
+        self.path_1.add_module('conv', nn.Conv2d(self.stem_size, self.num_channels // 2, 1, stride=1, bias=False, **dd))
 
         self.path_2 = nn.Sequential()
         self.path_2.add_module('pad', nn.ZeroPad2d((-1, 1, -1, 1)))
         self.path_2.add_module('avgpool', nn.AvgPool2d(1, stride=2, count_include_pad=False))
-        self.path_2.add_module('conv', nn.Conv2d(self.stem_size, self.num_channels // 2, 1, stride=1, bias=False))
+        self.path_2.add_module('conv', nn.Conv2d(self.stem_size, self.num_channels // 2, 1, stride=1, bias=False, **dd))
 
-        self.final_path_bn = nn.BatchNorm2d(self.num_channels, eps=0.001, momentum=0.1)
+        self.final_path_bn = nn.BatchNorm2d(self.num_channels, eps=0.001, momentum=0.1, **dd)
 
-        self.comb_iter_0_left = BranchSeparables(self.num_channels, self.num_channels, 5, 2, pad_type)
-        self.comb_iter_0_right = BranchSeparables(self.num_channels, self.num_channels, 7, 2, pad_type)
+        self.comb_iter_0_left = BranchSeparables(self.num_channels, self.num_channels, 5, 2, pad_type, **dd)
+        self.comb_iter_0_right = BranchSeparables(self.num_channels, self.num_channels, 7, 2, pad_type, **dd)
 
         self.comb_iter_1_left = create_pool2d('max', 3, 2, padding=pad_type)
-        self.comb_iter_1_right = BranchSeparables(self.num_channels, self.num_channels, 7, 2, pad_type)
+        self.comb_iter_1_right = BranchSeparables(self.num_channels, self.num_channels, 7, 2, pad_type, **dd)
 
         self.comb_iter_2_left = create_pool2d('avg', 3, 2, count_include_pad=False, padding=pad_type)
-        self.comb_iter_2_right = BranchSeparables(self.num_channels, self.num_channels, 5, 2, pad_type)
+        self.comb_iter_2_right = BranchSeparables(self.num_channels, self.num_channels, 5, 2, pad_type, **dd)
 
         self.comb_iter_3_right = create_pool2d('avg', 3, 1, count_include_pad=False, padding=pad_type)
 
-        self.comb_iter_4_left = BranchSeparables(self.num_channels, self.num_channels, 3, 1, pad_type)
+        self.comb_iter_4_left = BranchSeparables(self.num_channels, self.num_channels, 3, 1, pad_type, **dd)
         self.comb_iter_4_right = create_pool2d('max', 3, 2, padding=pad_type)
 
     def forward(self, x_conv0, x_stem_0):
@@ -188,34 +252,44 @@ class CellStem1(nn.Module):
 
 class FirstCell(nn.Module):
 
-    def __init__(self, in_chs_left, out_chs_left, in_chs_right, out_chs_right, pad_type=''):
-        super(FirstCell, self).__init__()
-        self.conv_1x1 = ActConvBn(in_chs_right, out_chs_right, 1, stride=1)
+    def __init__(
+            self,
+            in_chs_left: int,
+            out_chs_left: int,
+            in_chs_right: int,
+            out_chs_right: int,
+            pad_type: str = '',
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
+        self.conv_1x1 = ActConvBn(in_chs_right, out_chs_right, 1, stride=1, **dd)
 
         self.act = nn.ReLU()
         self.path_1 = nn.Sequential()
         self.path_1.add_module('avgpool', nn.AvgPool2d(1, stride=2, count_include_pad=False))
-        self.path_1.add_module('conv', nn.Conv2d(in_chs_left, out_chs_left, 1, stride=1, bias=False))
+        self.path_1.add_module('conv', nn.Conv2d(in_chs_left, out_chs_left, 1, stride=1, bias=False, **dd))
 
         self.path_2 = nn.Sequential()
         self.path_2.add_module('pad', nn.ZeroPad2d((-1, 1, -1, 1)))
         self.path_2.add_module('avgpool', nn.AvgPool2d(1, stride=2, count_include_pad=False))
-        self.path_2.add_module('conv', nn.Conv2d(in_chs_left, out_chs_left, 1, stride=1, bias=False))
+        self.path_2.add_module('conv', nn.Conv2d(in_chs_left, out_chs_left, 1, stride=1, bias=False, **dd))
 
-        self.final_path_bn = nn.BatchNorm2d(out_chs_left * 2, eps=0.001, momentum=0.1)
+        self.final_path_bn = nn.BatchNorm2d(out_chs_left * 2, eps=0.001, momentum=0.1, **dd)
 
-        self.comb_iter_0_left = BranchSeparables(out_chs_right, out_chs_right, 5, 1, pad_type)
-        self.comb_iter_0_right = BranchSeparables(out_chs_right, out_chs_right, 3, 1, pad_type)
+        self.comb_iter_0_left = BranchSeparables(out_chs_right, out_chs_right, 5, 1, pad_type, **dd)
+        self.comb_iter_0_right = BranchSeparables(out_chs_right, out_chs_right, 3, 1, pad_type, **dd)
 
-        self.comb_iter_1_left = BranchSeparables(out_chs_right, out_chs_right, 5, 1, pad_type)
-        self.comb_iter_1_right = BranchSeparables(out_chs_right, out_chs_right, 3, 1, pad_type)
+        self.comb_iter_1_left = BranchSeparables(out_chs_right, out_chs_right, 5, 1, pad_type, **dd)
+        self.comb_iter_1_right = BranchSeparables(out_chs_right, out_chs_right, 3, 1, pad_type, **dd)
 
         self.comb_iter_2_left = create_pool2d('avg', 3, 1, count_include_pad=False, padding=pad_type)
 
         self.comb_iter_3_left = create_pool2d('avg', 3, 1, count_include_pad=False, padding=pad_type)
         self.comb_iter_3_right = create_pool2d('avg', 3, 1, count_include_pad=False, padding=pad_type)
 
-        self.comb_iter_4_left = BranchSeparables(out_chs_right, out_chs_right, 3, 1, pad_type)
+        self.comb_iter_4_left = BranchSeparables(out_chs_right, out_chs_right, 3, 1, pad_type, **dd)
 
     def forward(self, x, x_prev):
         x_relu = self.act(x_prev)
@@ -248,23 +322,33 @@ class FirstCell(nn.Module):
 
 class NormalCell(nn.Module):
 
-    def __init__(self, in_chs_left, out_chs_left, in_chs_right, out_chs_right, pad_type=''):
-        super(NormalCell, self).__init__()
-        self.conv_prev_1x1 = ActConvBn(in_chs_left, out_chs_left, 1, stride=1, padding=pad_type)
-        self.conv_1x1 = ActConvBn(in_chs_right, out_chs_right, 1, stride=1, padding=pad_type)
+    def __init__(
+            self,
+            in_chs_left: int,
+            out_chs_left: int,
+            in_chs_right: int,
+            out_chs_right: int,
+            pad_type: str = '',
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
+        self.conv_prev_1x1 = ActConvBn(in_chs_left, out_chs_left, 1, stride=1, padding=pad_type, **dd)
+        self.conv_1x1 = ActConvBn(in_chs_right, out_chs_right, 1, stride=1, padding=pad_type, **dd)
 
-        self.comb_iter_0_left = BranchSeparables(out_chs_right, out_chs_right, 5, 1, pad_type)
-        self.comb_iter_0_right = BranchSeparables(out_chs_left, out_chs_left, 3, 1, pad_type)
+        self.comb_iter_0_left = BranchSeparables(out_chs_right, out_chs_right, 5, 1, pad_type, **dd)
+        self.comb_iter_0_right = BranchSeparables(out_chs_left, out_chs_left, 3, 1, pad_type, **dd)
 
-        self.comb_iter_1_left = BranchSeparables(out_chs_left, out_chs_left, 5, 1, pad_type)
-        self.comb_iter_1_right = BranchSeparables(out_chs_left, out_chs_left, 3, 1, pad_type)
+        self.comb_iter_1_left = BranchSeparables(out_chs_left, out_chs_left, 5, 1, pad_type, **dd)
+        self.comb_iter_1_right = BranchSeparables(out_chs_left, out_chs_left, 3, 1, pad_type, **dd)
 
         self.comb_iter_2_left = create_pool2d('avg', 3, 1, count_include_pad=False, padding=pad_type)
 
         self.comb_iter_3_left = create_pool2d('avg', 3, 1, count_include_pad=False, padding=pad_type)
         self.comb_iter_3_right = create_pool2d('avg', 3, 1, count_include_pad=False, padding=pad_type)
 
-        self.comb_iter_4_left = BranchSeparables(out_chs_right, out_chs_right, 3, 1, pad_type)
+        self.comb_iter_4_left = BranchSeparables(out_chs_right, out_chs_right, 3, 1, pad_type, **dd)
 
     def forward(self, x, x_prev):
         x_left = self.conv_prev_1x1(x_prev)
@@ -294,23 +378,33 @@ class NormalCell(nn.Module):
 
 class ReductionCell0(nn.Module):
 
-    def __init__(self, in_chs_left, out_chs_left, in_chs_right, out_chs_right, pad_type=''):
-        super(ReductionCell0, self).__init__()
-        self.conv_prev_1x1 = ActConvBn(in_chs_left, out_chs_left, 1, stride=1, padding=pad_type)
-        self.conv_1x1 = ActConvBn(in_chs_right, out_chs_right, 1, stride=1, padding=pad_type)
+    def __init__(
+            self,
+            in_chs_left: int,
+            out_chs_left: int,
+            in_chs_right: int,
+            out_chs_right: int,
+            pad_type: str = '',
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
+        self.conv_prev_1x1 = ActConvBn(in_chs_left, out_chs_left, 1, stride=1, padding=pad_type, **dd)
+        self.conv_1x1 = ActConvBn(in_chs_right, out_chs_right, 1, stride=1, padding=pad_type, **dd)
 
-        self.comb_iter_0_left = BranchSeparables(out_chs_right, out_chs_right, 5, 2, pad_type)
-        self.comb_iter_0_right = BranchSeparables(out_chs_right, out_chs_right, 7, 2, pad_type)
+        self.comb_iter_0_left = BranchSeparables(out_chs_right, out_chs_right, 5, 2, pad_type, **dd)
+        self.comb_iter_0_right = BranchSeparables(out_chs_right, out_chs_right, 7, 2, pad_type, **dd)
 
         self.comb_iter_1_left = create_pool2d('max', 3, 2, padding=pad_type)
-        self.comb_iter_1_right = BranchSeparables(out_chs_right, out_chs_right, 7, 2, pad_type)
+        self.comb_iter_1_right = BranchSeparables(out_chs_right, out_chs_right, 7, 2, pad_type, **dd)
 
         self.comb_iter_2_left = create_pool2d('avg', 3, 2, count_include_pad=False, padding=pad_type)
-        self.comb_iter_2_right = BranchSeparables(out_chs_right, out_chs_right, 5, 2, pad_type)
+        self.comb_iter_2_right = BranchSeparables(out_chs_right, out_chs_right, 5, 2, pad_type, **dd)
 
         self.comb_iter_3_right = create_pool2d('avg', 3, 1, count_include_pad=False, padding=pad_type)
 
-        self.comb_iter_4_left = BranchSeparables(out_chs_right, out_chs_right, 3, 1, pad_type)
+        self.comb_iter_4_left = BranchSeparables(out_chs_right, out_chs_right, 3, 1, pad_type, **dd)
         self.comb_iter_4_right = create_pool2d('max', 3, 2, padding=pad_type)
 
     def forward(self, x, x_prev):
@@ -342,23 +436,33 @@ class ReductionCell0(nn.Module):
 
 class ReductionCell1(nn.Module):
 
-    def __init__(self, in_chs_left, out_chs_left, in_chs_right, out_chs_right, pad_type=''):
-        super(ReductionCell1, self).__init__()
-        self.conv_prev_1x1 = ActConvBn(in_chs_left, out_chs_left, 1, stride=1, padding=pad_type)
-        self.conv_1x1 = ActConvBn(in_chs_right, out_chs_right, 1, stride=1, padding=pad_type)
+    def __init__(
+            self,
+            in_chs_left: int,
+            out_chs_left: int,
+            in_chs_right: int,
+            out_chs_right: int,
+            pad_type: str = '',
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
+        self.conv_prev_1x1 = ActConvBn(in_chs_left, out_chs_left, 1, stride=1, padding=pad_type, **dd)
+        self.conv_1x1 = ActConvBn(in_chs_right, out_chs_right, 1, stride=1, padding=pad_type, **dd)
 
-        self.comb_iter_0_left = BranchSeparables(out_chs_right, out_chs_right, 5, 2, pad_type)
-        self.comb_iter_0_right = BranchSeparables(out_chs_right, out_chs_right, 7, 2, pad_type)
+        self.comb_iter_0_left = BranchSeparables(out_chs_right, out_chs_right, 5, 2, pad_type, **dd)
+        self.comb_iter_0_right = BranchSeparables(out_chs_right, out_chs_right, 7, 2, pad_type, **dd)
 
         self.comb_iter_1_left = create_pool2d('max', 3, 2, padding=pad_type)
-        self.comb_iter_1_right = BranchSeparables(out_chs_right, out_chs_right, 7, 2, pad_type)
+        self.comb_iter_1_right = BranchSeparables(out_chs_right, out_chs_right, 7, 2, pad_type, **dd)
 
         self.comb_iter_2_left = create_pool2d('avg', 3, 2, count_include_pad=False, padding=pad_type)
-        self.comb_iter_2_right = BranchSeparables(out_chs_right, out_chs_right, 5, 2, pad_type)
+        self.comb_iter_2_right = BranchSeparables(out_chs_right, out_chs_right, 5, 2, pad_type, **dd)
 
         self.comb_iter_3_right = create_pool2d('avg', 3, 1, count_include_pad=False, padding=pad_type)
 
-        self.comb_iter_4_left = BranchSeparables(out_chs_right, out_chs_right, 3, 1, pad_type)
+        self.comb_iter_4_left = BranchSeparables(out_chs_right, out_chs_right, 3, 1, pad_type, **dd)
         self.comb_iter_4_right = create_pool2d('max', 3, 2, padding=pad_type)
 
     def forward(self, x, x_prev):
@@ -393,17 +497,20 @@ class NASNetALarge(nn.Module):
 
     def __init__(
             self,
-            num_classes=1000,
-            in_chans=3,
-            stem_size=96,
-            channel_multiplier=2,
-            num_features=4032,
-            output_stride=32,
-            drop_rate=0.,
-            global_pool='avg',
-            pad_type='same',
+            num_classes: int = 1000,
+            in_chans: int = 3,
+            stem_size: int = 96,
+            channel_multiplier: int = 2,
+            num_features: int = 4032,
+            output_stride: int = 32,
+            drop_rate: float = 0.,
+            global_pool: str = 'avg',
+            pad_type: str = 'same',
+            device=None,
+            dtype=None,
     ):
         super(NASNetALarge, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.stem_size = stem_size
         self.num_features = self.head_hidden_size = num_features
@@ -414,76 +521,83 @@ class NASNetALarge(nn.Module):
         # 24 is default value for the architecture
 
         self.conv0 = ConvNormAct(
-            in_channels=in_chans, out_channels=self.stem_size, kernel_size=3, padding=0, stride=2,
-            norm_layer=partial(nn.BatchNorm2d, eps=0.001, momentum=0.1), apply_act=False)
+            in_channels=in_chans,
+            out_channels=self.stem_size,
+            kernel_size=3,
+            padding=0,
+            stride=2,
+            norm_layer=partial(nn.BatchNorm2d, eps=0.001, momentum=0.1),
+            apply_act=False,
+            **dd,
+        )
 
         self.cell_stem_0 = CellStem0(
-            self.stem_size, num_channels=channels // (channel_multiplier ** 2), pad_type=pad_type)
+            self.stem_size, num_channels=channels // (channel_multiplier ** 2), pad_type=pad_type, **dd)
         self.cell_stem_1 = CellStem1(
-            self.stem_size, num_channels=channels // channel_multiplier, pad_type=pad_type)
+            self.stem_size, num_channels=channels // channel_multiplier, pad_type=pad_type, **dd)
 
         self.cell_0 = FirstCell(
             in_chs_left=channels, out_chs_left=channels // 2,
-            in_chs_right=2 * channels, out_chs_right=channels, pad_type=pad_type)
+            in_chs_right=2 * channels, out_chs_right=channels, pad_type=pad_type, **dd)
         self.cell_1 = NormalCell(
             in_chs_left=2 * channels, out_chs_left=channels,
-            in_chs_right=6 * channels, out_chs_right=channels, pad_type=pad_type)
+            in_chs_right=6 * channels, out_chs_right=channels, pad_type=pad_type, **dd)
         self.cell_2 = NormalCell(
             in_chs_left=6 * channels, out_chs_left=channels,
-            in_chs_right=6 * channels, out_chs_right=channels, pad_type=pad_type)
+            in_chs_right=6 * channels, out_chs_right=channels, pad_type=pad_type, **dd)
         self.cell_3 = NormalCell(
             in_chs_left=6 * channels, out_chs_left=channels,
-            in_chs_right=6 * channels, out_chs_right=channels, pad_type=pad_type)
+            in_chs_right=6 * channels, out_chs_right=channels, pad_type=pad_type, **dd)
         self.cell_4 = NormalCell(
             in_chs_left=6 * channels, out_chs_left=channels,
-            in_chs_right=6 * channels, out_chs_right=channels, pad_type=pad_type)
+            in_chs_right=6 * channels, out_chs_right=channels, pad_type=pad_type, **dd)
         self.cell_5 = NormalCell(
             in_chs_left=6 * channels, out_chs_left=channels,
-            in_chs_right=6 * channels, out_chs_right=channels, pad_type=pad_type)
+            in_chs_right=6 * channels, out_chs_right=channels, pad_type=pad_type, **dd)
 
         self.reduction_cell_0 = ReductionCell0(
             in_chs_left=6 * channels, out_chs_left=2 * channels,
-            in_chs_right=6 * channels, out_chs_right=2 * channels, pad_type=pad_type)
+            in_chs_right=6 * channels, out_chs_right=2 * channels, pad_type=pad_type, **dd)
         self.cell_6 = FirstCell(
             in_chs_left=6 * channels, out_chs_left=channels,
-            in_chs_right=8 * channels, out_chs_right=2 * channels, pad_type=pad_type)
+            in_chs_right=8 * channels, out_chs_right=2 * channels, pad_type=pad_type, **dd)
         self.cell_7 = NormalCell(
             in_chs_left=8 * channels, out_chs_left=2 * channels,
-            in_chs_right=12 * channels, out_chs_right=2 * channels, pad_type=pad_type)
+            in_chs_right=12 * channels, out_chs_right=2 * channels, pad_type=pad_type, **dd)
         self.cell_8 = NormalCell(
             in_chs_left=12 * channels, out_chs_left=2 * channels,
-            in_chs_right=12 * channels, out_chs_right=2 * channels, pad_type=pad_type)
+            in_chs_right=12 * channels, out_chs_right=2 * channels, pad_type=pad_type, **dd)
         self.cell_9 = NormalCell(
             in_chs_left=12 * channels, out_chs_left=2 * channels,
-            in_chs_right=12 * channels, out_chs_right=2 * channels, pad_type=pad_type)
+            in_chs_right=12 * channels, out_chs_right=2 * channels, pad_type=pad_type, **dd)
         self.cell_10 = NormalCell(
             in_chs_left=12 * channels, out_chs_left=2 * channels,
-            in_chs_right=12 * channels, out_chs_right=2 * channels, pad_type=pad_type)
+            in_chs_right=12 * channels, out_chs_right=2 * channels, pad_type=pad_type, **dd)
         self.cell_11 = NormalCell(
             in_chs_left=12 * channels, out_chs_left=2 * channels,
-            in_chs_right=12 * channels, out_chs_right=2 * channels, pad_type=pad_type)
+            in_chs_right=12 * channels, out_chs_right=2 * channels, pad_type=pad_type, **dd)
 
         self.reduction_cell_1 = ReductionCell1(
             in_chs_left=12 * channels, out_chs_left=4 * channels,
-            in_chs_right=12 * channels, out_chs_right=4 * channels, pad_type=pad_type)
+            in_chs_right=12 * channels, out_chs_right=4 * channels, pad_type=pad_type, **dd)
         self.cell_12 = FirstCell(
             in_chs_left=12 * channels, out_chs_left=2 * channels,
-            in_chs_right=16 * channels, out_chs_right=4 * channels, pad_type=pad_type)
+            in_chs_right=16 * channels, out_chs_right=4 * channels, pad_type=pad_type, **dd)
         self.cell_13 = NormalCell(
             in_chs_left=16 * channels, out_chs_left=4 * channels,
-            in_chs_right=24 * channels, out_chs_right=4 * channels, pad_type=pad_type)
+            in_chs_right=24 * channels, out_chs_right=4 * channels, pad_type=pad_type, **dd)
         self.cell_14 = NormalCell(
             in_chs_left=24 * channels, out_chs_left=4 * channels,
-            in_chs_right=24 * channels, out_chs_right=4 * channels, pad_type=pad_type)
+            in_chs_right=24 * channels, out_chs_right=4 * channels, pad_type=pad_type, **dd)
         self.cell_15 = NormalCell(
             in_chs_left=24 * channels, out_chs_left=4 * channels,
-            in_chs_right=24 * channels, out_chs_right=4 * channels, pad_type=pad_type)
+            in_chs_right=24 * channels, out_chs_right=4 * channels, pad_type=pad_type, **dd)
         self.cell_16 = NormalCell(
             in_chs_left=24 * channels, out_chs_left=4 * channels,
-            in_chs_right=24 * channels, out_chs_right=4 * channels, pad_type=pad_type)
+            in_chs_right=24 * channels, out_chs_right=4 * channels, pad_type=pad_type, **dd)
         self.cell_17 = NormalCell(
             in_chs_left=24 * channels, out_chs_left=4 * channels,
-            in_chs_right=24 * channels, out_chs_right=4 * channels, pad_type=pad_type)
+            in_chs_right=24 * channels, out_chs_right=4 * channels, pad_type=pad_type, **dd)
         self.act = nn.ReLU(inplace=True)
         self.feature_info = [
             dict(num_chs=96, reduction=2, module='conv0'),
@@ -494,7 +608,12 @@ class NASNetALarge(nn.Module):
         ]
 
         self.global_pool, self.head_drop, self.last_linear = create_classifier(
-            self.num_features, self.num_classes, pool_type=global_pool, drop_rate=drop_rate)
+            self.num_features,
+            self.num_classes,
+            pool_type=global_pool,
+            drop_rate=drop_rate,
+            **dd,
+        )
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):

@@ -7,7 +7,7 @@ Original model: https://github.com/mrT23/TResNet
 """
 from collections import OrderedDict
 from functools import partial
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Type
 
 import torch
 import torch.nn as nn
@@ -26,25 +26,36 @@ class BasicBlock(nn.Module):
 
     def __init__(
             self,
-            inplanes,
-            planes,
-            stride=1,
-            downsample=None,
-            use_se=True,
-            aa_layer=None,
-            drop_path_rate=0.
-    ):
-        super(BasicBlock, self).__init__()
+            inplanes: int,
+            planes: int,
+            stride: int = 1,
+            downsample: Optional[nn.Module] = None,
+            use_se: bool = True,
+            aa_layer: Optional[Type[nn.Module]] = None,
+            drop_path_rate: float = 0.,
+            device=None,
+            dtype=None,
+    ) -> None:
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.downsample = downsample
         self.stride = stride
         act_layer = partial(nn.LeakyReLU, negative_slope=1e-3)
 
-        self.conv1 = ConvNormAct(inplanes, planes, kernel_size=3, stride=stride, act_layer=act_layer, aa_layer=aa_layer)
-        self.conv2 = ConvNormAct(planes, planes, kernel_size=3, stride=1, apply_act=False)
+        self.conv1 = ConvNormAct(
+            inplanes,
+            planes,
+            kernel_size=3,
+            stride=stride,
+            act_layer=act_layer,
+            aa_layer=aa_layer,
+            **dd,
+        )
+        self.conv2 = ConvNormAct(planes, planes, kernel_size=3, stride=1, apply_act=False, **dd)
         self.act = nn.ReLU(inplace=True)
 
         rd_chs = max(planes * self.expansion // 4, 64)
-        self.se = SEModule(planes * self.expansion, rd_channels=rd_chs) if use_se else None
+        self.se = SEModule(planes * self.expansion, rd_channels=rd_chs, **dd) if use_se else None
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0 else nn.Identity()
 
     def forward(self, x):
@@ -66,30 +77,38 @@ class Bottleneck(nn.Module):
 
     def __init__(
             self,
-            inplanes,
-            planes,
-            stride=1,
-            downsample=None,
-            use_se=True,
-            act_layer=None,
-            aa_layer=None,
-            drop_path_rate=0.,
-    ):
-        super(Bottleneck, self).__init__()
+            inplanes: int,
+            planes: int,
+            stride: int = 1,
+            downsample: Optional[nn.Module] = None,
+            use_se: bool = True,
+            act_layer: Optional[Type[nn.Module]] = None,
+            aa_layer: Optional[Type[nn.Module]] = None,
+            drop_path_rate: float = 0.,
+            device=None,
+            dtype=None,
+    ) -> None:
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.downsample = downsample
         self.stride = stride
         act_layer = act_layer or partial(nn.LeakyReLU, negative_slope=1e-3)
 
-        self.conv1 = ConvNormAct(
-            inplanes, planes, kernel_size=1, stride=1, act_layer=act_layer)
+        self.conv1 = ConvNormAct(inplanes, planes, kernel_size=1, stride=1, act_layer=act_layer, **dd)
         self.conv2 = ConvNormAct(
-            planes, planes, kernel_size=3, stride=stride, act_layer=act_layer, aa_layer=aa_layer)
+            planes,
+            planes,
+            kernel_size=3,
+            stride=stride,
+            act_layer=act_layer,
+            aa_layer=aa_layer,
+            **dd,
+        )
 
         reduction_chs = max(planes * self.expansion // 8, 64)
-        self.se = SEModule(planes, rd_channels=reduction_chs) if use_se else None
+        self.se = SEModule(planes, rd_channels=reduction_chs, **dd) if use_se else None
 
-        self.conv3 = ConvNormAct(
-            planes, planes * self.expansion, kernel_size=1, stride=1, apply_act=False)
+        self.conv3 = ConvNormAct(planes, planes * self.expansion, kernel_size=1, stride=1, apply_act=False, **dd)
 
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0 else nn.Identity()
         self.act = nn.ReLU(inplace=True)
@@ -112,19 +131,22 @@ class Bottleneck(nn.Module):
 class TResNet(nn.Module):
     def __init__(
             self,
-            layers,
-            in_chans=3,
-            num_classes=1000,
-            width_factor=1.0,
-            v2=False,
-            global_pool='fast',
-            drop_rate=0.,
-            drop_path_rate=0.,
-    ):
+            layers: List[int],
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            width_factor: float = 1.0,
+            v2: bool = False,
+            global_pool: str = 'fast',
+            drop_rate: float = 0.,
+            drop_path_rate: float = 0.,
+            device=None,
+            dtype=None,
+    ) -> None:
+        super(TResNet, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
-        super(TResNet, self).__init__()
 
         aa_layer = BlurPool2d
         act_layer = nn.LeakyReLU
@@ -137,19 +159,19 @@ class TResNet(nn.Module):
             self.planes = self.planes // 8 * 8
 
         dpr = calculate_drop_path_rates(drop_path_rate, layers, stagewise=True)
-        conv1 = ConvNormAct(in_chans * 16, self.planes, stride=1, kernel_size=3, act_layer=act_layer)
+        conv1 = ConvNormAct(in_chans * 16, self.planes, stride=1, kernel_size=3, act_layer=act_layer, **dd)
         layer1 = self._make_layer(
             Bottleneck if v2 else BasicBlock,
-            self.planes, layers[0], stride=1, use_se=True, aa_layer=aa_layer, drop_path_rate=dpr[0])
+            self.planes, layers[0], stride=1, use_se=True, aa_layer=aa_layer, drop_path_rate=dpr[0], **dd)
         layer2 = self._make_layer(
             Bottleneck if v2 else BasicBlock,
-            self.planes * 2, layers[1], stride=2, use_se=True, aa_layer=aa_layer, drop_path_rate=dpr[1])
+            self.planes * 2, layers[1], stride=2, use_se=True, aa_layer=aa_layer, drop_path_rate=dpr[1], **dd)
         layer3 = self._make_layer(
             Bottleneck,
-            self.planes * 4, layers[2], stride=2, use_se=True, aa_layer=aa_layer, drop_path_rate=dpr[2])
+            self.planes * 4, layers[2], stride=2, use_se=True, aa_layer=aa_layer, drop_path_rate=dpr[2], **dd)
         layer4 = self._make_layer(
             Bottleneck,
-            self.planes * 8, layers[3], stride=2, use_se=False, aa_layer=aa_layer, drop_path_rate=dpr[3])
+            self.planes * 8, layers[3], stride=2, use_se=False, aa_layer=aa_layer, drop_path_rate=dpr[3], **dd)
 
         # body
         self.body = nn.Sequential(OrderedDict([
@@ -171,7 +193,7 @@ class TResNet(nn.Module):
 
         # head
         self.num_features = self.head_hidden_size = (self.planes * 8) * Bottleneck.expansion
-        self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=drop_rate)
+        self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=drop_rate, **dd)
 
         # model initialization
         for m in self.modules():
@@ -187,7 +209,20 @@ class TResNet(nn.Module):
             if isinstance(m, Bottleneck):
                 nn.init.zeros_(m.conv3.bn.weight)
 
-    def _make_layer(self, block, planes, blocks, stride=1, use_se=True, aa_layer=None, drop_path_rate=0.):
+    def _make_layer(
+            self,
+            block,
+            planes,
+            blocks,
+            stride=1,
+            use_se=True,
+            aa_layer=None,
+            drop_path_rate=0.,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             layers = []
@@ -195,7 +230,7 @@ class TResNet(nn.Module):
                 # avg pooling before 1x1 conv
                 layers.append(nn.AvgPool2d(kernel_size=2, stride=2, ceil_mode=True, count_include_pad=False))
             layers += [ConvNormAct(
-                self.inplanes, planes * block.expansion, kernel_size=1, stride=1, apply_act=False)]
+                self.inplanes, planes * block.expansion, kernel_size=1, stride=1, apply_act=False, **dd)]
             downsample = nn.Sequential(*layers)
 
         layers = []
@@ -208,6 +243,7 @@ class TResNet(nn.Module):
                 use_se=use_se,
                 aa_layer=aa_layer,
                 drop_path_rate=drop_path_rate[i] if isinstance(drop_path_rate, list) else drop_path_rate,
+                **dd,
             ))
             self.inplanes = planes * block.expansion
         return nn.Sequential(*layers)

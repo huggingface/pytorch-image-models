@@ -44,7 +44,9 @@ class ConvMlp(nn.Module):
             drop_rate: float = 0.2,
             act_layer: Type[nn.Module] = nn.ReLU,
             conv_layer: Type[nn.Module] = nn.Conv2d,
-    ):
+            device=None,
+            dtype=None,
+    ) -> None:
         """Initialize ConvMlp.
 
         Args:
@@ -56,13 +58,14 @@ class ConvMlp(nn.Module):
             act_layer: Activation layer type.
             conv_layer: Convolution layer type.
         """
-        super(ConvMlp, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.input_kernel_size = kernel_size
         mid_features = int(out_features * mlp_ratio)
-        self.fc1 = conv_layer(in_features, mid_features, kernel_size, bias=True)
+        self.fc1 = conv_layer(in_features, mid_features, kernel_size, bias=True, **dd)
         self.act1 = act_layer(True)
         self.drop = nn.Dropout(drop_rate)
-        self.fc2 = conv_layer(mid_features, out_features, 1, bias=True)
+        self.fc2 = conv_layer(mid_features, out_features, 1, bias=True, **dd)
         self.act2 = act_layer(True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -105,6 +108,8 @@ class VGG(nn.Module):
             norm_layer: Optional[Type[nn.Module]] = None,
             global_pool: str = 'avg',
             drop_rate: float = 0.,
+            device=None,
+            dtype=None,
     ) -> None:
         """Initialize VGG model.
 
@@ -120,7 +125,8 @@ class VGG(nn.Module):
             global_pool: Global pooling type.
             drop_rate: Dropout rate.
         """
-        super(VGG, self).__init__()
+        super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         assert output_stride == 32
         self.num_classes = num_classes
         self.drop_rate = drop_rate
@@ -140,9 +146,9 @@ class VGG(nn.Module):
                 net_stride *= 2
             else:
                 v = cast(int, v)
-                conv2d = conv_layer(prev_chs, v, kernel_size=3, padding=1)
+                conv2d = conv_layer(prev_chs, v, kernel_size=3, padding=1, **dd)
                 if norm_layer is not None:
-                    layers += [conv2d, norm_layer(v), act_layer(inplace=True)]
+                    layers += [conv2d, norm_layer(v, **dd), act_layer(inplace=True)]
                 else:
                     layers += [conv2d, act_layer(inplace=True)]
                 prev_chs = v
@@ -159,12 +165,14 @@ class VGG(nn.Module):
             drop_rate=drop_rate,
             act_layer=act_layer,
             conv_layer=conv_layer,
+            **dd,
         )
         self.head = ClassifierHead(
             self.head_hidden_size,
             num_classes,
             pool_type=global_pool,
             drop_rate=drop_rate,
+            **dd,
         )
 
         self._initialize_weights()

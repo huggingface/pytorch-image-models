@@ -32,21 +32,31 @@ class SeparableConv2d(nn.Module):
             padding: PadType = '',
             act_layer: Type[nn.Module] = nn.ReLU,
             norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            device=None,
+            dtype=None,
     ):
-        super(SeparableConv2d, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.kernel_size = kernel_size
         self.dilation = dilation
 
         # depthwise convolution
         self.conv_dw = create_conv2d(
-            in_chs, in_chs, kernel_size, stride=stride,
-            padding=padding, dilation=dilation, depthwise=True)
-        self.bn_dw = norm_layer(in_chs)
+            in_chs,
+            in_chs,
+            kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            depthwise=True,
+            **dd,
+        )
+        self.bn_dw = norm_layer(in_chs, **dd)
         self.act_dw = act_layer(inplace=True) if act_layer is not None else nn.Identity()
 
         # pointwise convolution
-        self.conv_pw = create_conv2d(in_chs, out_chs, kernel_size=1)
-        self.bn_pw = norm_layer(out_chs)
+        self.conv_pw = create_conv2d(in_chs, out_chs, kernel_size=1, **dd)
+        self.bn_pw = norm_layer(out_chs, **dd)
         self.act_pw = act_layer(inplace=True) if act_layer is not None else nn.Identity()
 
     def forward(self, x):
@@ -71,20 +81,30 @@ class PreSeparableConv2d(nn.Module):
             act_layer: Type[nn.Module] = nn.ReLU,
             norm_layer: Type[nn.Module] = nn.BatchNorm2d,
             first_act: bool = True,
+            device=None,
+            dtype=None,
     ):
-        super(PreSeparableConv2d, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer=act_layer)
         self.kernel_size = kernel_size
         self.dilation = dilation
 
-        self.norm = norm_act_layer(in_chs, inplace=True) if first_act else nn.Identity()
+        self.norm = norm_act_layer(in_chs, inplace=True, **dd) if first_act else nn.Identity()
         # depthwise convolution
         self.conv_dw = create_conv2d(
-            in_chs, in_chs, kernel_size, stride=stride,
-            padding=padding, dilation=dilation, depthwise=True)
+            in_chs,
+            in_chs,
+            kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            depthwise=True,
+            **dd,
+        )
 
         # pointwise convolution
-        self.conv_pw = create_conv2d(in_chs, out_chs, kernel_size=1)
+        self.conv_pw = create_conv2d(in_chs, out_chs, kernel_size=1, **dd)
 
     def forward(self, x):
         x = self.norm(x)
@@ -105,16 +125,26 @@ class XceptionModule(nn.Module):
             no_skip: bool = False,
             act_layer: Type[nn.Module] = nn.ReLU,
             norm_layer: Optional[Type[nn.Module]] = None,
-            drop_path: Optional[nn.Module] = None
+            drop_path: Optional[nn.Module] = None,
+            device=None,
+            dtype=None,
     ):
-        super(XceptionModule, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         out_chs = to_3tuple(out_chs)
         self.in_channels = in_chs
         self.out_channels = out_chs[-1]
         self.no_skip = no_skip
         if not no_skip and (self.out_channels != self.in_channels or stride != 1):
             self.shortcut = ConvNormAct(
-                in_chs, self.out_channels, 1, stride=stride, norm_layer=norm_layer, apply_act=False)
+                in_chs,
+                self.out_channels,
+                1,
+                stride=stride,
+                norm_layer=norm_layer,
+                apply_act=False,
+                **dd,
+            )
         else:
             self.shortcut = None
 
@@ -124,8 +154,16 @@ class XceptionModule(nn.Module):
             if start_with_relu:
                 self.stack.add_module(f'act{i + 1}', act_layer(inplace=i > 0))
             self.stack.add_module(f'conv{i + 1}', SeparableConv2d(
-                in_chs, out_chs[i], 3, stride=stride if i == 2 else 1, dilation=dilation, padding=pad_type,
-                act_layer=separable_act_layer, norm_layer=norm_layer))
+                in_chs,
+                out_chs[i],
+                3,
+                stride=stride if i == 2 else 1,
+                dilation=dilation,
+                padding=pad_type,
+                act_layer=separable_act_layer,
+                norm_layer=norm_layer,
+                **dd,
+            ))
             in_chs = out_chs[i]
 
         self.drop_path = drop_path
@@ -153,19 +191,22 @@ class PreXceptionModule(nn.Module):
             no_skip: bool = False,
             act_layer: Type[nn.Module] = nn.ReLU,
             norm_layer: Optional[Type[nn.Module]] = None,
-            drop_path: Optional[nn.Module] = None
+            drop_path: Optional[nn.Module] = None,
+            device=None,
+            dtype=None,
     ):
-        super(PreXceptionModule, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         out_chs = to_3tuple(out_chs)
         self.in_channels = in_chs
         self.out_channels = out_chs[-1]
         self.no_skip = no_skip
         if not no_skip and (self.out_channels != self.in_channels or stride != 1):
-            self.shortcut = create_conv2d(in_chs, self.out_channels, 1, stride=stride)
+            self.shortcut = create_conv2d(in_chs, self.out_channels, 1, stride=stride, **dd)
         else:
             self.shortcut = nn.Identity()
 
-        self.norm = get_norm_act_layer(norm_layer, act_layer=act_layer)(in_chs, inplace=True)
+        self.norm = get_norm_act_layer(norm_layer, act_layer=act_layer)(in_chs, inplace=True, **dd)
         self.stack = nn.Sequential()
         for i in range(3):
             self.stack.add_module(f'conv{i + 1}', PreSeparableConv2d(
@@ -178,6 +219,7 @@ class PreXceptionModule(nn.Module):
                 act_layer=act_layer,
                 norm_layer=norm_layer,
                 first_act=i > 0,
+                **dd,
             ))
             in_chs = out_chs[i]
 
@@ -210,17 +252,20 @@ class XceptionAligned(nn.Module):
             drop_rate: float = 0.,
             drop_path_rate: float = 0.,
             global_pool: str = 'avg',
+            device=None,
+            dtype=None,
     ):
-        super(XceptionAligned, self).__init__()
+        super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         assert output_stride in (8, 16, 32)
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
 
-        layer_args = dict(act_layer=act_layer, norm_layer=norm_layer)
+        layer_args = dict(act_layer=act_layer, norm_layer=norm_layer, **dd)
         self.stem = nn.Sequential(*[
             ConvNormAct(in_chans, 32, kernel_size=3, stride=2, **layer_args),
-            create_conv2d(32, 64, kernel_size=3, stride=1) if preact else
+            create_conv2d(32, 64, kernel_size=3, stride=1, **dd) if preact else
             ConvNormAct(32, 64, kernel_size=3, stride=1, **layer_args)
         ])
 
@@ -257,6 +302,7 @@ class XceptionAligned(nn.Module):
             num_classes=num_classes,
             pool_type=global_pool,
             drop_rate=drop_rate,
+            **dd,
         )
 
     @torch.jit.ignore

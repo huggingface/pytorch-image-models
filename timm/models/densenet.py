@@ -4,7 +4,7 @@ fixed kwargs passthrough and addition of dynamic global avg/max pool.
 """
 import re
 from collections import OrderedDict
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -31,9 +31,11 @@ class DenseLayer(nn.Module):
             num_input_features: int,
             growth_rate: int,
             bn_size: int,
-            norm_layer: type = BatchNormAct2d,
+            norm_layer: Type[nn.Module] = BatchNormAct2d,
             drop_rate: float = 0.,
             grad_checkpointing: bool = False,
+            device=None,
+            dtype=None,
     ) -> None:
         """Initialize DenseLayer.
 
@@ -45,13 +47,14 @@ class DenseLayer(nn.Module):
             drop_rate: Dropout rate.
             grad_checkpointing: Use gradient checkpointing.
         """
+        dd = {'device': device, 'dtype': dtype}
         super(DenseLayer, self).__init__()
-        self.add_module('norm1', norm_layer(num_input_features)),
+        self.add_module('norm1', norm_layer(num_input_features, **dd)),
         self.add_module('conv1', nn.Conv2d(
-            num_input_features, bn_size * growth_rate, kernel_size=1, stride=1, bias=False)),
-        self.add_module('norm2', norm_layer(bn_size * growth_rate)),
+            num_input_features, bn_size * growth_rate, kernel_size=1, stride=1, bias=False, **dd)),
+        self.add_module('norm2', norm_layer(bn_size * growth_rate, **dd)),
         self.add_module('conv2', nn.Conv2d(
-            bn_size * growth_rate, growth_rate, kernel_size=3, stride=1, padding=1, bias=False)),
+            bn_size * growth_rate, growth_rate, kernel_size=3, stride=1, padding=1, bias=False, **dd)),
         self.drop_rate = float(drop_rate)
         self.grad_checkpointing = grad_checkpointing
 
@@ -129,9 +132,11 @@ class DenseBlock(nn.ModuleDict):
             num_input_features: int,
             bn_size: int,
             growth_rate: int,
-            norm_layer: type = BatchNormAct2d,
+            norm_layer: Type[nn.Module] = BatchNormAct2d,
             drop_rate: float = 0.,
             grad_checkpointing: bool = False,
+            device=None,
+            dtype=None,
     ) -> None:
         """Initialize DenseBlock.
 
@@ -144,6 +149,7 @@ class DenseBlock(nn.ModuleDict):
             drop_rate: Dropout rate.
             grad_checkpointing: Use gradient checkpointing.
         """
+        dd = {'device': device, 'dtype': dtype}
         super(DenseBlock, self).__init__()
         for i in range(num_layers):
             layer = DenseLayer(
@@ -153,6 +159,7 @@ class DenseBlock(nn.ModuleDict):
                 norm_layer=norm_layer,
                 drop_rate=drop_rate,
                 grad_checkpointing=grad_checkpointing,
+                **dd,
             )
             self.add_module('denselayer%d' % (i + 1), layer)
 
@@ -182,8 +189,10 @@ class DenseTransition(nn.Sequential):
             self,
             num_input_features: int,
             num_output_features: int,
-            norm_layer: type = BatchNormAct2d,
-            aa_layer: Optional[type] = None,
+            norm_layer: Type[nn.Module] = BatchNormAct2d,
+            aa_layer: Optional[Type[nn.Module]] = None,
+            device=None,
+            dtype=None,
     ) -> None:
         """Initialize DenseTransition.
 
@@ -193,12 +202,13 @@ class DenseTransition(nn.Sequential):
             norm_layer: Normalization layer class.
             aa_layer: Anti-aliasing layer class.
         """
+        dd = {'device': device, 'dtype': dtype}
         super(DenseTransition, self).__init__()
-        self.add_module('norm', norm_layer(num_input_features))
+        self.add_module('norm', norm_layer(num_input_features, **dd))
         self.add_module('conv', nn.Conv2d(
-            num_input_features, num_output_features, kernel_size=1, stride=1, bias=False))
+            num_input_features, num_output_features, kernel_size=1, stride=1, bias=False, **dd))
         if aa_layer is not None:
-            self.add_module('pool', aa_layer(num_output_features, stride=2))
+            self.add_module('pool', aa_layer(num_output_features, stride=2, **dd))
         else:
             self.add_module('pool', nn.AvgPool2d(kernel_size=2, stride=2))
 
@@ -231,11 +241,13 @@ class DenseNet(nn.Module):
             stem_type: str = '',
             act_layer: str = 'relu',
             norm_layer: str = 'batchnorm2d',
-            aa_layer: Optional[type] = None,
+            aa_layer: Optional[Type[nn.Module]] = None,
             drop_rate: float = 0.,
             proj_drop_rate: float = 0.,
             memory_efficient: bool = False,
             aa_stem_only: bool = True,
+            device=None,
+            dtype=None,
     ) -> None:
         """Initialize DenseNet.
 
@@ -255,6 +267,7 @@ class DenseNet(nn.Module):
             memory_efficient: If True, uses checkpointing for memory efficiency.
             aa_stem_only: Apply anti-aliasing only to stem.
         """
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         super(DenseNet, self).__init__()
         norm_layer = get_norm_act_layer(norm_layer, act_layer=act_layer)
@@ -267,25 +280,25 @@ class DenseNet(nn.Module):
         else:
             stem_pool = nn.Sequential(*[
                 nn.MaxPool2d(kernel_size=3, stride=1, padding=1),
-                aa_layer(channels=num_init_features, stride=2)])
+                aa_layer(channels=num_init_features, stride=2, **dd)])
         if deep_stem:
             stem_chs_1 = stem_chs_2 = growth_rate
             if 'tiered' in stem_type:
                 stem_chs_1 = 3 * (growth_rate // 4)
                 stem_chs_2 = num_init_features if 'narrow' in stem_type else 6 * (growth_rate // 4)
             self.features = nn.Sequential(OrderedDict([
-                ('conv0', nn.Conv2d(in_chans, stem_chs_1, 3, stride=2, padding=1, bias=False)),
-                ('norm0', norm_layer(stem_chs_1)),
-                ('conv1', nn.Conv2d(stem_chs_1, stem_chs_2, 3, stride=1, padding=1, bias=False)),
-                ('norm1', norm_layer(stem_chs_2)),
-                ('conv2', nn.Conv2d(stem_chs_2, num_init_features, 3, stride=1, padding=1, bias=False)),
-                ('norm2', norm_layer(num_init_features)),
+                ('conv0', nn.Conv2d(in_chans, stem_chs_1, 3, stride=2, padding=1, bias=False, **dd)),
+                ('norm0', norm_layer(stem_chs_1, **dd)),
+                ('conv1', nn.Conv2d(stem_chs_1, stem_chs_2, 3, stride=1, padding=1, bias=False, **dd)),
+                ('norm1', norm_layer(stem_chs_2, **dd)),
+                ('conv2', nn.Conv2d(stem_chs_2, num_init_features, 3, stride=1, padding=1, bias=False, **dd)),
+                ('norm2', norm_layer(num_init_features, **dd)),
                 ('pool0', stem_pool),
             ]))
         else:
             self.features = nn.Sequential(OrderedDict([
-                ('conv0', nn.Conv2d(in_chans, num_init_features, kernel_size=7, stride=2, padding=3, bias=False)),
-                ('norm0', norm_layer(num_init_features)),
+                ('conv0', nn.Conv2d(in_chans, num_init_features, kernel_size=7, stride=2, padding=3, bias=False, **dd)),
+                ('norm0', norm_layer(num_init_features, **dd)),
                 ('pool0', stem_pool),
             ]))
         self.feature_info = [
@@ -303,6 +316,7 @@ class DenseNet(nn.Module):
                 norm_layer=norm_layer,
                 drop_rate=proj_drop_rate,
                 grad_checkpointing=memory_efficient,
+                **dd,
             )
             module_name = f'denseblock{(i + 1)}'
             self.features.add_module(module_name, block)
@@ -317,12 +331,13 @@ class DenseNet(nn.Module):
                     num_output_features=num_features // 2,
                     norm_layer=norm_layer,
                     aa_layer=transition_aa_layer,
+                    **dd,
                 )
                 self.features.add_module(f'transition{i + 1}', trans)
                 num_features = num_features // 2
 
         # Final batch norm
-        self.features.add_module('norm5', norm_layer(num_features))
+        self.features.add_module('norm5', norm_layer(num_features, **dd))
 
         self.feature_info += [dict(num_chs=num_features, reduction=current_stride, module='features.norm5')]
         self.num_features = self.head_hidden_size = num_features
@@ -332,6 +347,7 @@ class DenseNet(nn.Module):
             self.num_features,
             self.num_classes,
             pool_type=global_pool,
+            **dd,
         )
         self.global_pool = global_pool
         self.head_drop = nn.Dropout(drop_rate)

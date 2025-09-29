@@ -11,7 +11,7 @@ for some reference, rewrote most of the code.
 Hacked together by / Copyright 2020 Ross Wightman
 """
 
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Type
 
 import torch
 import torch.nn as nn
@@ -28,7 +28,7 @@ __all__ = ['VovNet']  # model_registry will add each entrypoint fn to this
 
 
 class SequentialAppendList(nn.Sequential):
-    def __init__(self, *args):
+    def __init__(self, *args, **kwargs):
         super(SequentialAppendList, self).__init__(*args)
 
     def forward(self, x: torch.Tensor, concat_list: List[torch.Tensor]) -> torch.Tensor:
@@ -45,22 +45,25 @@ class OsaBlock(nn.Module):
 
     def __init__(
             self,
-            in_chs,
-            mid_chs,
-            out_chs,
-            layer_per_block,
-            residual=False,
-            depthwise=False,
-            attn='',
-            norm_layer=BatchNormAct2d,
-            act_layer=nn.ReLU,
-            drop_path=None,
+            in_chs: int,
+            mid_chs: int,
+            out_chs: int,
+            layer_per_block: int,
+            residual: bool = False,
+            depthwise: bool = False,
+            attn: str = '',
+            norm_layer: Type[nn.Module] = BatchNormAct2d,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            drop_path: Optional[nn.Module] = None,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super(OsaBlock, self).__init__()
 
         self.residual = residual
         self.depthwise = depthwise
-        conv_kwargs = dict(norm_layer=norm_layer, act_layer=act_layer)
+        conv_kwargs = dict(norm_layer=norm_layer, act_layer=act_layer, **dd)
 
         next_in_chs = in_chs
         if self.depthwise and next_in_chs != mid_chs:
@@ -83,7 +86,7 @@ class OsaBlock(nn.Module):
         next_in_chs = in_chs + layer_per_block * mid_chs
         self.conv_concat = ConvNormAct(next_in_chs, out_chs, **conv_kwargs)
 
-        self.attn = create_attn(attn, out_chs) if attn else None
+        self.attn = create_attn(attn, out_chs, **dd) if attn else None
 
         self.drop_path = drop_path
 
@@ -106,19 +109,22 @@ class OsaStage(nn.Module):
 
     def __init__(
             self,
-            in_chs,
-            mid_chs,
-            out_chs,
-            block_per_stage,
-            layer_per_block,
-            downsample=True,
-            residual=True,
-            depthwise=False,
-            attn='ese',
-            norm_layer=BatchNormAct2d,
-            act_layer=nn.ReLU,
-            drop_path_rates=None,
+            in_chs: int,
+            mid_chs: int,
+            out_chs: int,
+            block_per_stage: int,
+            layer_per_block: int,
+            downsample: bool = True,
+            residual: bool = True,
+            depthwise: bool = False,
+            attn: str = 'ese',
+            norm_layer: Type[nn.Module] = BatchNormAct2d,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            drop_path_rates: Optional[List[float]] = None,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super(OsaStage, self).__init__()
         self.grad_checkpointing = False
 
@@ -144,7 +150,8 @@ class OsaStage(nn.Module):
                 attn=attn if last_block else '',
                 norm_layer=norm_layer,
                 act_layer=act_layer,
-                drop_path=drop_path
+                drop_path=drop_path,
+                **dd,
             )]
             in_chs = out_chs
         self.blocks = nn.Sequential(*blocks)
@@ -164,14 +171,16 @@ class VovNet(nn.Module):
     def __init__(
             self,
             cfg,
-            in_chans=3,
-            num_classes=1000,
-            global_pool='avg',
-            output_stride=32,
-            norm_layer=BatchNormAct2d,
-            act_layer=nn.ReLU,
-            drop_rate=0.,
-            drop_path_rate=0.,
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            global_pool: str = 'avg',
+            output_stride: int = 32,
+            norm_layer: Type[nn.Module] = BatchNormAct2d,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            drop_rate: float = 0.,
+            drop_path_rate: float = 0.,
+            device=None,
+            dtype=None,
             **kwargs,
     ):
         """
@@ -188,6 +197,7 @@ class VovNet(nn.Module):
             kwargs (dict): Extra kwargs overlayed onto cfg
         """
         super(VovNet, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         assert output_stride == 32  # FIXME support dilation
@@ -199,7 +209,7 @@ class VovNet(nn.Module):
         stage_out_chs = cfg["stage_out_chs"]
         block_per_stage = cfg["block_per_stage"]
         layer_per_block = cfg["layer_per_block"]
-        conv_kwargs = dict(norm_layer=norm_layer, act_layer=act_layer)
+        conv_kwargs = dict(norm_layer=norm_layer, act_layer=act_layer, **dd)
 
         # Stem module
         last_stem_stride = stem_stride // 2
@@ -237,7 +247,7 @@ class VovNet(nn.Module):
         self.stages = nn.Sequential(*stages)
 
         self.head_hidden_size = self.num_features
-        self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=drop_rate)
+        self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=drop_rate, **dd)
 
         for n, m in self.named_modules():
             if isinstance(m, nn.Conv2d):

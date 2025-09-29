@@ -4,6 +4,7 @@ Originally from torchvision Inception3 model
 Licensed BSD-Clause 3 https://github.com/pytorch/vision/blob/master/LICENSE
 """
 from functools import partial
+from typing import Optional, Type
 
 import torch
 import torch.nn as nn
@@ -21,19 +22,27 @@ __all__ = ['InceptionV3']  # model_registry will add each entrypoint fn to this
 
 class InceptionA(nn.Module):
 
-    def __init__(self, in_channels, pool_features, conv_block=None):
+    def __init__(
+            self,
+            in_channels: int,
+            pool_features: int,
+            conv_block: Optional[Type[nn.Module]] = None,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super(InceptionA, self).__init__()
         conv_block = conv_block or ConvNormAct
-        self.branch1x1 = conv_block(in_channels, 64, kernel_size=1)
+        self.branch1x1 = conv_block(in_channels, 64, kernel_size=1, **dd)
 
-        self.branch5x5_1 = conv_block(in_channels, 48, kernel_size=1)
-        self.branch5x5_2 = conv_block(48, 64, kernel_size=5, padding=2)
+        self.branch5x5_1 = conv_block(in_channels, 48, kernel_size=1, **dd)
+        self.branch5x5_2 = conv_block(48, 64, kernel_size=5, padding=2, **dd)
 
-        self.branch3x3dbl_1 = conv_block(in_channels, 64, kernel_size=1)
-        self.branch3x3dbl_2 = conv_block(64, 96, kernel_size=3, padding=1)
-        self.branch3x3dbl_3 = conv_block(96, 96, kernel_size=3, padding=1)
+        self.branch3x3dbl_1 = conv_block(in_channels, 64, kernel_size=1, **dd)
+        self.branch3x3dbl_2 = conv_block(64, 96, kernel_size=3, padding=1, **dd)
+        self.branch3x3dbl_3 = conv_block(96, 96, kernel_size=3, padding=1, **dd)
 
-        self.branch_pool = conv_block(in_channels, pool_features, kernel_size=1)
+        self.branch_pool = conv_block(in_channels, pool_features, kernel_size=1, **dd)
 
     def _forward(self, x):
         branch1x1 = self.branch1x1(x)
@@ -58,14 +67,21 @@ class InceptionA(nn.Module):
 
 class InceptionB(nn.Module):
 
-    def __init__(self, in_channels, conv_block=None):
+    def __init__(
+            self,
+            in_channels: int,
+            conv_block: Optional[Type[nn.Module]] = None,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super(InceptionB, self).__init__()
         conv_block = conv_block or ConvNormAct
-        self.branch3x3 = conv_block(in_channels, 384, kernel_size=3, stride=2)
+        self.branch3x3 = conv_block(in_channels, 384, kernel_size=3, stride=2, **dd)
 
-        self.branch3x3dbl_1 = conv_block(in_channels, 64, kernel_size=1)
-        self.branch3x3dbl_2 = conv_block(64, 96, kernel_size=3, padding=1)
-        self.branch3x3dbl_3 = conv_block(96, 96, kernel_size=3, stride=2)
+        self.branch3x3dbl_1 = conv_block(in_channels, 64, kernel_size=1, **dd)
+        self.branch3x3dbl_2 = conv_block(64, 96, kernel_size=3, padding=1, **dd)
+        self.branch3x3dbl_3 = conv_block(96, 96, kernel_size=3, stride=2, **dd)
 
     def _forward(self, x):
         branch3x3 = self.branch3x3(x)
@@ -86,23 +102,31 @@ class InceptionB(nn.Module):
 
 class InceptionC(nn.Module):
 
-    def __init__(self, in_channels, channels_7x7, conv_block=None):
+    def __init__(
+            self,
+            in_channels: int,
+            channels_7x7: int,
+            conv_block: Optional[Type[nn.Module]] = None,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super(InceptionC, self).__init__()
         conv_block = conv_block or ConvNormAct
-        self.branch1x1 = conv_block(in_channels, 192, kernel_size=1)
+        self.branch1x1 = conv_block(in_channels, 192, kernel_size=1, **dd)
 
         c7 = channels_7x7
-        self.branch7x7_1 = conv_block(in_channels, c7, kernel_size=1)
-        self.branch7x7_2 = conv_block(c7, c7, kernel_size=(1, 7), padding=(0, 3))
-        self.branch7x7_3 = conv_block(c7, 192, kernel_size=(7, 1), padding=(3, 0))
+        self.branch7x7_1 = conv_block(in_channels, c7, kernel_size=1, **dd)
+        self.branch7x7_2 = conv_block(c7, c7, kernel_size=(1, 7), padding=(0, 3), **dd)
+        self.branch7x7_3 = conv_block(c7, 192, kernel_size=(7, 1), padding=(3, 0), **dd)
 
-        self.branch7x7dbl_1 = conv_block(in_channels, c7, kernel_size=1)
-        self.branch7x7dbl_2 = conv_block(c7, c7, kernel_size=(7, 1), padding=(3, 0))
-        self.branch7x7dbl_3 = conv_block(c7, c7, kernel_size=(1, 7), padding=(0, 3))
-        self.branch7x7dbl_4 = conv_block(c7, c7, kernel_size=(7, 1), padding=(3, 0))
-        self.branch7x7dbl_5 = conv_block(c7, 192, kernel_size=(1, 7), padding=(0, 3))
+        self.branch7x7dbl_1 = conv_block(in_channels, c7, kernel_size=1, **dd)
+        self.branch7x7dbl_2 = conv_block(c7, c7, kernel_size=(7, 1), padding=(3, 0), **dd)
+        self.branch7x7dbl_3 = conv_block(c7, c7, kernel_size=(1, 7), padding=(0, 3), **dd)
+        self.branch7x7dbl_4 = conv_block(c7, c7, kernel_size=(7, 1), padding=(3, 0), **dd)
+        self.branch7x7dbl_5 = conv_block(c7, 192, kernel_size=(1, 7), padding=(0, 3), **dd)
 
-        self.branch_pool = conv_block(in_channels, 192, kernel_size=1)
+        self.branch_pool = conv_block(in_channels, 192, kernel_size=1, **dd)
 
     def _forward(self, x):
         branch1x1 = self.branch1x1(x)
@@ -130,16 +154,23 @@ class InceptionC(nn.Module):
 
 class InceptionD(nn.Module):
 
-    def __init__(self, in_channels, conv_block=None):
+    def __init__(
+            self,
+            in_channels: int,
+            conv_block: Optional[Type[nn.Module]] = None,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super(InceptionD, self).__init__()
         conv_block = conv_block or ConvNormAct
-        self.branch3x3_1 = conv_block(in_channels, 192, kernel_size=1)
-        self.branch3x3_2 = conv_block(192, 320, kernel_size=3, stride=2)
+        self.branch3x3_1 = conv_block(in_channels, 192, kernel_size=1, **dd)
+        self.branch3x3_2 = conv_block(192, 320, kernel_size=3, stride=2, **dd)
 
-        self.branch7x7x3_1 = conv_block(in_channels, 192, kernel_size=1)
-        self.branch7x7x3_2 = conv_block(192, 192, kernel_size=(1, 7), padding=(0, 3))
-        self.branch7x7x3_3 = conv_block(192, 192, kernel_size=(7, 1), padding=(3, 0))
-        self.branch7x7x3_4 = conv_block(192, 192, kernel_size=3, stride=2)
+        self.branch7x7x3_1 = conv_block(in_channels, 192, kernel_size=1, **dd)
+        self.branch7x7x3_2 = conv_block(192, 192, kernel_size=(1, 7), padding=(0, 3), **dd)
+        self.branch7x7x3_3 = conv_block(192, 192, kernel_size=(7, 1), padding=(3, 0), **dd)
+        self.branch7x7x3_4 = conv_block(192, 192, kernel_size=3, stride=2, **dd)
 
     def _forward(self, x):
         branch3x3 = self.branch3x3_1(x)
@@ -161,21 +192,28 @@ class InceptionD(nn.Module):
 
 class InceptionE(nn.Module):
 
-    def __init__(self, in_channels, conv_block=None):
+    def __init__(
+            self,
+            in_channels: int,
+            conv_block: Optional[Type[nn.Module]] = None,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super(InceptionE, self).__init__()
         conv_block = conv_block or ConvNormAct
-        self.branch1x1 = conv_block(in_channels, 320, kernel_size=1)
+        self.branch1x1 = conv_block(in_channels, 320, kernel_size=1, **dd)
 
-        self.branch3x3_1 = conv_block(in_channels, 384, kernel_size=1)
-        self.branch3x3_2a = conv_block(384, 384, kernel_size=(1, 3), padding=(0, 1))
-        self.branch3x3_2b = conv_block(384, 384, kernel_size=(3, 1), padding=(1, 0))
+        self.branch3x3_1 = conv_block(in_channels, 384, kernel_size=1, **dd)
+        self.branch3x3_2a = conv_block(384, 384, kernel_size=(1, 3), padding=(0, 1), **dd)
+        self.branch3x3_2b = conv_block(384, 384, kernel_size=(3, 1), padding=(1, 0), **dd)
 
-        self.branch3x3dbl_1 = conv_block(in_channels, 448, kernel_size=1)
-        self.branch3x3dbl_2 = conv_block(448, 384, kernel_size=3, padding=1)
-        self.branch3x3dbl_3a = conv_block(384, 384, kernel_size=(1, 3), padding=(0, 1))
-        self.branch3x3dbl_3b = conv_block(384, 384, kernel_size=(3, 1), padding=(1, 0))
+        self.branch3x3dbl_1 = conv_block(in_channels, 448, kernel_size=1, **dd)
+        self.branch3x3dbl_2 = conv_block(448, 384, kernel_size=3, padding=1, **dd)
+        self.branch3x3dbl_3a = conv_block(384, 384, kernel_size=(1, 3), padding=(0, 1), **dd)
+        self.branch3x3dbl_3b = conv_block(384, 384, kernel_size=(3, 1), padding=(1, 0), **dd)
 
-        self.branch_pool = conv_block(in_channels, 192, kernel_size=1)
+        self.branch_pool = conv_block(in_channels, 192, kernel_size=1, **dd)
 
     def _forward(self, x):
         branch1x1 = self.branch1x1(x)
@@ -208,13 +246,21 @@ class InceptionE(nn.Module):
 
 class InceptionAux(nn.Module):
 
-    def __init__(self, in_channels, num_classes, conv_block=None):
+    def __init__(
+            self,
+            in_channels: int,
+            num_classes: int,
+            conv_block: Optional[Type[nn.Module]] = None,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super(InceptionAux, self).__init__()
         conv_block = conv_block or ConvNormAct
-        self.conv0 = conv_block(in_channels, 128, kernel_size=1)
-        self.conv1 = conv_block(128, 768, kernel_size=5)
+        self.conv0 = conv_block(in_channels, 128, kernel_size=1, **dd)
+        self.conv1 = conv_block(128, 768, kernel_size=5, **dd)
         self.conv1.stddev = 0.01
-        self.fc = Linear(768, num_classes)
+        self.fc = Linear(768, num_classes, **dd)
         self.fc.stddev = 0.001
 
     def forward(self, x):
@@ -242,16 +288,19 @@ class InceptionV3(nn.Module):
 
     def __init__(
             self,
-            num_classes=1000,
-            in_chans=3,
-            drop_rate=0.,
-            global_pool='avg',
-            aux_logits=False,
-            norm_layer='batchnorm2d',
-            norm_eps=1e-3,
-            act_layer='relu',
+            num_classes: int = 1000,
+            in_chans: int = 3,
+            drop_rate: float = 0.,
+            global_pool: str = 'avg',
+            aux_logits: bool = False,
+            norm_layer: str = 'batchnorm2d',
+            norm_eps: float = 1e-3,
+            act_layer: str = 'relu',
+            device=None,
+            dtype=None,
     ):
         super(InceptionV3, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.aux_logits = aux_logits
         conv_block = partial(
@@ -263,28 +312,28 @@ class InceptionV3(nn.Module):
             act_kwargs=dict(inplace=True),
         )
 
-        self.Conv2d_1a_3x3 = conv_block(in_chans, 32, kernel_size=3, stride=2)
-        self.Conv2d_2a_3x3 = conv_block(32, 32, kernel_size=3)
-        self.Conv2d_2b_3x3 = conv_block(32, 64, kernel_size=3, padding=1)
+        self.Conv2d_1a_3x3 = conv_block(in_chans, 32, kernel_size=3, stride=2, **dd)
+        self.Conv2d_2a_3x3 = conv_block(32, 32, kernel_size=3, **dd)
+        self.Conv2d_2b_3x3 = conv_block(32, 64, kernel_size=3, padding=1, **dd)
         self.Pool1 = nn.MaxPool2d(kernel_size=3, stride=2)
-        self.Conv2d_3b_1x1 = conv_block(64, 80, kernel_size=1)
-        self.Conv2d_4a_3x3 = conv_block(80, 192, kernel_size=3)
+        self.Conv2d_3b_1x1 = conv_block(64, 80, kernel_size=1, **dd)
+        self.Conv2d_4a_3x3 = conv_block(80, 192, kernel_size=3, **dd)
         self.Pool2 = nn.MaxPool2d(kernel_size=3, stride=2)
-        self.Mixed_5b = InceptionA(192, pool_features=32, conv_block=conv_block)
-        self.Mixed_5c = InceptionA(256, pool_features=64, conv_block=conv_block)
-        self.Mixed_5d = InceptionA(288, pool_features=64, conv_block=conv_block)
-        self.Mixed_6a = InceptionB(288, conv_block=conv_block)
-        self.Mixed_6b = InceptionC(768, channels_7x7=128, conv_block=conv_block)
-        self.Mixed_6c = InceptionC(768, channels_7x7=160, conv_block=conv_block)
-        self.Mixed_6d = InceptionC(768, channels_7x7=160, conv_block=conv_block)
-        self.Mixed_6e = InceptionC(768, channels_7x7=192, conv_block=conv_block)
+        self.Mixed_5b = InceptionA(192, pool_features=32, conv_block=conv_block, **dd)
+        self.Mixed_5c = InceptionA(256, pool_features=64, conv_block=conv_block, **dd)
+        self.Mixed_5d = InceptionA(288, pool_features=64, conv_block=conv_block, **dd)
+        self.Mixed_6a = InceptionB(288, conv_block=conv_block, **dd)
+        self.Mixed_6b = InceptionC(768, channels_7x7=128, conv_block=conv_block, **dd)
+        self.Mixed_6c = InceptionC(768, channels_7x7=160, conv_block=conv_block, **dd)
+        self.Mixed_6d = InceptionC(768, channels_7x7=160, conv_block=conv_block, **dd)
+        self.Mixed_6e = InceptionC(768, channels_7x7=192, conv_block=conv_block, **dd)
         if aux_logits:
-            self.AuxLogits = InceptionAux(768, num_classes, conv_block=conv_block)
+            self.AuxLogits = InceptionAux(768, num_classes, conv_block=conv_block, **dd)
         else:
             self.AuxLogits = None
-        self.Mixed_7a = InceptionD(768, conv_block=conv_block)
-        self.Mixed_7b = InceptionE(1280, conv_block=conv_block)
-        self.Mixed_7c = InceptionE(2048, conv_block=conv_block)
+        self.Mixed_7a = InceptionD(768, conv_block=conv_block, **dd)
+        self.Mixed_7b = InceptionE(1280, conv_block=conv_block, **dd)
+        self.Mixed_7c = InceptionE(2048, conv_block=conv_block, **dd)
         self.feature_info = [
             dict(num_chs=64, reduction=2, module='Conv2d_2b_3x3'),
             dict(num_chs=192, reduction=4, module='Conv2d_4a_3x3'),
@@ -299,6 +348,7 @@ class InceptionV3(nn.Module):
             self.num_classes,
             pool_type=global_pool,
             drop_rate=drop_rate,
+            **dd,
         )
 
         for m in self.modules():

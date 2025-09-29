@@ -13,6 +13,7 @@ support for extras like dilation, switchable BN/activations, feature extraction,
 """
 import math
 from collections import OrderedDict
+from typing import Type, Optional
 
 import torch
 import torch.nn as nn
@@ -36,11 +37,12 @@ def _weight_init(m):
 
 class SEModule(nn.Module):
 
-    def __init__(self, channels, reduction):
-        super(SEModule, self).__init__()
-        self.fc1 = nn.Conv2d(channels, channels // reduction, kernel_size=1)
+    def __init__(self, channels: int, reduction: int, device=None, dtype=None):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
+        self.fc1 = nn.Conv2d(channels, channels // reduction, kernel_size=1, **dd)
         self.relu = nn.ReLU(inplace=True)
-        self.fc2 = nn.Conv2d(channels // reduction, channels, kernel_size=1)
+        self.fc2 = nn.Conv2d(channels // reduction, channels, kernel_size=1, **dd)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
@@ -87,18 +89,36 @@ class SEBottleneck(Bottleneck):
     """
     expansion = 4
 
-    def __init__(self, inplanes, planes, groups, reduction, stride=1, downsample=None):
-        super(SEBottleneck, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes * 2, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes * 2)
+    def __init__(
+            self,
+            inplanes: int,
+            planes: int,
+            groups: int,
+            reduction: int,
+            stride: int = 1,
+            downsample: Optional[nn.Module] = None,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
+        self.conv1 = nn.Conv2d(inplanes, planes * 2, kernel_size=1, bias=False, **dd)
+        self.bn1 = nn.BatchNorm2d(planes * 2, **dd)
         self.conv2 = nn.Conv2d(
-            planes * 2, planes * 4, kernel_size=3, stride=stride,
-            padding=1, groups=groups, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes * 4)
-        self.conv3 = nn.Conv2d(planes * 4, planes * 4, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(planes * 4)
+            planes * 2,
+            planes * 4,
+            kernel_size=3,
+            stride=stride,
+            padding=1,
+            groups=groups,
+            bias=False,
+            **dd,
+        )
+        self.bn2 = nn.BatchNorm2d(planes * 4, **dd)
+        self.conv3 = nn.Conv2d(planes * 4, planes * 4, kernel_size=1, bias=False, **dd)
+        self.bn3 = nn.BatchNorm2d(planes * 4, **dd)
         self.relu = nn.ReLU(inplace=True)
-        self.se_module = SEModule(planes * 4, reduction=reduction)
+        self.se_module = SEModule(planes * 4, reduction=reduction, **dd)
         self.downsample = downsample
         self.stride = stride
 
@@ -111,16 +131,27 @@ class SEResNetBottleneck(Bottleneck):
     """
     expansion = 4
 
-    def __init__(self, inplanes, planes, groups, reduction, stride=1, downsample=None):
-        super(SEResNetBottleneck, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False, stride=stride)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, padding=1, groups=groups, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
-        self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(planes * 4)
+    def __init__(
+            self,
+            inplanes: int,
+            planes: int,
+            groups: int,
+            reduction: int,
+            stride: int = 1,
+            downsample: Optional[nn.Module] = None,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
+        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False, stride=stride, **dd)
+        self.bn1 = nn.BatchNorm2d(planes, **dd)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, padding=1, groups=groups, bias=False, **dd)
+        self.bn2 = nn.BatchNorm2d(planes, **dd)
+        self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False, **dd)
+        self.bn3 = nn.BatchNorm2d(planes * 4, **dd)
         self.relu = nn.ReLU(inplace=True)
-        self.se_module = SEModule(planes * 4, reduction=reduction)
+        self.se_module = SEModule(planes * 4, reduction=reduction, **dd)
         self.downsample = downsample
         self.stride = stride
 
@@ -131,17 +162,29 @@ class SEResNeXtBottleneck(Bottleneck):
     """
     expansion = 4
 
-    def __init__(self, inplanes, planes, groups, reduction, stride=1, downsample=None, base_width=4):
-        super(SEResNeXtBottleneck, self).__init__()
+    def __init__(
+            self,
+            inplanes: int,
+            planes: int,
+            groups: int,
+            reduction: int,
+            stride: int = 1,
+            downsample: Optional[nn.Module] = None,
+            base_width: int = 4,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         width = math.floor(planes * (base_width / 64)) * groups
-        self.conv1 = nn.Conv2d(inplanes, width, kernel_size=1, bias=False, stride=1)
-        self.bn1 = nn.BatchNorm2d(width)
-        self.conv2 = nn.Conv2d(width, width, kernel_size=3, stride=stride, padding=1, groups=groups, bias=False)
-        self.bn2 = nn.BatchNorm2d(width)
-        self.conv3 = nn.Conv2d(width, planes * 4, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(planes * 4)
+        self.conv1 = nn.Conv2d(inplanes, width, kernel_size=1, bias=False, stride=1, **dd)
+        self.bn1 = nn.BatchNorm2d(width, **dd)
+        self.conv2 = nn.Conv2d(width, width, kernel_size=3, stride=stride, padding=1, groups=groups, bias=False, **dd)
+        self.bn2 = nn.BatchNorm2d(width, **dd)
+        self.conv3 = nn.Conv2d(width, planes * 4, kernel_size=1, bias=False, **dd)
+        self.bn3 = nn.BatchNorm2d(planes * 4, **dd)
         self.relu = nn.ReLU(inplace=True)
-        self.se_module = SEModule(planes * 4, reduction=reduction)
+        self.se_module = SEModule(planes * 4, reduction=reduction, **dd)
         self.downsample = downsample
         self.stride = stride
 
@@ -149,14 +192,25 @@ class SEResNeXtBottleneck(Bottleneck):
 class SEResNetBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, inplanes, planes, groups, reduction, stride=1, downsample=None):
-        super(SEResNetBlock, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=3, padding=1, stride=stride, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, padding=1, groups=groups, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
+    def __init__(
+            self,
+            inplanes: int,
+            planes: int,
+            groups: int,
+            reduction: int,
+            stride: int = 1,
+            downsample: Optional[nn.Module] = None,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
+        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=3, padding=1, stride=stride, bias=False, **dd)
+        self.bn1 = nn.BatchNorm2d(planes, **dd)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, padding=1, groups=groups, bias=False, **dd)
+        self.bn2 = nn.BatchNorm2d(planes, **dd)
         self.relu = nn.ReLU(inplace=True)
-        self.se_module = SEModule(planes, reduction=reduction)
+        self.se_module = SEModule(planes, reduction=reduction, **dd)
         self.downsample = downsample
         self.stride = stride
 
@@ -183,9 +237,22 @@ class SEResNetBlock(nn.Module):
 class SENet(nn.Module):
 
     def __init__(
-            self, block, layers, groups, reduction, drop_rate=0.2,
-            in_chans=3, inplanes=64, input_3x3=False, downsample_kernel_size=1,
-            downsample_padding=0, num_classes=1000, global_pool='avg'):
+            self,
+            block: Type[nn.Module],
+            layers,
+            groups: int,
+            reduction: int,
+            drop_rate: float = 0.2,
+            in_chans: int = 3,
+            inplanes: int = 64,
+            input_3x3: bool = False,
+            downsample_kernel_size: int = 1,
+            downsample_padding: int = 0,
+            num_classes: int = 1000,
+            global_pool: str = 'avg',
+            device=None,
+            dtype=None,
+    ):
         """
         Parameters
         ----------
@@ -229,27 +296,27 @@ class SENet(nn.Module):
         num_classes (int): Number of outputs in `last_linear` layer.
             - For all models: 1000
         """
-        super(SENet, self).__init__()
+        super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.inplanes = inplanes
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         if input_3x3:
             layer0_modules = [
-                ('conv1', nn.Conv2d(in_chans, 64, 3, stride=2, padding=1, bias=False)),
-                ('bn1', nn.BatchNorm2d(64)),
+                ('conv1', nn.Conv2d(in_chans, 64, 3, stride=2, padding=1, bias=False, **dd)),
+                ('bn1', nn.BatchNorm2d(64, **dd)),
                 ('relu1', nn.ReLU(inplace=True)),
-                ('conv2', nn.Conv2d(64, 64, 3, stride=1, padding=1, bias=False)),
-                ('bn2', nn.BatchNorm2d(64)),
+                ('conv2', nn.Conv2d(64, 64, 3, stride=1, padding=1, bias=False, **dd)),
+                ('bn2', nn.BatchNorm2d(64, **dd)),
                 ('relu2', nn.ReLU(inplace=True)),
-                ('conv3', nn.Conv2d(64, inplanes, 3, stride=1, padding=1, bias=False)),
-                ('bn3', nn.BatchNorm2d(inplanes)),
+                ('conv3', nn.Conv2d(64, inplanes, 3, stride=1, padding=1, bias=False, **dd)),
+                ('bn3', nn.BatchNorm2d(inplanes, **dd)),
                 ('relu3', nn.ReLU(inplace=True)),
             ]
         else:
             layer0_modules = [
-                ('conv1', nn.Conv2d(
-                    in_chans, inplanes, kernel_size=7, stride=2, padding=3, bias=False)),
-                ('bn1', nn.BatchNorm2d(inplanes)),
+                ('conv1', nn.Conv2d(in_chans, inplanes, kernel_size=7, stride=2, padding=3, bias=False, **dd)),
+                ('bn1', nn.BatchNorm2d(inplanes, **dd)),
                 ('relu1', nn.ReLU(inplace=True)),
             ]
         self.layer0 = nn.Sequential(OrderedDict(layer0_modules))
@@ -263,7 +330,8 @@ class SENet(nn.Module):
             groups=groups,
             reduction=reduction,
             downsample_kernel_size=1,
-            downsample_padding=0
+            downsample_padding=0,
+            **dd,
         )
         self.feature_info += [dict(num_chs=64 * block.expansion, reduction=4, module='layer1')]
         self.layer2 = self._make_layer(
@@ -274,7 +342,8 @@ class SENet(nn.Module):
             groups=groups,
             reduction=reduction,
             downsample_kernel_size=downsample_kernel_size,
-            downsample_padding=downsample_padding
+            downsample_padding=downsample_padding,
+            **dd,
         )
         self.feature_info += [dict(num_chs=128 * block.expansion, reduction=8, module='layer2')]
         self.layer3 = self._make_layer(
@@ -285,7 +354,8 @@ class SENet(nn.Module):
             groups=groups,
             reduction=reduction,
             downsample_kernel_size=downsample_kernel_size,
-            downsample_padding=downsample_padding
+            downsample_padding=downsample_padding,
+            **dd,
         )
         self.feature_info += [dict(num_chs=256 * block.expansion, reduction=16, module='layer3')]
         self.layer4 = self._make_layer(
@@ -296,31 +366,37 @@ class SENet(nn.Module):
             groups=groups,
             reduction=reduction,
             downsample_kernel_size=downsample_kernel_size,
-            downsample_padding=downsample_padding
+            downsample_padding=downsample_padding,
+            **dd,
         )
         self.feature_info += [dict(num_chs=512 * block.expansion, reduction=32, module='layer4')]
         self.num_features = self.head_hidden_size = 512 * block.expansion
         self.global_pool, self.last_linear = create_classifier(
-            self.num_features, self.num_classes, pool_type=global_pool)
+            self.num_features,
+            self.num_classes,
+            pool_type=global_pool,
+            **dd,
+        )
 
         for m in self.modules():
             _weight_init(m)
 
     def _make_layer(self, block, planes, blocks, groups, reduction, stride=1,
-                    downsample_kernel_size=1, downsample_padding=0):
+                    downsample_kernel_size=1, downsample_padding=0, device=None, dtype=None):
+        dd = {'device': device, 'dtype': dtype}
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
                 nn.Conv2d(
                     self.inplanes, planes * block.expansion, kernel_size=downsample_kernel_size,
-                    stride=stride, padding=downsample_padding, bias=False),
-                nn.BatchNorm2d(planes * block.expansion),
+                    stride=stride, padding=downsample_padding, bias=False, **dd),
+                nn.BatchNorm2d(planes * block.expansion, **dd),
             )
 
-        layers = [block(self.inplanes, planes, groups, reduction, stride, downsample)]
+        layers = [block(self.inplanes, planes, groups, reduction, stride, downsample, **dd)]
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes, groups, reduction))
+            layers.append(block(self.inplanes, planes, groups, reduction, **dd))
 
         return nn.Sequential(*layers)
 
