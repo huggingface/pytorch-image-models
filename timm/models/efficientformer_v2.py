@@ -16,14 +16,26 @@ Modifications and timm support by / Copyright 2023, Ross Wightman
 """
 import math
 from functools import partial
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import create_conv2d, create_norm_layer, get_act_layer, get_norm_layer, ConvNormAct
-from timm.layers import DropPath, calculate_drop_path_rates, trunc_normal_, to_2tuple, to_ntuple, ndgrid
+from timm.layers import (
+    create_conv2d,
+    create_norm_layer,
+    get_act_layer,
+    get_norm_layer,
+    ConvNormAct,
+    LayerScale2d,
+    DropPath,
+    calculate_drop_path_rates,
+    trunc_normal_,
+    to_2tuple,
+    to_ntuple,
+    ndgrid,
+)
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
@@ -57,17 +69,20 @@ EfficientFormer_expansion_ratios = {
 class ConvNorm(nn.Module):
     def __init__(
             self,
-            in_channels,
-            out_channels,
-            kernel_size=1,
-            stride=1,
-            padding='',
-            dilation=1,
-            groups=1,
-            bias=True,
-            norm_layer='batchnorm2d',
-            norm_kwargs=None,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: int = 1,
+            stride: int = 1,
+            padding: Union[int, str] = '',
+            dilation: int = 1,
+            groups: int = 1,
+            bias: bool = True,
+            norm_layer: str = 'batchnorm2d',
+            norm_kwargs: Optional[Dict] = None,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         norm_kwargs = norm_kwargs or {}
         super(ConvNorm, self).__init__()
         self.conv = create_conv2d(
@@ -79,8 +94,9 @@ class ConvNorm(nn.Module):
             dilation=dilation,
             groups=groups,
             bias=bias,
+            **dd,
         )
-        self.bn = create_norm_layer(norm_layer, out_channels, **norm_kwargs)
+        self.bn = create_norm_layer(norm_layer, out_channels, **norm_kwargs, **dd)
 
     def forward(self, x):
         x = self.conv(x)
@@ -93,14 +109,17 @@ class Attention2d(torch.nn.Module):
 
     def __init__(
             self,
-            dim=384,
-            key_dim=32,
-            num_heads=8,
-            attn_ratio=4,
-            resolution=7,
-            act_layer=nn.GELU,
-            stride=None,
+            dim: int = 384,
+            key_dim: int = 32,
+            num_heads: int = 8,
+            attn_ratio: int = 4,
+            resolution: Union[int, Tuple[int, int]] = 7,
+            act_layer: Type[nn.Module] = nn.GELU,
+            stride: Optional[int] = None,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.num_heads = num_heads
         self.scale = key_dim ** -0.5
@@ -109,7 +128,7 @@ class Attention2d(torch.nn.Module):
         resolution = to_2tuple(resolution)
         if stride is not None:
             resolution = tuple([math.ceil(r / stride) for r in resolution])
-            self.stride_conv = ConvNorm(dim, dim, kernel_size=3, stride=stride, groups=dim)
+            self.stride_conv = ConvNorm(dim, dim, kernel_size=3, stride=stride, groups=dim, **dd)
             self.upsample = nn.Upsample(scale_factor=stride, mode='bilinear')
         else:
             self.stride_conv = None
@@ -122,21 +141,24 @@ class Attention2d(torch.nn.Module):
         self.attn_ratio = attn_ratio
         kh = self.key_dim * self.num_heads
 
-        self.q = ConvNorm(dim, kh)
-        self.k = ConvNorm(dim, kh)
-        self.v = ConvNorm(dim, self.dh)
-        self.v_local = ConvNorm(self.dh, self.dh, kernel_size=3, groups=self.dh)
-        self.talking_head1 = nn.Conv2d(self.num_heads, self.num_heads, kernel_size=1)
-        self.talking_head2 = nn.Conv2d(self.num_heads, self.num_heads, kernel_size=1)
+        self.q = ConvNorm(dim, kh, **dd)
+        self.k = ConvNorm(dim, kh, **dd)
+        self.v = ConvNorm(dim, self.dh, **dd)
+        self.v_local = ConvNorm(self.dh, self.dh, kernel_size=3, groups=self.dh, **dd)
+        self.talking_head1 = nn.Conv2d(self.num_heads, self.num_heads, kernel_size=1, **dd)
+        self.talking_head2 = nn.Conv2d(self.num_heads, self.num_heads, kernel_size=1, **dd)
 
         self.act = act_layer()
-        self.proj = ConvNorm(self.dh, dim, 1)
+        self.proj = ConvNorm(self.dh, dim, 1, **dd)
 
-        pos = torch.stack(ndgrid(torch.arange(self.resolution[0]), torch.arange(self.resolution[1]))).flatten(1)
+        pos = torch.stack(ndgrid(
+            torch.arange(self.resolution[0], device=device, dtype=torch.long),
+            torch.arange(self.resolution[1], device=device, dtype=torch.long),
+        )).flatten(1)
         rel_pos = (pos[..., :, None] - pos[..., None, :]).abs()
         rel_pos = (rel_pos[0] * self.resolution[1]) + rel_pos[1]
-        self.attention_biases = torch.nn.Parameter(torch.zeros(num_heads, self.N))
-        self.register_buffer('attention_bias_idxs', torch.LongTensor(rel_pos), persistent=False)
+        self.attention_biases = torch.nn.Parameter(torch.zeros(num_heads, self.N, **dd))
+        self.register_buffer('attention_bias_idxs', rel_pos, persistent=False)
         self.attention_bias_cache = {}  # per-device attention_biases cache (data-parallel compat)
 
     @torch.no_grad()
@@ -182,11 +204,18 @@ class Attention2d(torch.nn.Module):
 
 
 class LocalGlobalQuery(torch.nn.Module):
-    def __init__(self, in_dim, out_dim):
+    def __init__(
+            self,
+            in_dim: int,
+            out_dim: int,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.pool = nn.AvgPool2d(1, 2, 0)
-        self.local = nn.Conv2d(in_dim, in_dim, kernel_size=3, stride=2, padding=1, groups=in_dim)
-        self.proj = ConvNorm(in_dim, out_dim, 1)
+        self.local = nn.Conv2d(in_dim, in_dim, kernel_size=3, stride=2, padding=1, groups=in_dim, **dd)
+        self.proj = ConvNorm(in_dim, out_dim, 1, **dd)
 
     def forward(self, x):
         local_q = self.local(x)
@@ -201,14 +230,17 @@ class Attention2dDownsample(torch.nn.Module):
 
     def __init__(
             self,
-            dim=384,
-            key_dim=16,
-            num_heads=8,
-            attn_ratio=4,
-            resolution=7,
-            out_dim=None,
-            act_layer=nn.GELU,
+            dim: int = 384,
+            key_dim: int = 16,
+            num_heads: int = 8,
+            attn_ratio: int = 4,
+            resolution: Union[int, Tuple[int, int]] = 7,
+            out_dim: Optional[int] = None,
+            act_layer: Type[nn.Module] = nn.GELU,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
 
         self.num_heads = num_heads
@@ -225,19 +257,22 @@ class Attention2dDownsample(torch.nn.Module):
         self.out_dim = out_dim or dim
         kh = self.key_dim * self.num_heads
 
-        self.q = LocalGlobalQuery(dim, kh)
-        self.k = ConvNorm(dim, kh, 1)
-        self.v = ConvNorm(dim, self.dh, 1)
-        self.v_local = ConvNorm(self.dh, self.dh, kernel_size=3, stride=2, groups=self.dh)
+        self.q = LocalGlobalQuery(dim, kh, **dd)
+        self.k = ConvNorm(dim, kh, 1, **dd)
+        self.v = ConvNorm(dim, self.dh, 1, **dd)
+        self.v_local = ConvNorm(self.dh, self.dh, kernel_size=3, stride=2, groups=self.dh, **dd)
 
         self.act = act_layer()
-        self.proj = ConvNorm(self.dh, self.out_dim, 1)
+        self.proj = ConvNorm(self.dh, self.out_dim, 1, **dd)
 
-        self.attention_biases = nn.Parameter(torch.zeros(num_heads, self.N))
-        k_pos = torch.stack(ndgrid(torch.arange(self.resolution[0]), torch.arange(self.resolution[1]))).flatten(1)
+        self.attention_biases = nn.Parameter(torch.zeros(num_heads, self.N, **dd))
+        k_pos = torch.stack(ndgrid(
+            torch.arange(self.resolution[0], device=device, dtype=torch.long),
+            torch.arange(self.resolution[1], device=device, dtype=torch.long),
+        )).flatten(1)
         q_pos = torch.stack(ndgrid(
-            torch.arange(0, self.resolution[0], step=2),
-            torch.arange(0, self.resolution[1], step=2)
+            torch.arange(0, self.resolution[0], step=2, device=device, dtype=torch.long),
+            torch.arange(0, self.resolution[1], step=2, device=device, dtype=torch.long),
         )).flatten(1)
         rel_pos = (q_pos[..., :, None] - k_pos[..., None, :]).abs()
         rel_pos = (rel_pos[0] * self.resolution[1]) + rel_pos[1]
@@ -282,16 +317,19 @@ class Attention2dDownsample(torch.nn.Module):
 class Downsample(nn.Module):
     def __init__(
             self,
-            in_chs,
-            out_chs,
-            kernel_size=3,
-            stride=2,
-            padding=1,
-            resolution=7,
-            use_attn=False,
-            act_layer=nn.GELU,
-            norm_layer=nn.BatchNorm2d,
+            in_chs: int,
+            out_chs: int,
+            kernel_size: Union[int, Tuple[int, int]] = 3,
+            stride: Union[int, Tuple[int, int]] = 2,
+            padding: Union[int, Tuple[int, int]] = 1,
+            resolution: Union[int, Tuple[int, int]] = 7,
+            use_attn: bool = False,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Optional[Type[nn.Module]] = nn.BatchNorm2d,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
 
         kernel_size = to_2tuple(kernel_size)
@@ -305,6 +343,7 @@ class Downsample(nn.Module):
             stride=stride,
             padding=padding,
             norm_layer=norm_layer,
+            **dd,
         )
 
         if use_attn:
@@ -313,6 +352,7 @@ class Downsample(nn.Module):
                 out_dim=out_chs,
                 resolution=resolution,
                 act_layer=act_layer,
+                **dd,
             )
         else:
             self.attn = None
@@ -332,28 +372,44 @@ class ConvMlpWithNorm(nn.Module):
 
     def __init__(
             self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            act_layer=nn.GELU,
-            norm_layer=nn.BatchNorm2d,
-            drop=0.,
-            mid_conv=False,
+            in_features: int,
+            hidden_features: Optional[int] = None,
+            out_features: Optional[int] = None,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            drop: float = 0.,
+            mid_conv: bool = False,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
         self.fc1 = ConvNormAct(
-            in_features, hidden_features, 1,
-            bias=True, norm_layer=norm_layer, act_layer=act_layer)
+            in_features,
+            hidden_features,
+            1,
+            bias=True,
+            norm_layer=norm_layer,
+            act_layer=act_layer,
+            **dd,
+        )
         if mid_conv:
             self.mid = ConvNormAct(
-                hidden_features, hidden_features, 3,
-                groups=hidden_features, bias=True, norm_layer=norm_layer, act_layer=act_layer)
+                hidden_features,
+                hidden_features,
+                3,
+                groups=hidden_features,
+                bias=True,
+                norm_layer=norm_layer,
+                act_layer=act_layer,
+                **dd,
+            )
         else:
             self.mid = nn.Identity()
         self.drop1 = nn.Dropout(drop)
-        self.fc2 = ConvNorm(hidden_features, out_features, 1, norm_layer=norm_layer)
+        self.fc2 = ConvNorm(hidden_features, out_features, 1, norm_layer=norm_layer, **dd)
         self.drop2 = nn.Dropout(drop)
 
     def forward(self, x):
@@ -365,31 +421,23 @@ class ConvMlpWithNorm(nn.Module):
         return x
 
 
-class LayerScale2d(nn.Module):
-    def __init__(self, dim, init_values=1e-5, inplace=False):
-        super().__init__()
-        self.inplace = inplace
-        self.gamma = nn.Parameter(init_values * torch.ones(dim))
-
-    def forward(self, x):
-        gamma = self.gamma.view(1, -1, 1, 1)
-        return x.mul_(gamma) if self.inplace else x * gamma
-
-
 class EfficientFormerV2Block(nn.Module):
     def __init__(
             self,
-            dim,
-            mlp_ratio=4.,
-            act_layer=nn.GELU,
-            norm_layer=nn.BatchNorm2d,
-            proj_drop=0.,
-            drop_path=0.,
-            layer_scale_init_value=1e-5,
-            resolution=7,
-            stride=None,
-            use_attn=True,
+            dim: int,
+            mlp_ratio: float = 4.,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            proj_drop: float = 0.,
+            drop_path: float = 0.,
+            layer_scale_init_value: Optional[float] = 1e-5,
+            resolution: Union[int, Tuple[int, int]] = 7,
+            stride: Optional[int] = None,
+            use_attn: bool = True,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
 
         if use_attn:
@@ -398,9 +446,10 @@ class EfficientFormerV2Block(nn.Module):
                 resolution=resolution,
                 act_layer=act_layer,
                 stride=stride,
+                **dd,
             )
             self.ls1 = LayerScale2d(
-                dim, layer_scale_init_value) if layer_scale_init_value is not None else nn.Identity()
+                dim, layer_scale_init_value, **dd) if layer_scale_init_value is not None else nn.Identity()
             self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         else:
             self.token_mixer = None
@@ -414,9 +463,10 @@ class EfficientFormerV2Block(nn.Module):
             norm_layer=norm_layer,
             drop=proj_drop,
             mid_conv=True,
+            **dd,
         )
         self.ls2 = LayerScale2d(
-            dim, layer_scale_init_value) if layer_scale_init_value is not None else nn.Identity()
+            dim, layer_scale_init_value, **dd) if layer_scale_init_value is not None else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x):
@@ -427,16 +477,38 @@ class EfficientFormerV2Block(nn.Module):
 
 
 class Stem4(nn.Sequential):
-    def __init__(self, in_chs, out_chs, act_layer=nn.GELU, norm_layer=nn.BatchNorm2d):
+    def __init__(
+            self,
+            in_chs: int,
+            out_chs: int,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.stride = 4
         self.conv1 = ConvNormAct(
-            in_chs, out_chs // 2, kernel_size=3, stride=2, padding=1, bias=True,
-            norm_layer=norm_layer, act_layer=act_layer
+            in_chs,
+            out_chs // 2,
+            kernel_size=3,
+            stride=2, padding=1,
+            bias=True,
+            norm_layer=norm_layer,
+            act_layer=act_layer,
+            **dd,
         )
         self.conv2 = ConvNormAct(
-            out_chs // 2, out_chs, kernel_size=3, stride=2, padding=1, bias=True,
-            norm_layer=norm_layer, act_layer=act_layer
+            out_chs // 2,
+            out_chs,
+            kernel_size=3,
+            stride=2,
+            padding=1,
+            bias=True,
+            norm_layer=norm_layer,
+            act_layer=act_layer,
+            **dd,
         )
 
 
@@ -444,23 +516,25 @@ class EfficientFormerV2Stage(nn.Module):
 
     def __init__(
             self,
-            dim,
-            dim_out,
-            depth,
-            resolution=7,
-            downsample=True,
-            block_stride=None,
-            downsample_use_attn=False,
-            block_use_attn=False,
-            num_vit=1,
-            mlp_ratio=4.,
-            proj_drop=.0,
-            drop_path=0.,
-            layer_scale_init_value=1e-5,
-            act_layer=nn.GELU,
-            norm_layer=nn.BatchNorm2d,
-
+            dim: int,
+            dim_out: int,
+            depth: int,
+            resolution: Union[int, Tuple[int, int]] = 7,
+            downsample: bool = True,
+            block_stride: Optional[int] = None,
+            downsample_use_attn: bool = False,
+            block_use_attn: bool = False,
+            num_vit: int = 1,
+            mlp_ratio: Union[float, Tuple[float, ...]] = 4.,
+            proj_drop: float = .0,
+            drop_path: Union[float, List[float]] = 0.,
+            layer_scale_init_value: Optional[float] = 1e-5,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.grad_checkpointing = False
         mlp_ratio = to_ntuple(depth)(mlp_ratio)
@@ -474,6 +548,7 @@ class EfficientFormerV2Stage(nn.Module):
                 resolution=resolution,
                 norm_layer=norm_layer,
                 act_layer=act_layer,
+                **dd,
             )
             dim = dim_out
             resolution = tuple([math.ceil(r / 2) for r in resolution])
@@ -495,6 +570,7 @@ class EfficientFormerV2Stage(nn.Module):
                 layer_scale_init_value=layer_scale_init_value,
                 act_layer=act_layer,
                 norm_layer=norm_layer,
+                **dd,
             )
             blocks += [b]
         self.blocks = nn.Sequential(*blocks)
@@ -511,25 +587,28 @@ class EfficientFormerV2Stage(nn.Module):
 class EfficientFormerV2(nn.Module):
     def __init__(
             self,
-            depths,
-            in_chans=3,
-            img_size=224,
-            global_pool='avg',
-            embed_dims=None,
-            downsamples=None,
-            mlp_ratios=4,
-            norm_layer='batchnorm2d',
-            norm_eps=1e-5,
-            act_layer='gelu',
-            num_classes=1000,
-            drop_rate=0.,
-            proj_drop_rate=0.,
-            drop_path_rate=0.,
-            layer_scale_init_value=1e-5,
-            num_vit=0,
-            distillation=True,
+            depths: Tuple[int, ...],
+            in_chans: int = 3,
+            img_size: Union[int, Tuple[int, int]] = 224,
+            global_pool: str = 'avg',
+            embed_dims: Optional[Tuple[int, ...]] = None,
+            downsamples: Optional[Tuple[bool, ...]] = None,
+            mlp_ratios: Union[float, Tuple[float, ...], Tuple[Tuple[float, ...], ...]] = 4,
+            norm_layer: str = 'batchnorm2d',
+            norm_eps: float = 1e-5,
+            act_layer: str = 'gelu',
+            num_classes: int = 1000,
+            drop_rate: float = 0.,
+            proj_drop_rate: float = 0.,
+            drop_path_rate: float = 0.,
+            layer_scale_init_value: Optional[float] = 1e-5,
+            num_vit: int = 0,
+            distillation: bool = True,
+            device=None,
+            dtype=None,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         assert global_pool in ('avg', '')
         self.num_classes = num_classes
         self.global_pool = global_pool
@@ -538,7 +617,7 @@ class EfficientFormerV2(nn.Module):
         norm_layer = partial(get_norm_layer(norm_layer), eps=norm_eps)
         act_layer = get_act_layer(act_layer)
 
-        self.stem = Stem4(in_chans, embed_dims[0], act_layer=act_layer, norm_layer=norm_layer)
+        self.stem = Stem4(in_chans, embed_dims[0], act_layer=act_layer, norm_layer=norm_layer, **dd)
         prev_dim = embed_dims[0]
         stride = 4
 
@@ -565,6 +644,7 @@ class EfficientFormerV2(nn.Module):
                 layer_scale_init_value=layer_scale_init_value,
                 act_layer=act_layer,
                 norm_layer=norm_layer,
+                **dd,
             )
             if downsamples[i]:
                 stride *= 2
@@ -575,12 +655,12 @@ class EfficientFormerV2(nn.Module):
 
         # Classifier head
         self.num_features = self.head_hidden_size = embed_dims[-1]
-        self.norm = norm_layer(embed_dims[-1])
+        self.norm = norm_layer(embed_dims[-1], **dd)
         self.head_drop = nn.Dropout(drop_rate)
-        self.head = nn.Linear(embed_dims[-1], num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(embed_dims[-1], num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.dist = distillation
         if self.dist:
-            self.head_dist = nn.Linear(embed_dims[-1], num_classes) if num_classes > 0 else nn.Identity()
+            self.head_dist = nn.Linear(embed_dims[-1], num_classes, **dd) if num_classes > 0 else nn.Identity()
         else:
             self.head_dist = None
 

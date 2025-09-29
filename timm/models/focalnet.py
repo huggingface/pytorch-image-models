@@ -18,13 +18,22 @@ This impl is/has:
 # Written by Jianwei Yang (jianwyan@microsoft.com)
 # --------------------------------------------------------
 from functools import partial
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import Mlp, DropPath, LayerNorm2d, trunc_normal_, ClassifierHead, NormMlpClassifierHead, calculate_drop_path_rates
+from timm.layers import (
+    Mlp,
+    DropPath,
+    LayerNorm2d,
+    LayerScale2d,
+    trunc_normal_,
+    ClassifierHead,
+    NormMlpClassifierHead,
+    calculate_drop_path_rates,
+)
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import named_apply, checkpoint
@@ -37,15 +46,18 @@ class FocalModulation(nn.Module):
     def __init__(
             self,
             dim: int,
-            focal_window,
+            focal_window: int,
             focal_level: int,
             focal_factor: int = 2,
             bias: bool = True,
             use_post_norm: bool = False,
             normalize_modulator: bool = False,
             proj_drop: float = 0.,
-            norm_layer: Callable = LayerNorm2d,
+            norm_layer: Type[nn.Module] = LayerNorm2d,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
 
         self.dim = dim
@@ -56,11 +68,11 @@ class FocalModulation(nn.Module):
         self.normalize_modulator = normalize_modulator
         self.input_split = [dim, dim, self.focal_level + 1]
 
-        self.f = nn.Conv2d(dim, 2 * dim + (self.focal_level + 1), kernel_size=1, bias=bias)
-        self.h = nn.Conv2d(dim, dim, kernel_size=1, bias=bias)
+        self.f = nn.Conv2d(dim, 2 * dim + (self.focal_level + 1), kernel_size=1, bias=bias, **dd)
+        self.h = nn.Conv2d(dim, dim, kernel_size=1, bias=bias, **dd)
 
         self.act = nn.GELU()
-        self.proj = nn.Conv2d(dim, dim, kernel_size=1)
+        self.proj = nn.Conv2d(dim, dim, kernel_size=1, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
         self.focal_layers = nn.ModuleList()
 
@@ -68,11 +80,11 @@ class FocalModulation(nn.Module):
         for k in range(self.focal_level):
             kernel_size = self.focal_factor * k + self.focal_window
             self.focal_layers.append(nn.Sequential(
-                nn.Conv2d(dim, dim, kernel_size=kernel_size, groups=dim, padding=kernel_size // 2, bias=False),
+                nn.Conv2d(dim, dim, kernel_size=kernel_size, groups=dim, padding=kernel_size // 2, bias=False, **dd),
                 nn.GELU(),
             ))
             self.kernel_sizes.append(kernel_size)
-        self.norm = norm_layer(dim) if self.use_post_norm else nn.Identity()
+        self.norm = norm_layer(dim, **dd) if self.use_post_norm else nn.Identity()
 
     def forward(self, x):
         # pre linear projection
@@ -101,17 +113,6 @@ class FocalModulation(nn.Module):
         return x_out
 
 
-class LayerScale2d(nn.Module):
-    def __init__(self, dim, init_values=1e-5, inplace=False):
-        super().__init__()
-        self.inplace = inplace
-        self.gamma = nn.Parameter(init_values * torch.ones(dim))
-
-    def forward(self, x):
-        gamma = self.gamma.view(1, -1, 1, 1)
-        return x.mul_(gamma) if self.inplace else x * gamma
-
-
 class FocalNetBlock(nn.Module):
     """ Focal Modulation Network Block.
     """
@@ -125,11 +126,13 @@ class FocalNetBlock(nn.Module):
             use_post_norm: bool = False,
             use_post_norm_in_modulation: bool = False,
             normalize_modulator: bool = False,
-            layerscale_value: float = 1e-4,
+            layerscale_value: Optional[float] = 1e-4,
             proj_drop: float = 0.,
             drop_path: float = 0.,
-            act_layer: Callable = nn.GELU,
-            norm_layer: Callable = LayerNorm2d,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = LayerNorm2d,
+            device=None,
+            dtype=None,
     ):
         """
         Args:
@@ -145,6 +148,7 @@ class FocalNetBlock(nn.Module):
             act_layer: Activation layer.
             norm_layer: Normalization layer.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.dim = dim
         self.mlp_ratio = mlp_ratio
@@ -153,7 +157,7 @@ class FocalNetBlock(nn.Module):
         self.focal_level = focal_level
         self.use_post_norm = use_post_norm
 
-        self.norm1 = norm_layer(dim) if not use_post_norm else nn.Identity()
+        self.norm1 = norm_layer(dim, **dd) if not use_post_norm else nn.Identity()
         self.modulation = FocalModulation(
             dim,
             focal_window=focal_window,
@@ -162,21 +166,23 @@ class FocalNetBlock(nn.Module):
             normalize_modulator=normalize_modulator,
             proj_drop=proj_drop,
             norm_layer=norm_layer,
+            **dd,
         )
-        self.norm1_post = norm_layer(dim) if use_post_norm else nn.Identity()
-        self.ls1 = LayerScale2d(dim, layerscale_value) if layerscale_value is not None else nn.Identity()
+        self.norm1_post = norm_layer(dim, **dd) if use_post_norm else nn.Identity()
+        self.ls1 = LayerScale2d(dim, layerscale_value, **dd) if layerscale_value is not None else nn.Identity()
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-        self.norm2 = norm_layer(dim) if not use_post_norm else nn.Identity()
+        self.norm2 = norm_layer(dim, **dd) if not use_post_norm else nn.Identity()
         self.mlp = Mlp(
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
             drop=proj_drop,
             use_conv=True,
+            **dd,
         )
-        self.norm2_post = norm_layer(dim) if use_post_norm else nn.Identity()
-        self.ls2 = LayerScale2d(dim, layerscale_value) if layerscale_value is not None else nn.Identity()
+        self.norm2_post = norm_layer(dim, **dd) if use_post_norm else nn.Identity()
+        self.ls2 = LayerScale2d(dim, layerscale_value, **dd) if layerscale_value is not None else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x):
@@ -211,10 +217,12 @@ class FocalNetStage(nn.Module):
             use_post_norm: bool = False,
             use_post_norm_in_modulation: bool = False,
             normalize_modulator: bool = False,
-            layerscale_value: float = 1e-4,
+            layerscale_value: Optional[float] = 1e-4,
             proj_drop: float = 0.,
-            drop_path: float = 0.,
-            norm_layer: Callable = LayerNorm2d,
+            drop_path: Union[float, List[float]] = 0.,
+            norm_layer: Type[nn.Module] = LayerNorm2d,
+            device=None,
+            dtype=None,
     ):
         """
         Args:
@@ -233,6 +241,7 @@ class FocalNetStage(nn.Module):
             drop_path: Stochastic depth rate.
             norm_layer: Normalization layer.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.dim = dim
         self.depth = depth
@@ -245,6 +254,7 @@ class FocalNetStage(nn.Module):
                 stride=2,
                 overlap=use_overlap_down,
                 norm_layer=norm_layer,
+                **dd,
             )
         else:
             self.downsample = nn.Identity()
@@ -263,6 +273,7 @@ class FocalNetStage(nn.Module):
                 proj_drop=proj_drop,
                 drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
                 norm_layer=norm_layer,
+                **dd,
             )
             for i in range(depth)])
 
@@ -288,7 +299,9 @@ class Downsample(nn.Module):
             out_chs: int,
             stride: int = 4,
             overlap: bool = False,
-            norm_layer: Optional[Callable] = None,
+            norm_layer: Optional[Type[nn.Module]] = None,
+            device=None,
+            dtype=None,
     ):
         """
 
@@ -299,6 +312,7 @@ class Downsample(nn.Module):
             overlap: Use overlapping convolutions if True.
             norm_layer: Normalization layer.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.stride = stride
         padding = 0
@@ -309,8 +323,8 @@ class Downsample(nn.Module):
                 kernel_size, padding = 7, 2
             elif stride == 2:
                 kernel_size, padding = 3, 1
-        self.proj = nn.Conv2d(in_chs, out_chs, kernel_size=kernel_size, stride=stride, padding=padding)
-        self.norm = norm_layer(out_chs) if norm_layer is not None else nn.Identity()
+        self.proj = nn.Conv2d(in_chs, out_chs, kernel_size=kernel_size, stride=stride, padding=padding, **dd)
+        self.norm = norm_layer(out_chs, **dd) if norm_layer is not None else nn.Identity()
 
     def forward(self, x):
         x = self.proj(x)
@@ -339,10 +353,12 @@ class FocalNet(nn.Module):
             head_hidden_size: Optional[int] = None,
             head_init_scale: float = 1.0,
             layerscale_value: Optional[float] = None,
-            drop_rate: bool = 0.,
-            proj_drop_rate: bool = 0.,
-            drop_path_rate: bool = 0.1,
-            norm_layer: Callable = partial(LayerNorm2d, eps=1e-5),
+            drop_rate: float = 0.,
+            proj_drop_rate: float = 0.,
+            drop_path_rate: float = 0.1,
+            norm_layer: Type[nn.Module] = partial(LayerNorm2d, eps=1e-5),
+            device=None,
+            dtype=None,
     ):
         """
         Args:
@@ -361,7 +377,7 @@ class FocalNet(nn.Module):
             norm_layer: Normalization layer.
         """
         super().__init__()
-
+        dd = {'device': device, 'dtype': dtype}
         self.num_layers = len(depths)
         embed_dim = [embed_dim * (2 ** i) for i in range(self.num_layers)]
 
@@ -375,6 +391,7 @@ class FocalNet(nn.Module):
             out_chs=embed_dim[0],
             overlap=use_overlap_down,
             norm_layer=norm_layer,
+            **dd,
         )
         in_dim = embed_dim[0]
 
@@ -398,6 +415,7 @@ class FocalNet(nn.Module):
                 proj_drop=proj_drop_rate,
                 drop_path=dpr[sum(depths[:i_layer]):sum(depths[:i_layer + 1])],
                 norm_layer=norm_layer,
+                **dd,
             )
             in_dim = out_dim
             layers += [layer]
@@ -415,14 +433,16 @@ class FocalNet(nn.Module):
                 pool_type=global_pool,
                 drop_rate=drop_rate,
                 norm_layer=norm_layer,
+                **dd,
             )
         else:
-            self.norm = norm_layer(self.num_features)
+            self.norm = norm_layer(self.num_features, **dd)
             self.head = ClassifierHead(
                 self.num_features,
                 num_classes,
                 pool_type=global_pool,
-                drop_rate=drop_rate
+                drop_rate=drop_rate,
+                **dd,
             )
 
         named_apply(partial(_init_weights, head_init_scale=head_init_scale), self)
