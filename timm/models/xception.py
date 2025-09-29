@@ -24,6 +24,7 @@ The resize parameter of the validation transform should be 333, and make sure to
 import torch.jit
 import torch.nn as nn
 import torch.nn.functional as F
+from typing import Optional
 
 from timm.layers import create_classifier
 from ._builder import build_model_with_cfg
@@ -33,12 +34,32 @@ __all__ = ['Xception']
 
 
 class SeparableConv2d(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=1, stride=1, padding=0, dilation=1):
-        super(SeparableConv2d, self).__init__()
+    def __init__(
+            self,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: int = 1,
+            stride: int = 1,
+            padding: int = 0,
+            dilation: int = 1,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
 
         self.conv1 = nn.Conv2d(
-            in_channels, in_channels, kernel_size, stride, padding, dilation, groups=in_channels, bias=False)
-        self.pointwise = nn.Conv2d(in_channels, out_channels, 1, 1, 0, 1, 1, bias=False)
+            in_channels,
+            in_channels,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            groups=in_channels,
+            bias=False,
+            **dd,
+        )
+        self.pointwise = nn.Conv2d(in_channels, out_channels, 1, 1, 0, 1, 1, bias=False, **dd)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -47,12 +68,23 @@ class SeparableConv2d(nn.Module):
 
 
 class Block(nn.Module):
-    def __init__(self, in_channels, out_channels, reps, strides=1, start_with_relu=True, grow_first=True):
-        super(Block, self).__init__()
+    def __init__(
+            self,
+            in_channels: int,
+            out_channels: int,
+            reps: int,
+            strides: int = 1,
+            start_with_relu: bool = True,
+            grow_first: bool = True,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
 
         if out_channels != in_channels or strides != 1:
-            self.skip = nn.Conv2d(in_channels, out_channels, 1, stride=strides, bias=False)
-            self.skipbn = nn.BatchNorm2d(out_channels)
+            self.skip = nn.Conv2d(in_channels, out_channels, 1, stride=strides, bias=False, **dd)
+            self.skipbn = nn.BatchNorm2d(out_channels, **dd)
         else:
             self.skip = None
 
@@ -65,8 +97,8 @@ class Block(nn.Module):
                 inc = in_channels
                 outc = in_channels if i < (reps - 1) else out_channels
             rep.append(nn.ReLU(inplace=True))
-            rep.append(SeparableConv2d(inc, outc, 3, stride=1, padding=1))
-            rep.append(nn.BatchNorm2d(outc))
+            rep.append(SeparableConv2d(inc, outc, 3, stride=1, padding=1, **dd))
+            rep.append(nn.BatchNorm2d(outc, **dd))
 
         if not start_with_relu:
             rep = rep[1:]
@@ -96,47 +128,56 @@ class Xception(nn.Module):
     https://arxiv.org/pdf/1610.02357.pdf
     """
 
-    def __init__(self, num_classes=1000, in_chans=3, drop_rate=0., global_pool='avg'):
+    def __init__(
+            self,
+            num_classes: int = 1000,
+            in_chans: int = 3,
+            drop_rate: float = 0.,
+            global_pool: str = 'avg',
+            device=None,
+            dtype=None,
+    ):
         """ Constructor
         Args:
             num_classes: number of classes
         """
         super(Xception, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.drop_rate = drop_rate
         self.global_pool = global_pool
         self.num_classes = num_classes
         self.num_features = self.head_hidden_size = 2048
 
-        self.conv1 = nn.Conv2d(in_chans, 32, 3, 2, 0, bias=False)
-        self.bn1 = nn.BatchNorm2d(32)
+        self.conv1 = nn.Conv2d(in_chans, 32, 3, 2, 0, bias=False, **dd)
+        self.bn1 = nn.BatchNorm2d(32, **dd)
         self.act1 = nn.ReLU(inplace=True)
 
-        self.conv2 = nn.Conv2d(32, 64, 3, bias=False)
-        self.bn2 = nn.BatchNorm2d(64)
+        self.conv2 = nn.Conv2d(32, 64, 3, bias=False, **dd)
+        self.bn2 = nn.BatchNorm2d(64, **dd)
         self.act2 = nn.ReLU(inplace=True)
 
-        self.block1 = Block(64, 128, 2, 2, start_with_relu=False)
-        self.block2 = Block(128, 256, 2, 2)
-        self.block3 = Block(256, 728, 2, 2)
+        self.block1 = Block(64, 128, 2, 2, start_with_relu=False, **dd)
+        self.block2 = Block(128, 256, 2, 2, **dd)
+        self.block3 = Block(256, 728, 2, 2, **dd)
 
-        self.block4 = Block(728, 728, 3, 1)
-        self.block5 = Block(728, 728, 3, 1)
-        self.block6 = Block(728, 728, 3, 1)
-        self.block7 = Block(728, 728, 3, 1)
+        self.block4 = Block(728, 728, 3, 1, **dd)
+        self.block5 = Block(728, 728, 3, 1, **dd)
+        self.block6 = Block(728, 728, 3, 1, **dd)
+        self.block7 = Block(728, 728, 3, 1, **dd)
 
-        self.block8 = Block(728, 728, 3, 1)
-        self.block9 = Block(728, 728, 3, 1)
-        self.block10 = Block(728, 728, 3, 1)
-        self.block11 = Block(728, 728, 3, 1)
+        self.block8 = Block(728, 728, 3, 1, **dd)
+        self.block9 = Block(728, 728, 3, 1, **dd)
+        self.block10 = Block(728, 728, 3, 1, **dd)
+        self.block11 = Block(728, 728, 3, 1, **dd)
 
-        self.block12 = Block(728, 1024, 2, 2, grow_first=False)
+        self.block12 = Block(728, 1024, 2, 2, grow_first=False, **dd)
 
-        self.conv3 = SeparableConv2d(1024, 1536, 3, 1, 1)
-        self.bn3 = nn.BatchNorm2d(1536)
+        self.conv3 = SeparableConv2d(1024, 1536, 3, 1, 1, **dd)
+        self.bn3 = nn.BatchNorm2d(1536, **dd)
         self.act3 = nn.ReLU(inplace=True)
 
-        self.conv4 = SeparableConv2d(1536, self.num_features, 3, 1, 1)
-        self.bn4 = nn.BatchNorm2d(self.num_features)
+        self.conv4 = SeparableConv2d(1536, self.num_features, 3, 1, 1, **dd)
+        self.bn4 = nn.BatchNorm2d(self.num_features, **dd)
         self.act4 = nn.ReLU(inplace=True)
         self.feature_info = [
             dict(num_chs=64, reduction=2, module='act2'),
@@ -146,7 +187,7 @@ class Xception(nn.Module):
             dict(num_chs=2048, reduction=32, module='act4'),
         ]
 
-        self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
+        self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool, **dd)
 
         # #------- init weights --------
         for m in self.modules():

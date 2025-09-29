@@ -8,7 +8,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 """
 from collections import OrderedDict
 from functools import partial
-from typing import Tuple
+from typing import Tuple, Type, Optional
 
 import torch
 import torch.nn as nn
@@ -23,9 +23,16 @@ __all__ = ['DPN']
 
 
 class CatBnAct(nn.Module):
-    def __init__(self, in_chs, norm_layer=BatchNormAct2d):
+    def __init__(
+            self,
+            in_chs: int,
+            norm_layer: Type[nn.Module] = BatchNormAct2d,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super(CatBnAct, self).__init__()
-        self.bn = norm_layer(in_chs, eps=0.001)
+        self.bn = norm_layer(in_chs, eps=0.001, **dd)
 
     @torch.jit._overload_method  # noqa: F811
     def forward(self, x):
@@ -44,10 +51,21 @@ class CatBnAct(nn.Module):
 
 
 class BnActConv2d(nn.Module):
-    def __init__(self, in_chs, out_chs, kernel_size, stride, groups=1, norm_layer=BatchNormAct2d):
+    def __init__(
+            self,
+            in_chs: int,
+            out_chs: int,
+            kernel_size: int,
+            stride: int,
+            groups: int = 1,
+            norm_layer: Type[nn.Module] = BatchNormAct2d,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super(BnActConv2d, self).__init__()
-        self.bn = norm_layer(in_chs, eps=0.001)
-        self.conv = create_conv2d(in_chs, out_chs, kernel_size, stride=stride, groups=groups)
+        self.bn = norm_layer(in_chs, eps=0.001, **dd)
+        self.conv = create_conv2d(in_chs, out_chs, kernel_size, stride=stride, groups=groups, **dd)
 
     def forward(self, x):
         return self.conv(self.bn(x))
@@ -56,15 +74,18 @@ class BnActConv2d(nn.Module):
 class DualPathBlock(nn.Module):
     def __init__(
             self,
-            in_chs,
-            num_1x1_a,
-            num_3x3_b,
-            num_1x1_c,
-            inc,
-            groups,
-            block_type='normal',
-            b=False,
+            in_chs: int,
+            num_1x1_a: int,
+            num_3x3_b: int,
+            num_1x1_c: int,
+            inc: int,
+            groups: int,
+            block_type: str = 'normal',
+            b: bool = False,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super(DualPathBlock, self).__init__()
         self.num_1x1_c = num_1x1_c
         self.inc = inc
@@ -86,20 +107,20 @@ class DualPathBlock(nn.Module):
             # Using different member names here to allow easier parameter key matching for conversion
             if self.key_stride == 2:
                 self.c1x1_w_s2 = BnActConv2d(
-                    in_chs=in_chs, out_chs=num_1x1_c + 2 * inc, kernel_size=1, stride=2)
+                    in_chs=in_chs, out_chs=num_1x1_c + 2 * inc, kernel_size=1, stride=2, **dd)
             else:
                 self.c1x1_w_s1 = BnActConv2d(
-                    in_chs=in_chs, out_chs=num_1x1_c + 2 * inc, kernel_size=1, stride=1)
+                    in_chs=in_chs, out_chs=num_1x1_c + 2 * inc, kernel_size=1, stride=1, **dd)
 
-        self.c1x1_a = BnActConv2d(in_chs=in_chs, out_chs=num_1x1_a, kernel_size=1, stride=1)
+        self.c1x1_a = BnActConv2d(in_chs=in_chs, out_chs=num_1x1_a, kernel_size=1, stride=1, **dd)
         self.c3x3_b = BnActConv2d(
-            in_chs=num_1x1_a, out_chs=num_3x3_b, kernel_size=3, stride=self.key_stride, groups=groups)
+            in_chs=num_1x1_a, out_chs=num_3x3_b, kernel_size=3, stride=self.key_stride, groups=groups, **dd)
         if b:
-            self.c1x1_c = CatBnAct(in_chs=num_3x3_b)
-            self.c1x1_c1 = create_conv2d(num_3x3_b, num_1x1_c, kernel_size=1)
-            self.c1x1_c2 = create_conv2d(num_3x3_b, inc, kernel_size=1)
+            self.c1x1_c = CatBnAct(in_chs=num_3x3_b, **dd)
+            self.c1x1_c1 = create_conv2d(num_3x3_b, num_1x1_c, kernel_size=1, **dd)
+            self.c1x1_c2 = create_conv2d(num_3x3_b, inc, kernel_size=1, **dd)
         else:
-            self.c1x1_c = BnActConv2d(in_chs=num_3x3_b, out_chs=num_1x1_c + inc, kernel_size=1, stride=1)
+            self.c1x1_c = BnActConv2d(in_chs=num_3x3_b, out_chs=num_1x1_c + inc, kernel_size=1, stride=1, **dd)
             self.c1x1_c1 = None
             self.c1x1_c2 = None
 
@@ -150,23 +171,26 @@ class DualPathBlock(nn.Module):
 class DPN(nn.Module):
     def __init__(
             self,
-            k_sec=(3, 4, 20, 3),
-            inc_sec=(16, 32, 24, 128),
-            k_r=96,
-            groups=32,
-            num_classes=1000,
-            in_chans=3,
-            output_stride=32,
-            global_pool='avg',
-            small=False,
-            num_init_features=64,
-            b=False,
-            drop_rate=0.,
-            norm_layer='batchnorm2d',
-            act_layer='relu',
-            fc_act_layer='elu',
+            k_sec: Tuple[int, ...] = (3, 4, 20, 3),
+            inc_sec: Tuple[int, ...] = (16, 32, 24, 128),
+            k_r: int = 96,
+            groups: int = 32,
+            num_classes: int = 1000,
+            in_chans: int = 3,
+            output_stride: int = 32,
+            global_pool: str = 'avg',
+            small: bool = False,
+            num_init_features: int = 64,
+            b: bool = False,
+            drop_rate: float = 0.,
+            norm_layer: str = 'batchnorm2d',
+            act_layer: str = 'relu',
+            fc_act_layer: str = 'elu',
+            device=None,
+            dtype=None,
     ):
         super(DPN, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.b = b
@@ -179,7 +203,13 @@ class DPN(nn.Module):
 
         # conv1
         blocks['conv1_1'] = ConvNormAct(
-            in_chans, num_init_features, kernel_size=3 if small else 7, stride=2, norm_layer=norm_layer)
+            in_chans,
+            num_init_features,
+            kernel_size=3 if small else 7,
+            stride=2,
+            norm_layer=norm_layer,
+            **dd,
+        )
         blocks['conv1_pool'] = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.feature_info = [dict(num_chs=num_init_features, reduction=2, module='features.conv1_1')]
 
@@ -187,10 +217,10 @@ class DPN(nn.Module):
         bw = 64 * bw_factor
         inc = inc_sec[0]
         r = (k_r * bw) // (64 * bw_factor)
-        blocks['conv2_1'] = DualPathBlock(num_init_features, r, r, bw, inc, groups, 'proj', b)
+        blocks['conv2_1'] = DualPathBlock(num_init_features, r, r, bw, inc, groups, 'proj', b, **dd)
         in_chs = bw + 3 * inc
         for i in range(2, k_sec[0] + 1):
-            blocks['conv2_' + str(i)] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'normal', b)
+            blocks['conv2_' + str(i)] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'normal', b, **dd)
             in_chs += inc
         self.feature_info += [dict(num_chs=in_chs, reduction=4, module=f'features.conv2_{k_sec[0]}')]
 
@@ -198,10 +228,10 @@ class DPN(nn.Module):
         bw = 128 * bw_factor
         inc = inc_sec[1]
         r = (k_r * bw) // (64 * bw_factor)
-        blocks['conv3_1'] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'down', b)
+        blocks['conv3_1'] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'down', b, **dd)
         in_chs = bw + 3 * inc
         for i in range(2, k_sec[1] + 1):
-            blocks['conv3_' + str(i)] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'normal', b)
+            blocks['conv3_' + str(i)] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'normal', b, **dd)
             in_chs += inc
         self.feature_info += [dict(num_chs=in_chs, reduction=8, module=f'features.conv3_{k_sec[1]}')]
 
@@ -209,10 +239,10 @@ class DPN(nn.Module):
         bw = 256 * bw_factor
         inc = inc_sec[2]
         r = (k_r * bw) // (64 * bw_factor)
-        blocks['conv4_1'] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'down', b)
+        blocks['conv4_1'] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'down', b, **dd)
         in_chs = bw + 3 * inc
         for i in range(2, k_sec[2] + 1):
-            blocks['conv4_' + str(i)] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'normal', b)
+            blocks['conv4_' + str(i)] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'normal', b, **dd)
             in_chs += inc
         self.feature_info += [dict(num_chs=in_chs, reduction=16, module=f'features.conv4_{k_sec[2]}')]
 
@@ -220,21 +250,26 @@ class DPN(nn.Module):
         bw = 512 * bw_factor
         inc = inc_sec[3]
         r = (k_r * bw) // (64 * bw_factor)
-        blocks['conv5_1'] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'down', b)
+        blocks['conv5_1'] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'down', b, **dd)
         in_chs = bw + 3 * inc
         for i in range(2, k_sec[3] + 1):
-            blocks['conv5_' + str(i)] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'normal', b)
+            blocks['conv5_' + str(i)] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'normal', b, **dd)
             in_chs += inc
         self.feature_info += [dict(num_chs=in_chs, reduction=32, module=f'features.conv5_{k_sec[3]}')]
 
-        blocks['conv5_bn_ac'] = CatBnAct(in_chs, norm_layer=fc_norm_layer)
+        blocks['conv5_bn_ac'] = CatBnAct(in_chs, norm_layer=fc_norm_layer, **dd)
 
         self.num_features = self.head_hidden_size = in_chs
         self.features = nn.Sequential(blocks)
 
         # Using 1x1 conv for the FC layer to allow the extra pooling scheme
         self.global_pool, self.classifier = create_classifier(
-            self.num_features, self.num_classes, pool_type=global_pool, use_conv=True)
+            self.num_features,
+            self.num_classes,
+            pool_type=global_pool,
+            use_conv=True,
+            **dd,
+        )
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
 
     @torch.jit.ignore

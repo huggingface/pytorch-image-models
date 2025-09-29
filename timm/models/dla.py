@@ -6,7 +6,7 @@ Res2Net additions from: https://github.com/gasvn/Res2Net/
 Res2Net Paper: `Res2Net: A New Multi-scale Backbone Architecture` - https://arxiv.org/abs/1904.01169
 """
 import math
-from typing import List, Optional
+from typing import List, Optional, Type
 
 import torch
 import torch.nn as nn
@@ -22,17 +22,41 @@ __all__ = ['DLA']
 class DlaBasic(nn.Module):
     """DLA Basic"""
 
-    def __init__(self, inplanes, planes, stride=1, dilation=1, **_):
-        super(DlaBasic, self).__init__()
+    def __init__(
+            self,
+            inplanes: int,
+            planes: int,
+            stride: int = 1,
+            dilation: int = 1,
+            device=None,
+            dtype=None,
+            **_,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.conv1 = nn.Conv2d(
-            inplanes, planes, kernel_size=3,
-            stride=stride, padding=dilation, bias=False, dilation=dilation)
-        self.bn1 = nn.BatchNorm2d(planes)
+            inplanes,
+            planes,
+            kernel_size=3,
+            stride=stride,
+            padding=dilation,
+            bias=False,
+            dilation=dilation,
+            **dd,
+        )
+        self.bn1 = nn.BatchNorm2d(planes, **dd)
         self.relu = nn.ReLU(inplace=True)
         self.conv2 = nn.Conv2d(
-            planes, planes, kernel_size=3,
-            stride=1, padding=dilation, bias=False, dilation=dilation)
-        self.bn2 = nn.BatchNorm2d(planes)
+            planes,
+            planes,
+            kernel_size=3,
+            stride=1,
+            padding=dilation,
+            bias=False,
+            dilation=dilation,
+            **dd,
+        )
+        self.bn2 = nn.BatchNorm2d(planes, **dd)
         self.stride = stride
 
     def forward(self, x, shortcut: Optional[torch.Tensor] = None, children: Optional[List[torch.Tensor]] = None):
@@ -56,20 +80,39 @@ class DlaBottleneck(nn.Module):
     """DLA/DLA-X Bottleneck"""
     expansion = 2
 
-    def __init__(self, inplanes, outplanes, stride=1, dilation=1, cardinality=1, base_width=64):
-        super(DlaBottleneck, self).__init__()
+    def __init__(
+        self,
+        inplanes: int,
+        outplanes: int,
+        stride: int = 1,
+        dilation: int = 1,
+        cardinality: int = 1,
+        base_width: int = 64,
+        device=None,
+        dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.stride = stride
         mid_planes = int(math.floor(outplanes * (base_width / 64)) * cardinality)
         mid_planes = mid_planes // self.expansion
 
-        self.conv1 = nn.Conv2d(inplanes, mid_planes, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(mid_planes)
+        self.conv1 = nn.Conv2d(inplanes, mid_planes, kernel_size=1, bias=False, **dd)
+        self.bn1 = nn.BatchNorm2d(mid_planes, **dd)
         self.conv2 = nn.Conv2d(
-            mid_planes, mid_planes, kernel_size=3,
-            stride=stride, padding=dilation, bias=False, dilation=dilation, groups=cardinality)
-        self.bn2 = nn.BatchNorm2d(mid_planes)
-        self.conv3 = nn.Conv2d(mid_planes, outplanes, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(outplanes)
+            mid_planes,
+            mid_planes,
+            kernel_size=3,
+            stride=stride,
+            padding=dilation,
+            bias=False,
+            dilation=dilation,
+            groups=cardinality,
+            **dd,
+        )
+        self.bn2 = nn.BatchNorm2d(mid_planes, **dd)
+        self.conv3 = nn.Conv2d(mid_planes, outplanes, kernel_size=1, bias=False, **dd)
+        self.bn3 = nn.BatchNorm2d(outplanes, **dd)
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x, shortcut: Optional[torch.Tensor] = None, children: Optional[List[torch.Tensor]] = None):
@@ -99,31 +142,51 @@ class DlaBottle2neck(nn.Module):
     """
     expansion = 2
 
-    def __init__(self, inplanes, outplanes, stride=1, dilation=1, scale=4, cardinality=8, base_width=4):
-        super(DlaBottle2neck, self).__init__()
+    def __init__(
+        self,
+        inplanes: int,
+        outplanes: int,
+        stride: int = 1,
+        dilation: int = 1,
+        scale: int = 4,
+        cardinality: int = 8,
+        base_width: int = 4,
+        device=None,
+        dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.is_first = stride > 1
         self.scale = scale
         mid_planes = int(math.floor(outplanes * (base_width / 64)) * cardinality)
         mid_planes = mid_planes // self.expansion
         self.width = mid_planes
 
-        self.conv1 = nn.Conv2d(inplanes, mid_planes * scale, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(mid_planes * scale)
+        self.conv1 = nn.Conv2d(inplanes, mid_planes * scale, kernel_size=1, bias=False, **dd)
+        self.bn1 = nn.BatchNorm2d(mid_planes * scale, **dd)
 
         num_scale_convs = max(1, scale - 1)
         convs = []
         bns = []
         for _ in range(num_scale_convs):
             convs.append(nn.Conv2d(
-                mid_planes, mid_planes, kernel_size=3,
-                stride=stride, padding=dilation, dilation=dilation, groups=cardinality, bias=False))
-            bns.append(nn.BatchNorm2d(mid_planes))
+                mid_planes,
+                mid_planes,
+                kernel_size=3,
+                stride=stride,
+                padding=dilation,
+                dilation=dilation,
+                groups=cardinality,
+                bias=False,
+                **dd,
+            ))
+            bns.append(nn.BatchNorm2d(mid_planes, **dd))
         self.convs = nn.ModuleList(convs)
         self.bns = nn.ModuleList(bns)
         self.pool = nn.AvgPool2d(kernel_size=3, stride=stride, padding=1) if self.is_first else None
 
-        self.conv3 = nn.Conv2d(mid_planes * scale, outplanes, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(outplanes)
+        self.conv3 = nn.Conv2d(mid_planes * scale, outplanes, kernel_size=1, bias=False, **dd)
+        self.bn3 = nn.BatchNorm2d(outplanes, **dd)
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x, shortcut: Optional[torch.Tensor] = None, children: Optional[List[torch.Tensor]] = None):
@@ -163,11 +226,27 @@ class DlaBottle2neck(nn.Module):
 
 
 class DlaRoot(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, shortcut):
-        super(DlaRoot, self).__init__()
+    def __init__(
+            self,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: int,
+            shortcut: bool,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.conv = nn.Conv2d(
-            in_channels, out_channels, 1, stride=1, bias=False, padding=(kernel_size - 1) // 2)
-        self.bn = nn.BatchNorm2d(out_channels)
+            in_channels,
+            out_channels,
+            1,
+            stride=1,
+            bias=False,
+            padding=(kernel_size - 1) // 2,
+            **dd,
+        )
+        self.bn = nn.BatchNorm2d(out_channels, **dd)
         self.relu = nn.ReLU(inplace=True)
         self.shortcut = shortcut
 
@@ -184,27 +263,30 @@ class DlaRoot(nn.Module):
 class DlaTree(nn.Module):
     def __init__(
             self,
-            levels,
-            block,
-            in_channels,
-            out_channels,
-            stride=1,
-            dilation=1,
-            cardinality=1,
-            base_width=64,
-            level_root=False,
-            root_dim=0,
-            root_kernel_size=1,
-            root_shortcut=False,
+            levels: int,
+            block: Type[nn.Module],
+            in_channels: int,
+            out_channels: int,
+            stride: int = 1,
+            dilation: int = 1,
+            cardinality: int = 1,
+            base_width: int = 64,
+            level_root: bool = False,
+            root_dim: int = 0,
+            root_kernel_size: int = 1,
+            root_shortcut: bool = False,
+            device=None,
+            dtype=None,
     ):
-        super(DlaTree, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         if root_dim == 0:
             root_dim = 2 * out_channels
         if level_root:
             root_dim += in_channels
         self.downsample = nn.MaxPool2d(stride, stride=stride) if stride > 1 else nn.Identity()
         self.project = nn.Identity()
-        cargs = dict(dilation=dilation, cardinality=cardinality, base_width=base_width)
+        cargs = dict(dilation=dilation, cardinality=cardinality, base_width=base_width, **dd)
         if levels == 1:
             self.tree1 = block(in_channels, out_channels, stride, **cargs)
             self.tree2 = block(out_channels, out_channels, 1, **cargs)
@@ -213,9 +295,9 @@ class DlaTree(nn.Module):
                 # used, I've moved the project layer here to avoid wasted params but old checkpoints will
                 # need strict=False while loading.
                 self.project = nn.Sequential(
-                    nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, bias=False),
-                    nn.BatchNorm2d(out_channels))
-            self.root = DlaRoot(root_dim, out_channels, root_kernel_size, root_shortcut)
+                    nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, bias=False, **dd),
+                    nn.BatchNorm2d(out_channels, **dd))
+            self.root = DlaRoot(root_dim, out_channels, root_kernel_size, root_shortcut, **dd)
         else:
             cargs.update(dict(root_kernel_size=root_kernel_size, root_shortcut=root_shortcut))
             self.tree1 = DlaTree(
@@ -262,16 +344,19 @@ class DLA(nn.Module):
             self,
             levels,
             channels,
-            output_stride=32,
-            num_classes=1000,
-            in_chans=3,
-            global_pool='avg',
-            cardinality=1,
-            base_width=64,
-            block=DlaBottle2neck,
-            shortcut_root=False,
-            drop_rate=0.0,
+            output_stride: int = 32,
+            num_classes: int = 1000,
+            in_chans: int = 3,
+            global_pool: str = 'avg',
+            cardinality: int = 1,
+            base_width: int = 64,
+            block: Type[nn.Module] = DlaBottle2neck,
+            shortcut_root: bool = False,
+            drop_rate: float = 0.0,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super(DLA, self).__init__()
         self.channels = channels
         self.num_classes = num_classes
@@ -280,13 +365,13 @@ class DLA(nn.Module):
         assert output_stride == 32  # FIXME support dilation
 
         self.base_layer = nn.Sequential(
-            nn.Conv2d(in_chans, channels[0], kernel_size=7, stride=1, padding=3, bias=False),
-            nn.BatchNorm2d(channels[0]),
+            nn.Conv2d(in_chans, channels[0], kernel_size=7, stride=1, padding=3, bias=False, **dd),
+            nn.BatchNorm2d(channels[0], **dd),
             nn.ReLU(inplace=True),
         )
-        self.level0 = self._make_conv_level(channels[0], channels[0], levels[0])
-        self.level1 = self._make_conv_level(channels[0], channels[1], levels[1], stride=2)
-        cargs = dict(cardinality=cardinality, base_width=base_width, root_shortcut=shortcut_root)
+        self.level0 = self._make_conv_level(channels[0], channels[0], levels[0], **dd)
+        self.level1 = self._make_conv_level(channels[0], channels[1], levels[1], stride=2, **dd)
+        cargs = dict(cardinality=cardinality, base_width=base_width, root_shortcut=shortcut_root, **dd)
         self.level2 = DlaTree(levels[2], block, channels[1], channels[2], 2, level_root=False, **cargs)
         self.level3 = DlaTree(levels[3], block, channels[2], channels[3], 2, level_root=True, **cargs)
         self.level4 = DlaTree(levels[4], block, channels[3], channels[4], 2, level_root=True, **cargs)
@@ -307,6 +392,7 @@ class DLA(nn.Module):
             pool_type=global_pool,
             use_conv=True,
             drop_rate=drop_rate,
+            **dd,
         )
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
 
@@ -318,15 +404,22 @@ class DLA(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-    def _make_conv_level(self, inplanes, planes, convs, stride=1, dilation=1):
+    def _make_conv_level(self, inplanes: int, planes: int, convs: int, stride: int = 1, dilation: int = 1, device=None, dtype=None):
+        dd = {'device': device, 'dtype': dtype}
         modules = []
         for i in range(convs):
             modules.extend([
                 nn.Conv2d(
-                    inplanes, planes, kernel_size=3,
+                    inplanes,
+                    planes,
+                    kernel_size=3,
                     stride=stride if i == 0 else 1,
-                    padding=dilation, bias=False, dilation=dilation),
-                nn.BatchNorm2d(planes),
+                    padding=dilation,
+                    bias=False,
+                    dilation=dilation,
+                    **dd,
+                ),
+                nn.BatchNorm2d(planes, **dd),
                 nn.ReLU(inplace=True)])
             inplanes = planes
         return nn.Sequential(*modules)

@@ -33,7 +33,7 @@ class SeparableConvNormAct(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(SeparableConvNormAct, self).__init__()
+        super().__init__()
 
         self.conv_dw = create_conv2d(
             in_channels,
@@ -57,7 +57,7 @@ class SeparableConvNormAct(nn.Module):
 
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
         norm_kwargs = dict(drop_layer=drop_layer) if drop_layer is not None else {}
-        self.bn = norm_act_layer(out_channels, apply_act=apply_act, **norm_kwargs)
+        self.bn = norm_act_layer(out_channels, apply_act=apply_act, **norm_kwargs, **dd)
 
     @property
     def in_channels(self):
