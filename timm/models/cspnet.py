@@ -500,6 +500,8 @@ class DarkStage(nn.Module):
             avg_down: bool = False,
             block_fn: Type[nn.Module] = BottleneckBlock,
             block_dpr: Optional[List[float]] = None,
+            device=None,
+            dtype=None,
             **block_kwargs,
     ):
         dd = {'device': device, 'dtype': dtype}
