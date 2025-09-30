@@ -20,7 +20,7 @@ Modifications and additions for timm by / Copyright 2022, Ross Wightman
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import math
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union, Type
 
 import torch
 import torch.nn as nn
@@ -49,6 +49,8 @@ class OutlookAttention(nn.Module):
             qkv_bias: bool = False,
             attn_drop: float = 0.,
             proj_drop: float = 0.,
+            device=None,
+            dtype=None,
     ):
         """Initialize OutlookAttention.
 
@@ -62,6 +64,7 @@ class OutlookAttention(nn.Module):
             attn_drop: Attention dropout rate.
             proj_drop: Projection dropout rate.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         head_dim = dim // num_heads
         self.num_heads = num_heads
@@ -70,11 +73,11 @@ class OutlookAttention(nn.Module):
         self.stride = stride
         self.scale = head_dim ** -0.5
 
-        self.v = nn.Linear(dim, dim, bias=qkv_bias)
-        self.attn = nn.Linear(dim, kernel_size ** 4 * num_heads)
+        self.v = nn.Linear(dim, dim, bias=qkv_bias, **dd)
+        self.attn = nn.Linear(dim, kernel_size ** 4 * num_heads, **dd)
 
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
+        self.proj = nn.Linear(dim, dim, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
 
         self.unfold = nn.Unfold(kernel_size=kernel_size, padding=padding, stride=stride)
@@ -128,9 +131,11 @@ class Outlooker(nn.Module):
             mlp_ratio: float = 3.,
             attn_drop: float = 0.,
             drop_path: float = 0.,
-            act_layer: Callable = nn.GELU,
-            norm_layer: Callable = nn.LayerNorm,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
             qkv_bias: bool = False,
+            device=None,
+            dtype=None,
     ):
         """Initialize Outlooker block.
 
@@ -147,8 +152,9 @@ class Outlooker(nn.Module):
             norm_layer: Normalization layer type.
             qkv_bias: Whether to use bias in linear layers.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.norm1 = norm_layer(dim)
+        self.norm1 = norm_layer(dim, **dd)
         self.attn = OutlookAttention(
             dim,
             num_heads,
@@ -157,14 +163,16 @@ class Outlooker(nn.Module):
             stride=stride,
             qkv_bias=qkv_bias,
             attn_drop=attn_drop,
+            **dd,
         )
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-        self.norm2 = norm_layer(dim)
+        self.norm2 = norm_layer(dim, **dd)
         self.mlp = Mlp(
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
+            **dd,
         )
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
@@ -193,6 +201,8 @@ class Attention(nn.Module):
             qkv_bias: bool = False,
             attn_drop: float = 0.,
             proj_drop: float = 0.,
+            device=None,
+            dtype=None,
     ):
         """Initialize Attention module.
 
@@ -203,15 +213,16 @@ class Attention(nn.Module):
             attn_drop: Attention dropout rate.
             proj_drop: Projection dropout rate.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = head_dim ** -0.5
         self.fused_attn = use_fused_attn()
 
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias, **dd)
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
+        self.proj = nn.Linear(dim, dim, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -258,8 +269,10 @@ class Transformer(nn.Module):
             qkv_bias: bool = False,
             attn_drop: float = 0.,
             drop_path: float = 0.,
-            act_layer: Callable = nn.GELU,
-            norm_layer: Callable = nn.LayerNorm,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            device=None,
+            dtype=None,
     ):
         """Initialize Transformer block.
 
@@ -273,13 +286,14 @@ class Transformer(nn.Module):
             act_layer: Activation layer type.
             norm_layer: Normalization layer type.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.norm1 = norm_layer(dim)
-        self.attn = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop)
+        self.norm1 = norm_layer(dim, **dd)
+        self.attn = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, **dd)
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-        self.norm2 = norm_layer(dim)
-        self.mlp = Mlp(in_features=dim, hidden_features=int(dim * mlp_ratio), act_layer=act_layer)
+        self.norm2 = norm_layer(dim, **dd)
+        self.mlp = Mlp(in_features=dim, hidden_features=int(dim * mlp_ratio), act_layer=act_layer, **dd)
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -307,6 +321,8 @@ class ClassAttention(nn.Module):
             qkv_bias: bool = False,
             attn_drop: float = 0.,
             proj_drop: float = 0.,
+            device=None,
+            dtype=None,
     ):
         """Initialize ClassAttention.
 
@@ -318,6 +334,7 @@ class ClassAttention(nn.Module):
             attn_drop: Attention dropout rate.
             proj_drop: Projection dropout rate.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.num_heads = num_heads
         if head_dim is not None:
@@ -327,10 +344,10 @@ class ClassAttention(nn.Module):
             self.head_dim = head_dim
         self.scale = head_dim ** -0.5
 
-        self.kv = nn.Linear(dim, self.head_dim * self.num_heads * 2, bias=qkv_bias)
-        self.q = nn.Linear(dim, self.head_dim * self.num_heads, bias=qkv_bias)
+        self.kv = nn.Linear(dim, self.head_dim * self.num_heads * 2, bias=qkv_bias, **dd)
+        self.q = nn.Linear(dim, self.head_dim * self.num_heads, bias=qkv_bias, **dd)
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(self.head_dim * self.num_heads, dim)
+        self.proj = nn.Linear(self.head_dim * self.num_heads, dim, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -371,8 +388,10 @@ class ClassBlock(nn.Module):
             drop: float = 0.,
             attn_drop: float = 0.,
             drop_path: float = 0.,
-            act_layer: Callable = nn.GELU,
-            norm_layer: Callable = nn.LayerNorm,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            device=None,
+            dtype=None,
     ):
         """Initialize ClassBlock.
 
@@ -388,8 +407,9 @@ class ClassBlock(nn.Module):
             act_layer: Activation layer type.
             norm_layer: Normalization layer type.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.norm1 = norm_layer(dim)
+        self.norm1 = norm_layer(dim, **dd)
         self.attn = ClassAttention(
             dim,
             num_heads=num_heads,
@@ -397,15 +417,17 @@ class ClassBlock(nn.Module):
             qkv_bias=qkv_bias,
             attn_drop=attn_drop,
             proj_drop=drop,
+            **dd,
         )
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-        self.norm2 = norm_layer(dim)
+        self.norm2 = norm_layer(dim, **dd)
         self.mlp = Mlp(
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
             drop=drop,
+            **dd,
         )
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
@@ -424,18 +446,20 @@ class ClassBlock(nn.Module):
         return torch.cat([cls_embed, x[:, 1:]], dim=1)
 
 
-def get_block(block_type: str, **kargs: Any) -> nn.Module:
+def get_block(block_type: str, **kwargs: Any) -> nn.Module:
     """Get block based on type.
 
     Args:
         block_type: Type of block ('ca' for ClassBlock).
-        **kargs: Additional keyword arguments for block.
+        **kwargs: Additional keyword arguments for block.
 
     Returns:
         The requested block module.
     """
     if block_type == 'ca':
-        return ClassBlock(**kargs)
+        return ClassBlock(**kwargs)
+    else:
+        assert False, f'Invalid block type: {block_type}'
 
 
 def rand_bbox(size: Tuple[int, ...], lam: float, scale: int = 1) -> Tuple[int, int, int, int]:
@@ -483,6 +507,8 @@ class PatchEmbed(nn.Module):
             in_chans: int = 3,
             hidden_dim: int = 64,
             embed_dim: int = 384,
+            device=None,
+            dtype=None,
     ):
         """Initialize PatchEmbed.
 
@@ -497,25 +523,31 @@ class PatchEmbed(nn.Module):
             hidden_dim: Hidden dimension for stem convolution.
             embed_dim: Output embedding dimension.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         assert patch_size in [4, 8, 16]
         if stem_conv:
             self.conv = nn.Sequential(
-                nn.Conv2d(in_chans, hidden_dim, kernel_size=7, stride=stem_stride, padding=3, bias=False),  # 112x112
-                nn.BatchNorm2d(hidden_dim),
+                nn.Conv2d(in_chans, hidden_dim, kernel_size=7, stride=stem_stride, padding=3, bias=False, **dd),
+                nn.BatchNorm2d(hidden_dim, **dd),
                 nn.ReLU(inplace=True),
-                nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, stride=1, padding=1, bias=False),  # 112x112
-                nn.BatchNorm2d(hidden_dim),
+                nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, stride=1, padding=1, bias=False, **dd),
+                nn.BatchNorm2d(hidden_dim, **dd),
                 nn.ReLU(inplace=True),
-                nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, stride=1, padding=1, bias=False),  # 112x112
-                nn.BatchNorm2d(hidden_dim),
+                nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, stride=1, padding=1, bias=False, **dd),
+                nn.BatchNorm2d(hidden_dim, **dd),
                 nn.ReLU(inplace=True),
             )
         else:
             self.conv = None
 
         self.proj = nn.Conv2d(
-            hidden_dim, embed_dim, kernel_size=patch_size // stem_stride, stride=patch_size // stem_stride)
+            hidden_dim,
+            embed_dim,
+            kernel_size=patch_size // stem_stride,
+            stride=patch_size // stem_stride,
+            **dd,
+        )
         self.num_patches = (img_size // patch_size) * (img_size // patch_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -536,7 +568,14 @@ class PatchEmbed(nn.Module):
 class Downsample(nn.Module):
     """Downsampling module between stages."""
 
-    def __init__(self, in_embed_dim: int, out_embed_dim: int, patch_size: int = 2):
+    def __init__(
+            self,
+            in_embed_dim: int,
+            out_embed_dim: int,
+            patch_size: int = 2,
+            device=None,
+            dtype=None,
+    ):
         """Initialize Downsample.
 
         Args:
@@ -545,7 +584,8 @@ class Downsample(nn.Module):
             patch_size: Patch size for downsampling.
         """
         super().__init__()
-        self.proj = nn.Conv2d(in_embed_dim, out_embed_dim, kernel_size=patch_size, stride=patch_size)
+        dd = {'device': device, 'dtype': dtype}
+        self.proj = nn.Conv2d(in_embed_dim, out_embed_dim, kernel_size=patch_size, stride=patch_size, **dd)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass.
@@ -575,6 +615,8 @@ def outlooker_blocks(
         qkv_bias: bool = False,
         attn_drop: float = 0,
         drop_path_rate: float = 0.,
+        device=None,
+        dtype=None,
         **kwargs: Any,
 ) -> nn.Sequential:
     """Generate outlooker layers for stage 1.
@@ -610,6 +652,9 @@ def outlooker_blocks(
             qkv_bias=qkv_bias,
             attn_drop=attn_drop,
             drop_path=block_dpr,
+            device=device,
+            dtype=dtype,
+            **kwargs,
         ))
     blocks = nn.Sequential(*blocks)
     return blocks
@@ -654,6 +699,7 @@ def transformer_blocks(
             qkv_bias=qkv_bias,
             attn_drop=attn_drop,
             drop_path=block_dpr,
+            **kwargs,
         ))
     blocks = nn.Sequential(*blocks)
     return blocks
@@ -681,11 +727,13 @@ class VOLO(nn.Module):
             pos_drop_rate: float = 0.,
             attn_drop_rate: float = 0.,
             drop_path_rate: float = 0.,
-            norm_layer: Callable = nn.LayerNorm,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
             post_layers: Optional[Tuple[str, ...]] = ('ca', 'ca'),
             use_aux_head: bool = True,
             use_mix_token: bool = False,
             pooling_scale: int = 2,
+            device=None,
+            dtype=None,
     ):
         """Initialize VOLO model.
 
@@ -714,6 +762,7 @@ class VOLO(nn.Module):
             pooling_scale: Pooling scale factor.
         """
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         num_layers = len(layers)
         mlp_ratio = to_ntuple(num_layers)(mlp_ratio)
         img_size = to_2tuple(img_size)
@@ -735,12 +784,13 @@ class VOLO(nn.Module):
             in_chans=in_chans,
             hidden_dim=stem_hidden_dim,
             embed_dim=embed_dims[0],
+            **dd,
         )
         r = patch_size
 
         # initial positional encoding, we add positional encoding after outlooker blocks
         patch_grid = (img_size[0] // patch_size // pooling_scale, img_size[1] // patch_size // pooling_scale)
-        self.pos_embed = nn.Parameter(torch.zeros(1, patch_grid[0], patch_grid[1], embed_dims[-1]))
+        self.pos_embed = nn.Parameter(torch.zeros(1, patch_grid[0], patch_grid[1], embed_dims[-1], **dd))
         self.pos_drop = nn.Dropout(p=pos_drop_rate)
 
         # set the main block in network
@@ -761,6 +811,7 @@ class VOLO(nn.Module):
                     qkv_bias=qkv_bias,
                     attn_drop=attn_drop_rate,
                     norm_layer=norm_layer,
+                    **dd,
                 )
             else:
                 # stage 2
@@ -775,6 +826,7 @@ class VOLO(nn.Module):
                     drop_path_rate=drop_path_rate,
                     attn_drop=attn_drop_rate,
                     norm_layer=norm_layer,
+                    **dd,
                 )
             network.append(stage)
             self.stage_ends.append(block_idx)
@@ -782,7 +834,7 @@ class VOLO(nn.Module):
             block_idx += 1
             if downsamples[i]:
                 # downsampling between two stages
-                network.append(Downsample(embed_dims[i], embed_dims[i + 1], 2))
+                network.append(Downsample(embed_dims[i], embed_dims[i + 1], 2, **dd))
                 r *= 2
                 block_idx += 1
 
@@ -800,22 +852,24 @@ class VOLO(nn.Module):
                     qkv_bias=qkv_bias,
                     attn_drop=attn_drop_rate,
                     drop_path=0.,
-                    norm_layer=norm_layer)
+                    norm_layer=norm_layer,
+                    **dd,
+                )
                 for i in range(len(post_layers))
             ])
-            self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dims[-1]))
+            self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dims[-1], **dd))
             trunc_normal_(self.cls_token, std=.02)
 
         # set output type
         if use_aux_head:
-            self.aux_head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+            self.aux_head = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
         else:
             self.aux_head = None
-        self.norm = norm_layer(self.num_features)
+        self.norm = norm_layer(self.num_features, **dd)
 
         # Classifier head
         self.head_drop = nn.Dropout(drop_rate)
-        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
         trunc_normal_(self.pos_embed, std=.02)
         self.apply(self._init_weights)
@@ -891,9 +945,13 @@ class VOLO(nn.Module):
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
-        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        device = self.head.weight.device if hasattr(self.head, 'weight') else None
+        dtype = self.head.weight.dtype if hasattr(self.head, 'weight') else None
+        self.head = nn.Linear(
+            self.num_features, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
         if self.aux_head is not None:
-            self.aux_head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+            self.aux_head = nn.Linear(
+                self.num_features, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
 
     def forward_tokens(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through token processing stages.
