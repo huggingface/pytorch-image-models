@@ -30,10 +30,7 @@ from timm import __version__
 from timm.models._pretrained import filter_pretrained_cfg
 
 try:
-    from huggingface_hub import (
-        create_repo, get_hf_file_metadata,
-        hf_hub_download, hf_hub_url,
-        repo_type_and_id_from_hf_id, upload_folder)
+    from huggingface_hub import HfApi, hf_hub_download
     from huggingface_hub.utils import EntryNotFoundError
     hf_hub_download = partial(hf_hub_download, library_name="timm", library_version=__version__)
     _has_hf_hub = True
@@ -414,20 +411,16 @@ def push_to_hf_hub(
             Whether to save the model using `safetensors` or the traditional PyTorch way (that uses `pickle`).
             Can be set to `"both"` in order to push both safe and unsafe weights.
     """
-    # Create repo if it doesn't exist yet
-    repo_url = create_repo(repo_id, token=token, private=private, exist_ok=True)
+    api = HfApi(token=token, library_name="timm", library_version=__version__)
 
-    # Infer complete repo_id from repo_url
+    # Create repo if it doesn't exist yet
+    repo_url = api.create_repo(repo_id, private=private, exist_ok=True)
+
     # Can be different from the input `repo_id` if repo_owner was implicit
-    _, repo_owner, repo_name = repo_type_and_id_from_hf_id(repo_url)
-    repo_id = f"{repo_owner}/{repo_name}"
+    repo_id = repo_url.repo_id
 
     # Check if README file already exist in repo
-    try:
-        get_hf_file_metadata(hf_hub_url(repo_id=repo_id, filename="README.md", revision=revision))
-        has_readme = True
-    except EntryNotFoundError:
-        has_readme = False
+    has_readme = api.file_exists(repo_id=repo_id, filename="README.md", revision=revision)
 
     # Dump model and push to Hub
     with TemporaryDirectory() as tmpdir:
@@ -449,7 +442,7 @@ def push_to_hf_hub(
             readme_path.write_text(readme_text)
 
         # Upload model and return
-        return upload_folder(
+        return api.upload_folder(
             repo_id=repo_id,
             folder_path=tmpdir,
             revision=revision,
