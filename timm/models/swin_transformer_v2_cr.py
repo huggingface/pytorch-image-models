@@ -107,15 +107,18 @@ class WindowMultiHeadAttention(nn.Module):
     """
 
     def __init__(
-        self,
-        dim: int,
-        num_heads: int,
-        window_size: Tuple[int, int],
-        drop_attn: float = 0.0,
-        drop_proj: float = 0.0,
-        meta_hidden_dim: int = 384,  # FIXME what's the optimal value?
-        sequential_attn: bool = False,
+            self,
+            dim: int,
+            num_heads: int,
+            window_size: Tuple[int, int],
+            drop_attn: float = 0.0,
+            drop_proj: float = 0.0,
+            meta_hidden_dim: int = 384,  # FIXME what's the optimal value?
+            sequential_attn: bool = False,
+            device=None,
+            dtype=None,
     ) -> None:
+        dd = {'device': device, 'dtype': dtype}
         super(WindowMultiHeadAttention, self).__init__()
         assert dim % num_heads == 0, \
             "The number of input features (in_features) are not divisible by the number of heads (num_heads)."
@@ -124,9 +127,9 @@ class WindowMultiHeadAttention(nn.Module):
         self.num_heads: int = num_heads
         self.sequential_attn: bool = sequential_attn
 
-        self.qkv = nn.Linear(in_features=dim, out_features=dim * 3, bias=True)
+        self.qkv = nn.Linear(in_features=dim, out_features=dim * 3, bias=True, **dd)
         self.attn_drop = nn.Dropout(drop_attn)
-        self.proj = nn.Linear(in_features=dim, out_features=dim, bias=True)
+        self.proj = nn.Linear(in_features=dim, out_features=dim, bias=True, **dd)
         self.proj_drop = nn.Dropout(drop_proj)
         # meta network for positional encodings
         self.meta_mlp = Mlp(
@@ -134,24 +137,29 @@ class WindowMultiHeadAttention(nn.Module):
             hidden_features=meta_hidden_dim,
             out_features=num_heads,
             act_layer=nn.ReLU,
-            drop=(0.125, 0.)  # FIXME should there be stochasticity, appears to 'overfit' without?
+            drop=(0.125, 0.),  # FIXME should there be stochasticity, appears to 'overfit' without?
+            **dd,
         )
         # NOTE old checkpoints used inverse of logit_scale ('tau') following the paper, see conversion fn
-        self.logit_scale = nn.Parameter(torch.log(10 * torch.ones(num_heads)))
+        self.logit_scale = nn.Parameter(torch.log(10 * torch.ones(num_heads, **dd)))
         self._make_pair_wise_relative_positions()
 
     def _make_pair_wise_relative_positions(self) -> None:
         """Initialize the pair-wise relative positions to compute the positional biases."""
         device = self.logit_scale.device
         coordinates = torch.stack(ndgrid(
-            torch.arange(self.window_size[0], device=device),
-            torch.arange(self.window_size[1], device=device)
-        ), dim=0).flatten(1)
+            torch.arange(self.window_size[0], device=device, dtype=torch.float32),
+            torch.arange(self.window_size[1], device=device, dtype=torch.float32),
+        )).flatten(1)
         relative_coordinates = coordinates[:, :, None] - coordinates[:, None, :]
         relative_coordinates = relative_coordinates.permute(1, 2, 0).reshape(-1, 2).float()
         relative_coordinates_log = torch.sign(relative_coordinates) * torch.log(
             1.0 + relative_coordinates.abs())
-        self.register_buffer("relative_coordinates_log", relative_coordinates_log, persistent=False)
+        self.register_buffer(
+            "relative_coordinates_log",
+            relative_coordinates_log.to(self.logit_scale.dtype),
+            persistent=False,
+        )
 
     def set_window_size(self, window_size: Tuple[int, int]) -> None:
         """Update window size and regenerate relative position coordinates.
@@ -249,7 +257,10 @@ class SwinTransformerV2CrBlock(nn.Module):
             extra_norm: bool = False,
             sequential_attn: bool = False,
             norm_layer: Type[nn.Module] = nn.LayerNorm,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super(SwinTransformerV2CrBlock, self).__init__()
         self.dim: int = dim
         self.feat_size: Tuple[int, int] = feat_size
@@ -268,8 +279,9 @@ class SwinTransformerV2CrBlock(nn.Module):
             drop_attn=drop_attn,
             drop_proj=proj_drop,
             sequential_attn=sequential_attn,
+            **dd,
         )
-        self.norm1 = norm_layer(dim)
+        self.norm1 = norm_layer(dim, **dd)
         self.drop_path1 = DropPath(drop_prob=drop_path) if drop_path > 0.0 else nn.Identity()
 
         # mlp branch
@@ -278,17 +290,18 @@ class SwinTransformerV2CrBlock(nn.Module):
             hidden_features=int(dim * mlp_ratio),
             drop=proj_drop,
             out_features=dim,
+            **dd,
         )
-        self.norm2 = norm_layer(dim)
+        self.norm2 = norm_layer(dim, **dd)
         self.drop_path2 = DropPath(drop_prob=drop_path) if drop_path > 0.0 else nn.Identity()
 
         # Extra main branch norm layer mentioned for Huge/Giant models in V2 paper.
         # Also being used as final network norm and optional stage ending norm while still in a C-last format.
-        self.norm3 = norm_layer(dim) if extra_norm else nn.Identity()
+        self.norm3 = norm_layer(dim, **dd) if extra_norm else nn.Identity()
 
         self.register_buffer(
             "attn_mask",
-            None if self.dynamic_mask else self.get_attn_mask(),
+            None if self.dynamic_mask else self.get_attn_mask(**dd),
             persistent=False,
         )
         self.init_weights()
@@ -310,15 +323,20 @@ class SwinTransformerV2CrBlock(nn.Module):
         shift_size = [0 if f <= w else s for f, w, s in zip(self.feat_size, window_size, target_shift_size)]
         return tuple(window_size), tuple(shift_size)
 
-    def get_attn_mask(self, x: Optional[torch.Tensor] = None) -> Optional[torch.Tensor]:
+    def get_attn_mask(
+            self,
+            x: Optional[torch.Tensor] = None,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+    ) -> Optional[torch.Tensor]:
         """Method generates the attention mask used in shift case."""
         # Make masks for shift case
         if any(self.shift_size):
             # calculate attention mask for SW-MSA
             if x is None:
-                img_mask = torch.zeros((1, *self.feat_size, 1))  # 1 H W 1
+                img_mask = torch.zeros((1, *self.feat_size, 1), device=device, dtype=dtype)  # 1 H W 1
             else:
-                img_mask = torch.zeros((1, x.shape[1], x.shape[2], 1), dtype=x.dtype, device=x.device)  # 1 H W 1
+                img_mask = torch.zeros((1, x.shape[1], x.shape[2], 1), device=x.device, dtype=x.dtype)  # 1 H W 1
             cnt = 0
             for h in (
                     (0, -self.window_size[0]),
@@ -358,9 +376,11 @@ class SwinTransformerV2CrBlock(nn.Module):
         self.window_size, self.shift_size = self._calc_window_shift(to_2tuple(window_size))
         self.window_area = self.window_size[0] * self.window_size[1]
         self.attn.set_window_size(self.window_size)
+        device = self.attn_mask.device if self.attn_mask is not None else None
+        dtype = self.attn_mask.dtype if self.attn_mask is not None else None
         self.register_buffer(
             "attn_mask",
-            None if self.dynamic_mask else self.get_attn_mask(),
+            None if self.dynamic_mask else self.get_attn_mask(device=device, dtype=dtype),
             persistent=False,
         )
 
@@ -432,16 +452,23 @@ class PatchMerging(nn.Module):
     This class implements the patch merging as a strided convolution with a normalization before.
     """
 
-    def __init__(self, dim: int, norm_layer: Type[nn.Module] = nn.LayerNorm) -> None:
+    def __init__(
+            self,
+            dim: int,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            device=None,
+            dtype=None,
+    ) -> None:
         """Initialize patch merging layer.
 
         Args:
             dim: Number of input channels.
             norm_layer: Type of normalization layer to be utilized.
         """
+        dd = {'device': device, 'dtype': dtype}
         super(PatchMerging, self).__init__()
-        self.norm = norm_layer(4 * dim)
-        self.reduction = nn.Linear(in_features=4 * dim, out_features=2 * dim, bias=False)
+        self.norm = norm_layer(4 * dim, **dd)
+        self.reduction = nn.Linear(in_features=4 * dim, out_features=2 * dim, bias=False, **dd)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass of patch merging.
@@ -472,8 +499,10 @@ class PatchEmbed(nn.Module):
             patch_size: Union[int, Tuple[int, int]] = 16,
             in_chans: int = 3,
             embed_dim: int = 768,
-            norm_layer: Optional[Callable] = None,
+            norm_layer: Optional[Type[nn.Module]] = None,
             strict_img_size: bool = True,
+            device=None,
+            dtype=None,
     ) -> None:
         """Initialize patch embedding.
 
@@ -485,6 +514,7 @@ class PatchEmbed(nn.Module):
             norm_layer: Normalization layer.
             strict_img_size: Enforce strict image size.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         img_size = to_2tuple(img_size)
         patch_size = to_2tuple(patch_size)
@@ -494,8 +524,8 @@ class PatchEmbed(nn.Module):
         self.num_patches = self.grid_size[0] * self.grid_size[1]
         self.strict_img_size = strict_img_size
 
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
-        self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
+        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size, **dd)
+        self.norm = norm_layer(embed_dim, **dd) if norm_layer else nn.Identity()
 
     def set_input_size(self, img_size: Tuple[int, int]) -> None:
         """Update input image size.
@@ -548,32 +578,35 @@ class SwinTransformerV2CrStage(nn.Module):
     """
 
     def __init__(
-        self,
-        embed_dim: int,
-        depth: int,
-        downscale: bool,
-        num_heads: int,
-        feat_size: Tuple[int, int],
-        window_size: Tuple[int, int],
-        always_partition: bool = False,
-        dynamic_mask: bool = False,
-        mlp_ratio: float = 4.0,
-        init_values: Optional[float] = 0.0,
-        proj_drop: float = 0.0,
-        drop_attn: float = 0.0,
-        drop_path: Union[List[float], float] = 0.0,
-        norm_layer: Type[nn.Module] = nn.LayerNorm,
-        extra_norm_period: int = 0,
-        extra_norm_stage: bool = False,
-        sequential_attn: bool = False,
+            self,
+            embed_dim: int,
+            depth: int,
+            downscale: bool,
+            num_heads: int,
+            feat_size: Tuple[int, int],
+            window_size: Tuple[int, int],
+            always_partition: bool = False,
+            dynamic_mask: bool = False,
+            mlp_ratio: float = 4.0,
+            init_values: Optional[float] = 0.0,
+            proj_drop: float = 0.0,
+            drop_attn: float = 0.0,
+            drop_path: Union[List[float], float] = 0.0,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            extra_norm_period: int = 0,
+            extra_norm_stage: bool = False,
+            sequential_attn: bool = False,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super(SwinTransformerV2CrStage, self).__init__()
         self.downscale: bool = downscale
         self.grad_checkpointing: bool = False
         self.feat_size: Tuple[int, int] = (feat_size[0] // 2, feat_size[1] // 2) if downscale else feat_size
 
         if downscale:
-            self.downsample = PatchMerging(embed_dim, norm_layer=norm_layer)
+            self.downsample = PatchMerging(embed_dim, norm_layer=norm_layer, **dd)
             embed_dim = embed_dim * 2
         else:
             self.downsample = nn.Identity()
@@ -601,6 +634,7 @@ class SwinTransformerV2CrStage(nn.Module):
                 extra_norm=_extra_norm(index),
                 sequential_attn=sequential_attn,
                 norm_layer=norm_layer,
+                **dd,
             )
             for index in range(depth)]
         )
@@ -670,33 +704,36 @@ class SwinTransformerV2Cr(nn.Module):
     """
 
     def __init__(
-        self,
-        img_size: Tuple[int, int] = (224, 224),
-        patch_size: int = 4,
-        window_size: Optional[int] = None,
-        window_ratio: int = 8,
-        always_partition: bool = False,
-        strict_img_size: bool = True,
-        in_chans: int = 3,
-        num_classes: int = 1000,
-        embed_dim: int = 96,
-        depths: Tuple[int, ...] = (2, 2, 6, 2),
-        num_heads: Tuple[int, ...] = (3, 6, 12, 24),
-        mlp_ratio: float = 4.0,
-        init_values: Optional[float] = 0.,
-        drop_rate: float = 0.0,
-        proj_drop_rate: float = 0.0,
-        attn_drop_rate: float = 0.0,
-        drop_path_rate: float = 0.0,
-        norm_layer: Type[nn.Module] = nn.LayerNorm,
-        extra_norm_period: int = 0,
-        extra_norm_stage: bool = False,
-        sequential_attn: bool = False,
-        global_pool: str = 'avg',
-        weight_init='skip',
-        **kwargs: Any
+            self,
+            img_size: Tuple[int, int] = (224, 224),
+            patch_size: int = 4,
+            window_size: Optional[int] = None,
+            window_ratio: int = 8,
+            always_partition: bool = False,
+            strict_img_size: bool = True,
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            embed_dim: int = 96,
+            depths: Tuple[int, ...] = (2, 2, 6, 2),
+            num_heads: Tuple[int, ...] = (3, 6, 12, 24),
+            mlp_ratio: float = 4.0,
+            init_values: Optional[float] = 0.,
+            drop_rate: float = 0.0,
+            proj_drop_rate: float = 0.0,
+            attn_drop_rate: float = 0.0,
+            drop_path_rate: float = 0.0,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            extra_norm_period: int = 0,
+            extra_norm_stage: bool = False,
+            sequential_attn: bool = False,
+            global_pool: str = 'avg',
+            weight_init='skip',
+            device=None,
+            dtype=None,
+            **kwargs: Any
     ) -> None:
         super(SwinTransformerV2Cr, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
         img_size = to_2tuple(img_size)
         self.num_classes: int = num_classes
         self.patch_size: int = patch_size
@@ -711,6 +748,7 @@ class SwinTransformerV2Cr(nn.Module):
             embed_dim=embed_dim,
             norm_layer=norm_layer,
             strict_img_size=strict_img_size,
+            **dd,
         )
         grid_size = self.patch_embed.grid_size
         if window_size is None:
@@ -741,6 +779,7 @@ class SwinTransformerV2Cr(nn.Module):
                 extra_norm_stage=extra_norm_stage or (stage_idx + 1) == len(depths),  # last stage ends w/ norm
                 sequential_attn=sequential_attn,
                 norm_layer=norm_layer,
+                **dd,
             )]
             if stage_idx != 0:
                 in_dim *= 2
@@ -753,6 +792,7 @@ class SwinTransformerV2Cr(nn.Module):
             num_classes,
             pool_type=global_pool,
             drop_rate=drop_rate,
+            **dd,
         )
 
         # current weight init skips custom init and uses pytorch layer defaults, seems to work well
