@@ -17,7 +17,7 @@ import operator
 from collections import OrderedDict
 from dataclasses import dataclass
 from functools import partial, reduce
-from typing import Union, List, Tuple, Optional
+from typing import Union, List, Tuple, Optional, Any, Type
 
 import torch
 from torch import nn
@@ -93,13 +93,16 @@ class PatchEmbed(nn.Module):
 
     def __init__(
             self,
-            dim_in=3,
-            dim_out=768,
-            kernel=(7, 7),
-            stride=(4, 4),
-            padding=(3, 3),
+            dim_in: int = 3,
+            dim_out: int = 768,
+            kernel: Tuple[int, int] = (7, 7),
+            stride: Tuple[int, int] = (4, 4),
+            padding: Tuple[int, int] = (3, 3),
+            device=None,
+            dtype=None,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
 
         self.proj = nn.Conv2d(
             dim_in,
@@ -107,6 +110,7 @@ class PatchEmbed(nn.Module):
             kernel_size=kernel,
             stride=stride,
             padding=padding,
+            **dd,
         )
 
     def forward(self, x) -> Tuple[torch.Tensor, List[int]]:
@@ -165,15 +169,15 @@ def cal_rel_pos_type(
     q_h_ratio = max(k_h / q_h, 1.0)
     k_h_ratio = max(q_h / k_h, 1.0)
     dist_h = (
-            torch.arange(q_h, device=q.device).unsqueeze(-1) * q_h_ratio -
-            torch.arange(k_h, device=q.device).unsqueeze(0) * k_h_ratio
+        torch.arange(q_h, device=q.device, dtype=torch.long).unsqueeze(-1) * q_h_ratio -
+        torch.arange(k_h, device=q.device, dtype=torch.long).unsqueeze(0) * k_h_ratio
     )
     dist_h += (k_h - 1) * k_h_ratio
     q_w_ratio = max(k_w / q_w, 1.0)
     k_w_ratio = max(q_w / k_w, 1.0)
     dist_w = (
-            torch.arange(q_w, device=q.device).unsqueeze(-1) * q_w_ratio -
-            torch.arange(k_w, device=q.device).unsqueeze(0) * k_w_ratio
+        torch.arange(q_w, device=q.device, dtype=torch.long).unsqueeze(-1) * q_w_ratio -
+        torch.arange(k_w, device=q.device, dtype=torch.long).unsqueeze(0) * k_w_ratio
     )
     dist_w += (k_w - 1) * k_w_ratio
 
@@ -198,21 +202,24 @@ def cal_rel_pos_type(
 class MultiScaleAttentionPoolFirst(nn.Module):
     def __init__(
             self,
-            dim,
-            dim_out,
-            feat_size,
-            num_heads=8,
-            qkv_bias=True,
-            mode="conv",
-            kernel_q=(1, 1),
-            kernel_kv=(1, 1),
-            stride_q=(1, 1),
-            stride_kv=(1, 1),
-            has_cls_token=True,
-            rel_pos_type='spatial',
-            residual_pooling=True,
-            norm_layer=nn.LayerNorm,
+            dim: int,
+            dim_out: int,
+            feat_size: Tuple[int, int],
+            num_heads: int = 8,
+            qkv_bias: bool = True,
+            mode: str = "conv",
+            kernel_q: Tuple[int, int] = (1, 1),
+            kernel_kv: Tuple[int, int] = (1, 1),
+            stride_q: Tuple[int, int] = (1, 1),
+            stride_kv: Tuple[int, int] = (1, 1),
+            has_cls_token: bool = True,
+            rel_pos_type: str = 'spatial',
+            residual_pooling: bool = True,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.num_heads = num_heads
         self.dim_out = dim_out
@@ -222,10 +229,10 @@ class MultiScaleAttentionPoolFirst(nn.Module):
         padding_q = tuple([int(q // 2) for q in kernel_q])
         padding_kv = tuple([int(kv // 2) for kv in kernel_kv])
 
-        self.q = nn.Linear(dim, dim_out, bias=qkv_bias)
-        self.k = nn.Linear(dim, dim_out, bias=qkv_bias)
-        self.v = nn.Linear(dim, dim_out, bias=qkv_bias)
-        self.proj = nn.Linear(dim_out, dim_out)
+        self.q = nn.Linear(dim, dim_out, bias=qkv_bias, **dd)
+        self.k = nn.Linear(dim, dim_out, bias=qkv_bias, **dd)
+        self.v = nn.Linear(dim, dim_out, bias=qkv_bias, **dd)
+        self.proj = nn.Linear(dim_out, dim_out, **dd)
 
         # Skip pooling with kernel and stride size of (1, 1, 1).
         if prod(kernel_q) == 1 and prod(stride_q) == 1:
@@ -254,8 +261,9 @@ class MultiScaleAttentionPoolFirst(nn.Module):
                     padding=padding_q,
                     groups=dim_conv,
                     bias=False,
+                    **dd,
                 )
-                self.norm_q = norm_layer(dim_conv)
+                self.norm_q = norm_layer(dim_conv, **dd)
             if kernel_kv:
                 self.pool_k = nn.Conv2d(
                     dim_conv,
@@ -265,8 +273,9 @@ class MultiScaleAttentionPoolFirst(nn.Module):
                     padding=padding_kv,
                     groups=dim_conv,
                     bias=False,
+                    **dd,
                 )
-                self.norm_k = norm_layer(dim_conv)
+                self.norm_k = norm_layer(dim_conv, **dd)
                 self.pool_v = nn.Conv2d(
                     dim_conv,
                     dim_conv,
@@ -275,8 +284,9 @@ class MultiScaleAttentionPoolFirst(nn.Module):
                     padding=padding_kv,
                     groups=dim_conv,
                     bias=False,
+                    **dd,
                 )
-                self.norm_v = norm_layer(dim_conv)
+                self.norm_v = norm_layer(dim_conv, **dd)
         else:
             raise NotImplementedError(f"Unsupported model {mode}")
 
@@ -289,8 +299,8 @@ class MultiScaleAttentionPoolFirst(nn.Module):
             kv_size = size // stride_kv[1] if len(stride_kv) > 0 else size
             rel_sp_dim = 2 * max(q_size, kv_size) - 1
 
-            self.rel_pos_h = nn.Parameter(torch.zeros(rel_sp_dim, self.head_dim))
-            self.rel_pos_w = nn.Parameter(torch.zeros(rel_sp_dim, self.head_dim))
+            self.rel_pos_h = nn.Parameter(torch.zeros(rel_sp_dim, self.head_dim, **dd))
+            self.rel_pos_w = nn.Parameter(torch.zeros(rel_sp_dim, self.head_dim, **dd))
             trunc_normal_tf_(self.rel_pos_h, std=0.02)
             trunc_normal_tf_(self.rel_pos_w, std=0.02)
 
@@ -368,21 +378,24 @@ class MultiScaleAttentionPoolFirst(nn.Module):
 class MultiScaleAttention(nn.Module):
     def __init__(
             self,
-            dim,
-            dim_out,
-            feat_size,
-            num_heads=8,
-            qkv_bias=True,
-            mode="conv",
-            kernel_q=(1, 1),
-            kernel_kv=(1, 1),
-            stride_q=(1, 1),
-            stride_kv=(1, 1),
-            has_cls_token=True,
-            rel_pos_type='spatial',
-            residual_pooling=True,
-            norm_layer=nn.LayerNorm,
+            dim: int,
+            dim_out: int,
+            feat_size: Tuple[int, int],
+            num_heads: int = 8,
+            qkv_bias: bool = True,
+            mode: str = "conv",
+            kernel_q: Tuple[int, int] = (1, 1),
+            kernel_kv: Tuple[int, int] = (1, 1),
+            stride_q: Tuple[int, int] = (1, 1),
+            stride_kv: Tuple[int, int] = (1, 1),
+            has_cls_token: bool = True,
+            rel_pos_type: str = 'spatial',
+            residual_pooling: bool = True,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.num_heads = num_heads
         self.dim_out = dim_out
@@ -392,8 +405,8 @@ class MultiScaleAttention(nn.Module):
         padding_q = tuple([int(q // 2) for q in kernel_q])
         padding_kv = tuple([int(kv // 2) for kv in kernel_kv])
 
-        self.qkv = nn.Linear(dim, dim_out * 3, bias=qkv_bias)
-        self.proj = nn.Linear(dim_out, dim_out)
+        self.qkv = nn.Linear(dim, dim_out * 3, bias=qkv_bias, **dd)
+        self.proj = nn.Linear(dim_out, dim_out, **dd)
 
         # Skip pooling with kernel and stride size of (1, 1, 1).
         if prod(kernel_q) == 1 and prod(stride_q) == 1:
@@ -422,8 +435,9 @@ class MultiScaleAttention(nn.Module):
                     padding=padding_q,
                     groups=dim_conv,
                     bias=False,
+                    **dd,
                 )
-                self.norm_q = norm_layer(dim_conv)
+                self.norm_q = norm_layer(dim_conv, **dd)
             if kernel_kv:
                 self.pool_k = nn.Conv2d(
                     dim_conv,
@@ -433,8 +447,9 @@ class MultiScaleAttention(nn.Module):
                     padding=padding_kv,
                     groups=dim_conv,
                     bias=False,
+                    **dd,
                 )
-                self.norm_k = norm_layer(dim_conv)
+                self.norm_k = norm_layer(dim_conv, **dd)
                 self.pool_v = nn.Conv2d(
                     dim_conv,
                     dim_conv,
@@ -443,8 +458,9 @@ class MultiScaleAttention(nn.Module):
                     padding=padding_kv,
                     groups=dim_conv,
                     bias=False,
+                    **dd,
                 )
-                self.norm_v = norm_layer(dim_conv)
+                self.norm_v = norm_layer(dim_conv, **dd)
         else:
             raise NotImplementedError(f"Unsupported model {mode}")
 
@@ -457,8 +473,8 @@ class MultiScaleAttention(nn.Module):
             kv_size = size // stride_kv[1] if len(stride_kv) > 0 else size
             rel_sp_dim = 2 * max(q_size, kv_size) - 1
 
-            self.rel_pos_h = nn.Parameter(torch.zeros(rel_sp_dim, self.head_dim))
-            self.rel_pos_w = nn.Parameter(torch.zeros(rel_sp_dim, self.head_dim))
+            self.rel_pos_h = nn.Parameter(torch.zeros(rel_sp_dim, self.head_dim, **dd))
+            self.rel_pos_w = nn.Parameter(torch.zeros(rel_sp_dim, self.head_dim, **dd))
             trunc_normal_tf_(self.rel_pos_h, std=0.02)
             trunc_normal_tf_(self.rel_pos_w, std=0.02)
 
@@ -521,34 +537,37 @@ class MultiScaleAttention(nn.Module):
 class MultiScaleBlock(nn.Module):
     def __init__(
             self,
-            dim,
-            dim_out,
-            num_heads,
-            feat_size,
-            mlp_ratio=4.0,
-            qkv_bias=True,
-            drop_path=0.0,
-            norm_layer=nn.LayerNorm,
-            kernel_q=(1, 1),
-            kernel_kv=(1, 1),
-            stride_q=(1, 1),
-            stride_kv=(1, 1),
-            mode="conv",
-            has_cls_token=True,
-            expand_attn=False,
-            pool_first=False,
-            rel_pos_type='spatial',
-            residual_pooling=True,
+            dim: int,
+            dim_out: int,
+            num_heads: int,
+            feat_size: Tuple[int, int],
+            mlp_ratio: float = 4.0,
+            qkv_bias: bool = True,
+            drop_path: float = 0.0,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            kernel_q: Tuple[int, int] = (1, 1),
+            kernel_kv: Tuple[int, int] = (1, 1),
+            stride_q: Tuple[int, int] = (1, 1),
+            stride_kv: Tuple[int, int] = (1, 1),
+            mode: str = "conv",
+            has_cls_token: bool = True,
+            expand_attn: bool = False,
+            pool_first: bool = False,
+            rel_pos_type: str = 'spatial',
+            residual_pooling: bool = True,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         proj_needed = dim != dim_out
         self.dim = dim
         self.dim_out = dim_out
         self.has_cls_token = has_cls_token
 
-        self.norm1 = norm_layer(dim)
+        self.norm1 = norm_layer(dim, **dd)
 
-        self.shortcut_proj_attn = nn.Linear(dim, dim_out) if proj_needed and expand_attn else None
+        self.shortcut_proj_attn = nn.Linear(dim, dim_out, **dd) if proj_needed and expand_attn else None
         if stride_q and prod(stride_q) > 1:
             kernel_skip = [s + 1 if s > 1 else s for s in stride_q]
             stride_skip = stride_q
@@ -574,16 +593,18 @@ class MultiScaleBlock(nn.Module):
             mode=mode,
             rel_pos_type=rel_pos_type,
             residual_pooling=residual_pooling,
+            **dd,
         )
         self.drop_path1 = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
-        self.norm2 = norm_layer(att_dim)
+        self.norm2 = norm_layer(att_dim, **dd)
         mlp_dim_out = dim_out
-        self.shortcut_proj_mlp = nn.Linear(dim, dim_out) if proj_needed and not expand_attn else None
+        self.shortcut_proj_mlp = nn.Linear(dim, dim_out, **dd) if proj_needed and not expand_attn else None
         self.mlp = Mlp(
             in_features=att_dim,
             hidden_features=int(att_dim * mlp_ratio),
             out_features=mlp_dim_out,
+            **dd,
         )
         self.drop_path2 = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
@@ -621,26 +642,29 @@ class MultiScaleVitStage(nn.Module):
 
     def __init__(
             self,
-            dim,
-            dim_out,
-            depth,
-            num_heads,
-            feat_size,
-            mlp_ratio=4.0,
-            qkv_bias=True,
-            mode="conv",
-            kernel_q=(1, 1),
-            kernel_kv=(1, 1),
-            stride_q=(1, 1),
-            stride_kv=(1, 1),
-            has_cls_token=True,
-            expand_attn=False,
-            pool_first=False,
-            rel_pos_type='spatial',
-            residual_pooling=True,
-            norm_layer=nn.LayerNorm,
-            drop_path=0.0,
+            dim: int,
+            dim_out: int,
+            depth: int,
+            num_heads: int,
+            feat_size: Tuple[int, int],
+            mlp_ratio: float = 4.0,
+            qkv_bias: bool = True,
+            kernel_q: Tuple[int, int] = (1, 1),
+            kernel_kv: Tuple[int, int] = (1, 1),
+            stride_q: Tuple[int, int] = (1, 1),
+            stride_kv: Tuple[int, int] = (1, 1),
+            mode: str = "conv",
+            has_cls_token: bool = True,
+            expand_attn: bool = False,
+            pool_first: bool = False,
+            rel_pos_type: str = 'spatial',
+            residual_pooling: bool = True,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            drop_path: Union[float, List[float]] = 0.0,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.grad_checkpointing = False
 
@@ -670,6 +694,7 @@ class MultiScaleVitStage(nn.Module):
                 expand_attn=expand_attn,
                 norm_layer=norm_layer,
                 drop_path=drop_path[i] if isinstance(drop_path, (list, tuple)) else drop_path,
+                **dd,
             )
             dim = out_dims[i]
             self.blocks.append(attention_block)
@@ -709,8 +734,11 @@ class MultiScaleVit(nn.Module):
             num_classes: int = 1000,
             drop_path_rate: float = 0.,
             drop_rate: float = 0.,
+            device=None,
+            dtype=None,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         img_size = to_2tuple(img_size)
         norm_layer = partial(get_norm_layer(cfg.norm_layer), eps=cfg.norm_eps)
         self.num_classes = num_classes
@@ -728,12 +756,13 @@ class MultiScaleVit(nn.Module):
             kernel=cfg.patch_kernel,
             stride=cfg.patch_stride,
             padding=cfg.patch_padding,
+            **dd,
         )
         patch_dims = (img_size[0] // cfg.patch_stride[0], img_size[1] // cfg.patch_stride[1])
         num_patches = prod(patch_dims)
 
         if cfg.use_cls_token:
-            self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+            self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim, **dd))
             self.num_prefix_tokens = 1
             pos_embed_dim = num_patches + 1
         else:
@@ -742,7 +771,7 @@ class MultiScaleVit(nn.Module):
             pos_embed_dim = num_patches
 
         if cfg.use_abs_pos:
-            self.pos_embed = nn.Parameter(torch.zeros(1, pos_embed_dim, embed_dim))
+            self.pos_embed = nn.Parameter(torch.zeros(1, pos_embed_dim, embed_dim, **dd))
         else:
             self.pos_embed = None
 
@@ -777,6 +806,7 @@ class MultiScaleVit(nn.Module):
                 residual_pooling=cfg.residual_pooling,
                 norm_layer=norm_layer,
                 drop_path=dpr[i],
+                **dd,
             )
             curr_stride *= max(cfg.stride_q[i])
             self.feature_info += [dict(module=f'block.{i}', num_chs=dim_out, reduction=curr_stride)]
@@ -785,10 +815,10 @@ class MultiScaleVit(nn.Module):
             self.stages.append(stage)
 
         self.num_features = self.head_hidden_size = embed_dim
-        self.norm = norm_layer(embed_dim)
+        self.norm = norm_layer(embed_dim, **dd)
         self.head = nn.Sequential(OrderedDict([
             ('drop', nn.Dropout(self.drop_rate)),
-            ('fc', nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity())
+            ('fc', nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity())
         ]))
 
         if self.pos_embed is not None:
@@ -829,9 +859,11 @@ class MultiScaleVit(nn.Module):
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
+        device = self.head.fc.weight.device if hasattr(self.head.fc, 'weight') else None
+        dtype = self.head.fc.weight.dtype if hasattr(self.head.fc, 'weight') else None
         self.head = nn.Sequential(OrderedDict([
             ('drop', nn.Dropout(self.drop_rate)),
-            ('fc', nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity())
+            ('fc', nn.Linear(self.num_features, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity())
         ]))
 
     def forward_intermediates(

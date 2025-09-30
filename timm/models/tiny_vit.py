@@ -10,7 +10,7 @@ __all__ = ['TinyVit']
 
 import itertools
 from functools import partial
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union, Type, Any
 
 import torch
 import torch.nn as nn
@@ -27,10 +27,23 @@ from ._registry import register_model, generate_default_cfgs
 
 
 class ConvNorm(torch.nn.Sequential):
-    def __init__(self, in_chs, out_chs, ks=1, stride=1, pad=0, dilation=1, groups=1, bn_weight_init=1):
+    def __init__(
+            self,
+            in_chs: int,
+            out_chs: int,
+            ks: int = 1,
+            stride: int = 1,
+            pad: int = 0,
+            dilation: int = 1,
+            groups: int = 1,
+            bn_weight_init: float = 1,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.conv = nn.Conv2d(in_chs, out_chs, ks, stride, pad, dilation, groups, bias=False)
-        self.bn = nn.BatchNorm2d(out_chs)
+        self.conv = nn.Conv2d(in_chs, out_chs, ks, stride, pad, dilation, groups, bias=False, **dd)
+        self.bn = nn.BatchNorm2d(out_chs, **dd)
         torch.nn.init.constant_(self.bn.weight, bn_weight_init)
         torch.nn.init.constant_(self.bn.bias, 0)
 
@@ -50,12 +63,20 @@ class ConvNorm(torch.nn.Sequential):
 
 
 class PatchEmbed(nn.Module):
-    def __init__(self, in_chs, out_chs, act_layer):
+    def __init__(
+            self,
+            in_chs: int,
+            out_chs: int,
+            act_layer: Type[nn.Module],
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.stride = 4
-        self.conv1 = ConvNorm(in_chs, out_chs // 2, 3, 2, 1)
+        self.conv1 = ConvNorm(in_chs, out_chs // 2, 3, 2, 1, **dd)
         self.act = act_layer()
-        self.conv2 = ConvNorm(out_chs // 2, out_chs, 3, 2, 1)
+        self.conv2 = ConvNorm(out_chs // 2, out_chs, 3, 2, 1, **dd)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -65,14 +86,24 @@ class PatchEmbed(nn.Module):
 
 
 class MBConv(nn.Module):
-    def __init__(self, in_chs, out_chs, expand_ratio, act_layer, drop_path):
+    def __init__(
+            self,
+            in_chs: int,
+            out_chs: int,
+            expand_ratio: float,
+            act_layer: Type[nn.Module],
+            drop_path: float,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         mid_chs = int(in_chs * expand_ratio)
-        self.conv1 = ConvNorm(in_chs, mid_chs, ks=1)
+        self.conv1 = ConvNorm(in_chs, mid_chs, ks=1, **dd)
         self.act1 = act_layer()
-        self.conv2 = ConvNorm(mid_chs, mid_chs, ks=3, stride=1, pad=1, groups=mid_chs)
+        self.conv2 = ConvNorm(mid_chs, mid_chs, ks=3, stride=1, pad=1, groups=mid_chs, **dd)
         self.act2 = act_layer()
-        self.conv3 = ConvNorm(mid_chs, out_chs, ks=1, bn_weight_init=0.0)
+        self.conv3 = ConvNorm(mid_chs, out_chs, ks=1, bn_weight_init=0.0, **dd)
         self.act3 = act_layer()
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
@@ -90,13 +121,21 @@ class MBConv(nn.Module):
 
 
 class PatchMerging(nn.Module):
-    def __init__(self, dim, out_dim, act_layer):
+    def __init__(
+            self,
+            dim: int,
+            out_dim: int,
+            act_layer: Type[nn.Module],
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.conv1 = ConvNorm(dim, out_dim, 1, 1, 0)
+        self.conv1 = ConvNorm(dim, out_dim, 1, 1, 0, **dd)
         self.act1 = act_layer()
-        self.conv2 = ConvNorm(out_dim, out_dim, 3, 2, 1, groups=out_dim)
+        self.conv2 = ConvNorm(out_dim, out_dim, 3, 2, 1, groups=out_dim, **dd)
         self.act2 = act_layer()
-        self.conv3 = ConvNorm(out_dim, out_dim, 1, 1, 0)
+        self.conv3 = ConvNorm(out_dim, out_dim, 1, 1, 0, **dd)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -110,19 +149,26 @@ class PatchMerging(nn.Module):
 class ConvLayer(nn.Module):
     def __init__(
             self,
-            dim,
-            depth,
-            act_layer,
-            drop_path=0.,
-            conv_expand_ratio=4.,
+            dim: int,
+            depth: int,
+            act_layer: Type[nn.Module],
+            drop_path: Union[float, List[float]] = 0.,
+            conv_expand_ratio: float = 4.,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.dim = dim
         self.depth = depth
         self.blocks = nn.Sequential(*[
             MBConv(
-                dim, dim, conv_expand_ratio, act_layer,
+                dim,
+                dim,
+                conv_expand_ratio,
+                act_layer,
                 drop_path[i] if isinstance(drop_path, list) else drop_path,
+                **dd,
             )
             for i in range(depth)
         ])
@@ -135,21 +181,24 @@ class ConvLayer(nn.Module):
 class NormMlp(nn.Module):
     def __init__(
             self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            norm_layer=nn.LayerNorm,
-            act_layer=nn.GELU,
-            drop=0.,
+            in_features: int,
+            hidden_features: Optional[int] = None,
+            out_features: Optional[int] = None,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            act_layer: Type[nn.Module] = nn.GELU,
+            drop: float = 0.,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
-        self.norm = norm_layer(in_features)
-        self.fc1 = nn.Linear(in_features, hidden_features)
+        self.norm = norm_layer(in_features, **dd)
+        self.fc1 = nn.Linear(in_features, hidden_features, **dd)
         self.act = act_layer()
         self.drop1 = nn.Dropout(drop)
-        self.fc2 = nn.Linear(hidden_features, out_features)
+        self.fc2 = nn.Linear(hidden_features, out_features, **dd)
         self.drop2 = nn.Dropout(drop)
 
     def forward(self, x):
@@ -168,12 +217,15 @@ class Attention(torch.nn.Module):
 
     def __init__(
             self,
-            dim,
-            key_dim,
-            num_heads=8,
-            attn_ratio=4,
-            resolution=(14, 14),
+            dim: int,
+            key_dim: int,
+            num_heads: int = 8,
+            attn_ratio: int = 4,
+            resolution: Tuple[int, int] = (14, 14),
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         assert isinstance(resolution, tuple) and len(resolution) == 2
         self.num_heads = num_heads
@@ -185,9 +237,9 @@ class Attention(torch.nn.Module):
         self.resolution = resolution
         self.fused_attn = use_fused_attn()
 
-        self.norm = nn.LayerNorm(dim)
-        self.qkv = nn.Linear(dim, num_heads * (self.val_dim + 2 * key_dim))
-        self.proj = nn.Linear(self.out_dim, dim)
+        self.norm = nn.LayerNorm(dim, **dd)
+        self.qkv = nn.Linear(dim, num_heads * (self.val_dim + 2 * key_dim), **dd)
+        self.proj = nn.Linear(self.out_dim, dim, **dd)
 
         points = list(itertools.product(range(resolution[0]), range(resolution[1])))
         N = len(points)
@@ -199,8 +251,12 @@ class Attention(torch.nn.Module):
                 if offset not in attention_offsets:
                     attention_offsets[offset] = len(attention_offsets)
                 idxs.append(attention_offsets[offset])
-        self.attention_biases = torch.nn.Parameter(torch.zeros(num_heads, len(attention_offsets)))
-        self.register_buffer('attention_bias_idxs', torch.LongTensor(idxs).view(N, N), persistent=False)
+        self.attention_biases = torch.nn.Parameter(torch.zeros(num_heads, len(attention_offsets), **dd))
+        self.register_buffer(
+            'attention_bias_idxs',
+            torch.tensor(idxs, device=device, dtype=torch.long).view(N, N),
+            persistent=False,
+        )
         self.attention_bias_cache = {}
 
     @torch.no_grad()
@@ -261,15 +317,18 @@ class TinyVitBlock(nn.Module):
 
     def __init__(
             self,
-            dim,
-            num_heads,
-            window_size=7,
-            mlp_ratio=4.,
-            drop=0.,
-            drop_path=0.,
-            local_conv_size=3,
-            act_layer=nn.GELU
+            dim: int,
+            num_heads: int,
+            window_size: int = 7,
+            mlp_ratio: float = 4.,
+            drop: float = 0.,
+            drop_path: float = 0.,
+            local_conv_size: int = 3,
+            act_layer: Type[nn.Module] = nn.GELU,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.dim = dim
         self.num_heads = num_heads
@@ -281,20 +340,27 @@ class TinyVitBlock(nn.Module):
         head_dim = dim // num_heads
 
         window_resolution = (window_size, window_size)
-        self.attn = Attention(dim, head_dim, num_heads, attn_ratio=1, resolution=window_resolution)
+        self.attn = Attention(
+            dim,
+            head_dim,
+            num_heads,
+            attn_ratio=1,
+            resolution=window_resolution,
+            **dd,
+        )
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-
 
         self.mlp = NormMlp(
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
             drop=drop,
+            **dd,
         )
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         pad = local_conv_size // 2
-        self.local_conv = ConvNorm(dim, dim, ks=local_conv_size, stride=1, pad=pad, groups=dim)
+        self.local_conv = ConvNorm(dim, dim, ks=local_conv_size, stride=1, pad=pad, groups=dim, **dd)
 
     def forward(self, x):
         B, H, W, C = x.shape
@@ -363,19 +429,21 @@ class TinyVitStage(nn.Module):
 
     def __init__(
             self,
-            dim,
-            out_dim,
-            depth,
-            num_heads,
-            window_size,
-            mlp_ratio=4.,
-            drop=0.,
-            drop_path=0.,
-            downsample=None,
-            local_conv_size=3,
-            act_layer=nn.GELU,
+            dim: int,
+            out_dim: int,
+            depth: int,
+            num_heads: int,
+            window_size: int,
+            mlp_ratio: float = 4.,
+            drop: float = 0.,
+            drop_path: Union[float, List[float]] = 0.,
+            downsample: Optional[Type[nn.Module]] = None,
+            local_conv_size: int = 3,
+            act_layer: Type[nn.Module] = nn.GELU,
+            device=None,
+            dtype=None,
     ):
-
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.depth = depth
         self.out_dim =  out_dim
@@ -386,6 +454,7 @@ class TinyVitStage(nn.Module):
                 dim=dim,
                 out_dim=out_dim,
                 act_layer=act_layer,
+                **dd,
             )
         else:
             self.downsample = nn.Identity()
@@ -402,6 +471,7 @@ class TinyVitStage(nn.Module):
                 drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
                 local_conv_size=local_conv_size,
                 act_layer=act_layer,
+                **dd,
             )
             for i in range(depth)])
 
@@ -419,22 +489,25 @@ class TinyVitStage(nn.Module):
 class TinyVit(nn.Module):
     def __init__(
             self,
-            in_chans=3,
-            num_classes=1000,
-            global_pool='avg',
-            embed_dims=(96, 192, 384, 768),
-            depths=(2, 2, 6, 2),
-            num_heads=(3, 6, 12, 24),
-            window_sizes=(7, 7, 14, 7),
-            mlp_ratio=4.,
-            drop_rate=0.,
-            drop_path_rate=0.1,
-            use_checkpoint=False,
-            mbconv_expand_ratio=4.0,
-            local_conv_size=3,
-            act_layer=nn.GELU,
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            global_pool: str = 'avg',
+            embed_dims: Tuple[int, ...] = (96, 192, 384, 768),
+            depths: Tuple[int, ...] = (2, 2, 6, 2),
+            num_heads: Tuple[int, ...] = (3, 6, 12, 24),
+            window_sizes: Tuple[int, ...] = (7, 7, 14, 7),
+            mlp_ratio: float = 4.,
+            drop_rate: float = 0.,
+            drop_path_rate: float = 0.1,
+            use_checkpoint: bool = False,
+            mbconv_expand_ratio: float = 4.0,
+            local_conv_size: int = 3,
+            act_layer: Type[nn.Module] = nn.GELU,
+            device=None,
+            dtype=None,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
 
         self.num_classes = num_classes
         self.depths = depths
@@ -446,6 +519,7 @@ class TinyVit(nn.Module):
             in_chs=in_chans,
             out_chs=embed_dims[0],
             act_layer=act_layer,
+            **dd,
         )
 
         # stochastic depth rate rule
@@ -464,6 +538,7 @@ class TinyVit(nn.Module):
                     act_layer=act_layer,
                     drop_path=dpr[:depths[stage_idx]],
                     conv_expand_ratio=mbconv_expand_ratio,
+                    **dd,
                 )
             else:
                 out_dim = embed_dims[stage_idx]
@@ -480,6 +555,7 @@ class TinyVit(nn.Module):
                     drop_path=drop_path_rate,
                     downsample=PatchMerging,
                     act_layer=act_layer,
+                    **dd,
                 )
                 prev_dim = out_dim
                 stride *= 2
@@ -495,6 +571,7 @@ class TinyVit(nn.Module):
             num_classes,
             pool_type=global_pool,
             norm_layer=norm_layer_cf,
+            **dd,
         )
 
         # init weights

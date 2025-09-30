@@ -1,7 +1,7 @@
 """ ConvMixer
 
 """
-from typing import Optional
+from typing import Optional, Type
 
 import torch
 import torch.nn as nn
@@ -16,7 +16,7 @@ __all__ = ['ConvMixer']
 
 
 class Residual(nn.Module):
-    def __init__(self, fn):
+    def __init__(self, fn: nn.Module):
         super().__init__()
         self.fn = fn
 
@@ -27,42 +27,45 @@ class Residual(nn.Module):
 class ConvMixer(nn.Module):
     def __init__(
             self,
-            dim,
-            depth,
-            kernel_size=9,
-            patch_size=7,
-            in_chans=3,
-            num_classes=1000,
-            global_pool='avg',
-            drop_rate=0.,
-            act_layer=nn.GELU,
+            dim: int,
+            depth: int,
+            kernel_size: int = 9,
+            patch_size: int = 7,
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            global_pool: str = 'avg',
+            drop_rate: float = 0.,
+            act_layer: Type[nn.Module] = nn.GELU,
+            device=None,
+            dtype=None,
             **kwargs,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.num_features = self.head_hidden_size = dim
         self.grad_checkpointing = False
 
         self.stem = nn.Sequential(
-            nn.Conv2d(in_chans, dim, kernel_size=patch_size, stride=patch_size),
+            nn.Conv2d(in_chans, dim, kernel_size=patch_size, stride=patch_size, **dd),
             act_layer(),
-            nn.BatchNorm2d(dim)
+            nn.BatchNorm2d(dim, **dd)
         )
         self.blocks = nn.Sequential(
             *[nn.Sequential(
                     Residual(nn.Sequential(
-                        nn.Conv2d(dim, dim, kernel_size, groups=dim, padding="same"),
+                        nn.Conv2d(dim, dim, kernel_size, groups=dim, padding="same", **dd),
                         act_layer(),
-                        nn.BatchNorm2d(dim)
+                        nn.BatchNorm2d(dim, **dd)
                     )),
-                    nn.Conv2d(dim, dim, kernel_size=1),
+                    nn.Conv2d(dim, dim, kernel_size=1, **dd),
                     act_layer(),
-                    nn.BatchNorm2d(dim)
+                    nn.BatchNorm2d(dim, **dd)
             ) for i in range(depth)]
         )
         self.pooling = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
         self.head_drop = nn.Dropout(drop_rate)
-        self.head = nn.Linear(dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):

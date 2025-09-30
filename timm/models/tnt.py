@@ -10,7 +10,7 @@ The official pytorch code is released and available at
 https://github.com/huawei-noah/Efficient-AI-Backbones/tree/master/tnt_pytorch
 """
 import math
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Type, Any
 
 import torch
 import torch.nn as nn
@@ -29,7 +29,18 @@ class Attention(nn.Module):
     """ Multi-Head Attention
     """
 
-    def __init__(self, dim, hidden_dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0.):
+    def __init__(
+            self,
+            dim: int,
+            hidden_dim: int,
+            num_heads: int = 8,
+            qkv_bias: bool = False,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads
@@ -37,10 +48,10 @@ class Attention(nn.Module):
         self.head_dim = head_dim
         self.scale = head_dim ** -0.5
 
-        self.qk = nn.Linear(dim, hidden_dim * 2, bias=qkv_bias)
-        self.v = nn.Linear(dim, dim, bias=qkv_bias)
+        self.qk = nn.Linear(dim, hidden_dim * 2, bias=qkv_bias, **dd)
+        self.v = nn.Linear(dim, dim, bias=qkv_bias, **dd)
         self.attn_drop = nn.Dropout(attn_drop, inplace=True)
-        self.proj = nn.Linear(dim, dim)
+        self.proj = nn.Linear(dim, dim, **dd)
         self.proj_drop = nn.Dropout(proj_drop, inplace=True)
 
     def forward(self, x):
@@ -65,23 +76,26 @@ class Block(nn.Module):
 
     def __init__(
             self,
-            dim,
-            dim_out,
-            num_pixel,
-            num_heads_in=4,
-            num_heads_out=12,
-            mlp_ratio=4.,
-            qkv_bias=False,
-            proj_drop=0.,
-            attn_drop=0.,
-            drop_path=0.,
-            act_layer=nn.GELU,
-            norm_layer=nn.LayerNorm,
-            legacy=False,
+            dim: int,
+            dim_out: int,
+            num_pixel: int,
+            num_heads_in: int = 4,
+            num_heads_out: int = 12,
+            mlp_ratio: float = 4.,
+            qkv_bias: bool = False,
+            proj_drop: float = 0.,
+            attn_drop: float = 0.,
+            drop_path: float = 0.,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            legacy: bool = False,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         # Inner transformer
-        self.norm_in = norm_layer(dim)
+        self.norm_in = norm_layer(dim, **dd)
         self.attn_in = Attention(
             dim,
             dim,
@@ -89,28 +103,30 @@ class Block(nn.Module):
             qkv_bias=qkv_bias,
             attn_drop=attn_drop,
             proj_drop=proj_drop,
+            **dd,
         )
 
-        self.norm_mlp_in = norm_layer(dim)
+        self.norm_mlp_in = norm_layer(dim, **dd)
         self.mlp_in = Mlp(
             in_features=dim,
             hidden_features=int(dim * 4),
             out_features=dim,
             act_layer=act_layer,
             drop=proj_drop,
+            **dd,
         )
         self.legacy = legacy
         if self.legacy:
-            self.norm1_proj = norm_layer(dim)
-            self.proj = nn.Linear(dim * num_pixel, dim_out, bias=True)
+            self.norm1_proj = norm_layer(dim, **dd)
+            self.proj = nn.Linear(dim * num_pixel, dim_out, bias=True, **dd)
             self.norm2_proj = None
         else:
-            self.norm1_proj = norm_layer(dim * num_pixel)
-            self.proj = nn.Linear(dim * num_pixel, dim_out, bias=False)
-            self.norm2_proj = norm_layer(dim_out)
+            self.norm1_proj = norm_layer(dim * num_pixel, **dd)
+            self.proj = nn.Linear(dim * num_pixel, dim_out, bias=False, **dd)
+            self.norm2_proj = norm_layer(dim_out, **dd)
 
         # Outer transformer
-        self.norm_out = norm_layer(dim_out)
+        self.norm_out = norm_layer(dim_out, **dd)
         self.attn_out = Attention(
             dim_out,
             dim_out,
@@ -118,16 +134,18 @@ class Block(nn.Module):
             qkv_bias=qkv_bias,
             attn_drop=attn_drop,
             proj_drop=proj_drop,
+            **dd,
         )
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-        self.norm_mlp = norm_layer(dim_out)
+        self.norm_mlp = norm_layer(dim_out, **dd)
         self.mlp = Mlp(
             in_features=dim_out,
             hidden_features=int(dim_out * mlp_ratio),
             out_features=dim_out,
             act_layer=act_layer,
             drop=proj_drop,
+            **dd,
         )
 
     def forward(self, pixel_embed, patch_embed):
@@ -157,13 +175,16 @@ class PixelEmbed(nn.Module):
 
     def __init__(
             self,
-            img_size=224,
-            patch_size=16,
-            in_chans=3,
-            in_dim=48,
-            stride=4,
-            legacy=False,
+            img_size: Union[int, Tuple[int, int]] = 224,
+            patch_size: Union[int, Tuple[int, int]] = 16,
+            in_chans: int = 3,
+            in_dim: int = 48,
+            stride: int = 4,
+            legacy: bool = False,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         img_size = to_2tuple(img_size)
         patch_size = to_2tuple(patch_size)
@@ -178,7 +199,7 @@ class PixelEmbed(nn.Module):
         new_patch_size = [math.ceil(ps / stride) for ps in patch_size]
         self.new_patch_size = new_patch_size
 
-        self.proj = nn.Conv2d(in_chans, self.in_dim, kernel_size=7, padding=3, stride=stride)
+        self.proj = nn.Conv2d(in_chans, self.in_dim, kernel_size=7, padding=3, stride=stride, **dd)
         if self.legacy:
             self.unfold = nn.Unfold(kernel_size=new_patch_size, stride=new_patch_size)
         else:
@@ -221,28 +242,31 @@ class TNT(nn.Module):
 
     def __init__(
             self,
-            img_size=224,
-            patch_size=16,
-            in_chans=3,
-            num_classes=1000,
-            global_pool='token',
-            embed_dim=768,
-            inner_dim=48,
-            depth=12,
-            num_heads_inner=4,
-            num_heads_outer=12,
-            mlp_ratio=4.,
-            qkv_bias=False,
-            drop_rate=0.,
-            pos_drop_rate=0.,
-            proj_drop_rate=0.,
-            attn_drop_rate=0.,
-            drop_path_rate=0.,
-            norm_layer=nn.LayerNorm,
-            first_stride=4,
-            legacy=False,
+            img_size: Union[int, Tuple[int, int]] = 224,
+            patch_size: Union[int, Tuple[int, int]] = 16,
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            global_pool: str = 'token',
+            embed_dim: int = 768,
+            inner_dim: int = 48,
+            depth: int = 12,
+            num_heads_inner: int = 4,
+            num_heads_outer: int = 12,
+            mlp_ratio: float = 4.,
+            qkv_bias: bool = False,
+            drop_rate: float = 0.,
+            pos_drop_rate: float = 0.,
+            proj_drop_rate: float = 0.,
+            attn_drop_rate: float = 0.,
+            drop_path_rate: float = 0.,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            first_stride: int = 4,
+            legacy: bool = False,
+            device=None,
+            dtype=None,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         assert global_pool in ('', 'token', 'avg')
         self.num_classes = num_classes
         self.global_pool = global_pool
@@ -257,6 +281,7 @@ class TNT(nn.Module):
             in_dim=inner_dim,
             stride=first_stride,
             legacy=legacy,
+            **dd,
         )
         num_patches = self.pixel_embed.num_patches
         r = self.pixel_embed.feat_ratio() if hasattr(self.pixel_embed, 'feat_ratio') else patch_size
@@ -264,13 +289,13 @@ class TNT(nn.Module):
         new_patch_size = self.pixel_embed.new_patch_size
         num_pixel = new_patch_size[0] * new_patch_size[1]
 
-        self.norm1_proj = norm_layer(num_pixel * inner_dim)
-        self.proj = nn.Linear(num_pixel * inner_dim, embed_dim)
-        self.norm2_proj = norm_layer(embed_dim)
+        self.norm1_proj = norm_layer(num_pixel * inner_dim, **dd)
+        self.proj = nn.Linear(num_pixel * inner_dim, embed_dim, **dd)
+        self.norm2_proj = norm_layer(embed_dim, **dd)
 
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
-        self.patch_pos = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
-        self.pixel_pos = nn.Parameter(torch.zeros(1, inner_dim, new_patch_size[0], new_patch_size[1]))
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim, **dd))
+        self.patch_pos = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim, **dd))
+        self.pixel_pos = nn.Parameter(torch.zeros(1, inner_dim, new_patch_size[0], new_patch_size[1], **dd))
         self.pos_drop = nn.Dropout(p=pos_drop_rate)
 
         dpr = calculate_drop_path_rates(drop_path_rate, depth)  # stochastic depth decay rule
@@ -289,14 +314,15 @@ class TNT(nn.Module):
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
                 legacy=legacy,
+                **dd,
             ))
         self.blocks = nn.ModuleList(blocks)
         self.feature_info = [
             dict(module=f'blocks.{i}', num_chs=embed_dim, reduction=r) for i in range(depth)]
 
-        self.norm = norm_layer(embed_dim)
+        self.norm = norm_layer(embed_dim, **dd)
         self.head_drop = nn.Dropout(drop_rate)
-        self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
         trunc_normal_(self.cls_token, std=.02)
         trunc_normal_(self.patch_pos, std=.02)
@@ -340,7 +366,9 @@ class TNT(nn.Module):
         if global_pool is not None:
             assert global_pool in ('', 'token', 'avg')
             self.global_pool = global_pool
-        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        device = self.head.weight.device if hasattr(self.head, 'weight') else None
+        dtype = self.head.weight.dtype if hasattr(self.head, 'weight') else None
+        self.head = nn.Linear(self.embed_dim, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
 
     def forward_intermediates(
             self,

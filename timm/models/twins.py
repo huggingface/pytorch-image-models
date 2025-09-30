@@ -13,7 +13,7 @@ Code/weights from https://github.com/Meituan-AutoML/Twins, original copyright/li
 # --------------------------------------------------------
 import math
 from functools import partial
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Type, Any
 
 import torch
 import torch.nn as nn
@@ -38,7 +38,17 @@ class LocallyGroupedAttn(nn.Module):
     """
     fused_attn: torch.jit.Final[bool]
 
-    def __init__(self, dim, num_heads=8, attn_drop=0., proj_drop=0., ws=1):
+    def __init__(
+            self,
+            dim: int,
+            num_heads: int = 8,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.,
+            ws: int = 1,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         assert ws != 1
         super(LocallyGroupedAttn, self).__init__()
         assert dim % num_heads == 0, f"dim {dim} should be divided by num_heads {num_heads}."
@@ -49,9 +59,9 @@ class LocallyGroupedAttn(nn.Module):
         self.scale = head_dim ** -0.5
         self.fused_attn = use_fused_attn()
 
-        self.qkv = nn.Linear(dim, dim * 3, bias=True)
+        self.qkv = nn.Linear(dim, dim * 3, bias=True, **dd)
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
+        self.proj = nn.Linear(dim, dim, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
         self.ws = ws
 
@@ -135,7 +145,17 @@ class GlobalSubSampleAttn(nn.Module):
     """
     fused_attn: torch.jit.Final[bool]
 
-    def __init__(self, dim, num_heads=8, attn_drop=0., proj_drop=0., sr_ratio=1):
+    def __init__(
+            self,
+            dim: int,
+            num_heads: int = 8,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.,
+            sr_ratio: int = 1,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         assert dim % num_heads == 0, f"dim {dim} should be divided by num_heads {num_heads}."
 
@@ -145,16 +165,16 @@ class GlobalSubSampleAttn(nn.Module):
         self.scale = head_dim ** -0.5
         self.fused_attn = use_fused_attn()
 
-        self.q = nn.Linear(dim, dim, bias=True)
-        self.kv = nn.Linear(dim, dim * 2, bias=True)
+        self.q = nn.Linear(dim, dim, bias=True, **dd)
+        self.kv = nn.Linear(dim, dim * 2, bias=True, **dd)
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
+        self.proj = nn.Linear(dim, dim, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
 
         self.sr_ratio = sr_ratio
         if sr_ratio > 1:
-            self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
-            self.norm = nn.LayerNorm(dim)
+            self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio, **dd)
+            self.norm = nn.LayerNorm(dim, **dd)
         else:
             self.sr = None
             self.norm = None
@@ -193,33 +213,37 @@ class Block(nn.Module):
 
     def __init__(
             self,
-            dim,
-            num_heads,
-            mlp_ratio=4.,
-            proj_drop=0.,
-            attn_drop=0.,
-            drop_path=0.,
-            act_layer=nn.GELU,
-            norm_layer=nn.LayerNorm,
-            sr_ratio=1,
-            ws=None,
+            dim: int,
+            num_heads: int,
+            mlp_ratio: float = 4.,
+            proj_drop: float = 0.,
+            attn_drop: float = 0.,
+            drop_path: float = 0.,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            sr_ratio: int = 1,
+            ws: Optional[int] = None,
+            device=None,
+            dtype=None,
     ):
         super().__init__()
-        self.norm1 = norm_layer(dim)
+        dd = {'device': device, 'dtype': dtype}
+        self.norm1 = norm_layer(dim, **dd)
         if ws is None:
-            self.attn = Attention(dim, num_heads, False, None, attn_drop, proj_drop)
+            self.attn = Attention(dim, num_heads, False, None, attn_drop, proj_drop, **dd)
         elif ws == 1:
-            self.attn = GlobalSubSampleAttn(dim, num_heads, attn_drop, proj_drop, sr_ratio)
+            self.attn = GlobalSubSampleAttn(dim, num_heads, attn_drop, proj_drop, sr_ratio, **dd)
         else:
-            self.attn = LocallyGroupedAttn(dim, num_heads, attn_drop, proj_drop, ws)
+            self.attn = LocallyGroupedAttn(dim, num_heads, attn_drop, proj_drop, ws, **dd)
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-        self.norm2 = norm_layer(dim)
+        self.norm2 = norm_layer(dim, **dd)
         self.mlp = Mlp(
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
             drop=proj_drop,
+            **dd,
         )
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
@@ -231,10 +255,18 @@ class Block(nn.Module):
 
 class PosConv(nn.Module):
     # PEG  from https://arxiv.org/abs/2102.10882
-    def __init__(self, in_chans, embed_dim=768, stride=1):
+    def __init__(
+            self,
+            in_chans: int,
+            embed_dim: int = 768,
+            stride: int = 1,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super(PosConv, self).__init__()
         self.proj = nn.Sequential(
-            nn.Conv2d(in_chans, embed_dim, 3, stride, 1, bias=True, groups=embed_dim),
+            nn.Conv2d(in_chans, embed_dim, 3, stride, 1, bias=True, groups=embed_dim, **dd),
         )
         self.stride = stride
 
@@ -255,7 +287,16 @@ class PatchEmbed(nn.Module):
     """ Image to Patch Embedding
     """
 
-    def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768):
+    def __init__(
+            self,
+            img_size: Union[int, Tuple[int, int]] = 224,
+            patch_size: Union[int, Tuple[int, int]] = 16,
+            in_chans: int = 3,
+            embed_dim: int = 768,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         img_size = to_2tuple(img_size)
         patch_size = to_2tuple(patch_size)
@@ -266,8 +307,8 @@ class PatchEmbed(nn.Module):
             f"img_size {img_size} should be divided by patch_size {patch_size}."
         self.H, self.W = img_size[0] // patch_size[0], img_size[1] // patch_size[1]
         self.num_patches = self.H * self.W
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
-        self.norm = nn.LayerNorm(embed_dim)
+        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size, **dd)
+        self.norm = nn.LayerNorm(embed_dim, **dd)
 
     def forward(self, x) -> Tuple[torch.Tensor, Size_]:
         B, C, H, W = x.shape
@@ -286,26 +327,29 @@ class Twins(nn.Module):
     """
     def __init__(
             self,
-            img_size=224,
-            patch_size=4,
-            in_chans=3,
-            num_classes=1000,
-            global_pool='avg',
-            embed_dims=(64, 128, 256, 512),
-            num_heads=(1, 2, 4, 8),
-            mlp_ratios=(4, 4, 4, 4),
-            depths=(3, 4, 6, 3),
-            sr_ratios=(8, 4, 2, 1),
-            wss=None,
-            drop_rate=0.,
-            pos_drop_rate=0.,
-            proj_drop_rate=0.,
-            attn_drop_rate=0.,
-            drop_path_rate=0.,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6),
-            block_cls=Block,
+            img_size: Union[int, Tuple[int, int]] = 224,
+            patch_size: int = 4,
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            global_pool: str = 'avg',
+            embed_dims: Tuple[int, ...] = (64, 128, 256, 512),
+            num_heads: Tuple[int, ...] = (1, 2, 4, 8),
+            mlp_ratios: Tuple[float, ...] = (4, 4, 4, 4),
+            depths: Tuple[int, ...] = (3, 4, 6, 3),
+            sr_ratios: Tuple[int, ...] = (8, 4, 2, 1),
+            wss: Optional[Tuple[int, ...]] = None,
+            drop_rate: float = 0.,
+            pos_drop_rate: float = 0.,
+            proj_drop_rate: float = 0.,
+            attn_drop_rate: float = 0.,
+            drop_path_rate: float = 0.,
+            norm_layer: Type[nn.Module] = partial(nn.LayerNorm, eps=1e-6),
+            block_cls: Any = Block,
+            device=None,
+            dtype=None,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.global_pool = global_pool
         self.depths = depths
@@ -318,7 +362,7 @@ class Twins(nn.Module):
         self.patch_embeds = nn.ModuleList()
         self.pos_drops = nn.ModuleList()
         for i in range(len(depths)):
-            self.patch_embeds.append(PatchEmbed(img_size, patch_size, prev_chs, embed_dims[i]))
+            self.patch_embeds.append(PatchEmbed(img_size, patch_size, prev_chs, embed_dims[i], **dd))
             self.pos_drops.append(nn.Dropout(p=pos_drop_rate))
             prev_chs = embed_dims[i]
             img_size = tuple(t // patch_size for t in img_size)
@@ -338,19 +382,20 @@ class Twins(nn.Module):
                 drop_path=dpr[cur + i],
                 norm_layer=norm_layer,
                 sr_ratio=sr_ratios[k],
-                ws=1 if wss is None or i % 2 == 1 else wss[k]) for i in range(depths[k])],
-            )
+                ws=1 if wss is None or i % 2 == 1 else wss[k],
+                **dd,
+            ) for i in range(depths[k])])
             self.blocks.append(_block)
             self.feature_info += [dict(module=f'block.{k}', num_chs=embed_dims[k], reduction=2**(2+k))]
             cur += depths[k]
 
-        self.pos_block = nn.ModuleList([PosConv(embed_dim, embed_dim) for embed_dim in embed_dims])
+        self.pos_block = nn.ModuleList([PosConv(embed_dim, embed_dim, **dd) for embed_dim in embed_dims])
 
-        self.norm = norm_layer(self.num_features)
+        self.norm = norm_layer(self.num_features, **dd)
 
         # classification head
         self.head_drop = nn.Dropout(drop_rate)
-        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
         # init weights
         self.apply(self._init_weights)
@@ -387,7 +432,9 @@ class Twins(nn.Module):
         if global_pool is not None:
             assert global_pool in ('', 'avg')
             self.global_pool = global_pool
-        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        device = self.head.weight.device if hasattr(self.head, 'weight') else None
+        dtype = self.head.weight.dtype if hasattr(self.head, 'weight') else None
+        self.head = nn.Linear(self.num_features, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):

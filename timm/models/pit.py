@@ -14,7 +14,7 @@ Modifications for timm by / Copyright 2020 Ross Wightman
 import math
 import re
 from functools import partial
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import List, Optional, Sequence, Tuple, Union, Type, Any
 
 import torch
 from torch import nn
@@ -32,9 +32,6 @@ __all__ = ['PoolingVisionTransformer']  # model_registry will add each entrypoin
 
 class SequentialTuple(nn.Sequential):
     """ This module exists to work around torchscript typing issues list -> list"""
-    def __init__(self, *args):
-        super(SequentialTuple, self).__init__(*args)
-
     def forward(self, x: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         for module in self:
             x = module(x)
@@ -44,21 +41,24 @@ class SequentialTuple(nn.Sequential):
 class Transformer(nn.Module):
     def __init__(
             self,
-            base_dim,
-            depth,
-            heads,
-            mlp_ratio,
-            pool=None,
-            proj_drop=.0,
-            attn_drop=.0,
-            drop_path_prob=None,
-            norm_layer=None,
+            base_dim: int,
+            depth: int,
+            heads: int,
+            mlp_ratio: float,
+            pool: Optional[Any] = None,
+            proj_drop: float = .0,
+            attn_drop: float = .0,
+            drop_path_prob: Optional[List[float]] = None,
+            norm_layer: Optional[Type[nn.Module]] = None,
+            device=None,
+            dtype=None,
     ):
-        super(Transformer, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         embed_dim = base_dim * heads
 
         self.pool = pool
-        self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
+        self.norm = norm_layer(embed_dim, **dd) if norm_layer else nn.Identity()
         self.blocks = nn.Sequential(*[
             Block(
                 dim=embed_dim,
@@ -68,7 +68,8 @@ class Transformer(nn.Module):
                 proj_drop=proj_drop,
                 attn_drop=attn_drop,
                 drop_path=drop_path_prob[i],
-                norm_layer=partial(nn.LayerNorm, eps=1e-6)
+                norm_layer=partial(nn.LayerNorm, eps=1e-6),
+                **dd,
             )
             for i in range(depth)])
 
@@ -93,8 +94,17 @@ class Transformer(nn.Module):
 
 
 class Pooling(nn.Module):
-    def __init__(self, in_feature, out_feature, stride, padding_mode='zeros'):
-        super(Pooling, self).__init__()
+    def __init__(
+            self,
+            in_feature: int,
+            out_feature: int,
+            stride: int,
+            padding_mode: str = 'zeros',
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
 
         self.conv = nn.Conv2d(
             in_feature,
@@ -104,8 +114,9 @@ class Pooling(nn.Module):
             stride=stride,
             padding_mode=padding_mode,
             groups=in_feature,
+            **dd,
         )
-        self.fc = nn.Linear(in_feature, out_feature)
+        self.fc = nn.Linear(in_feature, out_feature, **dd)
 
     def forward(self, x, cls_token) -> Tuple[torch.Tensor, torch.Tensor]:
         x = self.conv(x)
@@ -116,14 +127,17 @@ class Pooling(nn.Module):
 class ConvEmbedding(nn.Module):
     def __init__(
             self,
-            in_channels,
-            out_channels,
+            in_channels: int,
+            out_channels: int,
             img_size: int = 224,
             patch_size: int = 16,
             stride: int = 8,
             padding: int = 0,
+            device=None,
+            dtype=None,
     ):
-        super(ConvEmbedding, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         padding = padding
         self.img_size = to_2tuple(img_size)
         self.patch_size = to_2tuple(patch_size)
@@ -132,8 +146,14 @@ class ConvEmbedding(nn.Module):
         self.grid_size = (self.height, self.width)
 
         self.conv = nn.Conv2d(
-            in_channels, out_channels, kernel_size=patch_size,
-            stride=stride, padding=padding, bias=True)
+            in_channels,
+            out_channels,
+            kernel_size=patch_size,
+            stride=stride,
+            padding=padding,
+            bias=True,
+            **dd,
+        )
 
     def forward(self, x):
         x = self.conv(x)
@@ -156,17 +176,20 @@ class PoolingVisionTransformer(nn.Module):
             depth: Sequence[int] = (2, 6, 4),
             heads: Sequence[int] = (2, 4, 8),
             mlp_ratio: float = 4,
-            num_classes=1000,
-            in_chans=3,
-            global_pool='token',
-            distilled=False,
-            drop_rate=0.,
-            pos_drop_drate=0.,
-            proj_drop_rate=0.,
-            attn_drop_rate=0.,
-            drop_path_rate=0.,
+            num_classes: int = 1000,
+            in_chans: int = 3,
+            global_pool: str = 'token',
+            distilled: bool = False,
+            drop_rate: float = 0.,
+            pos_drop_drate: float = 0.,
+            proj_drop_rate: float = 0.,
+            attn_drop_rate: float = 0.,
+            drop_path_rate: float = 0.,
+            device=None,
+            dtype=None,
     ):
-        super(PoolingVisionTransformer, self).__init__()
+        super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         assert global_pool in ('token',)
 
         self.base_dims = base_dims
@@ -177,9 +200,9 @@ class PoolingVisionTransformer(nn.Module):
         self.num_tokens = 2 if distilled else 1
         self.feature_info = []
 
-        self.patch_embed = ConvEmbedding(in_chans, embed_dim, img_size, patch_size, stride)
-        self.pos_embed = nn.Parameter(torch.randn(1, embed_dim, self.patch_embed.height, self.patch_embed.width))
-        self.cls_token = nn.Parameter(torch.randn(1, self.num_tokens, embed_dim))
+        self.patch_embed = ConvEmbedding(in_chans, embed_dim, img_size, patch_size, stride, **dd)
+        self.pos_embed = nn.Parameter(torch.randn(1, embed_dim, self.patch_embed.height, self.patch_embed.width, **dd))
+        self.cls_token = nn.Parameter(torch.randn(1, self.num_tokens, embed_dim, **dd))
         self.pos_drop = nn.Dropout(p=pos_drop_drate)
 
         transformers = []
@@ -194,6 +217,7 @@ class PoolingVisionTransformer(nn.Module):
                     prev_dim,
                     embed_dim,
                     stride=2,
+                    **dd,
                 )
             transformers += [Transformer(
                 base_dims[i],
@@ -204,20 +228,21 @@ class PoolingVisionTransformer(nn.Module):
                 proj_drop=proj_drop_rate,
                 attn_drop=attn_drop_rate,
                 drop_path_prob=dpr[i],
+                **dd,
             )]
             prev_dim = embed_dim
             self.feature_info += [dict(num_chs=prev_dim, reduction=(stride - 1) * 2**i, module=f'transformers.{i}')]
 
         self.transformers = SequentialTuple(*transformers)
-        self.norm = nn.LayerNorm(base_dims[-1] * heads[-1], eps=1e-6)
+        self.norm = nn.LayerNorm(base_dims[-1] * heads[-1], eps=1e-6, **dd)
         self.num_features = self.head_hidden_size = self.embed_dim = embed_dim
 
         # Classifier head
         self.head_drop = nn.Dropout(drop_rate)
-        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head_dist = None
         if distilled:
-            self.head_dist = nn.Linear(self.embed_dim, self.num_classes) if num_classes > 0 else nn.Identity()
+            self.head_dist = nn.Linear(self.embed_dim, self.num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.distilled_training = False  # must set this True to train w/ distillation token
 
         trunc_normal_(self.pos_embed, std=.02)
@@ -251,9 +276,11 @@ class PoolingVisionTransformer(nn.Module):
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
-        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        device = self.head.weight.device if hasattr(self.head, 'weight') else None
+        dtype = self.head.weight.dtype if hasattr(self.head, 'weight') else None
+        self.head = nn.Linear(self.embed_dim, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
         if self.head_dist is not None:
-            self.head_dist = nn.Linear(self.embed_dim, self.num_classes) if num_classes > 0 else nn.Identity()
+            self.head_dist = nn.Linear(self.embed_dim, self.num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
 
     def forward_intermediates(
             self,

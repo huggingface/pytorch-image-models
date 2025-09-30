@@ -16,7 +16,7 @@ Modifications and timm support by / Copyright 2022, Ross Wightman
 """
 
 import math
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union, Type, Any
 
 import torch
 import torch.nn as nn
@@ -35,21 +35,24 @@ __all__ = ['PyramidVisionTransformerV2']
 class MlpWithDepthwiseConv(nn.Module):
     def __init__(
             self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            act_layer=nn.GELU,
-            drop=0.,
-            extra_relu=False,
+            in_features: int,
+            hidden_features: Optional[int] = None,
+            out_features: Optional[int] = None,
+            act_layer: Type[nn.Module] = nn.GELU,
+            drop: float = 0.,
+            extra_relu: bool = False,
+            device=None,
+            dtype=None,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
-        self.fc1 = nn.Linear(in_features, hidden_features)
+        self.fc1 = nn.Linear(in_features, hidden_features, **dd)
         self.relu = nn.ReLU() if extra_relu else nn.Identity()
-        self.dwconv = nn.Conv2d(hidden_features, hidden_features, 3, 1, 1, bias=True, groups=hidden_features)
+        self.dwconv = nn.Conv2d(hidden_features, hidden_features, 3, 1, 1, bias=True, groups=hidden_features, **dd)
         self.act = act_layer()
-        self.fc2 = nn.Linear(hidden_features, out_features)
+        self.fc2 = nn.Linear(hidden_features, out_features, **dd)
         self.drop = nn.Dropout(drop)
 
     def forward(self, x, feat_size: List[int]):
@@ -71,15 +74,18 @@ class Attention(nn.Module):
 
     def __init__(
             self,
-            dim,
-            num_heads=8,
-            sr_ratio=1,
-            linear_attn=False,
-            qkv_bias=True,
-            attn_drop=0.,
-            proj_drop=0.
+            dim: int,
+            num_heads: int = 8,
+            sr_ratio: int = 1,
+            linear_attn: bool = False,
+            qkv_bias: bool = True,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.,
+            device=None,
+            dtype=None,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         assert dim % num_heads == 0, f"dim {dim} should be divided by num_heads {num_heads}."
 
         self.dim = dim
@@ -88,25 +94,25 @@ class Attention(nn.Module):
         self.scale = self.head_dim ** -0.5
         self.fused_attn = use_fused_attn()
 
-        self.q = nn.Linear(dim, dim, bias=qkv_bias)
-        self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
+        self.q = nn.Linear(dim, dim, bias=qkv_bias, **dd)
+        self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias, **dd)
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
+        self.proj = nn.Linear(dim, dim, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
 
         if not linear_attn:
             self.pool = None
             if sr_ratio > 1:
-                self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
-                self.norm = nn.LayerNorm(dim)
+                self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio, **dd)
+                self.norm = nn.LayerNorm(dim, **dd)
             else:
                 self.sr = None
                 self.norm = None
             self.act = None
         else:
             self.pool = nn.AdaptiveAvgPool2d(7)
-            self.sr = nn.Conv2d(dim, dim, kernel_size=1, stride=1)
-            self.norm = nn.LayerNorm(dim)
+            self.sr = nn.Conv2d(dim, dim, kernel_size=1, stride=1, **dd)
+            self.norm = nn.LayerNorm(dim, **dd)
             self.act = nn.GELU()
 
     def forward(self, x, feat_size: List[int]):
@@ -149,20 +155,23 @@ class Block(nn.Module):
 
     def __init__(
             self,
-            dim,
-            num_heads,
-            mlp_ratio=4.,
-            sr_ratio=1,
-            linear_attn=False,
-            qkv_bias=False,
-            proj_drop=0.,
-            attn_drop=0.,
-            drop_path=0.,
-            act_layer=nn.GELU,
-            norm_layer=LayerNorm,
+            dim: int,
+            num_heads: int,
+            mlp_ratio: float = 4.,
+            sr_ratio: int = 1,
+            linear_attn: bool = False,
+            qkv_bias: bool = False,
+            proj_drop: float = 0.,
+            attn_drop: float = 0.,
+            drop_path: float = 0.,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = LayerNorm,
+            device=None,
+            dtype=None,
     ):
         super().__init__()
-        self.norm1 = norm_layer(dim)
+        dd = {'device': device, 'dtype': dtype}
+        self.norm1 = norm_layer(dim, **dd)
         self.attn = Attention(
             dim,
             num_heads=num_heads,
@@ -171,16 +180,18 @@ class Block(nn.Module):
             qkv_bias=qkv_bias,
             attn_drop=attn_drop,
             proj_drop=proj_drop,
+            **dd,
         )
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-        self.norm2 = norm_layer(dim)
+        self.norm2 = norm_layer(dim, **dd)
         self.mlp = MlpWithDepthwiseConv(
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
             drop=proj_drop,
             extra_relu=linear_attn,
+            **dd,
         )
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
@@ -194,15 +205,24 @@ class Block(nn.Module):
 class OverlapPatchEmbed(nn.Module):
     """ Image to Patch Embedding
     """
-    def __init__(self, patch_size=7, stride=4, in_chans=3, embed_dim=768):
+    def __init__(
+            self,
+            patch_size: Union[int, Tuple[int, int]] = 7,
+            stride: int = 4,
+            in_chans: int = 3,
+            embed_dim: int = 768,
+            device=None,
+            dtype=None,
+    ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         patch_size = to_2tuple(patch_size)
         assert max(patch_size) > stride, "Set larger patch_size than stride"
         self.patch_size = patch_size
         self.proj = nn.Conv2d(
             in_chans, embed_dim, patch_size,
-            stride=stride, padding=(patch_size[0] // 2, patch_size[1] // 2))
-        self.norm = nn.LayerNorm(embed_dim)
+            stride=stride, padding=(patch_size[0] // 2, patch_size[1] // 2), **dd)
+        self.norm = nn.LayerNorm(embed_dim, **dd)
 
     def forward(self, x):
         x = self.proj(x)
@@ -227,8 +247,11 @@ class PyramidVisionTransformerStage(nn.Module):
             attn_drop: float = 0.,
             drop_path: Union[List[float], float] = 0.0,
             norm_layer: Callable = LayerNorm,
+            device=None,
+            dtype=None,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.grad_checkpointing = False
 
         if downsample:
@@ -237,6 +260,7 @@ class PyramidVisionTransformerStage(nn.Module):
                 stride=2,
                 in_chans=dim,
                 embed_dim=dim_out,
+                **dd,
             )
         else:
             assert dim == dim_out
@@ -253,9 +277,10 @@ class PyramidVisionTransformerStage(nn.Module):
             attn_drop=attn_drop,
             drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
             norm_layer=norm_layer,
+            **dd,
         ) for i in range(depth)])
 
-        self.norm = norm_layer(dim_out)
+        self.norm = norm_layer(dim_out, **dd)
 
     def forward(self, x):
         # x is either B, C, H, W (if downsample) or B, H, W, C if not
@@ -278,23 +303,26 @@ class PyramidVisionTransformerStage(nn.Module):
 class PyramidVisionTransformerV2(nn.Module):
     def __init__(
             self,
-            in_chans=3,
-            num_classes=1000,
-            global_pool='avg',
-            depths=(3, 4, 6, 3),
-            embed_dims=(64, 128, 256, 512),
-            num_heads=(1, 2, 4, 8),
-            sr_ratios=(8, 4, 2, 1),
-            mlp_ratios=(8., 8., 4., 4.),
-            qkv_bias=True,
-            linear=False,
-            drop_rate=0.,
-            proj_drop_rate=0.,
-            attn_drop_rate=0.,
-            drop_path_rate=0.,
-            norm_layer=LayerNorm,
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            global_pool: str = 'avg',
+            depths: Tuple[int, ...] = (3, 4, 6, 3),
+            embed_dims: Tuple[int, ...] = (64, 128, 256, 512),
+            num_heads: Tuple[int, ...] = (1, 2, 4, 8),
+            sr_ratios: Tuple[int, ...] = (8, 4, 2, 1),
+            mlp_ratios: Tuple[float, ...] = (8., 8., 4., 4.),
+            qkv_bias: bool = True,
+            linear: bool = False,
+            drop_rate: float = 0.,
+            proj_drop_rate: float = 0.,
+            attn_drop_rate: float = 0.,
+            drop_path_rate: float = 0.,
+            norm_layer: Type[nn.Module] = LayerNorm,
+            device=None,
+            dtype=None,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         assert global_pool in ('avg', '')
         self.global_pool = global_pool
@@ -311,6 +339,7 @@ class PyramidVisionTransformerV2(nn.Module):
             stride=4,
             in_chans=in_chans,
             embed_dim=embed_dims[0],
+            **dd,
         )
 
         dpr = calculate_drop_path_rates(drop_path_rate, depths, stagewise=True)
@@ -332,6 +361,7 @@ class PyramidVisionTransformerV2(nn.Module):
                 attn_drop=attn_drop_rate,
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
+                **dd,
             )]
             prev_dim = embed_dims[i]
             cur += depths[i]
@@ -341,7 +371,7 @@ class PyramidVisionTransformerV2(nn.Module):
         # classification head
         self.num_features = self.head_hidden_size = embed_dims[-1]
         self.head_drop = nn.Dropout(drop_rate)
-        self.head = nn.Linear(embed_dims[-1], num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(embed_dims[-1], num_classes, **dd) if num_classes > 0 else nn.Identity()
 
         self.apply(self._init_weights)
 
@@ -385,7 +415,9 @@ class PyramidVisionTransformerV2(nn.Module):
         if global_pool is not None:
             assert global_pool in ('avg', '')
             self.global_pool = global_pool
-        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        device = self.head.weight.device if hasattr(self.head, 'weight') else None
+        dtype = self.head.weight.dtype if hasattr(self.head, 'weight') else None
+        self.head = nn.Linear(self.num_features, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
 
     def forward_intermediates(
             self,
