@@ -11,7 +11,7 @@ Modifications copyright 2021, Ross Wightman
 # Copyright (c) 2015-present, Facebook, Inc.
 # All rights reserved.
 from functools import partial
-from typing import Optional
+from typing import Optional, Type
 
 import torch
 from torch import nn as nn
@@ -36,12 +36,13 @@ class VisionTransformerDistilled(VisionTransformer):
         weight_init = kwargs.pop('weight_init', '')
         super().__init__(*args, **kwargs, weight_init='skip')
         assert self.global_pool in ('token',)
+        dd = {'device': kwargs.get('device', None), 'dtype': kwargs.get('dtype', None)}
 
         self.num_prefix_tokens = 2
-        self.dist_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
+        self.dist_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim, **dd))
         self.pos_embed = nn.Parameter(
-            torch.zeros(1, self.patch_embed.num_patches + self.num_prefix_tokens, self.embed_dim))
-        self.head_dist = nn.Linear(self.embed_dim, self.num_classes) if self.num_classes > 0 else nn.Identity()
+            torch.zeros(1, self.patch_embed.num_patches + self.num_prefix_tokens, self.embed_dim, **dd))
+        self.head_dist = nn.Linear(self.embed_dim, self.num_classes, **dd) if self.num_classes > 0 else nn.Identity()
         self.distilled_training = False  # must set this True to train w/ distillation token
 
         self.init_weights(weight_init)
