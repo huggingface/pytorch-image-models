@@ -6,7 +6,7 @@ Next-ViT model defs and weights adapted from https://github.com/bytedance/Next-V
 """
 # Copyright (c) ByteDance Inc. All rights reserved.
 from functools import partial
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Type
 
 import torch
 import torch.nn.functional as F
@@ -73,19 +73,29 @@ def merge_pre_bn(module, pre_bn_1, pre_bn_2=None):
 class ConvNormAct(nn.Module):
     def __init__(
             self,
+            in_chs: int,
+            out_chs: int,
+            kernel_size: int = 3,
+            stride: int = 1,
+            groups: int = 1,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
+        self.conv = nn.Conv2d(
             in_chs,
             out_chs,
-            kernel_size=3,
-            stride=1,
-            groups=1,
-            norm_layer=nn.BatchNorm2d,
-            act_layer=nn.ReLU,
-    ):
-        super(ConvNormAct, self).__init__()
-        self.conv = nn.Conv2d(
-            in_chs, out_chs, kernel_size=kernel_size, stride=stride,
-            padding=1, groups=groups, bias=False)
-        self.norm = norm_layer(out_chs)
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=1,
+            groups=groups,
+            bias=False,
+            **dd,
+        )
+        self.norm = norm_layer(out_chs, **dd)
         self.act = act_layer()
 
     def forward(self, x):
@@ -106,22 +116,25 @@ def _make_divisible(v, divisor, min_value=None):
 
 
 class PatchEmbed(nn.Module):
-    def __init__(self,
-            in_chs,
-            out_chs,
-            stride=1,
-            norm_layer = nn.BatchNorm2d,
+    def __init__(
+            self,
+            in_chs: int,
+            out_chs: int,
+            stride: int = 1,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            device=None,
+            dtype=None,
     ):
-        super(PatchEmbed, self).__init__()
-
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         if stride == 2:
             self.pool = nn.AvgPool2d((2, 2), stride=2, ceil_mode=True, count_include_pad=False)
-            self.conv = nn.Conv2d(in_chs, out_chs, kernel_size=1, stride=1, bias=False)
-            self.norm = norm_layer(out_chs)
+            self.conv = nn.Conv2d(in_chs, out_chs, kernel_size=1, stride=1, bias=False, **dd)
+            self.norm = norm_layer(out_chs, **dd)
         elif in_chs != out_chs:
             self.pool = nn.Identity()
-            self.conv = nn.Conv2d(in_chs, out_chs, kernel_size=1, stride=1, bias=False)
-            self.norm = norm_layer(out_chs)
+            self.conv = nn.Conv2d(in_chs, out_chs, kernel_size=1, stride=1, bias=False, **dd)
+            self.norm = norm_layer(out_chs, **dd)
         else:
             self.pool = nn.Identity()
             self.conv = nn.Identity()
@@ -136,15 +149,30 @@ class ConvAttention(nn.Module):
     Multi-Head Convolutional Attention
     """
 
-    def __init__(self, out_chs, head_dim, norm_layer = nn.BatchNorm2d, act_layer = nn.ReLU):
-        super(ConvAttention, self).__init__()
+    def __init__(
+            self,
+            out_chs: int,
+            head_dim: int,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.group_conv3x3 = nn.Conv2d(
-            out_chs, out_chs,
-            kernel_size=3, stride=1, padding=1, groups=out_chs // head_dim, bias=False
+            out_chs,
+            out_chs,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            groups=out_chs // head_dim,
+            bias=False,
+            **dd,
         )
-        self.norm = norm_layer(out_chs)
+        self.norm = norm_layer(out_chs, **dd)
         self.act = act_layer()
-        self.projection = nn.Conv2d(out_chs, out_chs, kernel_size=1, bias=False)
+        self.projection = nn.Conv2d(out_chs, out_chs, kernel_size=1, bias=False, **dd)
 
     def forward(self, x):
         out = self.group_conv3x3(x)
@@ -160,37 +188,42 @@ class NextConvBlock(nn.Module):
 
     def __init__(
             self,
-            in_chs,
-            out_chs,
-            stride=1,
-            drop_path=0.,
-            drop=0.,
-            head_dim=32,
-            mlp_ratio=3.,
-            norm_layer=nn.BatchNorm2d,
-            act_layer=nn.ReLU
+            in_chs: int,
+            out_chs: int,
+            stride: int = 1,
+            drop_path: float = 0.,
+            drop: float = 0.,
+            head_dim: int = 32,
+            mlp_ratio: float = 3.,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            device=None,
+            dtype=None,
     ):
-        super(NextConvBlock, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.in_chs = in_chs
         self.out_chs = out_chs
         assert out_chs % head_dim == 0
 
-        self.patch_embed = PatchEmbed(in_chs, out_chs, stride, norm_layer=norm_layer)
+        self.patch_embed = PatchEmbed(in_chs, out_chs, stride, norm_layer=norm_layer, **dd)
         self.mhca = ConvAttention(
             out_chs,
             head_dim,
             norm_layer=norm_layer,
             act_layer=act_layer,
+            **dd,
         )
         self.attn_drop_path = DropPath(drop_path)
 
-        self.norm = norm_layer(out_chs)
+        self.norm = norm_layer(out_chs, **dd)
         self.mlp = ConvMlp(
             out_chs,
             hidden_features=int(out_chs * mlp_ratio),
             drop=drop,
             bias=True,
             act_layer=act_layer,
+            **dd,
         )
         self.mlp_drop_path = DropPath(drop_path)
         self.is_fused = False
@@ -219,15 +252,18 @@ class EfficientAttention(nn.Module):
 
     def __init__(
             self,
-            dim,
-            out_dim=None,
-            head_dim=32,
-            qkv_bias=True,
-            attn_drop=0.,
-            proj_drop=0.,
-            sr_ratio=1,
-            norm_layer=nn.BatchNorm1d,
+            dim: int,
+            out_dim: Optional[int] = None,
+            head_dim: int = 32,
+            qkv_bias: bool = True,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.,
+            sr_ratio: int = 1,
+            norm_layer: Type[nn.Module] = nn.BatchNorm1d,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.dim = dim
         self.out_dim = out_dim if out_dim is not None else dim
@@ -236,10 +272,10 @@ class EfficientAttention(nn.Module):
         self.scale = head_dim ** -0.5
         self.fused_attn = use_fused_attn()
 
-        self.q = nn.Linear(dim, self.dim, bias=qkv_bias)
-        self.k = nn.Linear(dim, self.dim, bias=qkv_bias)
-        self.v = nn.Linear(dim, self.dim, bias=qkv_bias)
-        self.proj = nn.Linear(self.dim, self.out_dim)
+        self.q = nn.Linear(dim, self.dim, bias=qkv_bias, **dd)
+        self.k = nn.Linear(dim, self.dim, bias=qkv_bias, **dd)
+        self.v = nn.Linear(dim, self.dim, bias=qkv_bias, **dd)
+        self.proj = nn.Linear(self.dim, self.out_dim, **dd)
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj_drop = nn.Dropout(proj_drop)
 
@@ -247,7 +283,7 @@ class EfficientAttention(nn.Module):
         self.N_ratio = sr_ratio ** 2
         if sr_ratio > 1:
             self.sr = nn.AvgPool1d(kernel_size=self.N_ratio, stride=self.N_ratio)
-            self.norm = norm_layer(dim)
+            self.norm = norm_layer(dim, **dd)
         else:
             self.sr = None
             self.norm = None
@@ -288,20 +324,23 @@ class NextTransformerBlock(nn.Module):
 
     def __init__(
             self,
-            in_chs,
-            out_chs,
-            drop_path,
-            stride=1,
-            sr_ratio=1,
-            mlp_ratio=2,
-            head_dim=32,
-            mix_block_ratio=0.75,
-            attn_drop=0.,
-            drop=0.,
-            norm_layer=nn.BatchNorm2d,
-            act_layer=nn.ReLU,
+            in_chs: int,
+            out_chs: int,
+            drop_path: float,
+            stride: int = 1,
+            sr_ratio: int = 1,
+            mlp_ratio: float = 2,
+            head_dim: int = 32,
+            mix_block_ratio: float = 0.75,
+            attn_drop: float = 0.,
+            drop: float = 0.,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            device=None,
+            dtype=None,
     ):
-        super(NextTransformerBlock, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.in_chs = in_chs
         self.out_chs = out_chs
         self.mix_block_ratio = mix_block_ratio
@@ -309,32 +348,41 @@ class NextTransformerBlock(nn.Module):
         self.mhsa_out_chs = _make_divisible(int(out_chs * mix_block_ratio), 32)
         self.mhca_out_chs = out_chs - self.mhsa_out_chs
 
-        self.patch_embed = PatchEmbed(in_chs, self.mhsa_out_chs, stride)
-        self.norm1 = norm_layer(self.mhsa_out_chs)
+        self.patch_embed = PatchEmbed(in_chs, self.mhsa_out_chs, stride, **dd)
+        self.norm1 = norm_layer(self.mhsa_out_chs, **dd)
         self.e_mhsa = EfficientAttention(
             self.mhsa_out_chs,
             head_dim=head_dim,
             sr_ratio=sr_ratio,
             attn_drop=attn_drop,
             proj_drop=drop,
+            **dd,
         )
         self.mhsa_drop_path = DropPath(drop_path * mix_block_ratio)
 
-        self.projection = PatchEmbed(self.mhsa_out_chs, self.mhca_out_chs, stride=1, norm_layer=norm_layer)
+        self.projection = PatchEmbed(
+            self.mhsa_out_chs,
+            self.mhca_out_chs,
+            stride=1,
+            norm_layer=norm_layer,
+            **dd,
+        )
         self.mhca = ConvAttention(
             self.mhca_out_chs,
             head_dim=head_dim,
             norm_layer=norm_layer,
             act_layer=act_layer,
+            **dd,
         )
         self.mhca_drop_path = DropPath(drop_path * (1 - mix_block_ratio))
 
-        self.norm2 = norm_layer(out_chs)
+        self.norm2 = norm_layer(out_chs, **dd)
         self.mlp = ConvMlp(
             out_chs,
             hidden_features=int(out_chs * mlp_ratio),
             act_layer=act_layer,
             drop=drop,
+            **dd,
         )
         self.mlp_drop_path = DropPath(drop_path)
         self.is_fused = False
@@ -378,19 +426,22 @@ class NextStage(nn.Module):
 
     def __init__(
             self,
-            in_chs,
-            block_chs,
-            block_types,
-            stride=2,
-            sr_ratio=1,
-            mix_block_ratio=1.0,
-            drop=0.,
-            attn_drop=0.,
-            drop_path=0.,
-            head_dim=32,
-            norm_layer=nn.BatchNorm2d,
-            act_layer=nn.ReLU,
+            in_chs: int,
+            block_chs: List[int],
+            block_types: List[Type[nn.Module]],
+            stride: int = 2,
+            sr_ratio: int = 1,
+            mix_block_ratio: float = 1.0,
+            drop: float = 0.,
+            attn_drop: float = 0.,
+            drop_path: Union[float, List[float], Tuple[float, ...]] = 0.,
+            head_dim: int = 32,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.grad_checkpointing = False
 
@@ -410,6 +461,7 @@ class NextStage(nn.Module):
                     head_dim=head_dim,
                     norm_layer=norm_layer,
                     act_layer=act_layer,
+                    **dd,
                 )
                 blocks.append(layer)
             elif block_type is NextTransformerBlock:
@@ -425,6 +477,7 @@ class NextStage(nn.Module):
                     drop=drop,
                     norm_layer=norm_layer,
                     act_layer=act_layer,
+                    **dd,
                 )
                 blocks.append(layer)
             in_chs = out_chs
@@ -446,22 +499,25 @@ class NextStage(nn.Module):
 class NextViT(nn.Module):
     def __init__(
             self,
-            in_chans,
-            num_classes=1000,
-            global_pool='avg',
-            stem_chs=(64, 32, 64),
-            depths=(3, 4, 10, 3),
-            strides=(1, 2, 2, 2),
-            sr_ratios=(8, 4, 2, 1),
-            drop_path_rate=0.1,
-            attn_drop_rate=0.,
-            drop_rate=0.,
-            head_dim=32,
-            mix_block_ratio=0.75,
-            norm_layer=nn.BatchNorm2d,
-            act_layer=None,
+            in_chans: int,
+            num_classes: int = 1000,
+            global_pool: str = 'avg',
+            stem_chs: Tuple[int, ...] = (64, 32, 64),
+            depths: Tuple[int, ...] = (3, 4, 10, 3),
+            strides: Tuple[int, ...] = (1, 2, 2, 2),
+            sr_ratios: Tuple[int, ...] = (8, 4, 2, 1),
+            drop_path_rate: float = 0.1,
+            attn_drop_rate: float = 0.,
+            drop_rate: float = 0.,
+            head_dim: int = 32,
+            mix_block_ratio: float = 0.75,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            act_layer: Optional[Type[nn.Module]] = None,
+            device=None,
+            dtype=None,
     ):
-        super(NextViT, self).__init__()
+        super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.grad_checkpointing = False
         self.num_classes = num_classes
         norm_layer = get_norm_layer(norm_layer)
@@ -490,10 +546,14 @@ class NextViT(nn.Module):
             [NextConvBlock] * (depths[3] - 1) + [NextTransformerBlock]]
 
         self.stem = nn.Sequential(
-            ConvNormAct(in_chans, stem_chs[0], kernel_size=3, stride=2, norm_layer=norm_layer, act_layer=act_layer),
-            ConvNormAct(stem_chs[0], stem_chs[1], kernel_size=3, stride=1, norm_layer=norm_layer, act_layer=act_layer),
-            ConvNormAct(stem_chs[1], stem_chs[2], kernel_size=3, stride=1, norm_layer=norm_layer, act_layer=act_layer),
-            ConvNormAct(stem_chs[2], stem_chs[2], kernel_size=3, stride=2, norm_layer=norm_layer, act_layer=act_layer),
+            ConvNormAct(
+                in_chans, stem_chs[0], kernel_size=3, stride=2, norm_layer=norm_layer, act_layer=act_layer, **dd),
+            ConvNormAct(
+                stem_chs[0], stem_chs[1], kernel_size=3, stride=1, norm_layer=norm_layer, act_layer=act_layer, **dd),
+            ConvNormAct(
+                stem_chs[1], stem_chs[2], kernel_size=3, stride=1, norm_layer=norm_layer, act_layer=act_layer, **dd),
+            ConvNormAct(
+                stem_chs[2], stem_chs[2], kernel_size=3, stride=2, norm_layer=norm_layer, act_layer=act_layer, **dd),
         )
         in_chs = out_chs = stem_chs[-1]
         stages = []
@@ -513,14 +573,15 @@ class NextViT(nn.Module):
                 drop_path=dpr[stage_idx],
                 norm_layer=norm_layer,
                 act_layer=act_layer,
+                **dd,
             )
             in_chs = out_chs = self.stage_out_chs[stage_idx][-1]
             stages += [stage]
             idx += depths[stage_idx]
         self.num_features = self.head_hidden_size = out_chs
         self.stages = nn.Sequential(*stages)
-        self.norm = norm_layer(out_chs)
-        self.head = ClassifierHead(pool_type=global_pool, in_features=out_chs, num_classes=num_classes)
+        self.norm = norm_layer(out_chs, **dd)
+        self.head = ClassifierHead(pool_type=global_pool, in_features=out_chs, num_classes=num_classes, **dd)
 
         self.stage_out_idx = [sum(depths[:idx + 1]) - 1 for idx in range(len(depths))]
         self._initialize_weights()

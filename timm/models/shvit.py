@@ -370,8 +370,7 @@ class SHViT(nn.Module):
         # cannot meaningfully change pooling of efficient head after creation
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        device, dtype = self.head.l.weight.device, self.head.l.weight.dtype if hasattr(self.head, 'l') else (None, None)
-        self.head = NormLinear(self.head_hidden_size, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
+        self.head = NormLinear(self.head_hidden_size, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_intermediates(
             self,

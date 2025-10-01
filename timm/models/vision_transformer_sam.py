@@ -11,14 +11,29 @@ A PyTorch implement of Vision Transformers as described in:
 """
 import logging
 from functools import partial
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, calculate_drop_path_rates, PatchDropout, LayerNorm2d, ClassifierHead, NormMlpClassifierHead, \
-    Format, resample_abs_pos_embed_nhwc, RotaryEmbeddingCat, apply_rot_embed_cat, to_2tuple, use_fused_attn
+from timm.layers import (
+    PatchEmbed,
+    Mlp,
+    DropPath,
+    calculate_drop_path_rates,
+    PatchDropout,
+    LayerNorm2d,
+    LayerScale,
+    ClassifierHead,
+    NormMlpClassifierHead,
+    Format,
+    resample_abs_pos_embed_nhwc,
+    RotaryEmbeddingCat,
+    apply_rot_embed_cat,
+    to_2tuple,
+    use_fused_attn,
+)
 from torch.jit import Final
 
 from ._builder import build_model_with_cfg
@@ -60,8 +75,8 @@ def get_rel_pos(q_size: int, k_size: int, rel_pos: torch.Tensor) -> torch.Tensor
         rel_pos_resized = rel_pos
 
     # Scale the coords with short length if shapes for q and k are different.
-    q_coords = torch.arange(q_size)[:, None] * max(k_size / q_size, 1.0)
-    k_coords = torch.arange(k_size)[None, :] * max(q_size / k_size, 1.0)
+    q_coords = torch.arange(q_size, dtype=torch.float32)[:, None] * max(k_size / q_size, 1.0)
+    k_coords = torch.arange(k_size, dtype=torch.float32)[None, :] * max(q_size / k_size, 1.0)
     relative_coords = (q_coords - k_coords) + (k_size - 1) * max(q_size / k_size, 1.0)
 
     return rel_pos_resized[relative_coords.long()]
@@ -70,11 +85,11 @@ register_notrace_function(get_rel_pos)
 
 
 def get_decomposed_rel_pos_bias(
-    q: torch.Tensor,
-    rel_pos_h: torch.Tensor,
-    rel_pos_w: torch.Tensor,
-    q_size: Tuple[int, int],
-    k_size: Tuple[int, int],
+        q: torch.Tensor,
+        rel_pos_h: torch.Tensor,
+        rel_pos_w: torch.Tensor,
+        q_size: Tuple[int, int],
+        k_size: Tuple[int, int],
 ) -> torch.Tensor:
     """
     Calculate decomposed Relative Positional Embeddings from :paper:`mvitv2`.
@@ -108,17 +123,20 @@ class Attention(nn.Module):
 
     def __init__(
             self,
-            dim,
-            num_heads=8,
-            qkv_bias=True,
-            qk_norm=False,
-            attn_drop=0.,
-            proj_drop=0.,
-            norm_layer=nn.LayerNorm,
+            dim: int,
+            num_heads: int = 8,
+            qkv_bias: bool = True,
+            qk_norm: bool = False,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
             use_rel_pos: bool = False,
             input_size: Optional[Tuple[int, int]] = None,
             rope: Optional[nn.Module] = None,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         assert dim % num_heads == 0, 'dim should be divisible by num_heads'
         self.num_heads = num_heads
@@ -126,11 +144,11 @@ class Attention(nn.Module):
         self.scale = self.head_dim ** -0.5
         self.fused_attn = use_fused_attn()
 
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
-        self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
-        self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias, **dd)
+        self.q_norm = norm_layer(self.head_dim, **dd) if qk_norm else nn.Identity()
+        self.k_norm = norm_layer(self.head_dim, **dd) if qk_norm else nn.Identity()
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
+        self.proj = nn.Linear(dim, dim, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
         self.use_rel_pos = use_rel_pos
         if self.use_rel_pos:
@@ -139,10 +157,8 @@ class Attention(nn.Module):
                 input_size is not None
             ), "Input size must be provided if using relative positional encoding."
             # initialize relative positional embeddings
-            self.rel_pos_h = nn.Parameter(torch.zeros(
-                2 * input_size[0] - 1, self.head_dim))
-            self.rel_pos_w = nn.Parameter(torch.zeros(
-                2 * input_size[1] - 1, self.head_dim))
+            self.rel_pos_h = nn.Parameter(torch.zeros(2 * input_size[0] - 1, self.head_dim, **dd))
+            self.rel_pos_w = nn.Parameter(torch.zeros(2 * input_size[1] - 1, self.head_dim, **dd))
         self.rope = rope
 
     def forward(self, x):
@@ -186,40 +202,33 @@ class Attention(nn.Module):
         return x
 
 
-class LayerScale(nn.Module):
-    def __init__(self, dim, init_values=1e-5, inplace=False):
-        super().__init__()
-        self.inplace = inplace
-        self.gamma = nn.Parameter(init_values * torch.ones(dim))
-
-    def forward(self, x):
-        return x.mul_(self.gamma) if self.inplace else x * self.gamma
-
-
 class Block(nn.Module):
 
     def __init__(
             self,
-            dim,
-            num_heads,
-            mlp_ratio=4.,
-            qkv_bias=True,
-            qk_norm=False,
-            proj_drop=0.,
-            attn_drop=0.,
-            init_values=None,
-            drop_path=0.,
-            act_layer=nn.GELU,
-            norm_layer=nn.LayerNorm,
-            mlp_layer=Mlp,
-            use_rel_pos=False,
-            window_size=0,
+            dim: int,
+            num_heads: int,
+            mlp_ratio: float = 4.,
+            qkv_bias: bool = True,
+            qk_norm: bool = False,
+            proj_drop: float = 0.,
+            attn_drop: float = 0.,
+            init_values: Optional[float] = None,
+            drop_path: float = 0.,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            mlp_layer: Type[nn.Module] = Mlp,
+            use_rel_pos: bool = False,
+            window_size: int = 0,
             input_size=None,
             rope=None,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.window_size = window_size
-        self.norm1 = norm_layer(dim)
+        self.norm1 = norm_layer(dim, **dd)
         self.attn = Attention(
             dim,
             num_heads=num_heads,
@@ -231,18 +240,20 @@ class Block(nn.Module):
             use_rel_pos=use_rel_pos,
             input_size=input_size if window_size == 0 else (window_size, window_size),
             rope=rope,
+            **dd,
         )
-        self.ls1 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
+        self.ls1 = LayerScale(dim, init_values=init_values, **dd) if init_values else nn.Identity()
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-        self.norm2 = norm_layer(dim)
+        self.norm2 = norm_layer(dim, **dd)
         self.mlp = mlp_layer(
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
             drop=proj_drop,
+            **dd,
         )
-        self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
+        self.ls2 = LayerScale(dim, init_values=init_values, **dd) if init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x):
@@ -344,11 +355,11 @@ class VisionTransformerSAM(nn.Module):
             attn_drop_rate: float = 0.,
             drop_path_rate: float = 0.,
             weight_init: str = '',
-            embed_layer: Callable = partial(PatchEmbed, output_fmt=Format.NHWC, strict_img_size=False),
-            norm_layer: Optional[Callable] = nn.LayerNorm,
-            act_layer: Optional[Callable] = nn.GELU,
-            block_fn: Callable = Block,
-            mlp_layer: Callable = Mlp,
+            embed_layer: Type[nn.Module] = partial(PatchEmbed, output_fmt=Format.NHWC, strict_img_size=False),
+            norm_layer: Optional[Type[nn.Module]] = nn.LayerNorm,
+            act_layer: Optional[Type[nn.Module]] = nn.GELU,
+            block_fn: Type[nn.Module] = Block,
+            mlp_layer: Type[nn.Module] = Mlp,
             use_abs_pos: bool = True,
             use_rel_pos: bool = False,
             use_rope: bool = False,
@@ -357,7 +368,9 @@ class VisionTransformerSAM(nn.Module):
             neck_chans: int = 256,
             global_pool: str = 'avg',
             head_hidden_size: Optional[int] = None,
-            ref_feat_shape: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None
+            ref_feat_shape: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None,
+            device=None,
+            dtype=None,
     ):
         """
         Args:
@@ -391,6 +404,7 @@ class VisionTransformerSAM(nn.Module):
             ref_feat_shape: Tuple of reference feature shapes for ROPE, (global, local)
         """
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
         act_layer = act_layer or nn.GELU
 
@@ -405,13 +419,14 @@ class VisionTransformerSAM(nn.Module):
             in_chans=in_chans,
             embed_dim=embed_dim,
             bias=not pre_norm,  # disable bias if pre-norm is used
+            **dd,
         )
         grid_size = self.patch_embed.grid_size
         r = self.patch_embed.feat_ratio() if hasattr(self.patch_embed, 'feat_ratio') else patch_size
 
         if use_abs_pos:
             # Initialize absolute positional embedding with pretrain image size.
-            self.pos_embed = nn.Parameter(torch.zeros(1, grid_size[0], grid_size[1], embed_dim))
+            self.pos_embed = nn.Parameter(torch.zeros(1, grid_size[0], grid_size[1], embed_dim, **dd))
         else:
             self.pos_embed = None
         self.pos_drop = nn.Dropout(p=pos_drop_rate)
@@ -422,7 +437,7 @@ class VisionTransformerSAM(nn.Module):
             )
         else:
             self.patch_drop = nn.Identity()
-        self.norm_pre = norm_layer(embed_dim) if pre_norm else nn.Identity()
+        self.norm_pre = norm_layer(embed_dim, **dd) if pre_norm else nn.Identity()
 
         if use_rope:
             assert not use_rel_pos, "ROPE and relative pos embeddings should not be enabled at same time"
@@ -468,6 +483,7 @@ class VisionTransformerSAM(nn.Module):
                 window_size=window_size if i not in global_attn_indexes else 0,
                 input_size=grid_size,
                 rope=self.rope_window if i not in global_attn_indexes else self.rope_global,
+                **dd,
             )
             for i in range(depth)])
         self.feature_info = [
@@ -480,16 +496,18 @@ class VisionTransformerSAM(nn.Module):
                     neck_chans,
                     kernel_size=1,
                     bias=False,
+                    **dd,
                 ),
-                LayerNorm2d(neck_chans),
+                LayerNorm2d(neck_chans, **dd),
                 nn.Conv2d(
                     neck_chans,
                     neck_chans,
                     kernel_size=3,
                     padding=1,
                     bias=False,
+                    **dd,
                 ),
-                LayerNorm2d(neck_chans),
+                LayerNorm2d(neck_chans, **dd),
             )
             self.num_features = neck_chans
         else:
@@ -497,7 +515,7 @@ class VisionTransformerSAM(nn.Module):
                 self.neck = nn.Identity()
             else:
                 # should have a final norm with standard ClassifierHead
-                self.neck = LayerNorm2d(embed_dim)
+                self.neck = LayerNorm2d(embed_dim, **dd)
             neck_chans = embed_dim
 
         # Classifier Head
@@ -508,6 +526,7 @@ class VisionTransformerSAM(nn.Module):
                 hidden_size=head_hidden_size,
                 pool_type=global_pool,
                 drop_rate=drop_rate,
+                **dd,
             )
         else:
             self.head = ClassifierHead(
@@ -515,6 +534,7 @@ class VisionTransformerSAM(nn.Module):
                 num_classes,
                 pool_type=global_pool,
                 drop_rate=drop_rate,
+                **dd,
             )
 
     @torch.jit.ignore

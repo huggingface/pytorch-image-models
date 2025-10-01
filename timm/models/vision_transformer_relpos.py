@@ -19,7 +19,17 @@ import torch.nn as nn
 from torch.jit import Final
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, calculate_drop_path_rates, RelPosMlp, RelPosBias, use_fused_attn, LayerType
+from timm.layers import (
+    PatchEmbed,
+    Mlp,
+    LayerScale,
+    DropPath,
+    calculate_drop_path_rates,
+    RelPosMlp,
+    RelPosBias,
+    use_fused_attn,
+    LayerType,
+)
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import named_apply, checkpoint
@@ -36,15 +46,18 @@ class RelPosAttention(nn.Module):
 
     def __init__(
             self,
-            dim,
-            num_heads=8,
-            qkv_bias=False,
-            qk_norm=False,
-            rel_pos_cls=None,
-            attn_drop=0.,
-            proj_drop=0.,
-            norm_layer=nn.LayerNorm,
+            dim: int,
+            num_heads: int = 8,
+            qkv_bias: bool = False,
+            qk_norm: bool = False,
+            rel_pos_cls: Optional[Type[nn.Module]] = None,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         assert dim % num_heads == 0, 'dim should be divisible by num_heads'
         self.num_heads = num_heads
@@ -52,12 +65,12 @@ class RelPosAttention(nn.Module):
         self.scale = self.head_dim ** -0.5
         self.fused_attn = use_fused_attn()
 
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
-        self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
-        self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
-        self.rel_pos = rel_pos_cls(num_heads=num_heads) if rel_pos_cls else None
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias, **dd)
+        self.q_norm = norm_layer(self.head_dim, **dd) if qk_norm else nn.Identity()
+        self.k_norm = norm_layer(self.head_dim, **dd) if qk_norm else nn.Identity()
+        self.rel_pos = rel_pos_cls(num_heads=num_heads, **dd) if rel_pos_cls else None
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
+        self.proj = nn.Linear(dim, dim, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, x, shared_rel_pos: Optional[torch.Tensor] = None):
@@ -97,35 +110,28 @@ class RelPosAttention(nn.Module):
         return x
 
 
-class LayerScale(nn.Module):
-    def __init__(self, dim, init_values=1e-5, inplace=False):
-        super().__init__()
-        self.inplace = inplace
-        self.gamma = nn.Parameter(init_values * torch.ones(dim))
-
-    def forward(self, x):
-        return x.mul_(self.gamma) if self.inplace else x * self.gamma
-
-
 class RelPosBlock(nn.Module):
 
     def __init__(
             self,
-            dim,
-            num_heads,
-            mlp_ratio=4.,
-            qkv_bias=False,
-            qk_norm=False,
-            rel_pos_cls=None,
-            init_values=None,
-            proj_drop=0.,
-            attn_drop=0.,
-            drop_path=0.,
-            act_layer=nn.GELU,
-            norm_layer=nn.LayerNorm,
+            dim: int,
+            num_heads: int,
+            mlp_ratio: float = 4.,
+            qkv_bias: bool = False,
+            qk_norm: bool = False,
+            rel_pos_cls: Optional[Type[nn.Module]] = None,
+            init_values: Optional[float] = None,
+            proj_drop: float = 0.,
+            attn_drop: float = 0.,
+            drop_path: float = 0.,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.norm1 = norm_layer(dim)
+        self.norm1 = norm_layer(dim, **dd)
         self.attn = RelPosAttention(
             dim,
             num_heads,
@@ -134,19 +140,22 @@ class RelPosBlock(nn.Module):
             rel_pos_cls=rel_pos_cls,
             attn_drop=attn_drop,
             proj_drop=proj_drop,
+            norm_layer=norm_layer,
+            **dd,
         )
-        self.ls1 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
+        self.ls1 = LayerScale(dim, init_values=init_values, **dd) if init_values else nn.Identity()
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-        self.norm2 = norm_layer(dim)
+        self.norm2 = norm_layer(dim, **dd)
         self.mlp = Mlp(
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
             drop=proj_drop,
+            **dd,
         )
-        self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
+        self.ls2 = LayerScale(dim, init_values=init_values, **dd) if init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x, shared_rel_pos: Optional[torch.Tensor] = None):
@@ -159,19 +168,22 @@ class ResPostRelPosBlock(nn.Module):
 
     def __init__(
             self,
-            dim,
-            num_heads,
-            mlp_ratio=4.,
-            qkv_bias=False,
-            qk_norm=False,
-            rel_pos_cls=None,
-            init_values=None,
-            proj_drop=0.,
-            attn_drop=0.,
-            drop_path=0.,
-            act_layer=nn.GELU,
-            norm_layer=nn.LayerNorm,
+            dim: int,
+            num_heads: int,
+            mlp_ratio: float = 4.,
+            qkv_bias: bool = False,
+            qk_norm: bool = False,
+            rel_pos_cls: Optional[Type[nn.Module]] = None,
+            init_values: Optional[float] = None,
+            proj_drop: float = 0.,
+            attn_drop: float = 0.,
+            drop_path: float = 0.,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.init_values = init_values
 
@@ -183,8 +195,10 @@ class ResPostRelPosBlock(nn.Module):
             rel_pos_cls=rel_pos_cls,
             attn_drop=attn_drop,
             proj_drop=proj_drop,
+            norm_layer=norm_layer,
+            **dd,
         )
-        self.norm1 = norm_layer(dim)
+        self.norm1 = norm_layer(dim, **dd)
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         self.mlp = Mlp(
@@ -192,8 +206,9 @@ class ResPostRelPosBlock(nn.Module):
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
             drop=proj_drop,
+            **dd,
         )
-        self.norm2 = norm_layer(dim)
+        self.norm2 = norm_layer(dim, **dd)
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         self.init_weights()
@@ -248,7 +263,9 @@ class VisionTransformerRelPos(nn.Module):
             embed_layer: Type[nn.Module] = PatchEmbed,
             norm_layer: Optional[LayerType] = None,
             act_layer: Optional[LayerType] = None,
-            block_fn: Type[nn.Module] = RelPosBlock
+            block_fn: Type[nn.Module] = RelPosBlock,
+            device=None,
+            dtype=None,
     ):
         """
         Args:
@@ -279,6 +296,7 @@ class VisionTransformerRelPos(nn.Module):
             act_layer: MLP activation layer
         """
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         assert global_pool in ('', 'avg', 'token')
         assert class_token or global_pool != 'token'
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
@@ -295,6 +313,7 @@ class VisionTransformerRelPos(nn.Module):
             patch_size=patch_size,
             in_chans=in_chans,
             embed_dim=embed_dim,
+            **dd,
         )
         feat_size = self.patch_embed.grid_size
         r = self.patch_embed.feat_ratio() if hasattr(self.patch_embed, 'feat_ratio') else patch_size
@@ -310,11 +329,11 @@ class VisionTransformerRelPos(nn.Module):
             rel_pos_cls = partial(RelPosBias, **rel_pos_args)
         self.shared_rel_pos = None
         if shared_rel_pos:
-            self.shared_rel_pos = rel_pos_cls(num_heads=num_heads)
+            self.shared_rel_pos = rel_pos_cls(num_heads=num_heads, **dd)
             # NOTE shared rel pos currently mutually exclusive w/ per-block, but could support both...
             rel_pos_cls = None
 
-        self.cls_token = nn.Parameter(torch.zeros(1, self.num_prefix_tokens, embed_dim)) if class_token else None
+        self.cls_token = nn.Parameter(torch.zeros(1, self.num_prefix_tokens, embed_dim, **dd)) if class_token else None
 
         dpr = calculate_drop_path_rates(drop_path_rate, depth)  # stochastic depth decay rule
         self.blocks = nn.ModuleList([
@@ -331,16 +350,17 @@ class VisionTransformerRelPos(nn.Module):
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
                 act_layer=act_layer,
+                **dd,
             )
             for i in range(depth)])
         self.feature_info = [
             dict(module=f'blocks.{i}', num_chs=embed_dim, reduction=r) for i in range(depth)]
-        self.norm = norm_layer(embed_dim) if not fc_norm else nn.Identity()
+        self.norm = norm_layer(embed_dim, **dd) if not fc_norm else nn.Identity()
 
         # Classifier Head
-        self.fc_norm = norm_layer(embed_dim) if fc_norm else nn.Identity()
+        self.fc_norm = norm_layer(embed_dim, **dd) if fc_norm else nn.Identity()
         self.head_drop = nn.Dropout(drop_rate)
-        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
         if weight_init != 'skip':
             self.init_weights(weight_init)
@@ -380,12 +400,13 @@ class VisionTransformerRelPos(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.head
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, device=None, dtype=None):
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         if global_pool is not None:
             assert global_pool in ('', 'avg', 'token')
             self.global_pool = global_pool
-        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     def forward_intermediates(
             self,

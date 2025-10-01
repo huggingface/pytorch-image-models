@@ -6,7 +6,7 @@ The Paddle Implement of PP-HGNet (https://github.com/PaddlePaddle/PaddleClas/blo
 PP-HGNet: https://github.com/PaddlePaddle/PaddleClas/blob/release/2.5.1/ppcls/arch/backbone/legendary_models/pp_hgnet.py
 PP-HGNetv2: https://github.com/PaddlePaddle/PaddleClas/blob/release/2.5.1/ppcls/arch/backbone/legendary_models/pp_hgnet_v2.py
 """
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -25,12 +25,15 @@ __all__ = ['HighPerfGpuNet']
 class LearnableAffineBlock(nn.Module):
     def __init__(
             self,
-            scale_value=1.0,
-            bias_value=0.0
+            scale_value: float = 1.0,
+            bias_value: float = 0.0,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.scale = nn.Parameter(torch.tensor([scale_value]), requires_grad=True)
-        self.bias = nn.Parameter(torch.tensor([bias_value]), requires_grad=True)
+        self.scale = nn.Parameter(torch.tensor([scale_value], **dd), requires_grad=True)
+        self.bias = nn.Parameter(torch.tensor([bias_value], **dd), requires_grad=True)
 
     def forward(self, x):
         return self.scale * x + self.bias
@@ -39,15 +42,18 @@ class LearnableAffineBlock(nn.Module):
 class ConvBNAct(nn.Module):
     def __init__(
             self,
-            in_chs,
-            out_chs,
-            kernel_size,
-            stride=1,
-            groups=1,
-            padding='',
-            use_act=True,
-            use_lab=False
+            in_chs: int,
+            out_chs: int,
+            kernel_size: int,
+            stride: int = 1,
+            groups: int = 1,
+            padding: str = '',
+            use_act: bool = True,
+            use_lab: bool = False,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.use_act = use_act
         self.use_lab = use_lab
@@ -58,14 +64,15 @@ class ConvBNAct(nn.Module):
             stride=stride,
             padding=padding,
             groups=groups,
+            **dd,
         )
-        self.bn = nn.BatchNorm2d(out_chs)
+        self.bn = nn.BatchNorm2d(out_chs, **dd)
         if self.use_act:
             self.act = nn.ReLU()
         else:
             self.act = nn.Identity()
         if self.use_act and self.use_lab:
-            self.lab = LearnableAffineBlock()
+            self.lab = LearnableAffineBlock(**dd)
         else:
             self.lab = nn.Identity()
 
@@ -80,12 +87,15 @@ class ConvBNAct(nn.Module):
 class LightConvBNAct(nn.Module):
     def __init__(
             self,
-            in_chs,
-            out_chs,
-            kernel_size,
-            groups=1,
-            use_lab=False
+            in_chs: int,
+            out_chs: int,
+            kernel_size: int,
+            groups: int = 1,
+            use_lab: bool = False,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.conv1 = ConvBNAct(
             in_chs,
@@ -93,6 +103,7 @@ class LightConvBNAct(nn.Module):
             kernel_size=1,
             use_act=False,
             use_lab=use_lab,
+            **dd,
         )
         self.conv2 = ConvBNAct(
             out_chs,
@@ -101,6 +112,7 @@ class LightConvBNAct(nn.Module):
             groups=out_chs,
             use_act=True,
             use_lab=use_lab,
+            **dd,
         )
 
     def forward(self, x):
@@ -110,7 +122,8 @@ class LightConvBNAct(nn.Module):
 
 
 class EseModule(nn.Module):
-    def __init__(self, chs):
+    def __init__(self, chs: int, device=None, dtype=None):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.conv = nn.Conv2d(
             chs,
@@ -118,6 +131,7 @@ class EseModule(nn.Module):
             kernel_size=1,
             stride=1,
             padding=0,
+            **dd,
         )
         self.sigmoid = nn.Sigmoid()
 
@@ -131,14 +145,16 @@ class EseModule(nn.Module):
 
 class StemV1(nn.Module):
     # for PP-HGNet
-    def __init__(self, stem_chs):
+    def __init__(self, stem_chs: List[int], device=None, dtype=None):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.stem = nn.Sequential(*[
             ConvBNAct(
                 stem_chs[i],
                 stem_chs[i + 1],
                 kernel_size=3,
-                stride=2 if i == 0 else 1) for i in range(
+                stride=2 if i == 0 else 1,
+                **dd) for i in range(
                 len(stem_chs) - 1)
         ])
         self.pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -151,7 +167,16 @@ class StemV1(nn.Module):
 
 class StemV2(nn.Module):
     # for PP-HGNetv2
-    def __init__(self, in_chs, mid_chs, out_chs, use_lab=False):
+    def __init__(
+            self,
+            in_chs: int,
+            mid_chs: int,
+            out_chs: int,
+            use_lab: bool = False,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.stem1 = ConvBNAct(
             in_chs,
@@ -159,6 +184,7 @@ class StemV2(nn.Module):
             kernel_size=3,
             stride=2,
             use_lab=use_lab,
+            **dd,
         )
         self.stem2a = ConvBNAct(
             mid_chs,
@@ -166,6 +192,7 @@ class StemV2(nn.Module):
             kernel_size=2,
             stride=1,
             use_lab=use_lab,
+            **dd,
         )
         self.stem2b = ConvBNAct(
             mid_chs // 2,
@@ -173,6 +200,7 @@ class StemV2(nn.Module):
             kernel_size=2,
             stride=1,
             use_lab=use_lab,
+            **dd,
         )
         self.stem3 = ConvBNAct(
             mid_chs * 2,
@@ -180,6 +208,7 @@ class StemV2(nn.Module):
             kernel_size=3,
             stride=2,
             use_lab=use_lab,
+            **dd,
         )
         self.stem4 = ConvBNAct(
             mid_chs,
@@ -187,6 +216,7 @@ class StemV2(nn.Module):
             kernel_size=1,
             stride=1,
             use_lab=use_lab,
+            **dd,
         )
         self.pool = nn.MaxPool2d(kernel_size=2, stride=1, ceil_mode=True)
 
@@ -206,17 +236,20 @@ class StemV2(nn.Module):
 class HighPerfGpuBlock(nn.Module):
     def __init__(
             self,
-            in_chs,
-            mid_chs,
-            out_chs,
-            layer_num,
-            kernel_size=3,
-            residual=False,
-            light_block=False,
-            use_lab=False,
-            agg='ese',
-            drop_path=0.,
+            in_chs: int,
+            mid_chs: int,
+            out_chs: int,
+            layer_num: int,
+            kernel_size: int = 3,
+            residual: bool = False,
+            light_block: bool = False,
+            use_lab: bool = False,
+            agg: str = 'ese',
+            drop_path: Union[List[float], float] = 0.,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.residual = residual
 
@@ -229,6 +262,7 @@ class HighPerfGpuBlock(nn.Module):
                         mid_chs,
                         kernel_size=kernel_size,
                         use_lab=use_lab,
+                        **dd,
                     )
                 )
             else:
@@ -239,6 +273,7 @@ class HighPerfGpuBlock(nn.Module):
                         kernel_size=kernel_size,
                         stride=1,
                         use_lab=use_lab,
+                        **dd,
                     )
                 )
 
@@ -251,6 +286,7 @@ class HighPerfGpuBlock(nn.Module):
                 kernel_size=1,
                 stride=1,
                 use_lab=use_lab,
+                **dd,
             )
             aggregation_excitation_conv = ConvBNAct(
                 out_chs // 2,
@@ -258,6 +294,7 @@ class HighPerfGpuBlock(nn.Module):
                 kernel_size=1,
                 stride=1,
                 use_lab=use_lab,
+                **dd,
             )
             self.aggregation = nn.Sequential(
                 aggregation_squeeze_conv,
@@ -270,8 +307,9 @@ class HighPerfGpuBlock(nn.Module):
                 kernel_size=1,
                 stride=1,
                 use_lab=use_lab,
+                **dd,
             )
-            att = EseModule(out_chs)
+            att = EseModule(out_chs, **dd)
             self.aggregation = nn.Sequential(
                 aggregation_conv,
                 att,
@@ -295,19 +333,22 @@ class HighPerfGpuBlock(nn.Module):
 class HighPerfGpuStage(nn.Module):
     def __init__(
             self,
-            in_chs,
-            mid_chs,
-            out_chs,
-            block_num,
-            layer_num,
-            downsample=True,
-            stride=2,
-            light_block=False,
-            kernel_size=3,
-            use_lab=False,
-            agg='ese',
-            drop_path=0.,
+            in_chs: int,
+            mid_chs: int,
+            out_chs: int,
+            block_num: int,
+            layer_num: int,
+            downsample: bool = True,
+            stride: int = 2,
+            light_block: bool = False,
+            kernel_size: int = 3,
+            use_lab: bool = False,
+            agg: str = 'ese',
+            drop_path: Union[List[float], float] = 0.,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.downsample = downsample
         if downsample:
@@ -319,6 +360,7 @@ class HighPerfGpuStage(nn.Module):
                 groups=in_chs,
                 use_act=False,
                 use_lab=use_lab,
+                **dd,
             )
         else:
             self.downsample = nn.Identity()
@@ -337,6 +379,7 @@ class HighPerfGpuStage(nn.Module):
                     use_lab=use_lab,
                     agg=agg,
                     drop_path=drop_path[i] if isinstance(drop_path, (list, tuple)) else drop_path,
+                    **dd,
                 )
             )
         self.blocks = nn.Sequential(*blocks_list)
@@ -359,9 +402,12 @@ class ClassifierHead(nn.Module):
             pool_type: str = 'avg',
             drop_rate: float = 0.,
             hidden_size: Optional[int] = 2048,
-            use_lab: bool = False
+            use_lab: bool = False,
+            device=None,
+            dtype=None,
     ):
-        super(ClassifierHead, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.num_features = in_features
         if pool_type is not None:
             if not pool_type:
@@ -377,10 +423,11 @@ class ClassifierHead(nn.Module):
                 stride=1,
                 padding=0,
                 bias=False,
+                **dd,
             )
             act = nn.ReLU()
             if use_lab:
-                lab = LearnableAffineBlock()
+                lab = LearnableAffineBlock(**dd)
                 self.last_conv = nn.Sequential(last_conv, act, lab)
             else:
                 self.last_conv = nn.Sequential(last_conv, act)
@@ -389,16 +436,17 @@ class ClassifierHead(nn.Module):
 
         self.dropout = nn.Dropout(drop_rate)
         self.flatten = nn.Flatten(1) if pool_type else nn.Identity()  # don't flatten if pooling disabled
-        self.fc = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.fc = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
-    def reset(self, num_classes: int, pool_type: Optional[str] = None):
+    def reset(self, num_classes: int, pool_type: Optional[str] = None, device=None, dtype=None):
+        dd = {'device': device, 'dtype': dtype}
         if pool_type is not None:
             if not pool_type:
                 assert num_classes == 0, 'Classifier head must be removed if pooling is disabled'
             self.global_pool = SelectAdaptivePool2d(pool_type=pool_type)
             self.flatten = nn.Flatten(1) if pool_type else nn.Identity()  # don't flatten if pooling disabled
 
-        self.fc = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.fc = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     def forward(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
@@ -423,9 +471,12 @@ class HighPerfGpuNet(nn.Module):
             drop_rate: float = 0.,
             drop_path_rate: float = 0.,
             use_lab: bool = False,
+            device=None,
+            dtype=None,
             **kwargs,
     ):
-        super(HighPerfGpuNet, self).__init__()
+        super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         stem_type = cfg["stem_type"]
         stem_chs = cfg["stem_chs"]
         stages_cfg = [cfg["stage1"], cfg["stage2"], cfg["stage3"], cfg["stage4"]]
@@ -439,9 +490,11 @@ class HighPerfGpuNet(nn.Module):
                 in_chs=in_chans,
                 mid_chs=stem_chs[0],
                 out_chs=stem_chs[1],
-                use_lab=use_lab)
+                use_lab=use_lab,
+                **dd,
+            )
         else:
-            self.stem = StemV1([in_chans] + stem_chs)
+            self.stem = StemV1([in_chans] + stem_chs, **dd)
 
         current_stride = 4
 
@@ -463,6 +516,7 @@ class HighPerfGpuNet(nn.Module):
                 use_lab=use_lab,
                 agg='ese' if stem_type == 'v1' else 'se',
                 drop_path=dpr[i],
+                **dd,
             )]
             self.num_features = out_chs
             if downsample:
@@ -476,7 +530,8 @@ class HighPerfGpuNet(nn.Module):
             pool_type=global_pool,
             drop_rate=drop_rate,
             hidden_size=head_hidden_size,
-            use_lab=use_lab
+            use_lab=use_lab,
+            **dd,
         )
         self.head_hidden_size = self.head.num_features
 
@@ -505,9 +560,9 @@ class HighPerfGpuNet(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, device=None, dtype=None):
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool)
+        self.head.reset(num_classes, global_pool, device=device, dtype=dtype)
 
     def forward_intermediates(
             self,

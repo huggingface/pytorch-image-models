@@ -16,7 +16,7 @@ Modifications by / Copyright 2025 Ryan Hou & Ross Wightman, original copyrights 
 # Licensed under the MIT License.
 
 from functools import partial
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -33,11 +33,12 @@ __all__ = ['FasterNet']
 
 
 class Partial_conv3(nn.Module):
-    def __init__(self, dim: int, n_div: int, forward: str):
+    def __init__(self, dim: int, n_div: int, forward: str, device=None, dtype=None):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.dim_conv3 = dim // n_div
         self.dim_untouched = dim - self.dim_conv3
-        self.partial_conv3 = nn.Conv2d(self.dim_conv3, self.dim_conv3, 3, 1, 1, bias=False)
+        self.partial_conv3 = nn.Conv2d(self.dim_conv3, self.dim_conv3, 3, 1, 1, bias=False, **dd)
 
         if forward == 'slicing':
             self.forward = self.forward_slicing
@@ -68,25 +69,28 @@ class MLPBlock(nn.Module):
             mlp_ratio: float,
             drop_path: float,
             layer_scale_init_value: float,
-            act_layer: LayerType = partial(nn.ReLU, inplace=True),
-            norm_layer: LayerType = nn.BatchNorm2d,
+            act_layer: Type[nn.Module] = partial(nn.ReLU, inplace=True),
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
             pconv_fw_type: str = 'split_cat',
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         mlp_hidden_dim = int(dim * mlp_ratio)
 
         self.mlp = nn.Sequential(*[
-            nn.Conv2d(dim, mlp_hidden_dim, 1, bias=False),
-            norm_layer(mlp_hidden_dim),
+            nn.Conv2d(dim, mlp_hidden_dim, 1, bias=False, **dd),
+            norm_layer(mlp_hidden_dim, **dd),
             act_layer(),
-            nn.Conv2d(mlp_hidden_dim, dim, 1, bias=False),
+            nn.Conv2d(mlp_hidden_dim, dim, 1, bias=False, **dd),
         ])
 
-        self.spatial_mixing = Partial_conv3(dim, n_div, pconv_fw_type)
+        self.spatial_mixing = Partial_conv3(dim, n_div, pconv_fw_type, **dd)
 
         if layer_scale_init_value > 0:
             self.layer_scale = nn.Parameter(
-                layer_scale_init_value * torch.ones((dim)), requires_grad=True)
+                layer_scale_init_value * torch.ones((dim), **dd), requires_grad=True)
         else:
             self.layer_scale = None
 
@@ -112,12 +116,15 @@ class Block(nn.Module):
             mlp_ratio: float,
             drop_path: float,
             layer_scale_init_value: float,
-            act_layer: LayerType = partial(nn.ReLU, inplace=True),
-            norm_layer: LayerType = nn.BatchNorm2d,
+            act_layer: Type[nn.Module] = partial(nn.ReLU, inplace=True),
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
             pconv_fw_type: str = 'split_cat',
             use_merge: bool = True,
             merge_size: Union[int, Tuple[int, int]] = 2,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.grad_checkpointing = False
         self.blocks = nn.Sequential(*[
@@ -130,6 +137,7 @@ class Block(nn.Module):
                 norm_layer=norm_layer,
                 act_layer=act_layer,
                 pconv_fw_type=pconv_fw_type,
+                **dd,
             )
             for i in range(depth)
         ])
@@ -137,6 +145,7 @@ class Block(nn.Module):
             dim=dim // 2,
             patch_size=merge_size,
             norm_layer=norm_layer,
+            **dd,
         ) if use_merge else nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -154,11 +163,14 @@ class PatchEmbed(nn.Module):
             in_chans: int,
             embed_dim: int,
             patch_size: Union[int, Tuple[int, int]] = 4,
-            norm_layer: LayerType = nn.BatchNorm2d,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.proj = nn.Conv2d(in_chans, embed_dim, patch_size, patch_size, bias=False)
-        self.norm = norm_layer(embed_dim)
+        self.proj = nn.Conv2d(in_chans, embed_dim, patch_size, patch_size, bias=False, **dd)
+        self.norm = norm_layer(embed_dim, **dd)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.norm(self.proj(x))
@@ -169,11 +181,14 @@ class PatchMerging(nn.Module):
             self,
             dim: int,
             patch_size: Union[int, Tuple[int, int]] = 2,
-            norm_layer: LayerType = nn.BatchNorm2d,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.reduction = nn.Conv2d(dim, 2 * dim, patch_size, patch_size, bias=False)
-        self.norm = norm_layer(2 * dim)
+        self.reduction = nn.Conv2d(dim, 2 * dim, patch_size, patch_size, bias=False, **dd)
+        self.norm = norm_layer(2 * dim, **dd)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.norm(self.reduction(x))
@@ -196,11 +211,14 @@ class FasterNet(nn.Module):
             drop_rate: float = 0.,
             drop_path_rate: float = 0.1,
             layer_scale_init_value: float = 0.,
-            act_layer: LayerType = partial(nn.ReLU, inplace=True),
-            norm_layer: LayerType = nn.BatchNorm2d,
+            act_layer: Type[nn.Module] = partial(nn.ReLU, inplace=True),
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
             pconv_fw_type: str = 'split_cat',
+            device=None,
+            dtype=None,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         assert pconv_fw_type in ('split_cat', 'slicing',)
         self.num_classes = num_classes
         self.drop_rate = drop_rate
@@ -214,9 +232,10 @@ class FasterNet(nn.Module):
             embed_dim=embed_dim,
             patch_size=patch_size,
             norm_layer=norm_layer if patch_norm else nn.Identity,
+            **dd,
         )
         # stochastic depth decay rule
-        dpr = calculate_drop_path_rates(drop_path_rate, sum(depths))
+        dpr = calculate_drop_path_rates(drop_path_rate, depths, stagewise=True)
 
         # build layers
         stages_list = []
@@ -227,13 +246,14 @@ class FasterNet(nn.Module):
                 depth=depths[i],
                 n_div=n_div,
                 mlp_ratio=mlp_ratio,
-                drop_path=dpr[sum(depths[:i]):sum(depths[:i + 1])],
+                drop_path=dpr[i],
                 layer_scale_init_value=layer_scale_init_value,
                 norm_layer=norm_layer,
                 act_layer=act_layer,
                 pconv_fw_type=pconv_fw_type,
                 use_merge=False if i == 0 else True,
                 merge_size=merge_size,
+                **dd,
             )
             stages_list.append(stage)
             self.feature_info += [dict(num_chs=dim, reduction=2**(i+2), module=f'stages.{i}')]
@@ -243,10 +263,10 @@ class FasterNet(nn.Module):
         self.num_features = prev_chs = int(embed_dim * 2 ** (self.num_stages - 1))
         self.head_hidden_size = out_chs = feature_dim # 1280
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.conv_head = nn.Conv2d(prev_chs, out_chs, 1, 1, 0, bias=False)
+        self.conv_head = nn.Conv2d(prev_chs, out_chs, 1, 1, 0, bias=False, **dd)
         self.act = act_layer()
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        self.classifier = Linear(out_chs, num_classes, bias=True) if num_classes > 0 else nn.Identity()
+        self.classifier = Linear(out_chs, num_classes, bias=True, **dd) if num_classes > 0 else nn.Identity()
         self._initialize_weights()
 
     def _initialize_weights(self):
@@ -285,12 +305,13 @@ class FasterNet(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.classifier
 
-    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+    def reset_classifier(self, num_classes: int, global_pool: str = 'avg', device=None, dtype=None):
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         # cannot meaningfully change pooling of efficient head after creation
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        self.classifier = Linear(self.head_hidden_size, num_classes) if num_classes > 0 else nn.Identity()
+        self.classifier = Linear(self.head_hidden_size, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     def forward_intermediates(
             self,

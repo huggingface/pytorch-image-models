@@ -9,7 +9,7 @@ We make StarNet as simple as possible [to show the key contribution of element-w
 Created by: Xu Ma (Email: ma.xu1@northeastern.edu)
 Modified Date: Mar/29/2024
 """
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union, Type
 
 import torch
 import torch.nn as nn
@@ -34,13 +34,16 @@ class ConvBN(nn.Sequential):
             stride: int = 1,
             padding: int = 0,
             with_bn: bool = True,
+            device=None,
+            dtype=None,
             **kwargs,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.add_module('conv', nn.Conv2d(
-            in_channels, out_channels, kernel_size, stride=stride, padding=padding, **kwargs))
+            in_channels, out_channels, kernel_size, stride=stride, padding=padding, **dd, **kwargs))
         if with_bn:
-            self.add_module('bn', nn.BatchNorm2d(out_channels))
+            self.add_module('bn', nn.BatchNorm2d(out_channels, **dd))
             nn.init.constant_(self.bn.weight, 1)
             nn.init.constant_(self.bn.bias, 0)
 
@@ -51,14 +54,17 @@ class Block(nn.Module):
             dim: int,
             mlp_ratio: int = 3,
             drop_path: float = 0.,
-            act_layer: LayerType = nn.ReLU6,
+            act_layer: Type[nn.Module] = nn.ReLU6,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.dwconv = ConvBN(dim, dim, 7, 1, 3, groups=dim, with_bn=True)
-        self.f1 = ConvBN(dim, mlp_ratio * dim, 1, with_bn=False)
-        self.f2 = ConvBN(dim, mlp_ratio * dim, 1, with_bn=False)
-        self.g = ConvBN(mlp_ratio * dim, dim, 1, with_bn=True)
-        self.dwconv2 = ConvBN(dim, dim, 7, 1, 3, groups=dim, with_bn=False)
+        self.dwconv = ConvBN(dim, dim, 7, 1, 3, groups=dim, with_bn=True, **dd)
+        self.f1 = ConvBN(dim, mlp_ratio * dim, 1, with_bn=False, **dd)
+        self.f2 = ConvBN(dim, mlp_ratio * dim, 1, with_bn=False, **dd)
+        self.g = ConvBN(mlp_ratio * dim, dim, 1, with_bn=True, **dd)
+        self.dwconv2 = ConvBN(dim, dim, 7, 1, 3, groups=dim, with_bn=False, **dd)
         self.act = act_layer()
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
@@ -80,13 +86,16 @@ class StarNet(nn.Module):
             mlp_ratio: int = 4,
             drop_rate: float = 0.,
             drop_path_rate: float = 0.,
-            act_layer: LayerType = nn.ReLU6,
+            act_layer: Type[nn.Module] = nn.ReLU6,
             num_classes: int = 1000,
             in_chans: int = 3,
             global_pool: str = 'avg',
             output_stride: int = 32,
+            device=None,
+            dtype=None,
             **kwargs,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         assert output_stride == 32
         self.num_classes = num_classes
@@ -97,7 +106,7 @@ class StarNet(nn.Module):
 
         # stem layer
         self.stem = nn.Sequential(
-            ConvBN(in_chans, stem_chs, kernel_size=3, stride=2, padding=1),
+            ConvBN(in_chans, stem_chs, kernel_size=3, stride=2, padding=1, **dd),
             act_layer(),
         )
         prev_chs = stem_chs
@@ -108,8 +117,8 @@ class StarNet(nn.Module):
         cur = 0
         for i_layer in range(len(depths)):
             embed_dim = base_dim * 2 ** i_layer
-            down_sampler = ConvBN(prev_chs, embed_dim, 3, stride=2, padding=1)
-            blocks = [Block(embed_dim, mlp_ratio, dpr[cur + i], act_layer) for i in range(depths[i_layer])]
+            down_sampler = ConvBN(prev_chs, embed_dim, 3, stride=2, padding=1, **dd)
+            blocks = [Block(embed_dim, mlp_ratio, dpr[cur + i], act_layer, **dd) for i in range(depths[i_layer])]
             cur += depths[i_layer]
             prev_chs = embed_dim
             stages.append(nn.Sequential(down_sampler, *blocks))
@@ -118,10 +127,10 @@ class StarNet(nn.Module):
         self.stages = nn.Sequential(*stages)
         # head
         self.num_features = self.head_hidden_size = prev_chs
-        self.norm = nn.BatchNorm2d(self.num_features)
+        self.norm = nn.BatchNorm2d(self.num_features, **dd)
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        self.head = Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -162,7 +171,11 @@ class StarNet(nn.Module):
             # NOTE: cannot meaningfully change pooling of efficient head after creation
             self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
             self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        self.head = Linear(self.head_hidden_size, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = Linear(
+            self.head_hidden_size, num_classes,
+            device=self.head.weight.device if isinstance(self.head, nn.Linear) else None,
+            dtype=self.head.weight.dtype if isinstance(self.head, nn.Linear) else None,
+        ) if num_classes > 0 else nn.Identity()
 
     def forward_intermediates(
             self,
