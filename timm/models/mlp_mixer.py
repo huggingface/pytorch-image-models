@@ -40,13 +40,14 @@ Hacked together by / Copyright 2021 Ross Wightman
 """
 import math
 from functools import partial
-from typing import Any, Dict, List, Optional, Union, Tuple
+from typing import Any, Dict, List, Optional, Type, Union, Tuple
 
 import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import PatchEmbed, Mlp, GluMlp, GatedMlp, DropPath, lecun_normal_, to_2tuple
+
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import named_apply, checkpoint, checkpoint_seq
@@ -65,11 +66,13 @@ class MixerBlock(nn.Module):
             dim: int,
             seq_len: int,
             mlp_ratio: Union[float, Tuple[float, float]] = (0.5, 4.0),
-            mlp_layer: type = Mlp,
-            norm_layer: type = partial(nn.LayerNorm, eps=1e-6),
-            act_layer: type = nn.GELU,
+            mlp_layer: Type[nn.Module] = Mlp,
+            norm_layer: Type[nn.Module] = partial(nn.LayerNorm, eps=1e-6),
+            act_layer: Type[nn.Module] = nn.GELU,
             drop: float = 0.,
             drop_path: float = 0.,
+            device=None,
+            dtype=None,
     ) -> None:
         """Initialize MixerBlock.
 
@@ -83,13 +86,14 @@ class MixerBlock(nn.Module):
             drop: Dropout rate.
             drop_path: Drop path rate.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         tokens_dim, channels_dim = [int(x * dim) for x in to_2tuple(mlp_ratio)]
-        self.norm1 = norm_layer(dim)
-        self.mlp_tokens = mlp_layer(seq_len, tokens_dim, act_layer=act_layer, drop=drop)
+        self.norm1 = norm_layer(dim, **dd)
+        self.mlp_tokens = mlp_layer(seq_len, tokens_dim, act_layer=act_layer, drop=drop, **dd)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.norm2 = norm_layer(dim)
-        self.mlp_channels = mlp_layer(dim, channels_dim, act_layer=act_layer, drop=drop)
+        self.norm2 = norm_layer(dim, **dd)
+        self.mlp_channels = mlp_layer(dim, channels_dim, act_layer=act_layer, drop=drop, **dd)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
@@ -101,15 +105,16 @@ class MixerBlock(nn.Module):
 class Affine(nn.Module):
     """Affine transformation layer."""
 
-    def __init__(self, dim: int) -> None:
+    def __init__(self, dim: int, device=None, dtype=None) -> None:
         """Initialize Affine layer.
 
         Args:
             dim: Dimension of features.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.alpha = nn.Parameter(torch.ones((1, 1, dim)))
-        self.beta = nn.Parameter(torch.zeros((1, 1, dim)))
+        self.alpha = nn.Parameter(torch.ones((1, 1, dim), **dd))
+        self.beta = nn.Parameter(torch.zeros((1, 1, dim), **dd))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Apply affine transformation."""
@@ -126,12 +131,14 @@ class ResBlock(nn.Module):
             dim: int,
             seq_len: int,
             mlp_ratio: float = 4,
-            mlp_layer: type = Mlp,
-            norm_layer: type = Affine,
-            act_layer: type = nn.GELU,
+            mlp_layer: Type[nn.Module] = Mlp,
+            norm_layer: Type[nn.Module] = Affine,
+            act_layer: Type[nn.Module] = nn.GELU,
             init_values: float = 1e-4,
             drop: float = 0.,
             drop_path: float = 0.,
+            device=None,
+            dtype=None,
     ) -> None:
         """Initialize ResBlock.
 
@@ -146,15 +153,16 @@ class ResBlock(nn.Module):
             drop: Dropout rate.
             drop_path: Drop path rate.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         channel_dim = int(dim * mlp_ratio)
-        self.norm1 = norm_layer(dim)
-        self.linear_tokens = nn.Linear(seq_len, seq_len)
+        self.norm1 = norm_layer(dim, **dd)
+        self.linear_tokens = nn.Linear(seq_len, seq_len, **dd)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.norm2 = norm_layer(dim)
-        self.mlp_channels = mlp_layer(dim, channel_dim, act_layer=act_layer, drop=drop)
-        self.ls1 = nn.Parameter(init_values * torch.ones(dim))
-        self.ls2 = nn.Parameter(init_values * torch.ones(dim))
+        self.norm2 = norm_layer(dim, **dd)
+        self.mlp_channels = mlp_layer(dim, channel_dim, act_layer=act_layer, drop=drop, **dd)
+        self.ls1 = nn.Parameter(init_values * torch.ones(dim, **dd))
+        self.ls2 = nn.Parameter(init_values * torch.ones(dim, **dd))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
@@ -172,7 +180,7 @@ class SpatialGatingUnit(nn.Module):
             self,
             dim: int,
             seq_len: int,
-            norm_layer: type = nn.LayerNorm,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
             device=None,
             dtype=None,
     ) -> None:
@@ -213,11 +221,13 @@ class SpatialGatingBlock(nn.Module):
             dim: int,
             seq_len: int,
             mlp_ratio: float = 4,
-            mlp_layer: type = GatedMlp,
-            norm_layer: type = partial(nn.LayerNorm, eps=1e-6),
-            act_layer: type = nn.GELU,
+            mlp_layer: Type[nn.Module] = GatedMlp,
+            norm_layer: Type[nn.Module] = partial(nn.LayerNorm, eps=1e-6),
+            act_layer: Type[nn.Module] = nn.GELU,
             drop: float = 0.,
             drop_path: float = 0.,
+            device=None,
+            dtype=None,
     ) -> None:
         """Initialize SpatialGatingBlock.
 
@@ -231,11 +241,19 @@ class SpatialGatingBlock(nn.Module):
             drop: Dropout rate.
             drop_path: Drop path rate.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         channel_dim = int(dim * mlp_ratio)
-        self.norm = norm_layer(dim)
-        sgu = partial(SpatialGatingUnit, seq_len=seq_len)
-        self.mlp_channels = mlp_layer(dim, channel_dim, act_layer=act_layer, gate_layer=sgu, drop=drop)
+        self.norm = norm_layer(dim, **dd)
+        sgu = partial(SpatialGatingUnit, seq_len=seq_len, **dd)
+        self.mlp_channels = mlp_layer(
+            dim,
+            channel_dim,
+            act_layer=act_layer,
+            gate_layer=sgu,
+            drop=drop,
+            **dd,
+        )
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -259,16 +277,18 @@ class MlpMixer(nn.Module):
             num_blocks: int = 8,
             embed_dim: int = 512,
             mlp_ratio: Union[float, Tuple[float, float]] = (0.5, 4.0),
-            block_layer: type = MixerBlock,
-            mlp_layer: type = Mlp,
-            norm_layer: type = partial(nn.LayerNorm, eps=1e-6),
-            act_layer: type = nn.GELU,
+            block_layer: Type[nn.Module] = MixerBlock,
+            mlp_layer: Type[nn.Module] = Mlp,
+            norm_layer: Type[nn.Module] = partial(nn.LayerNorm, eps=1e-6),
+            act_layer: Type[nn.Module] = nn.GELU,
             drop_rate: float = 0.,
             proj_drop_rate: float = 0.,
             drop_path_rate: float = 0.,
             nlhb: bool = False,
             stem_norm: bool = False,
             global_pool: str = 'avg',
+            device=None,
+            dtype=None,
     ) -> None:
         """Initialize MLP-Mixer.
 
@@ -292,6 +312,7 @@ class MlpMixer(nn.Module):
             global_pool: Global pooling type.
         """
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.global_pool = global_pool
         self.num_features = self.head_hidden_size = self.embed_dim = embed_dim  # for consistency with other models
@@ -303,6 +324,7 @@ class MlpMixer(nn.Module):
             in_chans=in_chans,
             embed_dim=embed_dim,
             norm_layer=norm_layer if stem_norm else None,
+            **dd,
         )
         reduction = self.stem.feat_ratio() if hasattr(self.stem, 'feat_ratio') else patch_size
         # FIXME drop_path (stochastic depth scaling rule or all the same?)
@@ -316,13 +338,14 @@ class MlpMixer(nn.Module):
                 act_layer=act_layer,
                 drop=proj_drop_rate,
                 drop_path=drop_path_rate,
+                **dd,
             )
             for _ in range(num_blocks)])
         self.feature_info = [
             dict(module=f'blocks.{i}', num_chs=embed_dim, reduction=reduction) for i in range(num_blocks)]
-        self.norm = norm_layer(embed_dim)
+        self.norm = norm_layer(embed_dim, **dd)
         self.head_drop = nn.Dropout(drop_rate)
-        self.head = nn.Linear(embed_dim, self.num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(embed_dim, self.num_classes, **dd) if num_classes > 0 else nn.Identity()
 
         self.init_weights(nlhb=nlhb)
 
@@ -376,7 +399,8 @@ class MlpMixer(nn.Module):
         if global_pool is not None:
             assert global_pool in ('', 'avg')
             self.global_pool = global_pool
-        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        device, dtype = self.head.weight.device, self.head.weight.dtype if hasattr(self.head, 'weight') else (None, None)
+        self.head = nn.Linear(self.embed_dim, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
 
     def forward_intermediates(
             self,

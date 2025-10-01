@@ -28,7 +28,7 @@ Adapted from https://github.com/sail-sg/metaformer, original copyright below
 
 from collections import OrderedDict
 from functools import partial
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Type
 
 import torch
 import torch.nn as nn
@@ -37,8 +37,17 @@ from torch import Tensor
 from torch.jit import Final
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import trunc_normal_, DropPath, calculate_drop_path_rates, SelectAdaptivePool2d, GroupNorm1, LayerNorm, LayerNorm2d, Mlp, \
-    use_fused_attn
+from timm.layers import (
+    trunc_normal_,
+    DropPath,
+    calculate_drop_path_rates,
+    SelectAdaptivePool2d,
+    GroupNorm1,
+    LayerNorm,
+    LayerNorm2d,
+    Mlp,
+    use_fused_attn,
+)
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint, checkpoint_seq
@@ -55,19 +64,23 @@ class Stem(nn.Module):
 
     def __init__(
             self,
-            in_channels,
-            out_channels,
-            norm_layer=None,
+            in_channels: int,
+            out_channels: int,
+            norm_layer: Optional[Type[nn.Module]] = None,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.conv = nn.Conv2d(
             in_channels,
             out_channels,
             kernel_size=7,
             stride=4,
-            padding=2
+            padding=2,
+            **dd,
         )
-        self.norm = norm_layer(out_channels) if norm_layer else nn.Identity()
+        self.norm = norm_layer(out_channels, **dd) if norm_layer else nn.Identity()
 
     def forward(self, x):
         x = self.conv(x)
@@ -82,21 +95,25 @@ class Downsampling(nn.Module):
 
     def __init__(
             self,
-            in_channels,
-            out_channels,
-            kernel_size,
-            stride=1,
-            padding=0,
-            norm_layer=None,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: int,
+            stride: int = 1,
+            padding: int = 0,
+            norm_layer: Optional[Type[nn.Module]] = None,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.norm = norm_layer(in_channels) if norm_layer else nn.Identity()
+        self.norm = norm_layer(in_channels, **dd) if norm_layer else nn.Identity()
         self.conv = nn.Conv2d(
             in_channels,
             out_channels,
             kernel_size=kernel_size,
             stride=stride,
-            padding=padding
+            padding=padding,
+            **dd
         )
 
     def forward(self, x):
@@ -110,10 +127,19 @@ class Scale(nn.Module):
     Scale vector by element multiplications.
     """
 
-    def __init__(self, dim, init_value=1.0, trainable=True, use_nchw=True):
+    def __init__(
+            self,
+            dim: int,
+            init_value: float = 1.0,
+            trainable: bool = True,
+            use_nchw: bool = True,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.shape = (dim, 1, 1) if use_nchw else (dim,)
-        self.scale = nn.Parameter(init_value * torch.ones(dim), requires_grad=trainable)
+        self.scale = nn.Parameter(init_value * torch.ones(dim, **dd), requires_grad=trainable)
 
     def forward(self, x):
         return x * self.scale.view(self.shape)
@@ -124,7 +150,7 @@ class SquaredReLU(nn.Module):
         Squared ReLU: https://arxiv.org/abs/2109.08668
     """
 
-    def __init__(self, inplace=False):
+    def __init__(self, inplace: bool = False):
         super().__init__()
         self.relu = nn.ReLU(inplace=inplace)
 
@@ -139,18 +165,21 @@ class StarReLU(nn.Module):
 
     def __init__(
             self,
-            scale_value=1.0,
-            bias_value=0.0,
-            scale_learnable=True,
-            bias_learnable=True,
-            mode=None,
-            inplace=False
+            scale_value: float = 1.0,
+            bias_value: float = 0.0,
+            scale_learnable: bool = True,
+            bias_learnable: bool = True,
+            mode: Optional[str] = None,
+            inplace: bool = False,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.inplace = inplace
         self.relu = nn.ReLU(inplace=inplace)
-        self.scale = nn.Parameter(scale_value * torch.ones(1), requires_grad=scale_learnable)
-        self.bias = nn.Parameter(bias_value * torch.ones(1), requires_grad=bias_learnable)
+        self.scale = nn.Parameter(scale_value * torch.ones(1, **dd), requires_grad=scale_learnable)
+        self.bias = nn.Parameter(bias_value * torch.ones(1, **dd), requires_grad=bias_learnable)
 
     def forward(self, x):
         return self.scale * self.relu(x) ** 2 + self.bias
@@ -165,15 +194,18 @@ class Attention(nn.Module):
 
     def __init__(
             self,
-            dim,
-            head_dim=32,
-            num_heads=None,
-            qkv_bias=False,
-            attn_drop=0.,
-            proj_drop=0.,
-            proj_bias=False,
+            dim: int,
+            head_dim: int = 32,
+            num_heads: Optional[int] = None,
+            qkv_bias: bool = False,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.,
+            proj_bias: bool = False,
+            device=None,
+            dtype=None,
             **kwargs
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
 
         self.head_dim = head_dim
@@ -186,9 +218,9 @@ class Attention(nn.Module):
 
         self.attention_dim = self.num_heads * self.head_dim
 
-        self.qkv = nn.Linear(dim, self.attention_dim * 3, bias=qkv_bias)
+        self.qkv = nn.Linear(dim, self.attention_dim * 3, bias=qkv_bias, **dd)
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(self.attention_dim, dim, bias=proj_bias)
+        self.proj = nn.Linear(self.attention_dim, dim, bias=proj_bias, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, x):
@@ -217,21 +249,21 @@ class Attention(nn.Module):
 # used a custom norm with a weight term but no bias term.
 
 class GroupNorm1NoBias(GroupNorm1):
-    def __init__(self, num_channels, **kwargs):
+    def __init__(self, num_channels: int, **kwargs):
         super().__init__(num_channels, **kwargs)
         self.eps = kwargs.get('eps', 1e-6)
         self.bias = None
 
 
 class LayerNorm2dNoBias(LayerNorm2d):
-    def __init__(self, num_channels, **kwargs):
+    def __init__(self, num_channels: int, **kwargs):
         super().__init__(num_channels, **kwargs)
         self.eps = kwargs.get('eps', 1e-6)
         self.bias = None
 
 
 class LayerNormNoBias(nn.LayerNorm):
-    def __init__(self, num_channels, **kwargs):
+    def __init__(self, num_channels: int, **kwargs):
         super().__init__(num_channels, **kwargs)
         self.eps = kwargs.get('eps', 1e-6)
         self.bias = None
@@ -244,24 +276,33 @@ class SepConv(nn.Module):
 
     def __init__(
             self,
-            dim,
-            expansion_ratio=2,
-            act1_layer=StarReLU,
-            act2_layer=nn.Identity,
-            bias=False,
-            kernel_size=7,
-            padding=3,
+            dim: int,
+            expansion_ratio: float = 2,
+            act1_layer: Type[nn.Module] = StarReLU,
+            act2_layer: Type[nn.Module] = nn.Identity,
+            bias: bool = False,
+            kernel_size: int = 7,
+            padding: int = 3,
+            device=None,
+            dtype=None,
             **kwargs
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         mid_channels = int(expansion_ratio * dim)
-        self.pwconv1 = nn.Conv2d(dim, mid_channels, kernel_size=1, bias=bias)
-        self.act1 = act1_layer()
+        self.pwconv1 = nn.Conv2d(dim, mid_channels, kernel_size=1, bias=bias, **dd)
+        self.act1 = act1_layer(**dd) if issubclass(act1_layer, StarReLU) else act1_layer()
         self.dwconv = nn.Conv2d(
-            mid_channels, mid_channels, kernel_size=kernel_size,
-            padding=padding, groups=mid_channels, bias=bias)  # depthwise conv
-        self.act2 = act2_layer()
-        self.pwconv2 = nn.Conv2d(mid_channels, dim, kernel_size=1, bias=bias)
+            mid_channels,
+            mid_channels,
+            kernel_size=kernel_size,
+            padding=padding,
+            groups=mid_channels,
+            bias=bias,
+            **dd,
+        )  # depthwise conv
+        self.act2 = act2_layer(**dd) if issubclass(act2_layer, StarReLU) else act2_layer()
+        self.pwconv2 = nn.Conv2d(mid_channels, dim, kernel_size=1, bias=bias, **dd)
 
     def forward(self, x):
         x = self.pwconv1(x)
@@ -277,10 +318,9 @@ class Pooling(nn.Module):
     Implementation of pooling for PoolFormer: https://arxiv.org/abs/2111.11418
     """
 
-    def __init__(self, pool_size=3, **kwargs):
+    def __init__(self, pool_size: int = 3, **kwargs):
         super().__init__()
-        self.pool = nn.AvgPool2d(
-            pool_size, stride=1, padding=pool_size // 2, count_include_pad=False)
+        self.pool = nn.AvgPool2d(pool_size, stride=1, padding=pool_size // 2, count_include_pad=False)
 
     def forward(self, x):
         y = self.pool(x)
@@ -293,20 +333,23 @@ class MlpHead(nn.Module):
 
     def __init__(
             self,
-            dim,
-            num_classes=1000,
-            mlp_ratio=4,
-            act_layer=SquaredReLU,
-            norm_layer=LayerNorm,
-            drop_rate=0.,
-            bias=True
+            dim: int,
+            num_classes: int = 1000,
+            mlp_ratio: float = 4,
+            act_layer: Type[nn.Module] = SquaredReLU,
+            norm_layer: Type[nn.Module] = LayerNorm,
+            drop_rate: float = 0.,
+            bias: bool = True,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         hidden_features = int(mlp_ratio * dim)
-        self.fc1 = nn.Linear(dim, hidden_features, bias=bias)
+        self.fc1 = nn.Linear(dim, hidden_features, bias=bias, **dd)
         self.act = act_layer()
-        self.norm = norm_layer(hidden_features)
-        self.fc2 = nn.Linear(hidden_features, num_classes, bias=bias)
+        self.norm = norm_layer(hidden_features, **dd)
+        self.fc2 = nn.Linear(hidden_features, num_classes, bias=bias, **dd)
         self.head_drop = nn.Dropout(drop_rate)
 
     def forward(self, x):
@@ -325,29 +368,32 @@ class MetaFormerBlock(nn.Module):
 
     def __init__(
             self,
-            dim,
-            token_mixer=Pooling,
-            mlp_act=StarReLU,
-            mlp_bias=False,
-            norm_layer=LayerNorm2d,
-            proj_drop=0.,
-            drop_path=0.,
-            use_nchw=True,
-            layer_scale_init_value=None,
-            res_scale_init_value=None,
+            dim: int,
+            token_mixer: Type[nn.Module] = Pooling,
+            mlp_act: Type[nn.Module] = StarReLU,
+            mlp_bias: bool = False,
+            norm_layer: Type[nn.Module] = LayerNorm2d,
+            proj_drop: float = 0.,
+            drop_path: float = 0.,
+            use_nchw: bool = True,
+            layer_scale_init_value: Optional[float] = None,
+            res_scale_init_value: Optional[float] = None,
+            device=None,
+            dtype=None,
             **kwargs
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        ls_layer = partial(Scale, dim=dim, init_value=layer_scale_init_value, use_nchw=use_nchw)
-        rs_layer = partial(Scale, dim=dim, init_value=res_scale_init_value, use_nchw=use_nchw)
+        ls_layer = partial(Scale, dim=dim, init_value=layer_scale_init_value, use_nchw=use_nchw, **dd)
+        rs_layer = partial(Scale, dim=dim, init_value=res_scale_init_value, use_nchw=use_nchw, **dd)
 
-        self.norm1 = norm_layer(dim)
-        self.token_mixer = token_mixer(dim=dim, proj_drop=proj_drop, **kwargs)
+        self.norm1 = norm_layer(dim, **dd)
+        self.token_mixer = token_mixer(dim=dim, proj_drop=proj_drop, **dd, **kwargs)
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.layer_scale1 = ls_layer() if layer_scale_init_value is not None else nn.Identity()
         self.res_scale1 = rs_layer() if res_scale_init_value is not None else nn.Identity()
 
-        self.norm2 = norm_layer(dim)
+        self.norm2 = norm_layer(dim, **dd)
         self.mlp = Mlp(
             dim,
             int(4 * dim),
@@ -355,6 +401,7 @@ class MetaFormerBlock(nn.Module):
             bias=mlp_bias,
             drop=proj_drop,
             use_conv=use_nchw,
+            **dd
         )
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.layer_scale2 = ls_layer() if layer_scale_init_value is not None else nn.Identity()
@@ -380,22 +427,24 @@ class MetaFormerStage(nn.Module):
 
     def __init__(
             self,
-            in_chs,
-            out_chs,
-            depth=2,
-            token_mixer=nn.Identity,
-            mlp_act=StarReLU,
-            mlp_bias=False,
-            downsample_norm=LayerNorm2d,
-            norm_layer=LayerNorm2d,
-            proj_drop=0.,
-            dp_rates=[0.] * 2,
-            layer_scale_init_value=None,
-            res_scale_init_value=None,
+            in_chs: int,
+            out_chs: int,
+            depth: int = 2,
+            token_mixer: Type[nn.Module] = nn.Identity,
+            mlp_act: Type[nn.Module] = StarReLU,
+            mlp_bias: bool = False,
+            downsample_norm: Optional[Type[nn.Module]] = LayerNorm2d,
+            norm_layer: Type[nn.Module] = LayerNorm2d,
+            proj_drop: float = 0.,
+            dp_rates: List[float] = [0.] * 2,
+            layer_scale_init_value: Optional[float] = None,
+            res_scale_init_value: Optional[float] = None,
+            device=None,
+            dtype=None,
             **kwargs,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-
         self.grad_checkpointing = False
         self.use_nchw = not issubclass(token_mixer, Attention)
 
@@ -407,6 +456,7 @@ class MetaFormerStage(nn.Module):
             stride=2,
             padding=1,
             norm_layer=downsample_norm,
+            **dd,
         )
 
         self.blocks = nn.Sequential(*[MetaFormerBlock(
@@ -420,6 +470,7 @@ class MetaFormerStage(nn.Module):
             layer_scale_init_value=layer_scale_init_value,
             res_scale_init_value=res_scale_init_value,
             use_nchw=self.use_nchw,
+            **dd,
             **kwargs,
         ) for i in range(depth)])
 
@@ -473,26 +524,33 @@ class MetaFormer(nn.Module):
 
     def __init__(
             self,
-            in_chans=3,
-            num_classes=1000,
-            global_pool='avg',
-            depths=(2, 2, 6, 2),
-            dims=(64, 128, 320, 512),
-            token_mixers=Pooling,
-            mlp_act=StarReLU,
-            mlp_bias=False,
-            drop_path_rate=0.,
-            proj_drop_rate=0.,
-            drop_rate=0.0,
-            layer_scale_init_values=None,
-            res_scale_init_values=(None, None, 1.0, 1.0),
-            downsample_norm=LayerNorm2dNoBias,
-            norm_layers=LayerNorm2dNoBias,
-            output_norm=LayerNorm2d,
-            use_mlp_head=True,
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            global_pool: str = 'avg',
+            depths: Tuple[int, ...] = (2, 2, 6, 2),
+            dims: Tuple[int, ...] = (64, 128, 320, 512),
+            token_mixers: Union[Type[nn.Module], List[Type[nn.Module]]] = Pooling,
+            mlp_act: Type[nn.Module] = StarReLU,
+            mlp_bias: bool = False,
+            drop_path_rate: float = 0.,
+            proj_drop_rate: float = 0.,
+            drop_rate: float = 0.0,
+            layer_scale_init_values: Optional[Union[float, List[float]]] = None,
+            res_scale_init_values: Union[Tuple[Optional[float], ...], List[Optional[float]]] = (None, None, 1.0, 1.0),
+            downsample_norm: Optional[Type[nn.Module]] = LayerNorm2dNoBias,
+            norm_layers: Union[Type[nn.Module], List[Type[nn.Module]]] = LayerNorm2dNoBias,
+            output_norm: Type[nn.Module] = LayerNorm2d,
+            use_mlp_head: bool = True,
+            device=None,
+            dtype=None,
             **kwargs,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
+        # Bind dd kwargs to activation layers that need them
+        if mlp_act in (StarReLU,):
+            mlp_act = partial(mlp_act, **dd)
+
         self.num_classes = num_classes
         self.num_features = dims[-1]
         self.drop_rate = drop_rate
@@ -519,7 +577,8 @@ class MetaFormer(nn.Module):
         self.stem = Stem(
             in_chans,
             dims[0],
-            norm_layer=downsample_norm
+            norm_layer=downsample_norm,
+            **dd,
         )
 
         stages = []
@@ -539,6 +598,7 @@ class MetaFormer(nn.Module):
                 res_scale_init_value=res_scale_init_values[i],
                 downsample_norm=downsample_norm,
                 norm_layer=norm_layers[i],
+                **dd,
                 **kwargs,
             )]
             prev_dim = dims[i]
@@ -550,17 +610,17 @@ class MetaFormer(nn.Module):
         if num_classes > 0:
             if self.use_mlp_head:
                 # FIXME not actually returning mlp hidden state right now as pre-logits.
-                final = MlpHead(self.num_features, num_classes, drop_rate=self.drop_rate)
+                final = MlpHead(self.num_features, num_classes, drop_rate=self.drop_rate, **dd)
                 self.head_hidden_size = self.num_features
             else:
-                final = nn.Linear(self.num_features, num_classes)
+                final = nn.Linear(self.num_features, num_classes, **dd)
                 self.head_hidden_size = self.num_features
         else:
             final = nn.Identity()
 
         self.head = nn.Sequential(OrderedDict([
             ('global_pool', SelectAdaptivePool2d(pool_type=global_pool)),
-            ('norm', output_norm(self.num_features)),
+            ('norm', output_norm(self.num_features, **dd)),
             ('flatten', nn.Flatten(1) if global_pool else nn.Identity()),
             ('drop', nn.Dropout(drop_rate) if self.use_mlp_head else nn.Identity()),
             ('fc', final)
@@ -584,16 +644,17 @@ class MetaFormer(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, device=None, dtype=None):
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         if global_pool is not None:
             self.head.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
             self.head.flatten = nn.Flatten(1) if global_pool else nn.Identity()
         if num_classes > 0:
             if self.use_mlp_head:
-                final = MlpHead(self.num_features, num_classes, drop_rate=self.drop_rate)
+                final = MlpHead(self.num_features, num_classes, drop_rate=self.drop_rate, **dd)
             else:
-                final = nn.Linear(self.num_features, num_classes)
+                final = nn.Linear(self.num_features, num_classes, **dd)
         else:
             final = nn.Identity()
         self.head.fc = final

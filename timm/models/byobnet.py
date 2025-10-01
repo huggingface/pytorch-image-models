@@ -31,7 +31,7 @@ Hacked together by / copyright Ross Wightman, 2021.
 import math
 from dataclasses import dataclass, field, replace
 from functools import partial
-from typing import Tuple, List, Dict, Optional, Union, Any, Callable, Sequence
+from typing import Tuple, List, Dict, Optional, Union, Any, Callable, Sequence, Type
 
 import torch
 import torch.nn as nn
@@ -245,11 +245,11 @@ def num_groups(group_size: Optional[int], channels: int) -> int:
 @dataclass
 class LayerFn:
     """Container for layer factory functions."""
-    conv_norm_act: Callable = ConvNormAct
-    norm_act: Callable = BatchNormAct2d
-    act: Callable = nn.ReLU
-    attn: Optional[Callable] = None
-    self_attn: Optional[Callable] = None
+    conv_norm_act: Type[nn.Module] = ConvNormAct
+    norm_act: Type[nn.Module] = BatchNormAct2d
+    act: Type[nn.Module] = nn.ReLU
+    attn: Optional[Type[nn.Module]] = None
+    self_attn: Optional[Type[nn.Module]] = None
 
 
 class DownsampleAvg(nn.Module):

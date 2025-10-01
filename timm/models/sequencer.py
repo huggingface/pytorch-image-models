@@ -9,7 +9,7 @@ Paper: `Sequencer: Deep LSTM for Image Classification` - https://arxiv.org/pdf/2
 import math
 from functools import partial
 from itertools import accumulate
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -58,7 +58,7 @@ def _init_weights(module: nn.Module, name: str, head_bias: float = 0., flax=Fals
 
 class RNNIdentity(nn.Module):
     def __init__(self, *args, **kwargs):
-        super(RNNIdentity, self).__init__()
+        super().__init__()
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, None]:
         return x, None
@@ -73,9 +73,12 @@ class RNN2dBase(nn.Module):
             num_layers: int = 1,
             bias: bool = True,
             bidirectional: bool = True,
-            union="cat",
-            with_fc=True,
+            union: str = "cat",
+            with_fc: bool = True,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
 
         self.input_size = input_size
@@ -90,14 +93,14 @@ class RNN2dBase(nn.Module):
         self.fc = None
         if with_fc:
             if union == "cat":
-                self.fc = nn.Linear(2 * self.output_size, input_size)
+                self.fc = nn.Linear(2 * self.output_size, input_size, **dd)
             elif union == "add":
-                self.fc = nn.Linear(self.output_size, input_size)
+                self.fc = nn.Linear(self.output_size, input_size, **dd)
             elif union == "vertical":
-                self.fc = nn.Linear(self.output_size, input_size)
+                self.fc = nn.Linear(self.output_size, input_size, **dd)
                 self.with_horizontal = False
             elif union == "horizontal":
-                self.fc = nn.Linear(self.output_size, input_size)
+                self.fc = nn.Linear(self.output_size, input_size, **dd)
                 self.with_vertical = False
             else:
                 raise ValueError("Unrecognized union: " + union)
@@ -167,10 +170,13 @@ class LSTM2d(RNN2dBase):
             num_layers: int = 1,
             bias: bool = True,
             bidirectional: bool = True,
-            union="cat",
-            with_fc=True,
+            union: str = "cat",
+            with_fc: bool = True,
+            device=None,
+            dtype=None,
     ):
-        super().__init__(input_size, hidden_size, num_layers, bias, bidirectional, union, with_fc)
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__(input_size, hidden_size, num_layers, bias, bidirectional, union, with_fc, device, dtype)
         if self.with_vertical:
             self.rnn_v = nn.LSTM(
                 input_size,
@@ -179,6 +185,7 @@ class LSTM2d(RNN2dBase):
                 batch_first=True,
                 bias=bias,
                 bidirectional=bidirectional,
+                **dd,
             )
         if self.with_horizontal:
             self.rnn_h = nn.LSTM(
@@ -188,29 +195,33 @@ class LSTM2d(RNN2dBase):
                 batch_first=True,
                 bias=bias,
                 bidirectional=bidirectional,
+                **dd,
             )
 
 
 class Sequencer2dBlock(nn.Module):
     def __init__(
             self,
-            dim,
-            hidden_size,
-            mlp_ratio=3.0,
-            rnn_layer=LSTM2d,
-            mlp_layer=Mlp,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6),
-            act_layer=nn.GELU,
-            num_layers=1,
-            bidirectional=True,
-            union="cat",
-            with_fc=True,
-            drop=0.,
-            drop_path=0.,
+            dim: int,
+            hidden_size: int,
+            mlp_ratio: float = 3.0,
+            rnn_layer: Type[nn.Module] = LSTM2d,
+            mlp_layer: Type[nn.Module] = Mlp,
+            norm_layer: Type[nn.Module] = partial(nn.LayerNorm, eps=1e-6),
+            act_layer: Type[nn.Module] = nn.GELU,
+            num_layers: int = 1,
+            bidirectional: bool = True,
+            union: str = "cat",
+            with_fc: bool = True,
+            drop: float = 0.,
+            drop_path: float = 0.,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         channels_dim = int(mlp_ratio * dim)
-        self.norm1 = norm_layer(dim)
+        self.norm1 = norm_layer(dim, **dd)
         self.rnn_tokens = rnn_layer(
             dim,
             hidden_size,
@@ -218,10 +229,11 @@ class Sequencer2dBlock(nn.Module):
             bidirectional=bidirectional,
             union=union,
             with_fc=with_fc,
+            **dd,
         )
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.norm2 = norm_layer(dim)
-        self.mlp_channels = mlp_layer(dim, channels_dim, act_layer=act_layer, drop=drop)
+        self.norm2 = norm_layer(dim, **dd)
+        self.mlp_channels = mlp_layer(dim, channels_dim, act_layer=act_layer, drop=drop, **dd)
 
     def forward(self, x):
         x = x + self.drop_path(self.rnn_tokens(self.norm1(x)))
@@ -243,9 +255,17 @@ class Shuffle(nn.Module):
 
 
 class Downsample2d(nn.Module):
-    def __init__(self, input_dim, output_dim, patch_size):
+    def __init__(
+            self,
+            input_dim: int,
+            output_dim: int,
+            patch_size: int,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.down = nn.Conv2d(input_dim, output_dim, kernel_size=patch_size, stride=patch_size)
+        self.down = nn.Conv2d(input_dim, output_dim, kernel_size=patch_size, stride=patch_size, **dd)
 
     def forward(self, x):
         x = x.permute(0, 3, 1, 2)
@@ -257,28 +277,31 @@ class Downsample2d(nn.Module):
 class Sequencer2dStage(nn.Module):
     def __init__(
             self,
-            dim,
-            dim_out,
-            depth,
-            patch_size,
-            hidden_size,
-            mlp_ratio,
-            downsample=False,
-            block_layer=Sequencer2dBlock,
-            rnn_layer=LSTM2d,
-            mlp_layer=Mlp,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6),
-            act_layer=nn.GELU,
-            num_layers=1,
-            bidirectional=True,
-            union="cat",
-            with_fc=True,
-            drop=0.,
-            drop_path=0.,
+            dim: int,
+            dim_out: int,
+            depth: int,
+            patch_size: int,
+            hidden_size: int,
+            mlp_ratio: float,
+            downsample: bool = False,
+            block_layer: Type[nn.Module] = Sequencer2dBlock,
+            rnn_layer: Type[nn.Module] = LSTM2d,
+            mlp_layer: Type[nn.Module] = Mlp,
+            norm_layer: Type[nn.Module] = partial(nn.LayerNorm, eps=1e-6),
+            act_layer: Type[nn.Module] = nn.GELU,
+            num_layers: int = 1,
+            bidirectional: bool = True,
+            union: str = "cat",
+            with_fc: bool = True,
+            drop: float = 0.,
+            drop_path: Union[float, List[float]] = 0.,
+            device=None,
+            dtype=None,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         if downsample:
-            self.downsample = Downsample2d(dim, dim_out, patch_size)
+            self.downsample = Downsample2d(dim, dim_out, patch_size, **dd)
         else:
             assert dim == dim_out
             self.downsample = nn.Identity()
@@ -299,6 +322,7 @@ class Sequencer2dStage(nn.Module):
                 with_fc=with_fc,
                 drop=drop,
                 drop_path=drop_path[block_idx] if isinstance(drop_path, (list, tuple)) else drop_path,
+                **dd,
             ))
         self.blocks = nn.Sequential(*blocks)
 
@@ -311,30 +335,33 @@ class Sequencer2dStage(nn.Module):
 class Sequencer2d(nn.Module):
     def __init__(
             self,
-            num_classes=1000,
-            img_size=224,
-            in_chans=3,
-            global_pool='avg',
-            layers=(4, 3, 8, 3),
-            patch_sizes=(7, 2, 2, 1),
-            embed_dims=(192, 384, 384, 384),
-            hidden_sizes=(48, 96, 96, 96),
-            mlp_ratios=(3.0, 3.0, 3.0, 3.0),
-            block_layer=Sequencer2dBlock,
-            rnn_layer=LSTM2d,
-            mlp_layer=Mlp,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6),
-            act_layer=nn.GELU,
-            num_rnn_layers=1,
-            bidirectional=True,
-            union="cat",
-            with_fc=True,
-            drop_rate=0.,
-            drop_path_rate=0.,
-            nlhb=False,
-            stem_norm=False,
+            num_classes: int = 1000,
+            img_size: int = 224,
+            in_chans: int = 3,
+            global_pool: str = 'avg',
+            layers: Tuple[int, ...] = (4, 3, 8, 3),
+            patch_sizes: Tuple[int, ...] = (7, 2, 2, 1),
+            embed_dims: Tuple[int, ...] = (192, 384, 384, 384),
+            hidden_sizes: Tuple[int, ...] = (48, 96, 96, 96),
+            mlp_ratios: Tuple[float, ...] = (3.0, 3.0, 3.0, 3.0),
+            block_layer: Type[nn.Module] = Sequencer2dBlock,
+            rnn_layer: Type[nn.Module] = LSTM2d,
+            mlp_layer: Type[nn.Module] = Mlp,
+            norm_layer: Type[nn.Module] = partial(nn.LayerNorm, eps=1e-6),
+            act_layer: Type[nn.Module] = nn.GELU,
+            num_rnn_layers: int = 1,
+            bidirectional: bool = True,
+            union: str = "cat",
+            with_fc: bool = True,
+            drop_rate: float = 0.,
+            drop_path_rate: float = 0.,
+            nlhb: bool = False,
+            stem_norm: bool = False,
+            device=None,
+            dtype=None,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         assert global_pool in ('', 'avg')
         self.num_classes = num_classes
         self.global_pool = global_pool
@@ -351,6 +378,7 @@ class Sequencer2d(nn.Module):
             norm_layer=norm_layer if stem_norm else None,
             flatten=False,
             output_fmt='NHWC',
+            **dd,
         )
 
         assert len(layers) == len(patch_sizes) == len(embed_dims) == len(hidden_sizes) == len(mlp_ratios)
@@ -377,18 +405,20 @@ class Sequencer2d(nn.Module):
                 with_fc=with_fc,
                 drop=drop_rate,
                 drop_path=drop_path_rate,
+                **dd,
             )]
             prev_dim = embed_dims[i]
             self.feature_info += [dict(num_chs=prev_dim, reduction=reductions[i], module=f'stages.{i}')]
 
         self.stages = nn.Sequential(*stages)
-        self.norm = norm_layer(embed_dims[-1])
+        self.norm = norm_layer(embed_dims[-1], **dd)
         self.head = ClassifierHead(
             self.num_features,
             num_classes,
             pool_type=global_pool,
             drop_rate=drop_rate,
             input_fmt=self.output_fmt,
+            **dd,
         )
 
         self.init_weights(nlhb=nlhb)

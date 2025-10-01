@@ -1,15 +1,27 @@
 import math
 from copy import deepcopy
 from functools import partial
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, calculate_drop_path_rates, ClNormMlpClassifierHead, LayerScale, \
-    get_norm_layer, get_act_layer, init_weight_jax, init_weight_vit, to_2tuple, use_fused_attn
+from timm.layers import (
+    PatchEmbed,
+    Mlp,
+    DropPath,
+    calculate_drop_path_rates,
+    ClNormMlpClassifierHead,
+    LayerScale,
+    get_norm_layer,
+    get_act_layer,
+    init_weight_jax,
+    init_weight_vit,
+    to_2tuple,
+    use_fused_attn,
+)
 
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
@@ -61,12 +73,15 @@ class MultiScaleAttention(nn.Module):
     fused_attn: torch.jit.Final[bool]
 
     def __init__(
-        self,
-        dim: int,
-        dim_out: int,
-        num_heads: int,
-        q_pool: nn.Module = None,
+            self,
+            dim: int,
+            dim_out: int,
+            num_heads: int,
+            q_pool: nn.Module = None,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.dim = dim
         self.dim_out = dim_out
@@ -76,8 +91,8 @@ class MultiScaleAttention(nn.Module):
         self.fused_attn = use_fused_attn()
 
         self.q_pool = q_pool
-        self.qkv = nn.Linear(dim, dim_out * 3)
-        self.proj = nn.Linear(dim_out, dim_out)
+        self.qkv = nn.Linear(dim, dim_out * 3, **dd)
+        self.proj = nn.Linear(dim_out, dim_out, **dd)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, H, W, _ = x.shape
@@ -116,18 +131,21 @@ class MultiScaleAttention(nn.Module):
 
 class MultiScaleBlock(nn.Module):
     def __init__(
-        self,
-        dim: int,
-        dim_out: int,
-        num_heads: int,
-        mlp_ratio: float = 4.0,
-        q_stride: Optional[Tuple[int, int]] = None,
-        norm_layer: Union[nn.Module, str] = "LayerNorm",
-        act_layer: Union[nn.Module, str] = "GELU",
-        window_size: int = 0,
-        init_values: Optional[float] = None,
-        drop_path: float = 0.0,
+            self,
+            dim: int,
+            dim_out: int,
+            num_heads: int,
+            mlp_ratio: float = 4.0,
+            q_stride: Optional[Tuple[int, int]] = None,
+            norm_layer: Union[Type[nn.Module], str] = "LayerNorm",
+            act_layer: Union[Type[nn.Module], str] = "GELU",
+            window_size: int = 0,
+            init_values: Optional[float] = None,
+            drop_path: float = 0.0,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         norm_layer = get_norm_layer(norm_layer)
         act_layer = get_act_layer(act_layer)
@@ -138,7 +156,7 @@ class MultiScaleBlock(nn.Module):
         self.q_stride = q_stride
 
         if dim != dim_out:
-            self.proj = nn.Linear(dim, dim_out)
+            self.proj = nn.Linear(dim, dim_out, **dd)
         else:
             self.proj = nn.Identity()
         self.pool = None
@@ -150,23 +168,25 @@ class MultiScaleBlock(nn.Module):
                 ceil_mode=False,
             )
 
-        self.norm1 = norm_layer(dim)
+        self.norm1 = norm_layer(dim, **dd)
         self.attn = MultiScaleAttention(
             dim,
             dim_out,
             num_heads=num_heads,
             q_pool=deepcopy(self.pool),
+            **dd,
         )
-        self.ls1 = LayerScale(dim_out, init_values) if init_values is not None else nn.Identity()
+        self.ls1 = LayerScale(dim_out, init_values, **dd) if init_values is not None else nn.Identity()
         self.drop_path1 = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
-        self.norm2 = norm_layer(dim_out)
+        self.norm2 = norm_layer(dim_out, **dd)
         self.mlp = Mlp(
             dim_out,
             int(dim_out * mlp_ratio),
             act_layer=act_layer,
+            **dd,
         )
-        self.ls2 = LayerScale(dim_out, init_values) if init_values is not None else nn.Identity()
+        self.ls2 = LayerScale(dim_out, init_values, **dd) if init_values is not None else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -214,23 +234,31 @@ class HieraPatchEmbed(nn.Module):
 
     def __init__(
         self,
-        kernel_size: Tuple[int, ...] = (7, 7),
-        stride: Tuple[int, ...] = (4, 4),
-        padding: Tuple[int, ...] = (3, 3),
+        kernel_size: Union[int, Tuple[int, int]] = (7, 7),
+        stride: Union[int, Tuple[int, int]] = (4, 4),
+        padding: Union[str, int, Tuple[int, int]] = (3, 3),
         in_chans: int = 3,
         embed_dim: int = 768,
+        device=None,
+        dtype=None,
     ):
         """
         Args:
-            kernel_size (Tuple): kernel size of the projection layer.
-            stride (Tuple): stride of the projection layer.
-            padding (Tuple): padding size of the projection layer.
-            in_chans (int): Number of input image channels.
-            embed_dim (int):  embed_dim (int): Patch embedding dimension.
+            kernel_size: kernel size of the projection layer.
+            stride: stride of the projection layer.
+            padding: padding size of the projection layer.
+            in_chans: Number of input image channels.
+            embed_dim: Patch embedding dimension.
         """
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.proj = nn.Conv2d(
-            in_chans, embed_dim, kernel_size=kernel_size, stride=stride, padding=padding
+            in_chans,
+            embed_dim,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            **dd,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -252,10 +280,10 @@ class HieraDet(nn.Module):
             global_pool: str = 'avg',
             embed_dim: int = 96,  # initial embed dim
             num_heads: int = 1,  # initial number of heads
-            patch_kernel: Tuple[int, ...] = (7, 7),
-            patch_stride: Tuple[int, ...] = (4, 4),
-            patch_padding: Tuple[int, ...] = (3, 3),
-            patch_size: Optional[Tuple[int, ...]] = None,
+            patch_kernel: Tuple[int, int] = (7, 7),
+            patch_stride: Tuple[int, int] = (4, 4),
+            patch_padding: Tuple[int, int] = (3, 3),
+            patch_size: Optional[Tuple[int, int]] = None,
             q_pool: int = 3,  # number of q_pool stages
             q_stride: Tuple[int, int] = (2, 2),  # downsample stride bet. stages
             stages: Tuple[int, ...] = (2, 3, 16, 3),  # blocks per stage
@@ -281,10 +309,13 @@ class HieraDet(nn.Module):
             head_init_scale: float = 0.001,
             drop_rate: float = 0.0,
             drop_path_rate: float = 0.0,  # stochastic depth
-            norm_layer: Union[nn.Module, str] = "LayerNorm",
-            act_layer: Union[nn.Module, str] = "GELU",
+            norm_layer: Union[Type[nn.Module], str] = "LayerNorm",
+            act_layer: Union[Type[nn.Module], str] = "GELU",
+            device=None,
+            dtype=None,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         norm_layer = get_norm_layer(norm_layer)
         act_layer = get_act_layer(act_layer)
         assert len(stages) == len(window_spec)
@@ -308,6 +339,7 @@ class HieraDet(nn.Module):
                 embed_dim=embed_dim,
                 output_fmt='NHWC',
                 dynamic_img_pad=True,
+                **dd,
             )
         else:
             self.patch_embed = HieraPatchEmbed(
@@ -316,14 +348,15 @@ class HieraDet(nn.Module):
                 padding=patch_padding,
                 in_chans=in_chans,
                 embed_dim=embed_dim,
+                **dd,
             )
         # Which blocks have global att?
         self.global_att_blocks = global_att_blocks
 
         # Windowed positional embedding (https://arxiv.org/abs/2311.05613)
         self.global_pos_size = global_pos_size
-        self.pos_embed = nn.Parameter(torch.zeros(1, embed_dim, *self.global_pos_size))
-        self.pos_embed_window = nn.Parameter(torch.zeros(1, embed_dim, self.window_spec[0], self.window_spec[0]))
+        self.pos_embed = nn.Parameter(torch.zeros(1, embed_dim, *self.global_pos_size, **dd))
+        self.pos_embed_window = nn.Parameter(torch.zeros(1, embed_dim, self.window_spec[0], self.window_spec[0], **dd))
 
         dpr = calculate_drop_path_rates(drop_path_rate, depth)  # stochastic depth decay rule
         cur_stage = 0
@@ -354,6 +387,7 @@ class HieraDet(nn.Module):
                 norm_layer=norm_layer,
                 act_layer=act_layer,
                 init_values=init_values,
+                **dd,
             )
 
             embed_dim = dim_out
@@ -369,6 +403,7 @@ class HieraDet(nn.Module):
             pool_type=global_pool,
             drop_rate=drop_rate,
             norm_layer=norm_layer,
+            **dd,
         )
 
         # Initialize everything
