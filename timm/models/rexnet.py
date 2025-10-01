@@ -12,7 +12,7 @@ Copyright 2020 Ross Wightman
 
 from functools import partial
 from math import ceil
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -49,6 +49,8 @@ class LinearBottleneck(nn.Module):
             act_layer: str = 'swish',
             dw_act_layer: str = 'relu6',
             drop_path: Optional[nn.Module] = None,
+            device=None,
+            dtype=None,
     ):
         """Initialize LinearBottleneck.
 
@@ -64,14 +66,15 @@ class LinearBottleneck(nn.Module):
             dw_act_layer: Activation layer for depthwise.
             drop_path: Drop path module.
         """
-        super(LinearBottleneck, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.use_shortcut = stride == 1 and dilation[0] == dilation[1] and in_chs <= out_chs
         self.in_channels = in_chs
         self.out_channels = out_chs
 
         if exp_ratio != 1.:
             dw_chs = make_divisible(round(in_chs * exp_ratio), divisor=ch_div)
-            self.conv_exp = ConvNormAct(in_chs, dw_chs, act_layer=act_layer)
+            self.conv_exp = ConvNormAct(in_chs, dw_chs, act_layer=act_layer, **dd)
         else:
             dw_chs = in_chs
             self.conv_exp = None
@@ -84,14 +87,15 @@ class LinearBottleneck(nn.Module):
             dilation=dilation[0],
             groups=dw_chs,
             apply_act=False,
+            **dd,
         )
         if se_ratio > 0:
-            self.se = SEWithNorm(dw_chs, rd_channels=make_divisible(int(dw_chs * se_ratio), ch_div))
+            self.se = SEWithNorm(dw_chs, rd_channels=make_divisible(int(dw_chs * se_ratio), ch_div), **dd)
         else:
             self.se = None
         self.act_dw = create_act_layer(dw_act_layer)
 
-        self.conv_pwl = ConvNormAct(dw_chs, out_chs, 1, apply_act=False)
+        self.conv_pwl = ConvNormAct(dw_chs, out_chs, 1, apply_act=False, **dd)
         self.drop_path = drop_path
 
     def feat_channels(self, exp: bool = False) -> int:
@@ -178,6 +182,8 @@ def _build_blocks(
         act_layer: str = 'swish',
         dw_act_layer: str = 'relu6',
         drop_path_rate: float = 0.,
+        device=None,
+        dtype=None,
 ) -> Tuple[List[nn.Module], List[Dict[str, Any]]]:
     """Build ReXNet blocks from configuration.
 
@@ -194,6 +200,7 @@ def _build_blocks(
     Returns:
         Tuple of (features list, feature_info list).
     """
+    dd = {'device': device, 'dtype': dtype}
     feat_chs = [prev_chs]
     feature_info = []
     curr_stride = 2
@@ -221,6 +228,7 @@ def _build_blocks(
             act_layer=act_layer,
             dw_act_layer=dw_act_layer,
             drop_path=drop_path,
+            **dd,
         ))
         curr_stride *= stride
         dilation = next_dilation
@@ -228,7 +236,7 @@ def _build_blocks(
         feat_chs += [features[-1].feat_channels()]
     pen_chs = make_divisible(1280 * width_mult, divisor=ch_div)
     feature_info += [dict(num_chs=feat_chs[-1], reduction=curr_stride, module=f'features.{len(features) - 1}')]
-    features.append(ConvNormAct(prev_chs, pen_chs, act_layer=act_layer))
+    features.append(ConvNormAct(prev_chs, pen_chs, act_layer=act_layer, **dd))
     return features, feature_info
 
 
@@ -255,6 +263,8 @@ class RexNet(nn.Module):
             dw_act_layer: str = 'relu6',
             drop_rate: float = 0.2,
             drop_path_rate: float = 0.,
+            device=None,
+            dtype=None,
     ):
         """Initialize ReXNet.
 
@@ -274,7 +284,8 @@ class RexNet(nn.Module):
             drop_rate: Dropout rate.
             drop_path_rate: Drop path rate.
         """
-        super(RexNet, self).__init__()
+        super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
@@ -282,7 +293,7 @@ class RexNet(nn.Module):
         assert output_stride in (32, 16, 8)
         stem_base_chs = 32 / width_mult if width_mult < 1.0 else 32
         stem_chs = make_divisible(round(stem_base_chs * width_mult), divisor=ch_div)
-        self.stem = ConvNormAct(in_chans, stem_chs, 3, stride=2, act_layer=act_layer)
+        self.stem = ConvNormAct(in_chans, stem_chs, 3, stride=2, act_layer=act_layer, **dd)
 
         block_cfg = _block_cfg(width_mult, depth_mult, initial_chs, final_chs, se_ratio, ch_div)
         features, self.feature_info = _build_blocks(
@@ -294,11 +305,12 @@ class RexNet(nn.Module):
             act_layer,
             dw_act_layer,
             drop_path_rate,
+            **dd,
         )
         self.num_features = self.head_hidden_size = features[-1].out_channels
         self.features = nn.Sequential(*features)
 
-        self.head = ClassifierHead(self.num_features, num_classes, global_pool, drop_rate)
+        self.head = ClassifierHead(self.num_features, num_classes, global_pool, drop_rate, **dd)
 
         efficientnet_init_weights(self)
 
@@ -336,7 +348,7 @@ class RexNet(nn.Module):
         """
         return self.head.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, device=None, dtype=None) -> None:
         """Reset the classifier.
 
         Args:
@@ -344,7 +356,12 @@ class RexNet(nn.Module):
             global_pool: Global pooling type.
         """
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool)
+        if device is not None or dtype is not None:
+            dd = {'device': device, 'dtype': dtype}
+            pool_type = global_pool if global_pool is not None else self.head.global_pool.pool_type
+            self.head = ClassifierHead(self.num_features, num_classes, pool_type, self.drop_rate, **dd)
+        else:
+            self.head.reset(num_classes, global_pool)
 
     def forward_intermediates(
             self,

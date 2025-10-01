@@ -3,6 +3,7 @@
 Hacked together by / Copyright 2020 Ross Wightman
 """
 from functools import partial
+from typing import Optional, Type, Union, Tuple
 
 from torch import nn as nn
 
@@ -17,14 +18,14 @@ class Mlp(nn.Module):
     """
     def __init__(
             self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            act_layer=nn.GELU,
-            norm_layer=None,
-            bias=True,
-            drop=0.,
-            use_conv=False,
+            in_features: int,
+            hidden_features: Optional[int] = None,
+            out_features: Optional[int] = None,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Optional[Type[nn.Module]] = None,
+            bias: Union[bool, Tuple[bool, bool]] = True,
+            drop: Union[float, Tuple[float, float]] = 0.,
+            use_conv: bool = False,
             device=None,
             dtype=None,
     ):
@@ -61,15 +62,15 @@ class GluMlp(nn.Module):
     """
     def __init__(
             self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            act_layer=nn.Sigmoid,
-            norm_layer=None,
-            bias=True,
-            drop=0.,
-            use_conv=False,
-            gate_last=True,
+            in_features: int,
+            hidden_features: Optional[int] = None,
+            out_features: Optional[int] = None,
+            act_layer: Type[nn.Module] = nn.Sigmoid,
+            norm_layer: Optional[Type[nn.Module]] = None,
+            bias: Union[bool, Tuple[bool, bool]] = True,
+            drop: Union[float, Tuple[float, float]] = 0.,
+            use_conv: bool = False,
+            gate_last: bool = True,
             device=None,
             dtype=None,
     ):
@@ -118,14 +119,14 @@ class SwiGLU(nn.Module):
     """
     def __init__(
             self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            act_layer=nn.SiLU,
-            norm_layer=None,
-            bias=True,
-            drop=0.,
-            align_to=0,
+            in_features: int,
+            hidden_features: Optional[int] = None,
+            out_features: Optional[int] = None,
+            act_layer: Type[nn.Module] = nn.SiLU,
+            norm_layer: Optional[Type[nn.Module]] = None,
+            bias: Union[bool, Tuple[bool, bool]] = True,
+            drop: Union[float, Tuple[float, float]] = 0.,
+            align_to: int = 0,
             device=None,
             dtype=None,
     ):
@@ -169,14 +170,14 @@ class GatedMlp(nn.Module):
     """
     def __init__(
             self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            act_layer=nn.GELU,
-            norm_layer=None,
-            gate_layer=None,
-            bias=True,
-            drop=0.,
+            in_features: int,
+            hidden_features: Optional[int] = None,
+            out_features: Optional[int] = None,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Optional[Type[nn.Module]] = None,
+            gate_layer: Optional[Type[nn.Module]] = None,
+            bias: Union[bool, Tuple[bool, bool]] = True,
+            drop: Union[float, Tuple[float, float]] = 0.,
             device=None,
             dtype=None,
     ):
@@ -216,13 +217,13 @@ class ConvMlp(nn.Module):
     """
     def __init__(
             self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            act_layer=nn.ReLU,
-            norm_layer=None,
-            bias=True,
-            drop=0.,
+            in_features: int,
+            hidden_features: Optional[int] = None,
+            out_features: Optional[int] = None,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            norm_layer: Optional[Type[nn.Module]] = None,
+            bias: Union[bool, Tuple[bool, bool]] = True,
+            drop: float = 0.,
             device=None,
             dtype=None,
     ):
@@ -254,13 +255,13 @@ class GlobalResponseNormMlp(nn.Module):
     """
     def __init__(
             self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            act_layer=nn.GELU,
-            bias=True,
-            drop=0.,
-            use_conv=False,
+            in_features: int,
+            hidden_features: Optional[int] = None,
+            out_features: Optional[int] = None,
+            act_layer: Type[nn.Module] = nn.GELU,
+            bias: Union[bool, Tuple[bool, bool]] = True,
+            drop: Union[float, Tuple[float, float]] = 0.,
+            use_conv: bool = False,
             device=None,
             dtype=None,
     ):

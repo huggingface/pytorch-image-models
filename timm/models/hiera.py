@@ -31,8 +31,19 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, calculate_drop_path_rates, Mlp, LayerScale, ClNormMlpClassifierHead, use_fused_attn, \
-    _assert, get_norm_layer, to_2tuple, init_weight_vit, init_weight_jax
+from timm.layers import (
+    DropPath,
+    calculate_drop_path_rates,
+    Mlp,
+    LayerScale,
+    ClNormMlpClassifierHead,
+    use_fused_attn,
+    _assert,
+    get_norm_layer,
+    to_2tuple,
+    init_weight_vit,
+    init_weight_jax,
+)
 
 from ._registry import generate_default_cfgs, register_model
 from ._builder import build_model_with_cfg
@@ -258,6 +269,8 @@ class MaskUnitAttention(nn.Module):
             q_stride: int = 1,
             window_size: int = 0,
             use_mask_unit_attn: bool = False,
+            device=None,
+            dtype=None,
     ):
         """
         Args:
@@ -267,8 +280,8 @@ class MaskUnitAttention(nn.Module):
         - window_size: The current (flattened) size of a mask unit *after* pooling (if any).
         - use_mask_unit_attn: Use Mask Unit or Global Attention.
         """
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-
         self.dim = dim
         self.dim_out = dim_out
         self.heads = heads
@@ -277,8 +290,8 @@ class MaskUnitAttention(nn.Module):
         self.scale = self.head_dim ** -0.5
         self.fused_attn = use_fused_attn()
 
-        self.qkv = nn.Linear(dim, 3 * dim_out)
-        self.proj = nn.Linear(dim_out, dim_out)
+        self.qkv = nn.Linear(dim, 3 * dim_out, **dd)
+        self.proj = nn.Linear(dim_out, dim_out, **dd)
 
         self.window_size = window_size
         self.use_mask_unit_attn = use_mask_unit_attn
@@ -322,16 +335,19 @@ class HieraBlock(nn.Module):
             window_size: int = 0,
             use_expand_proj: bool = True,
             use_mask_unit_attn: bool = False,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.dim = dim
         self.dim_out = dim_out
 
-        self.norm1 = norm_layer(dim)
+        self.norm1 = norm_layer(dim, **dd)
         if dim != dim_out:
             self.do_expand = True
             if use_expand_proj:
-                self.proj = nn.Linear(dim, dim_out)
+                self.proj = nn.Linear(dim, dim_out, **dd)
             else:
                 assert dim_out == dim * 2
                 self.proj = None
@@ -344,14 +360,15 @@ class HieraBlock(nn.Module):
             heads,
             q_stride,
             window_size,
-            use_mask_unit_attn
+            use_mask_unit_attn,
+            **dd
         )
-        self.ls1 = LayerScale(dim_out, init_values=init_values) if init_values is not None else nn.Identity()
+        self.ls1 = LayerScale(dim_out, init_values=init_values, **dd) if init_values is not None else nn.Identity()
         self.drop_path1 = DropPath(drop_path) if drop_path > 0 else nn.Identity()
 
-        self.norm2 = norm_layer(dim_out)
-        self.mlp = Mlp(dim_out, int(dim_out * mlp_ratio), act_layer=act_layer)
-        self.ls2 = LayerScale(dim_out, init_values=init_values) if init_values is not None else nn.Identity()
+        self.norm2 = norm_layer(dim_out, **dd)
+        self.mlp = Mlp(dim_out, int(dim_out * mlp_ratio), act_layer=act_layer, **dd)
+        self.ls2 = LayerScale(dim_out, init_values=init_values, **dd) if init_values is not None else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0 else nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -386,9 +403,11 @@ class PatchEmbed(nn.Module):
             stride: Tuple[int, ...],
             padding: Tuple[int, ...],
             reshape: bool = True,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-
         # Support any number of spatial dimensions
         self.spatial_dims = len(kernel)
         self.reshape = reshape
@@ -398,6 +417,7 @@ class PatchEmbed(nn.Module):
             kernel_size=kernel,
             stride=stride,
             padding=padding,
+            **dd,
         )
 
     def forward(
@@ -442,15 +462,18 @@ class Hiera(nn.Module):
             init_values: Optional[float] = None,
             fix_init: bool = True,
             weight_init: str = '',
-            norm_layer: Union[str, nn.Module] = "LayerNorm",
+            norm_layer: Union[str, Type[nn.Module]] = "LayerNorm",
             drop_rate: float = 0.0,
             patch_drop_rate: float = 0.0,
             head_init_scale: float = 0.001,
             sep_pos_embed: bool = False,
             abs_win_pos_embed: bool = False,
             global_pos_size: Tuple[int, int] = (14, 14),
+            device=None,
+            dtype=None,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.grad_checkpointing = False
         norm_layer = get_norm_layer(norm_layer)
@@ -475,6 +498,7 @@ class Hiera(nn.Module):
             patch_kernel,
             patch_stride,
             patch_padding,
+            **dd,
         )
 
         self.pos_embed: Optional[nn.Parameter] = None
@@ -483,18 +507,18 @@ class Hiera(nn.Module):
         self.pos_embed_temporal: Optional[nn.Parameter] = None
         if sep_pos_embed:
             self.pos_embed_spatial = nn.Parameter(
-                torch.zeros(1, self.tokens_spatial_shape[1] * self.tokens_spatial_shape[2], embed_dim)
+                torch.zeros(1, self.tokens_spatial_shape[1] * self.tokens_spatial_shape[2], embed_dim, **dd)
             )
             self.pos_embed_temporal = nn.Parameter(
-                torch.zeros(1, self.tokens_spatial_shape[0], embed_dim)
+                torch.zeros(1, self.tokens_spatial_shape[0], embed_dim, **dd)
             )
         else:
             if abs_win_pos_embed:
                 # absolute win, params NCHW to make tile & interpolate more natural before add & reshape
-                self.pos_embed = nn.Parameter(torch.zeros(1, embed_dim, *global_pos_size))
-                self.pos_embed_win = nn.Parameter(torch.zeros(1, embed_dim, *mask_unit_size))
+                self.pos_embed = nn.Parameter(torch.zeros(1, embed_dim, *global_pos_size, **dd))
+                self.pos_embed_win = nn.Parameter(torch.zeros(1, embed_dim, *mask_unit_size, **dd))
             else:
-                self.pos_embed = nn.Parameter(torch.zeros(1, num_tokens, embed_dim))
+                self.pos_embed = nn.Parameter(torch.zeros(1, num_tokens, embed_dim, **dd))
 
         # Setup roll and reroll modules
         self.unroll = Unroll(
@@ -544,6 +568,7 @@ class Hiera(nn.Module):
                 window_size=flat_mu_size,
                 use_expand_proj=use_expand_proj,
                 use_mask_unit_attn=use_mask_unit_attn,
+                **dd,
             )
             embed_dim = dim_out
             if i in self.stage_ends:
@@ -559,6 +584,7 @@ class Hiera(nn.Module):
             drop_rate=drop_rate,
             norm_layer=norm_layer,
             input_fmt='NLC',
+            **dd,
         )
 
         # Initialize everything

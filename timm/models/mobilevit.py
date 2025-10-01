@@ -14,7 +14,7 @@ Rest of code, ByobNet, and Transformer block hacked together by / Copyright 2022
 # Copyright (C) 2020 Apple Inc. All Rights Reserved.
 #
 import math
-from typing import Callable, Tuple, Optional
+from typing import Callable, Tuple, Optional, Type
 
 import torch
 import torch.nn.functional as F
@@ -185,20 +185,28 @@ class MobileVitBlock(nn.Module):
             no_fusion: bool = False,
             drop_path_rate: float = 0.,
             layers: LayerFn = None,
-            transformer_norm_layer: Callable = nn.LayerNorm,
+            transformer_norm_layer: Type[nn.Module] = nn.LayerNorm,
+            device=None,
+            dtype=None,
             **kwargs,  # eat unused args
     ):
-        super(MobileVitBlock, self).__init__()
-
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         layers = layers or LayerFn()
         groups = num_groups(group_size, in_chs)
         out_chs = out_chs or in_chs
         transformer_dim = transformer_dim or make_divisible(bottle_ratio * in_chs)
 
         self.conv_kxk = layers.conv_norm_act(
-            in_chs, in_chs, kernel_size=kernel_size,
-            stride=stride, groups=groups, dilation=dilation[0])
-        self.conv_1x1 = nn.Conv2d(in_chs, transformer_dim, kernel_size=1, bias=False)
+            in_chs,
+            in_chs,
+            kernel_size=kernel_size,
+            stride=stride,
+            groups=groups,
+            dilation=dilation[0],
+            **dd,
+        )
+        self.conv_1x1 = nn.Conv2d(in_chs, transformer_dim, kernel_size=1, bias=False, **dd)
 
         self.transformer = nn.Sequential(*[
             TransformerBlock(
@@ -211,17 +219,18 @@ class MobileVitBlock(nn.Module):
                 drop_path=drop_path_rate,
                 act_layer=layers.act,
                 norm_layer=transformer_norm_layer,
+                **dd,
             )
             for _ in range(transformer_depth)
         ])
-        self.norm = transformer_norm_layer(transformer_dim)
+        self.norm = transformer_norm_layer(transformer_dim, **dd)
 
-        self.conv_proj = layers.conv_norm_act(transformer_dim, out_chs, kernel_size=1, stride=1)
+        self.conv_proj = layers.conv_norm_act(transformer_dim, out_chs, kernel_size=1, stride=1, **dd)
 
         if no_fusion:
             self.conv_fusion = None
         else:
-            self.conv_fusion = layers.conv_norm_act(in_chs + out_chs, out_chs, kernel_size=kernel_size, stride=1)
+            self.conv_fusion = layers.conv_norm_act(in_chs + out_chs, out_chs, kernel_size=kernel_size, stride=1, **dd)
 
         self.patch_size = to_2tuple(patch_size)
         self.patch_area = self.patch_size[0] * self.patch_size[1]
@@ -290,12 +299,15 @@ class LinearSelfAttention(nn.Module):
     """
 
     def __init__(
-        self,
-        embed_dim: int,
-        attn_drop: float = 0.0,
-        proj_drop: float = 0.0,
-        bias: bool = True,
+            self,
+            embed_dim: int,
+            attn_drop: float = 0.0,
+            proj_drop: float = 0.0,
+            bias: bool = True,
+            device=None,
+            dtype=None,
     ) -> None:
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.embed_dim = embed_dim
 
@@ -304,6 +316,7 @@ class LinearSelfAttention(nn.Module):
             out_channels=1 + (2 * embed_dim),
             bias=bias,
             kernel_size=1,
+            **dd,
         )
         self.attn_drop = nn.Dropout(attn_drop)
         self.out_proj = nn.Conv2d(
@@ -311,6 +324,7 @@ class LinearSelfAttention(nn.Module):
             out_channels=embed_dim,
             bias=bias,
             kernel_size=1,
+            **dd,
         )
         self.out_drop = nn.Dropout(proj_drop)
 
@@ -405,29 +419,33 @@ class LinearTransformerBlock(nn.Module):
     """
 
     def __init__(
-        self,
-        embed_dim: int,
-        mlp_ratio: float = 2.0,
-        drop: float = 0.0,
-        attn_drop: float = 0.0,
-        drop_path: float = 0.0,
-        act_layer=None,
-        norm_layer=None,
+            self,
+            embed_dim: int,
+            mlp_ratio: float = 2.0,
+            drop: float = 0.0,
+            attn_drop: float = 0.0,
+            drop_path: float = 0.0,
+            act_layer: Optional[Type[nn.Module]] = None,
+            norm_layer: Optional[Type[nn.Module]] = None,
+            device=None,
+            dtype=None,
     ) -> None:
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         act_layer = act_layer or nn.SiLU
         norm_layer = norm_layer or GroupNorm1
 
-        self.norm1 = norm_layer(embed_dim)
-        self.attn = LinearSelfAttention(embed_dim=embed_dim, attn_drop=attn_drop, proj_drop=drop)
+        self.norm1 = norm_layer(embed_dim, **dd)
+        self.attn = LinearSelfAttention(embed_dim=embed_dim, attn_drop=attn_drop, proj_drop=drop, **dd)
         self.drop_path1 = DropPath(drop_path)
 
-        self.norm2 = norm_layer(embed_dim)
+        self.norm2 = norm_layer(embed_dim, **dd)
         self.mlp = ConvMlp(
             in_features=embed_dim,
             hidden_features=int(embed_dim * mlp_ratio),
             act_layer=act_layer,
-            drop=drop)
+            drop=drop,
+            **dd)
         self.drop_path2 = DropPath(drop_path)
 
     def forward(self, x: torch.Tensor, x_prev: Optional[torch.Tensor] = None) -> torch.Tensor:
@@ -453,34 +471,43 @@ class MobileVitV2Block(nn.Module):
     """
 
     def __init__(
-        self,
-        in_chs: int,
-        out_chs: Optional[int] = None,
-        kernel_size: int = 3,
-        bottle_ratio: float = 1.0,
-        group_size: Optional[int] = 1,
-        dilation: Tuple[int, int] = (1, 1),
-        mlp_ratio: float = 2.0,
-        transformer_dim: Optional[int] = None,
-        transformer_depth: int = 2,
-        patch_size: int = 8,
-        attn_drop: float = 0.,
-        drop: int = 0.,
-        drop_path_rate: float = 0.,
-        layers: LayerFn = None,
-        transformer_norm_layer: Callable = GroupNorm1,
-        **kwargs,  # eat unused args
+            self,
+            in_chs: int,
+            out_chs: Optional[int] = None,
+            kernel_size: int = 3,
+            bottle_ratio: float = 1.0,
+            group_size: Optional[int] = 1,
+            dilation: Tuple[int, int] = (1, 1),
+            mlp_ratio: float = 2.0,
+            transformer_dim: Optional[int] = None,
+            transformer_depth: int = 2,
+            patch_size: int = 8,
+            attn_drop: float = 0.,
+            drop: int = 0.,
+            drop_path_rate: float = 0.,
+            layers: LayerFn = None,
+            transformer_norm_layer: Type[nn.Module] = GroupNorm1,
+            device=None,
+            dtype=None,
+            **kwargs,  # eat unused args
     ):
-        super(MobileVitV2Block, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         layers = layers or LayerFn()
         groups = num_groups(group_size, in_chs)
         out_chs = out_chs or in_chs
         transformer_dim = transformer_dim or make_divisible(bottle_ratio * in_chs)
 
         self.conv_kxk = layers.conv_norm_act(
-            in_chs, in_chs, kernel_size=kernel_size,
-            stride=1, groups=groups, dilation=dilation[0])
-        self.conv_1x1 = nn.Conv2d(in_chs, transformer_dim, kernel_size=1, bias=False)
+            in_chs,
+            in_chs,
+            kernel_size=kernel_size,
+            stride=1,
+            groups=groups,
+            dilation=dilation[0],
+            **dd,
+        )
+        self.conv_1x1 = nn.Conv2d(in_chs, transformer_dim, kernel_size=1, bias=False, **dd)
 
         self.transformer = nn.Sequential(*[
             LinearTransformerBlock(
@@ -490,13 +517,14 @@ class MobileVitV2Block(nn.Module):
                 drop=drop,
                 drop_path=drop_path_rate,
                 act_layer=layers.act,
-                norm_layer=transformer_norm_layer
+                norm_layer=transformer_norm_layer,
+                **dd,
             )
             for _ in range(transformer_depth)
         ])
-        self.norm = transformer_norm_layer(transformer_dim)
+        self.norm = transformer_norm_layer(transformer_dim, **dd)
 
-        self.conv_proj = layers.conv_norm_act(transformer_dim, out_chs, kernel_size=1, stride=1, apply_act=False)
+        self.conv_proj = layers.conv_norm_act(transformer_dim, out_chs, kernel_size=1, stride=1, apply_act=False, **dd)
 
         self.patch_size = to_2tuple(patch_size)
         self.patch_area = self.patch_size[0] * self.patch_size[1]

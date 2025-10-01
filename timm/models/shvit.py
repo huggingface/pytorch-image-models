@@ -11,7 +11,7 @@ Paper: https://arxiv.org/abs/2401.16456
   year={2024}
 }
 """
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -57,12 +57,15 @@ class Conv2dNorm(nn.Sequential):
             stride: int = 1,
             padding: int = 0,
             bn_weight_init: int = 1,
+            device=None,
+            dtype=None,
             **kwargs,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.add_module('c', nn.Conv2d(
-            in_channels, out_channels, kernel_size, stride, padding, bias=False, **kwargs))
-        self.add_module('bn', nn.BatchNorm2d(out_channels))
+            in_channels, out_channels, kernel_size, stride, padding, bias=False, **dd, **kwargs))
+        self.add_module('bn', nn.BatchNorm2d(out_channels, **dd))
         nn.init.constant_(self.bn.weight, bn_weight_init)
         nn.init.constant_(self.bn.bias, 0)
 
@@ -95,10 +98,13 @@ class NormLinear(nn.Sequential):
             out_features: int,
             bias: bool = True,
             std: float = 0.02,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.add_module('bn', nn.BatchNorm1d(in_features))
-        self.add_module('l', nn.Linear(in_features, out_features, bias=bias))
+        self.add_module('bn', nn.BatchNorm1d(in_features, **dd))
+        self.add_module('l', nn.Linear(in_features, out_features, bias=bias, **dd))
         trunc_normal_(self.l.weight, std=std)
         if bias:
             nn.init.constant_(self.l.bias, 0)
@@ -120,15 +126,23 @@ class NormLinear(nn.Sequential):
 
 
 class PatchMerging(nn.Module):
-    def __init__(self, dim: int, out_dim: int, act_layer: LayerType = nn.ReLU):
+    def __init__(
+            self,
+            dim: int,
+            out_dim: int,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         hid_dim = int(dim * 4)
-        self.conv1 = Conv2dNorm(dim, hid_dim)
+        self.conv1 = Conv2dNorm(dim, hid_dim, **dd)
         self.act1 = act_layer()
-        self.conv2 = Conv2dNorm(hid_dim, hid_dim, 3, 2, 1, groups=hid_dim)
+        self.conv2 = Conv2dNorm(hid_dim, hid_dim, 3, 2, 1, groups=hid_dim, **dd)
         self.act2 = act_layer()
-        self.se = SqueezeExcite(hid_dim, 0.25)
-        self.conv3 = Conv2dNorm(hid_dim, out_dim)
+        self.se = SqueezeExcite(hid_dim, 0.25, **dd)
+        self.conv3 = Conv2dNorm(hid_dim, out_dim, **dd)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.conv1(x)
@@ -141,11 +155,19 @@ class PatchMerging(nn.Module):
 
 
 class FFN(nn.Module):
-    def __init__(self, dim: int, embed_dim: int, act_layer: LayerType = nn.ReLU):
+    def __init__(
+            self,
+            dim: int,
+            embed_dim: int,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.pw1 = Conv2dNorm(dim, embed_dim)
+        self.pw1 = Conv2dNorm(dim, embed_dim, **dd)
         self.act = act_layer()
-        self.pw2 = Conv2dNorm(embed_dim, dim, bn_weight_init=0)
+        self.pw2 = Conv2dNorm(embed_dim, dim, bn_weight_init=0, **dd)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.pw1(x)
@@ -161,19 +183,22 @@ class SHSA(nn.Module):
             dim: int,
             qk_dim: int,
             pdim: int,
-            norm_layer: LayerType = GroupNorm1,
-            act_layer: LayerType = nn.ReLU,
+            norm_layer: Type[nn.Module] = GroupNorm1,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.scale = qk_dim ** -0.5
         self.qk_dim = qk_dim
         self.dim = dim
         self.pdim = pdim
 
-        self.pre_norm = norm_layer(pdim)
+        self.pre_norm = norm_layer(pdim, **dd)
 
-        self.qkv = Conv2dNorm(pdim, qk_dim * 2 + pdim)
-        self.proj = nn.Sequential(act_layer(), Conv2dNorm(dim, dim, bn_weight_init=0))
+        self.qkv = Conv2dNorm(pdim, qk_dim * 2 + pdim, **dd)
+        self.proj = nn.Sequential(act_layer(), Conv2dNorm(dim, dim, bn_weight_init=0, **dd))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, _, H, W = x.shape
@@ -197,16 +222,19 @@ class BasicBlock(nn.Module):
             qk_dim: int,
             pdim: int,
             type: str,
-            norm_layer: LayerType = GroupNorm1,
-            act_layer: LayerType = nn.ReLU,
+            norm_layer: Type[nn.Module] = GroupNorm1,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.conv = Residual(Conv2dNorm(dim, dim, 3, 1, 1, groups=dim, bn_weight_init=0))
+        self.conv = Residual(Conv2dNorm(dim, dim, 3, 1, 1, groups=dim, bn_weight_init=0, **dd))
         if type == "s":
-            self.mixer = Residual(SHSA(dim, qk_dim, pdim, norm_layer, act_layer))
+            self.mixer = Residual(SHSA(dim, qk_dim, pdim, norm_layer, act_layer, **dd))
         else:
             self.mixer = nn.Identity()
-        self.ffn = Residual(FFN(dim, int(dim * 2)))
+        self.ffn = Residual(FFN(dim, int(dim * 2), **dd))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.conv(x)
@@ -224,21 +252,24 @@ class StageBlock(nn.Module):
             pdim: int,
             type: str,
             depth: int,
-            norm_layer: LayerType = GroupNorm1,
-            act_layer: LayerType = nn.ReLU,
+            norm_layer: Type[nn.Module] = GroupNorm1,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.grad_checkpointing = False
         self.downsample = nn.Sequential(
-            Residual(Conv2dNorm(prev_dim, prev_dim, 3, 1, 1, groups=prev_dim)),
-            Residual(FFN(prev_dim, int(prev_dim * 2), act_layer)),
-            PatchMerging(prev_dim, dim, act_layer),
-            Residual(Conv2dNorm(dim, dim, 3, 1, 1, groups=dim)),
-            Residual(FFN(dim, int(dim * 2), act_layer)),
+            Residual(Conv2dNorm(prev_dim, prev_dim, 3, 1, 1, groups=prev_dim, **dd)),
+            Residual(FFN(prev_dim, int(prev_dim * 2), act_layer, **dd)),
+            PatchMerging(prev_dim, dim, act_layer, **dd),
+            Residual(Conv2dNorm(dim, dim, 3, 1, 1, groups=dim, **dd)),
+            Residual(FFN(dim, int(dim * 2), act_layer, **dd)),
         ) if prev_dim != dim else nn.Identity()
 
         self.blocks = nn.Sequential(*[
-            BasicBlock(dim, qk_dim, pdim, type, norm_layer, act_layer) for _ in range(depth)
+            BasicBlock(dim, qk_dim, pdim, type, norm_layer, act_layer, **dd) for _ in range(depth)
         ])
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -262,10 +293,13 @@ class SHViT(nn.Module):
             depth: Tuple[int, int, int] = (1, 2, 3),
             types: Tuple[str, str, str] = ("s", "s", "s"),
             drop_rate: float = 0.,
-            norm_layer: LayerType = GroupNorm1,
-            act_layer: LayerType = nn.ReLU,
+            norm_layer: Type[nn.Module] = GroupNorm1,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            device=None,
+            dtype=None,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.feature_info = []
@@ -273,13 +307,13 @@ class SHViT(nn.Module):
         # Patch embedding
         stem_chs = embed_dim[0]
         self.patch_embed = nn.Sequential(
-            Conv2dNorm(in_chans, stem_chs // 8, 3, 2, 1),
+            Conv2dNorm(in_chans, stem_chs // 8, 3, 2, 1, **dd),
             act_layer(),
-            Conv2dNorm(stem_chs // 8, stem_chs // 4, 3, 2, 1),
+            Conv2dNorm(stem_chs // 8, stem_chs // 4, 3, 2, 1, **dd),
             act_layer(),
-            Conv2dNorm(stem_chs // 4, stem_chs // 2, 3, 2, 1),
+            Conv2dNorm(stem_chs // 4, stem_chs // 2, 3, 2, 1, **dd),
             act_layer(),
-            Conv2dNorm(stem_chs // 2, stem_chs, 3, 2, 1)
+            Conv2dNorm(stem_chs // 2, stem_chs, 3, 2, 1, **dd)
         )
 
         # Build SHViT blocks
@@ -295,6 +329,7 @@ class SHViT(nn.Module):
                 depth=depth[i],
                 norm_layer=norm_layer,
                 act_layer=act_layer,
+                **dd,
             ))
             prev_chs = embed_dim[i]
             self.feature_info.append(dict(num_chs=prev_chs, reduction=2**(i+4), module=f'stages.{i}'))
@@ -304,7 +339,7 @@ class SHViT(nn.Module):
         self.num_features = self.head_hidden_size = embed_dim[-1]
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        self.head = NormLinear(self.head_hidden_size, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = NormLinear(self.head_hidden_size, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     @torch.jit.ignore
     def no_weight_decay(self) -> Set:
@@ -335,7 +370,8 @@ class SHViT(nn.Module):
         # cannot meaningfully change pooling of efficient head after creation
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        self.head = NormLinear(self.head_hidden_size, num_classes) if num_classes > 0 else nn.Identity()
+        device, dtype = self.head.l.weight.device, self.head.l.weight.dtype if hasattr(self.head, 'l') else (None, None)
+        self.head = NormLinear(self.head_hidden_size, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
 
     def forward_intermediates(
             self,
