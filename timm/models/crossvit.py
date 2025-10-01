@@ -21,7 +21,7 @@ Modified from Timm. https://github.com/rwightman/pytorch-image-models/blob/maste
 # SPDX-License-Identifier: Apache-2.0
 
 from functools import partial
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -40,7 +40,17 @@ class PatchEmbed(nn.Module):
     """ Image to Patch Embedding
     """
 
-    def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768, multi_conv=False):
+    def __init__(
+            self,
+            img_size: Union[int, Tuple[int, int]] = 224,
+            patch_size: int = 16,
+            in_chans: int = 3,
+            embed_dim: int = 768,
+            multi_conv: bool = False,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         img_size = to_2tuple(img_size)
         patch_size = to_2tuple(patch_size)
@@ -51,22 +61,22 @@ class PatchEmbed(nn.Module):
         if multi_conv:
             if patch_size[0] == 12:
                 self.proj = nn.Sequential(
-                    nn.Conv2d(in_chans, embed_dim // 4, kernel_size=7, stride=4, padding=3),
+                    nn.Conv2d(in_chans, embed_dim // 4, kernel_size=7, stride=4, padding=3, **dd),
                     nn.ReLU(inplace=True),
-                    nn.Conv2d(embed_dim // 4, embed_dim // 2, kernel_size=3, stride=3, padding=0),
+                    nn.Conv2d(embed_dim // 4, embed_dim // 2, kernel_size=3, stride=3, padding=0, **dd),
                     nn.ReLU(inplace=True),
-                    nn.Conv2d(embed_dim // 2, embed_dim, kernel_size=3, stride=1, padding=1),
+                    nn.Conv2d(embed_dim // 2, embed_dim, kernel_size=3, stride=1, padding=1, **dd),
                 )
             elif patch_size[0] == 16:
                 self.proj = nn.Sequential(
-                    nn.Conv2d(in_chans, embed_dim // 4, kernel_size=7, stride=4, padding=3),
+                    nn.Conv2d(in_chans, embed_dim // 4, kernel_size=7, stride=4, padding=3, **dd),
                     nn.ReLU(inplace=True),
-                    nn.Conv2d(embed_dim // 4, embed_dim // 2, kernel_size=3, stride=2, padding=1),
+                    nn.Conv2d(embed_dim // 4, embed_dim // 2, kernel_size=3, stride=2, padding=1, **dd),
                     nn.ReLU(inplace=True),
-                    nn.Conv2d(embed_dim // 2, embed_dim, kernel_size=3, stride=2, padding=1),
+                    nn.Conv2d(embed_dim // 2, embed_dim, kernel_size=3, stride=2, padding=1, **dd),
                 )
         else:
-            self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+            self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size, **dd)
 
     def forward(self, x):
         B, C, H, W = x.shape
@@ -82,23 +92,26 @@ class PatchEmbed(nn.Module):
 class CrossAttention(nn.Module):
     def __init__(
             self,
-            dim,
-            num_heads=8,
-            qkv_bias=False,
-            attn_drop=0.,
-            proj_drop=0.,
+            dim: int,
+            num_heads: int = 8,
+            qkv_bias: bool = False,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
         # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
         self.scale = head_dim ** -0.5
 
-        self.wq = nn.Linear(dim, dim, bias=qkv_bias)
-        self.wk = nn.Linear(dim, dim, bias=qkv_bias)
-        self.wv = nn.Linear(dim, dim, bias=qkv_bias)
+        self.wq = nn.Linear(dim, dim, bias=qkv_bias, **dd)
+        self.wk = nn.Linear(dim, dim, bias=qkv_bias, **dd)
+        self.wv = nn.Linear(dim, dim, bias=qkv_bias, **dd)
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
+        self.proj = nn.Linear(dim, dim, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, x):
@@ -124,24 +137,28 @@ class CrossAttentionBlock(nn.Module):
 
     def __init__(
             self,
-            dim,
-            num_heads,
-            mlp_ratio=4.,
-            qkv_bias=False,
-            proj_drop=0.,
-            attn_drop=0.,
-            drop_path=0.,
-            act_layer=nn.GELU,
-            norm_layer=nn.LayerNorm,
+            dim: int,
+            num_heads: int,
+            mlp_ratio: float = 4.,
+            qkv_bias: bool = False,
+            proj_drop: float = 0.,
+            attn_drop: float = 0.,
+            drop_path: float = 0.,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.norm1 = norm_layer(dim)
+        self.norm1 = norm_layer(dim, **dd)
         self.attn = CrossAttention(
             dim,
             num_heads=num_heads,
             qkv_bias=qkv_bias,
             attn_drop=attn_drop,
             proj_drop=proj_drop,
+            **dd,
         )
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -155,20 +172,22 @@ class MultiScaleBlock(nn.Module):
 
     def __init__(
             self,
-            dim,
-            patches,
-            depth,
-            num_heads,
-            mlp_ratio,
-            qkv_bias=False,
-            proj_drop=0.,
-            attn_drop=0.,
-            drop_path=0.,
-            act_layer=nn.GELU,
-            norm_layer=nn.LayerNorm,
+            dim: Tuple[int, ...],
+            patches: Tuple[int, ...],
+            depth: Tuple[int, ...],
+            num_heads: Tuple[int, ...],
+            mlp_ratio: Tuple[float, ...],
+            qkv_bias: bool = False,
+            proj_drop: float = 0.,
+            attn_drop: float = 0.,
+            drop_path: Union[List[float], float] = 0.,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-
         num_branches = len(dim)
         self.num_branches = num_branches
         # different branch could have different embedding size, the first one is the base
@@ -185,6 +204,7 @@ class MultiScaleBlock(nn.Module):
                     attn_drop=attn_drop,
                     drop_path=drop_path[i],
                     norm_layer=norm_layer,
+                    **dd,
                 ))
             if len(tmp) != 0:
                 self.blocks.append(nn.Sequential(*tmp))
@@ -197,7 +217,7 @@ class MultiScaleBlock(nn.Module):
             if dim[d] == dim[(d + 1) % num_branches] and False:
                 tmp = [nn.Identity()]
             else:
-                tmp = [norm_layer(dim[d]), act_layer(), nn.Linear(dim[d], dim[(d + 1) % num_branches])]
+                tmp = [norm_layer(dim[d], **dd), act_layer(), nn.Linear(dim[d], dim[(d + 1) % num_branches], **dd)]
             self.projs.append(nn.Sequential(*tmp))
 
         self.fusion = nn.ModuleList()
@@ -215,6 +235,7 @@ class MultiScaleBlock(nn.Module):
                         attn_drop=attn_drop,
                         drop_path=drop_path[-1],
                         norm_layer=norm_layer,
+                        **dd,
                     ))
             else:
                 tmp = []
@@ -228,6 +249,7 @@ class MultiScaleBlock(nn.Module):
                         attn_drop=attn_drop,
                         drop_path=drop_path[-1],
                         norm_layer=norm_layer,
+                        **dd,
                     ))
                 self.fusion.append(nn.Sequential(*tmp))
 
@@ -236,8 +258,8 @@ class MultiScaleBlock(nn.Module):
             if dim[(d + 1) % num_branches] == dim[d] and False:
                 tmp = [nn.Identity()]
             else:
-                tmp = [norm_layer(dim[(d + 1) % num_branches]), act_layer(),
-                       nn.Linear(dim[(d + 1) % num_branches], dim[d])]
+                tmp = [norm_layer(dim[(d + 1) % num_branches], **dd), act_layer(),
+                       nn.Linear(dim[(d + 1) % num_branches], dim[d], **dd)]
             self.revert_projs.append(nn.Sequential(*tmp))
 
     def forward(self, x: List[torch.Tensor]) -> List[torch.Tensor]:
@@ -293,27 +315,30 @@ class CrossVit(nn.Module):
 
     def __init__(
             self,
-            img_size=224,
-            img_scale=(1.0, 1.0),
-            patch_size=(8, 16),
-            in_chans=3,
-            num_classes=1000,
-            embed_dim=(192, 384),
-            depth=((1, 3, 1), (1, 3, 1), (1, 3, 1)),
-            num_heads=(6, 12),
-            mlp_ratio=(2., 2., 4.),
-            multi_conv=False,
-            crop_scale=False,
-            qkv_bias=True,
-            drop_rate=0.,
-            pos_drop_rate=0.,
-            proj_drop_rate=0.,
-            attn_drop_rate=0.,
-            drop_path_rate=0.,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6),
-            global_pool='token',
+            img_size: int = 224,
+            img_scale: Tuple[float, ...] = (1.0, 1.0),
+            patch_size: Tuple[int, ...] = (8, 16),
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            embed_dim: Tuple[int, ...] = (192, 384),
+            depth: Tuple[Tuple[int, ...], ...] = ((1, 3, 1), (1, 3, 1), (1, 3, 1)),
+            num_heads: Tuple[int, ...] = (6, 12),
+            mlp_ratio: Tuple[float, ...] = (2., 2., 4.),
+            multi_conv: bool = False,
+            crop_scale: bool = False,
+            qkv_bias: bool = True,
+            drop_rate: float = 0.,
+            pos_drop_rate: float = 0.,
+            proj_drop_rate: float = 0.,
+            attn_drop_rate: float = 0.,
+            drop_path_rate: float = 0.,
+            norm_layer: Type[nn.Module] = partial(nn.LayerNorm, eps=1e-6),
+            global_pool: str = 'token',
+            device=None,
+            dtype=None,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         assert global_pool in ('token', 'avg')
 
         self.num_classes = num_classes
@@ -330,8 +355,8 @@ class CrossVit(nn.Module):
 
         # hard-coded for torch jit script
         for i in range(self.num_branches):
-            setattr(self, f'pos_embed_{i}', nn.Parameter(torch.zeros(1, 1 + num_patches[i], embed_dim[i])))
-            setattr(self, f'cls_token_{i}', nn.Parameter(torch.zeros(1, 1, embed_dim[i])))
+            setattr(self, f'pos_embed_{i}', nn.Parameter(torch.zeros(1, 1 + num_patches[i], embed_dim[i], **dd)))
+            setattr(self, f'cls_token_{i}', nn.Parameter(torch.zeros(1, 1, embed_dim[i], **dd)))
 
         for im_s, p, d in zip(self.img_size_scaled, patch_size, embed_dim):
             self.patch_embed.append(
@@ -341,6 +366,7 @@ class CrossVit(nn.Module):
                     in_chans=in_chans,
                     embed_dim=d,
                     multi_conv=multi_conv,
+                    **dd,
                 ))
 
         self.pos_drop = nn.Dropout(p=pos_drop_rate)
@@ -363,14 +389,15 @@ class CrossVit(nn.Module):
                 attn_drop=attn_drop_rate,
                 drop_path=dpr_,
                 norm_layer=norm_layer,
+                **dd,
             )
             dpr_ptr += curr_depth
             self.blocks.append(blk)
 
-        self.norm = nn.ModuleList([norm_layer(embed_dim[i]) for i in range(self.num_branches)])
+        self.norm = nn.ModuleList([norm_layer(embed_dim[i], **dd) for i in range(self.num_branches)])
         self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.ModuleList([
-            nn.Linear(embed_dim[i], num_classes) if num_classes > 0 else nn.Identity()
+            nn.Linear(embed_dim[i], num_classes, **dd) if num_classes > 0 else nn.Identity()
             for i in range(self.num_branches)])
 
         for i in range(self.num_branches):
@@ -418,8 +445,11 @@ class CrossVit(nn.Module):
         if global_pool is not None:
             assert global_pool in ('token', 'avg')
             self.global_pool = global_pool
+        device = self.head[0].weight.device if hasattr(self.head[0], 'weight') else None
+        dtype = self.head[0].weight.dtype if hasattr(self.head[0], 'weight') else None
+        dd = {'device': device, 'dtype': dtype}
         self.head = nn.ModuleList([
-            nn.Linear(self.embed_dim[i], num_classes) if num_classes > 0 else nn.Identity()
+            nn.Linear(self.embed_dim[i], num_classes, **dd) if num_classes > 0 else nn.Identity()
             for i in range(self.num_branches)
         ])
 

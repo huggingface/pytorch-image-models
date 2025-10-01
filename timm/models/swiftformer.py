@@ -11,7 +11,7 @@ Paper: https://arxiv.org/pdf/2303.15446
 }
 """
 import re
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -28,11 +28,12 @@ __all__ = ['SwiftFormer']
 
 
 class LayerScale2d(nn.Module):
-    def __init__(self, dim: int, init_values: float = 1e-5, inplace: bool = False):
+    def __init__(self, dim: int, init_values: float = 1e-5, inplace: bool = False, device=None, dtype=None):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.inplace = inplace
         self.gamma = nn.Parameter(
-            init_values * torch.ones(dim, 1, 1), requires_grad=True)
+            init_values * torch.ones(dim, 1, 1, **dd), requires_grad=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x.mul_(self.gamma) if self.inplace else x * self.gamma
@@ -51,14 +52,17 @@ class Embedding(nn.Module):
             patch_size: int = 16,
             stride: int = 16,
             padding: int = 0,
-            norm_layer: LayerType = nn.BatchNorm2d,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         patch_size = to_2tuple(patch_size)
         stride = to_2tuple(stride)
         padding = to_2tuple(padding)
-        self.proj = nn.Conv2d(in_chans, embed_dim, patch_size, stride, padding)
-        self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
+        self.proj = nn.Conv2d(in_chans, embed_dim, patch_size, stride, padding, **dd)
+        self.norm = norm_layer(embed_dim, **dd) if norm_layer else nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.proj(x)
@@ -78,18 +82,21 @@ class ConvEncoder(nn.Module):
             hidden_dim: int = 64,
             kernel_size: int = 3,
             drop_path: float = 0.,
-            act_layer: LayerType = nn.GELU,
-            norm_layer: LayerType = nn.BatchNorm2d,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
             use_layer_scale: bool = True,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.dwconv = nn.Conv2d(dim, dim, kernel_size, padding=kernel_size // 2, groups=dim)
-        self.norm = norm_layer(dim)
-        self.pwconv1 = nn.Conv2d(dim, hidden_dim, 1)
+        self.dwconv = nn.Conv2d(dim, dim, kernel_size, padding=kernel_size // 2, groups=dim, **dd)
+        self.norm = norm_layer(dim, **dd)
+        self.pwconv1 = nn.Conv2d(dim, hidden_dim, 1, **dd)
         self.act = act_layer()
-        self.pwconv2 = nn.Conv2d(hidden_dim, dim, 1)
+        self.pwconv2 = nn.Conv2d(hidden_dim, dim, 1, **dd)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.layer_scale = LayerScale2d(dim, 1) if use_layer_scale else nn.Identity()
+        self.layer_scale = LayerScale2d(dim, 1, **dd) if use_layer_scale else nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         input = x
@@ -114,17 +121,20 @@ class Mlp(nn.Module):
             in_features: int,
             hidden_features: Optional[int] = None,
             out_features: Optional[int] = None,
-            act_layer: LayerType = nn.GELU,
-            norm_layer: LayerType = nn.BatchNorm2d,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
             drop: float = 0.,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
-        self.norm1 = norm_layer(in_features)
-        self.fc1 = nn.Conv2d(in_features, hidden_features, 1)
+        self.norm1 = norm_layer(in_features, **dd)
+        self.fc1 = nn.Conv2d(in_features, hidden_features, 1, **dd)
         self.act = act_layer()
-        self.fc2 = nn.Conv2d(hidden_features, out_features, 1)
+        self.fc2 = nn.Conv2d(hidden_features, out_features, 1, **dd)
         self.drop = nn.Dropout(drop)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -143,16 +153,24 @@ class EfficientAdditiveAttention(nn.Module):
     Input: tensor in shape [B, C, H, W]
     Output: tensor in shape [B, C, H, W]
     """
-    def __init__(self, in_dims: int = 512, token_dim: int = 256, num_heads: int = 1):
+    def __init__(
+            self,
+            in_dims: int = 512,
+            token_dim: int = 256,
+            num_heads: int = 1,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.scale_factor = token_dim ** -0.5
-        self.to_query = nn.Linear(in_dims, token_dim * num_heads)
-        self.to_key = nn.Linear(in_dims, token_dim * num_heads)
+        self.to_query = nn.Linear(in_dims, token_dim * num_heads, **dd)
+        self.to_key = nn.Linear(in_dims, token_dim * num_heads, **dd)
 
-        self.w_g = nn.Parameter(torch.randn(token_dim * num_heads, 1))
+        self.w_g = nn.Parameter(torch.randn(token_dim * num_heads, 1, **dd))
 
-        self.proj = nn.Linear(token_dim * num_heads, token_dim * num_heads)
-        self.final = nn.Linear(token_dim * num_heads, token_dim)
+        self.proj = nn.Linear(token_dim * num_heads, token_dim * num_heads, **dd)
+        self.final = nn.Linear(token_dim * num_heads, token_dim, **dd)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, _, H, W = x.shape
@@ -181,17 +199,20 @@ class LocalRepresentation(nn.Module):
             kernel_size: int = 3,
             drop_path: float = 0.,
             use_layer_scale: bool = True,
-            act_layer: LayerType = nn.GELU,
-            norm_layer: LayerType = nn.BatchNorm2d,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.dwconv = nn.Conv2d(dim, dim, kernel_size, padding=kernel_size // 2, groups=dim)
-        self.norm = norm_layer(dim)
-        self.pwconv1 = nn.Conv2d(dim, dim, kernel_size=1)
+        self.dwconv = nn.Conv2d(dim, dim, kernel_size, padding=kernel_size // 2, groups=dim, **dd)
+        self.norm = norm_layer(dim, **dd)
+        self.pwconv1 = nn.Conv2d(dim, dim, kernel_size=1, **dd)
         self.act = act_layer()
-        self.pwconv2 = nn.Conv2d(dim, dim, kernel_size=1)
+        self.pwconv2 = nn.Conv2d(dim, dim, kernel_size=1, **dd)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.layer_scale = LayerScale2d(dim, 1) if use_layer_scale else nn.Identity()
+        self.layer_scale = LayerScale2d(dim, 1, **dd) if use_layer_scale else nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         skip = x
@@ -218,30 +239,35 @@ class Block(nn.Module):
             mlp_ratio: float = 4.,
             drop_rate: float = 0.,
             drop_path: float = 0.,
-            act_layer: LayerType = nn.GELU,
-            norm_layer: LayerType = nn.BatchNorm2d,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
             use_layer_scale: bool = True,
             layer_scale_init_value: float = 1e-5,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.local_representation = LocalRepresentation(
             dim=dim,
             use_layer_scale=use_layer_scale,
             act_layer=act_layer,
             norm_layer=norm_layer,
+            **dd,
         )
-        self.attn = EfficientAdditiveAttention(in_dims=dim, token_dim=dim)
+        self.attn = EfficientAdditiveAttention(in_dims=dim, token_dim=dim, **dd)
         self.linear = Mlp(
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
             norm_layer=norm_layer,
             drop=drop_rate,
+            **dd,
         )
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.layer_scale_1 = LayerScale2d(dim, layer_scale_init_value) \
+        self.layer_scale_1 = LayerScale2d(dim, layer_scale_init_value, **dd) \
             if use_layer_scale else nn.Identity()
-        self.layer_scale_2 = LayerScale2d(dim, layer_scale_init_value) \
+        self.layer_scale_2 = LayerScale2d(dim, layer_scale_init_value, **dd) \
             if use_layer_scale else nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -263,14 +289,17 @@ class Stage(nn.Module):
             index: int,
             layers: List[int],
             mlp_ratio: float = 4.,
-            act_layer: LayerType = nn.GELU,
-            norm_layer: LayerType = nn.BatchNorm2d,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
             drop_rate: float = 0.,
             drop_path_rate: float = 0.,
             use_layer_scale: bool = True,
             layer_scale_init_value: float = 1e-5,
-            downsample: Optional[LayerType] = None,
+            downsample: Optional[Type[nn.Module]] = None,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.grad_checkpointing = False
         self.downsample = downsample if downsample is not None else nn.Identity()
@@ -288,6 +317,7 @@ class Stage(nn.Module):
                     norm_layer=norm_layer,
                     use_layer_scale=use_layer_scale,
                     layer_scale_init_value=layer_scale_init_value,
+                    **dd,
                 ))
             else:
                 blocks.append(ConvEncoder(
@@ -298,6 +328,7 @@ class Stage(nn.Module):
                     act_layer=act_layer,
                     norm_layer=norm_layer,
                     use_layer_scale=use_layer_scale,
+                    **dd,
                 ))
         self.blocks = nn.Sequential(*blocks)
 
@@ -317,7 +348,7 @@ class SwiftFormer(nn.Module):
             embed_dims: List[int] = [48, 56, 112, 220],
             mlp_ratios: int = 4,
             downsamples: List[bool] = [False, True, True, True],
-            act_layer: LayerType = nn.GELU,
+            act_layer: Type[nn.Module] = nn.GELU,
             down_patch_size: int = 3,
             down_stride: int = 2,
             down_pad: int = 1,
@@ -329,20 +360,23 @@ class SwiftFormer(nn.Module):
             global_pool: str = 'avg',
             output_stride: int = 32,
             in_chans: int = 3,
+            device=None,
+            dtype=None,
             **kwargs,
     ):
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         assert output_stride == 32
         self.num_classes = num_classes
         self.global_pool = global_pool
         self.feature_info = []
 
         self.stem = nn.Sequential(
-            nn.Conv2d(in_chans, embed_dims[0] // 2, 3, 2, 1),
-            nn.BatchNorm2d(embed_dims[0] // 2),
+            nn.Conv2d(in_chans, embed_dims[0] // 2, 3, 2, 1, **dd),
+            nn.BatchNorm2d(embed_dims[0] // 2, **dd),
             nn.ReLU(),
-            nn.Conv2d(embed_dims[0] // 2, embed_dims[0], 3, 2, 1),
-            nn.BatchNorm2d(embed_dims[0]),
+            nn.Conv2d(embed_dims[0] // 2, embed_dims[0], 3, 2, 1, **dd),
+            nn.BatchNorm2d(embed_dims[0], **dd),
             nn.ReLU(),
         )
         prev_dim = embed_dims[0]
@@ -355,6 +389,7 @@ class SwiftFormer(nn.Module):
                 patch_size=down_patch_size,
                 stride=down_stride,
                 padding=down_pad,
+                **dd,
             ) if downsamples[i] else nn.Identity()
             stage = Stage(
                 dim=embed_dims[i],
@@ -367,6 +402,7 @@ class SwiftFormer(nn.Module):
                 use_layer_scale=use_layer_scale,
                 layer_scale_init_value=layer_scale_init_value,
                 downsample=downsample,
+                **dd,
             )
             prev_dim = embed_dims[i]
             stages.append(stage)
@@ -375,11 +411,11 @@ class SwiftFormer(nn.Module):
 
         # Classifier head
         self.num_features  = self.head_hidden_size = out_chs = embed_dims[-1]
-        self.norm = nn.BatchNorm2d(out_chs)
+        self.norm = nn.BatchNorm2d(out_chs, **dd)
         self.head_drop = nn.Dropout(drop_rate)
-        self.head = Linear(out_chs, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = Linear(out_chs, num_classes, **dd) if num_classes > 0 else nn.Identity()
         # assuming model is always distilled (valid for current checkpoints, will split def if that changes)
-        self.head_dist = Linear(out_chs, num_classes) if num_classes > 0 else nn.Identity()
+        self.head_dist = Linear(out_chs, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.distilled_training = False  # must set this True to train w/ distillation token
         self._initialize_weights()
 
@@ -423,8 +459,9 @@ class SwiftFormer(nn.Module):
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
-        self.head = Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
-        self.head_dist = Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        device, dtype = self.head.weight.device, self.head.weight.dtype if hasattr(self.head, 'weight') else (None, None)
+        self.head = Linear(self.num_features, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
+        self.head_dist = Linear(self.num_features, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
 
     @torch.jit.ignore
     def set_distilled_training(self, enable: bool = True):

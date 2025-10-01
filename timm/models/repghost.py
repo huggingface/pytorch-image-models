@@ -6,7 +6,7 @@ Original implementation: https://github.com/ChengpengChen/RepGhost
 """
 import copy
 from functools import partial
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Type
 
 import torch
 import torch.nn as nn
@@ -29,22 +29,25 @@ _SE_LAYER = partial(SqueezeExcite, gate_layer='hard_sigmoid', rd_round_fn=partia
 class RepGhostModule(nn.Module):
     def __init__(
             self,
-            in_chs,
-            out_chs,
-            kernel_size=1,
-            dw_size=3,
-            stride=1,
-            relu=True,
-            reparam=True,
+            in_chs: int,
+            out_chs: int,
+            kernel_size: int = 1,
+            dw_size: int = 3,
+            stride: int = 1,
+            relu: bool = True,
+            reparam: bool = True,
+            device=None,
+            dtype=None,
     ):
-        super(RepGhostModule, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.out_chs = out_chs
         init_chs = out_chs
         new_chs = out_chs
 
         self.primary_conv = nn.Sequential(
-            nn.Conv2d(in_chs, init_chs, kernel_size, stride, kernel_size // 2, bias=False),
-            nn.BatchNorm2d(init_chs),
+            nn.Conv2d(in_chs, init_chs, kernel_size, stride, kernel_size // 2, bias=False, **dd),
+            nn.BatchNorm2d(init_chs, **dd),
             nn.ReLU(inplace=True) if relu else nn.Identity(),
         )
 
@@ -52,14 +55,14 @@ class RepGhostModule(nn.Module):
         fusion_bn = []
         if reparam:
             fusion_conv.append(nn.Identity())
-            fusion_bn.append(nn.BatchNorm2d(init_chs))
+            fusion_bn.append(nn.BatchNorm2d(init_chs, **dd))
 
         self.fusion_conv = nn.Sequential(*fusion_conv)
         self.fusion_bn = nn.Sequential(*fusion_bn)
 
         self.cheap_operation = nn.Sequential(
-            nn.Conv2d(init_chs, new_chs, dw_size, 1, dw_size//2, groups=init_chs, bias=False),
-            nn.BatchNorm2d(new_chs),
+            nn.Conv2d(init_chs, new_chs, dw_size, 1, dw_size//2, groups=init_chs, bias=False, **dd),
+            nn.BatchNorm2d(new_chs, **dd),
             # nn.ReLU(inplace=True) if relu else nn.Identity(),
         )
         self.relu = nn.ReLU(inplace=False) if relu else nn.Identity()
@@ -113,6 +116,7 @@ class RepGhostModule(nn.Module):
         if len(self.fusion_conv) == 0 and len(self.fusion_bn) == 0:
             return
         kernel, bias = self.get_equivalent_kernel_bias()
+        dd = {'device': kernel.device, 'dtype': kernel.dtype}
         self.cheap_operation = nn.Conv2d(
             in_channels=self.cheap_operation[0].in_channels,
             out_channels=self.cheap_operation[0].out_channels,
@@ -120,7 +124,8 @@ class RepGhostModule(nn.Module):
             padding=self.cheap_operation[0].padding,
             dilation=self.cheap_operation[0].dilation,
             groups=self.cheap_operation[0].groups,
-            bias=True)
+            bias=True,
+            **dd)
         self.cheap_operation.weight.data = kernel
         self.cheap_operation.bias.data = bias
         self.__delattr__('fusion_conv')
@@ -137,37 +142,47 @@ class RepGhostBottleneck(nn.Module):
 
     def __init__(
             self,
-            in_chs,
-            mid_chs,
-            out_chs,
-            dw_kernel_size=3,
-            stride=1,
-            act_layer=nn.ReLU,
-            se_ratio=0.,
-            reparam=True,
+            in_chs: int,
+            mid_chs: int,
+            out_chs: int,
+            dw_kernel_size: int = 3,
+            stride: int = 1,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            se_ratio: float = 0.,
+            reparam: bool = True,
+            device=None,
+            dtype=None,
     ):
-        super(RepGhostBottleneck, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         has_se = se_ratio is not None and se_ratio > 0.
         self.stride = stride
 
         # Point-wise expansion
-        self.ghost1 = RepGhostModule(in_chs, mid_chs, relu=True, reparam=reparam)
+        self.ghost1 = RepGhostModule(in_chs, mid_chs, relu=True, reparam=reparam, **dd)
 
         # Depth-wise convolution
         if self.stride > 1:
             self.conv_dw = nn.Conv2d(
-                mid_chs, mid_chs, dw_kernel_size, stride=stride,
-                padding=(dw_kernel_size-1)//2, groups=mid_chs, bias=False)
-            self.bn_dw = nn.BatchNorm2d(mid_chs)
+                mid_chs,
+                mid_chs,
+                dw_kernel_size,
+                stride=stride,
+                padding=(dw_kernel_size-1)//2,
+                groups=mid_chs,
+                bias=False,
+                **dd,
+            )
+            self.bn_dw = nn.BatchNorm2d(mid_chs, **dd)
         else:
             self.conv_dw = None
             self.bn_dw = None
 
         # Squeeze-and-excitation
-        self.se = _SE_LAYER(mid_chs, rd_ratio=se_ratio) if has_se else None
+        self.se = _SE_LAYER(mid_chs, rd_ratio=se_ratio, **dd) if has_se else None
 
         # Point-wise linear projection
-        self.ghost2 = RepGhostModule(mid_chs, out_chs, relu=False, reparam=reparam)
+        self.ghost2 = RepGhostModule(mid_chs, out_chs, relu=False, reparam=reparam, **dd)
 
         # shortcut
         if in_chs == out_chs and self.stride == 1:
@@ -175,11 +190,18 @@ class RepGhostBottleneck(nn.Module):
         else:
             self.shortcut = nn.Sequential(
                 nn.Conv2d(
-                    in_chs, in_chs, dw_kernel_size, stride=stride,
-                    padding=(dw_kernel_size-1)//2, groups=in_chs, bias=False),
-                nn.BatchNorm2d(in_chs),
-                nn.Conv2d(in_chs, out_chs, 1, stride=1, padding=0, bias=False),
-                nn.BatchNorm2d(out_chs),
+                    in_chs,
+                    in_chs,
+                    dw_kernel_size,
+                    stride=stride,
+                    padding=(dw_kernel_size-1)//2,
+                    groups=in_chs,
+                    bias=False,
+                    **dd,
+                ),
+                nn.BatchNorm2d(in_chs, **dd),
+                nn.Conv2d(in_chs, out_chs, 1, stride=1, padding=0, bias=False, **dd),
+                nn.BatchNorm2d(out_chs, **dd),
             )
 
     def forward(self, x):
@@ -207,16 +229,19 @@ class RepGhostBottleneck(nn.Module):
 class RepGhostNet(nn.Module):
     def __init__(
             self,
-            cfgs,
-            num_classes=1000,
-            width=1.0,
-            in_chans=3,
-            output_stride=32,
-            global_pool='avg',
-            drop_rate=0.2,
-            reparam=True,
+            cfgs: List[List[List]],
+            num_classes: int = 1000,
+            width: float = 1.0,
+            in_chans: int = 3,
+            output_stride: int = 32,
+            global_pool: str = 'avg',
+            drop_rate: float = 0.2,
+            reparam: bool = True,
+            device=None,
+            dtype=None,
     ):
-        super(RepGhostNet, self).__init__()
+        super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         # setting of inverted residual blocks
         assert output_stride == 32, 'only output_stride==32 is valid, dilation not supported'
         self.cfgs = cfgs
@@ -227,9 +252,9 @@ class RepGhostNet(nn.Module):
 
         # building first layer
         stem_chs = make_divisible(16 * width, 4)
-        self.conv_stem = nn.Conv2d(in_chans, stem_chs, 3, 2, 1, bias=False)
+        self.conv_stem = nn.Conv2d(in_chans, stem_chs, 3, 2, 1, bias=False, **dd)
         self.feature_info.append(dict(num_chs=stem_chs, reduction=2, module=f'conv_stem'))
-        self.bn1 = nn.BatchNorm2d(stem_chs)
+        self.bn1 = nn.BatchNorm2d(stem_chs, **dd)
         self.act1 = nn.ReLU(inplace=True)
         prev_chs = stem_chs
 
@@ -244,7 +269,7 @@ class RepGhostNet(nn.Module):
             for k, exp_size, c, se_ratio, s in cfg:
                 out_chs = make_divisible(c * width, 4)
                 mid_chs = make_divisible(exp_size * width, 4)
-                layers.append(block(prev_chs, mid_chs, out_chs, k, s, se_ratio=se_ratio, reparam=reparam))
+                layers.append(block(prev_chs, mid_chs, out_chs, k, s, se_ratio=se_ratio, reparam=reparam, **dd))
                 prev_chs = out_chs
             if s > 1:
                 net_stride *= 2
@@ -254,7 +279,7 @@ class RepGhostNet(nn.Module):
             stage_idx += 1
 
         out_chs = make_divisible(exp_size * width * 2, 4)
-        stages.append(nn.Sequential(ConvBnAct(prev_chs, out_chs, 1)))
+        stages.append(nn.Sequential(ConvBnAct(prev_chs, out_chs, 1, **dd)))
         self.pool_dim = prev_chs = out_chs
 
         self.blocks = nn.Sequential(*stages)
@@ -263,10 +288,10 @@ class RepGhostNet(nn.Module):
         self.num_features = prev_chs
         self.head_hidden_size = out_chs = 1280
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.conv_head = nn.Conv2d(prev_chs, out_chs, 1, 1, 0, bias=True)
+        self.conv_head = nn.Conv2d(prev_chs, out_chs, 1, 1, 0, bias=True, **dd)
         self.act2 = nn.ReLU(inplace=True)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        self.classifier = Linear(out_chs, num_classes) if num_classes > 0 else nn.Identity()
+        self.classifier = Linear(out_chs, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
@@ -293,7 +318,13 @@ class RepGhostNet(nn.Module):
             # NOTE: cannot meaningfully change pooling of efficient head after creation
             self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
             self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        self.classifier = Linear(self.head_hidden_size, num_classes) if num_classes > 0 else nn.Identity()
+        if num_classes > 0:
+            device = self.classifier.weight.device if hasattr(self.classifier, 'weight') else None
+            dtype = self.classifier.weight.dtype if hasattr(self.classifier, 'weight') else None
+            dd = {'device': device, 'dtype': dtype}
+            self.classifier = Linear(self.head_hidden_size, num_classes, **dd)
+        else:
+            self.classifier = nn.Identity()
 
     def forward_intermediates(
             self,

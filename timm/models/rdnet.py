@@ -5,7 +5,7 @@ Apache-2.0
 """
 
 from functools import partial
-from typing import List, Optional, Tuple, Union, Callable
+from typing import List, Optional, Tuple, Union, Callable, Type
 
 import torch
 import torch.nn as nn
@@ -22,14 +22,24 @@ __all__ = ["RDNet"]
 
 
 class Block(nn.Module):
-    def __init__(self, in_chs, inter_chs, out_chs, norm_layer, act_layer):
+    def __init__(
+            self,
+            in_chs: int,
+            inter_chs: int,
+            out_chs: int,
+            norm_layer: Type[nn.Module],
+            act_layer: Type[nn.Module],
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.layers = nn.Sequential(
-            nn.Conv2d(in_chs, in_chs, groups=in_chs, kernel_size=7, stride=1, padding=3),
-            norm_layer(in_chs),
-            nn.Conv2d(in_chs, inter_chs, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(in_chs, in_chs, groups=in_chs, kernel_size=7, stride=1, padding=3, **dd),
+            norm_layer(in_chs, **dd),
+            nn.Conv2d(in_chs, inter_chs, kernel_size=1, stride=1, padding=0, **dd),
             act_layer(),
-            nn.Conv2d(inter_chs, out_chs, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(inter_chs, out_chs, kernel_size=1, stride=1, padding=0, **dd),
         )
 
     def forward(self, x):
@@ -37,15 +47,25 @@ class Block(nn.Module):
 
 
 class BlockESE(nn.Module):
-    def __init__(self, in_chs, inter_chs, out_chs, norm_layer, act_layer):
+    def __init__(
+            self,
+            in_chs: int,
+            inter_chs: int,
+            out_chs: int,
+            norm_layer: Type[nn.Module],
+            act_layer: Type[nn.Module],
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.layers = nn.Sequential(
-            nn.Conv2d(in_chs, in_chs, groups=in_chs, kernel_size=7, stride=1, padding=3),
-            norm_layer(in_chs),
-            nn.Conv2d(in_chs, inter_chs, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(in_chs, in_chs, groups=in_chs, kernel_size=7, stride=1, padding=3, **dd),
+            norm_layer(in_chs, **dd),
+            nn.Conv2d(in_chs, inter_chs, kernel_size=1, stride=1, padding=0, **dd),
             act_layer(),
-            nn.Conv2d(inter_chs, out_chs, kernel_size=1, stride=1, padding=0),
-            EffectiveSEModule(out_chs),
+            nn.Conv2d(inter_chs, out_chs, kernel_size=1, stride=1, padding=0, **dd),
+            EffectiveSEModule(out_chs, **dd),
         )
 
     def forward(self, x):
@@ -74,9 +94,12 @@ class DenseBlock(nn.Module):
             block_idx: int = 0,
             block_type: str = "Block",
             ls_init_value: float = 1e-6,
-            norm_layer: str = "layernorm2d",
-            act_layer: str = "gelu",
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            act_layer: Type[nn.Module] = nn.GELU,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.drop_rate = drop_rate
         self.drop_path_rate = drop_path_rate
@@ -84,7 +107,7 @@ class DenseBlock(nn.Module):
         self.block_idx = block_idx
         self.growth_rate = growth_rate
 
-        self.gamma = nn.Parameter(ls_init_value * torch.ones(growth_rate)) if ls_init_value > 0 else None
+        self.gamma = nn.Parameter(ls_init_value * torch.ones(growth_rate, **dd)) if ls_init_value > 0 else None
         growth_rate = int(growth_rate)
         inter_chs = int(num_input_features * bottleneck_width_ratio / 8) * 8
 
@@ -96,6 +119,7 @@ class DenseBlock(nn.Module):
             out_chs=growth_rate,
             norm_layer=norm_layer,
             act_layer=act_layer,
+            **dd,
         )
 
     def forward(self, x: List[torch.Tensor]) -> torch.Tensor:
@@ -110,7 +134,17 @@ class DenseBlock(nn.Module):
 
 
 class DenseStage(nn.Sequential):
-    def __init__(self, num_block, num_input_features, drop_path_rates, growth_rate, **kwargs):
+    def __init__(
+            self,
+            num_block: int,
+            num_input_features: int,
+            drop_path_rates: List[float],
+            growth_rate: int,
+            device=None,
+            dtype=None,
+            **kwargs,
+    ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         for i in range(num_block):
             layer = DenseBlock(
@@ -118,6 +152,7 @@ class DenseStage(nn.Sequential):
                 growth_rate=growth_rate,
                 drop_path_rate=drop_path_rates[i],
                 block_idx=i,
+                **dd,
                 **kwargs,
             )
             num_input_features += growth_rate
@@ -156,6 +191,8 @@ class RDNet(nn.Module):
             norm_eps: Optional[float] = None,
             drop_rate: float = 0.0,  # timm option [--drop: dropout ratio]
             drop_path_rate: float = 0.0,  # timm option [--drop-path: drop-path ratio]
+            device=None,
+            dtype=None,
     ):
         """
         Args:
@@ -181,6 +218,7 @@ class RDNet(nn.Module):
             drop_path_rate: Stochastic depth drop rate.
         """
         super().__init__()
+        dd = {'device': device, 'dtype': dtype}
         assert len(growth_rates) == len(num_blocks_list) == len(is_downsample_block)
         act_layer = get_act_layer(act_layer)
         norm_layer = get_norm_layer(norm_layer)
@@ -195,16 +233,16 @@ class RDNet(nn.Module):
         if stem_type == 'patch':
             # NOTE: this stem is a minimal form of ViT PatchEmbed, as used in SwinTransformer w/ patch_size = 4
             self.stem = nn.Sequential(
-                nn.Conv2d(in_chans, num_init_features, kernel_size=patch_size, stride=patch_size, bias=conv_bias),
-                norm_layer(num_init_features),
+                nn.Conv2d(in_chans, num_init_features, kernel_size=patch_size, stride=patch_size, bias=conv_bias, **dd),
+                norm_layer(num_init_features, **dd),
             )
             stem_stride = patch_size
         else:
             mid_chs = make_divisible(num_init_features // 2) if 'tiered' in stem_type else num_init_features
             self.stem = nn.Sequential(
-                nn.Conv2d(in_chans, mid_chs, kernel_size=3, stride=2, padding=1, bias=conv_bias),
-                nn.Conv2d(mid_chs, num_init_features, kernel_size=3, stride=2, padding=1, bias=conv_bias),
-                norm_layer(num_init_features),
+                nn.Conv2d(in_chans, mid_chs, kernel_size=3, stride=2, padding=1, bias=conv_bias, **dd),
+                nn.Conv2d(mid_chs, num_init_features, kernel_size=3, stride=2, padding=1, bias=conv_bias, **dd),
+                norm_layer(num_init_features, **dd),
             )
             stem_stride = 4
 
@@ -225,10 +263,15 @@ class RDNet(nn.Module):
                     curr_stride *= 2
                     k_size = stride = 2
 
-                dense_stage_layers.append(norm_layer(num_features))
-                dense_stage_layers.append(
-                    nn.Conv2d(num_features, compressed_num_features, kernel_size=k_size, stride=stride, padding=0)
-                )
+                dense_stage_layers.append(norm_layer(num_features, **dd))
+                dense_stage_layers.append(nn.Conv2d(
+                    num_features,
+                    compressed_num_features,
+                    kernel_size=k_size,
+                    stride=stride,
+                    padding=0,
+                    **dd,
+                ))
                 num_features = compressed_num_features
 
             stage = DenseStage(
@@ -242,6 +285,7 @@ class RDNet(nn.Module):
                 block_type=block_type[i],
                 norm_layer=norm_layer,
                 act_layer=act_layer,
+                **dd,
             )
             dense_stage_layers.append(stage)
             num_features += num_blocks_list[i] * growth_rates[i]
@@ -262,12 +306,13 @@ class RDNet(nn.Module):
         # if head_norm_first == true, norm -> global pool -> fc ordering, like most other nets
         # otherwise pool -> norm -> fc, the default RDNet ordering (pretrained NV weights)
         if head_norm_first:
-            self.norm_pre = norm_layer(self.num_features)
+            self.norm_pre = norm_layer(self.num_features, **dd)
             self.head = ClassifierHead(
                 self.num_features,
                 num_classes,
                 pool_type=global_pool,
                 drop_rate=self.drop_rate,
+                **dd,
             )
         else:
             self.norm_pre = nn.Identity()
@@ -277,6 +322,7 @@ class RDNet(nn.Module):
                 pool_type=global_pool,
                 drop_rate=self.drop_rate,
                 norm_layer=norm_layer,
+                **dd,
             )
 
         named_apply(partial(_init_weights, head_init_scale=head_init_scale), self)
