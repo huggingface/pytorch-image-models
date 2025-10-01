@@ -80,14 +80,17 @@ class Stem(nn.Module):
             norm_layer: str = 'layernorm2d',
             norm_eps: float = 1e-6,
             bias: bool = True,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         norm_act_layer = partial(get_norm_act_layer(norm_layer, act_layer), eps=norm_eps)
         self.out_chs = out_chs
 
-        self.conv1 = create_conv2d(in_chs, out_chs, 3, stride=2, bias=bias)
-        self.norm1 = norm_act_layer(out_chs)
-        self.conv2 = create_conv2d(out_chs, out_chs, 3, stride=1, bias=bias)
+        self.conv1 = create_conv2d(in_chs, out_chs, 3, stride=2, bias=bias, **dd)
+        self.norm1 = norm_act_layer(out_chs, **dd)
+        self.conv2 = create_conv2d(out_chs, out_chs, 3, stride=1, bias=bias, **dd)
 
         named_apply(_init_conv, self)
 
@@ -105,12 +108,15 @@ class Downsample2d(nn.Module):
             dim_out: int,
             pool_type: str = 'avg2',
             bias: bool = True,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.pool = nn.AvgPool2d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
 
         if dim != dim_out:
-            self.expand = nn.Conv2d(dim, dim_out, 1, bias=bias) # 1x1 conv
+            self.expand = nn.Conv2d(dim, dim_out, 1, bias=bias, **dd) # 1x1 conv
         else:
             self.expand = nn.Identity()
 
@@ -125,17 +131,20 @@ class StridedConv(nn.Module):
     """
     def __init__(
             self,
-            kernel_size=3,
-            stride=2,
-            padding=1,
-            in_chans=3,
-            embed_dim=768
+            kernel_size: int = 3,
+            stride: int = 2,
+            padding: int = 1,
+            in_chans: int = 3,
+            embed_dim: int = 768,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         norm_layer = partial(get_norm_layer('layernorm2d'), eps=1e-6)
 
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=kernel_size, stride=stride, padding=padding)
-        self.norm = norm_layer(in_chans) # affine over C
+        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=kernel_size, stride=stride, padding=padding, **dd)
+        self.norm = norm_layer(in_chans, **dd) # affine over C
 
     def forward(self, x):
         x = self.norm(x)
@@ -157,27 +166,30 @@ class MbConvLNBlock(nn.Module):
             norm_eps: float = 1e-6,
             act_layer: str = 'gelu',
             expand_ratio: float = 4.0,
+            device=None,
+            dtype=None,
     ):
-        super(MbConvLNBlock, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.stride, self.in_chs, self.out_chs = stride, in_chs, out_chs
         mid_chs = make_divisible(out_chs * expand_ratio)
         prenorm_act_layer = partial(get_norm_act_layer(norm_layer, act_layer), eps=norm_eps)
 
         if stride == 2:
-            self.shortcut = Downsample2d(in_chs, out_chs, pool_type='avg', bias=True)
+            self.shortcut = Downsample2d(in_chs, out_chs, pool_type='avg', bias=True, **dd)
         elif in_chs != out_chs:
-            self.shortcut = nn.Conv2d(in_chs, out_chs, 1, bias=True)
+            self.shortcut = nn.Conv2d(in_chs, out_chs, 1, bias=True, **dd)
         else:
             self.shortcut = nn.Identity()
 
-        self.pre_norm = prenorm_act_layer(in_chs, apply_act=False)
+        self.pre_norm = prenorm_act_layer(in_chs, apply_act=False, **dd)
         self.down = nn.Identity()
-        self.conv1_1x1 = create_conv2d(in_chs, mid_chs, 1, stride=1, bias=True)
+        self.conv1_1x1 = create_conv2d(in_chs, mid_chs, 1, stride=1, bias=True, **dd)
         self.act1 = create_act_layer(act_layer, inplace=True)
         self.conv2_kxk = create_conv2d(
-            mid_chs, mid_chs, kernel_size, stride=stride, dilation=1, groups=mid_chs, bias=True)
+            mid_chs, mid_chs, kernel_size, stride=stride, dilation=1, groups=mid_chs, bias=True, **dd)
         self.act2 = create_act_layer(act_layer, inplace=True)
-        self.conv3_1x1 = create_conv2d(mid_chs, out_chs, 1, bias=True)
+        self.conv3_1x1 = create_conv2d(mid_chs, out_chs, 1, bias=True, **dd)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
 
@@ -213,13 +225,17 @@ class MbConvStages(nn.Module):
             cfg: VitCfg,
             img_size: Union[int, Tuple[int, int]] = 224, # place holder
             in_chans: int = 3,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.grad_checkpointing = False
 
         self.stem = Stem(
             in_chs=in_chans,
             out_chs=cfg.stem_width,
+            **dd,
         )
 
         stages = []
@@ -231,6 +247,7 @@ class MbConvStages(nn.Module):
                     in_chs = stage_in_chs if d==0 else dim,
                     out_chs = dim,
                     stride = 2 if d == 0 else 1,
+                    **dd,
                 )
                 for d in range(cfg.depths[s])
             ]
@@ -240,7 +257,8 @@ class MbConvStages(nn.Module):
         self.pool = StridedConv(
             stride=2,
             in_chans=cfg.embed_dim[1],
-            embed_dim=cfg.embed_dim[2]
+            embed_dim=cfg.embed_dim[2],
+            **dd,
         )
 
     def forward(self, x):
@@ -256,12 +274,12 @@ class MbConvStages(nn.Module):
 class GeGluMlp(nn.Module):
     def __init__(
             self,
-            in_features,
-            hidden_features,
-            act_layer = 'gelu',
-            norm_layer = None,
-            bias = True,
-            drop = 0.0,
+            in_features: int,
+            hidden_features: int,
+            act_layer: str = 'gelu',
+            norm_layer: Optional[str] = None,
+            bias: bool = True,
+            drop: float = 0.0,
             device=None,
             dtype=None,
     ):
@@ -285,7 +303,8 @@ class GeGluMlp(nn.Module):
 def _create_vitamin(variant, pretrained=False, embed_cfg=None, **kwargs):
     out_indices = kwargs.pop('out_indices', 3)
     assert embed_cfg is not None
-    backbone = MbConvStages(cfg=embed_cfg, in_chans=kwargs.get('in_chans', 3))
+    dd = {'device': kwargs.get('device', None), 'dtype': kwargs.get('dtype', None)}
+    backbone = MbConvStages(cfg=embed_cfg, in_chans=kwargs.get('in_chans', 3), **dd)
     kwargs['embed_layer'] = partial(HybridEmbed, backbone=backbone, proj=False)
     kwargs.setdefault('patch_size', 1)  # default patch size for hybrid models if not set
 
