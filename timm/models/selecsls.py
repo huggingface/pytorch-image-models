@@ -9,7 +9,7 @@ https://arxiv.org/abs/1907.00837
 Based on ResNet implementation in https://github.com/rwightman/pytorch-image-models
 and SelecSLS Net implementation in https://github.com/mehtadushy/SelecSLS-Pytorch
 """
-from typing import List
+from typing import List, Type
 
 import torch
 import torch.nn as nn
@@ -25,7 +25,7 @@ __all__ = ['SelecSls']  # model_registry will add each entrypoint fn to this
 class SequentialList(nn.Sequential):
 
     def __init__(self, *args):
-        super(SequentialList, self).__init__(*args)
+        super().__init__(*args)
 
     @torch.jit._overload_method  # noqa: F811
     def forward(self, x):
@@ -45,7 +45,7 @@ class SequentialList(nn.Sequential):
 
 class SelectSeq(nn.Module):
     def __init__(self, mode='index', index=0):
-        super(SelectSeq, self).__init__()
+        super().__init__()
         self.mode = mode
         self.index = index
 
@@ -66,30 +66,43 @@ class SelectSeq(nn.Module):
             return torch.cat(x, dim=1)
 
 
-def conv_bn(in_chs, out_chs, k=3, stride=1, padding=None, dilation=1):
+def conv_bn(in_chs, out_chs, k=3, stride=1, padding=None, dilation=1, device=None, dtype=None):
+    dd = {'device': device, 'dtype': dtype}
     if padding is None:
         padding = ((stride - 1) + dilation * (k - 1)) // 2
     return nn.Sequential(
-        nn.Conv2d(in_chs, out_chs, k, stride, padding=padding, dilation=dilation, bias=False),
-        nn.BatchNorm2d(out_chs),
+        nn.Conv2d(in_chs, out_chs, k, stride, padding=padding, dilation=dilation, bias=False, **dd),
+        nn.BatchNorm2d(out_chs, **dd),
         nn.ReLU(inplace=True)
     )
 
 
 class SelecSlsBlock(nn.Module):
-    def __init__(self, in_chs, skip_chs, mid_chs, out_chs, is_first, stride, dilation=1):
-        super(SelecSlsBlock, self).__init__()
+    def __init__(
+            self,
+            in_chs: int,
+            skip_chs: int,
+            mid_chs: int,
+            out_chs: int,
+            is_first: bool,
+            stride: int,
+            dilation: int = 1,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.stride = stride
         self.is_first = is_first
         assert stride in [1, 2]
 
         # Process input with 4 conv blocks with the same number of input and output channels
-        self.conv1 = conv_bn(in_chs, mid_chs, 3, stride, dilation=dilation)
-        self.conv2 = conv_bn(mid_chs, mid_chs, 1)
-        self.conv3 = conv_bn(mid_chs, mid_chs // 2, 3)
-        self.conv4 = conv_bn(mid_chs // 2, mid_chs, 1)
-        self.conv5 = conv_bn(mid_chs, mid_chs // 2, 3)
-        self.conv6 = conv_bn(2 * mid_chs + (0 if is_first else skip_chs), out_chs, 1)
+        self.conv1 = conv_bn(in_chs, mid_chs, 3, stride, dilation=dilation, **dd)
+        self.conv2 = conv_bn(mid_chs, mid_chs, 1, **dd)
+        self.conv3 = conv_bn(mid_chs, mid_chs // 2, 3, **dd)
+        self.conv4 = conv_bn(mid_chs // 2, mid_chs, 1, **dd)
+        self.conv5 = conv_bn(mid_chs, mid_chs // 2, 3, **dd)
+        self.conv6 = conv_bn(2 * mid_chs + (0 if is_first else skip_chs), out_chs, 1, **dd)
 
     def forward(self, x: List[torch.Tensor]) -> List[torch.Tensor]:
         if not isinstance(x, list):
@@ -122,14 +135,24 @@ class SelecSls(nn.Module):
         Global pooling type. One of 'avg', 'max', 'avgmax', 'catavgmax'
     """
 
-    def __init__(self, cfg, num_classes=1000, in_chans=3, drop_rate=0.0, global_pool='avg'):
+    def __init__(
+            self,
+            cfg,
+            num_classes: int = 1000,
+            in_chans: int = 3,
+            drop_rate: float = 0.0,
+            global_pool: str = 'avg',
+            device=None,
+            dtype=None,
+    ):
         self.num_classes = num_classes
-        super(SelecSls, self).__init__()
+        super().__init__()
+        dd = {'device': device, 'dtype': dtype}
 
-        self.stem = conv_bn(in_chans, 32, stride=2)
-        self.features = SequentialList(*[cfg['block'](*block_args) for block_args in cfg['features']])
+        self.stem = conv_bn(in_chans, 32, stride=2, **dd)
+        self.features = SequentialList(*[cfg['block'](*block_args, **dd) for block_args in cfg['features']])
         self.from_seq = SelectSeq()  # from List[tensor] -> Tensor in module compatible way
-        self.head = nn.Sequential(*[conv_bn(*conv_args) for conv_args in cfg['head']])
+        self.head = nn.Sequential(*[conv_bn(*conv_args, **dd) for conv_args in cfg['head']])
         self.num_features = self.head_hidden_size = cfg['num_features']
         self.feature_info = cfg['feature_info']
 
@@ -138,6 +161,7 @@ class SelecSls(nn.Module):
             self.num_classes,
             pool_type=global_pool,
             drop_rate=drop_rate,
+            **dd,
         )
 
         for n, m in self.named_modules():
@@ -162,7 +186,13 @@ class SelecSls(nn.Module):
 
     def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
         self.num_classes = num_classes
-        self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
+        self.global_pool, self.fc = create_classifier(
+            self.num_features,
+            self.num_classes,
+            pool_type=global_pool,
+            device=self.fc.weight.device if hasattr(self.fc, 'weight') else None,
+            dtype=self.fc.weight.dtype if hasattr(self.fc, 'weight') else None,
+        )
 
     def forward_features(self, x):
         x = self.stem(x)
