@@ -885,3 +885,10 @@ def davit_huge_fl(pretrained=False, **kwargs) -> DaVit:
         window_size=12, down_kernel_size=3, channel_attn_v2=True, named_blocks=True,
     )
     return _create_davit('davit_huge_fl', pretrained=pretrained, **dict(model_args, **kwargs))
+
+# experimental
+
+@register_model
+def davit_swin_tiny(pretrained=False, **kwargs) -> DaVit:
+    model_args = dict(depths=(2, 2, 6, 2), embed_dims=(96, 192, 384, 768), num_heads=(3, 6, 12, 24), attn_types=('spatial',))
+    return _create_davit('davit_swin_tiny', pretrained=pretrained, **dict(model_args, **kwargs))

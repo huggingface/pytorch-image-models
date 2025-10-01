@@ -48,6 +48,7 @@ import torch.nn.functional as F
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import PatchEmbed, Mlp, SwiGLU, LayerNorm, DropPath, calculate_drop_path_rates, trunc_normal_, use_fused_attn
 from timm.layers import resample_patch_embed, resample_abs_pos_embed, resize_rel_pos_bias_table, ndgrid
+from timm.layers import NormMlpClassifierHead
 
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
@@ -465,14 +466,25 @@ class Beit(nn.Module):
                 window_size=self.patch_embed.grid_size if use_rel_pos_bias else None,
             )
             for i in range(depth)])
+
         self.feature_info = [
             dict(module=f'blocks.{i}', num_chs=embed_dim, reduction=r) for i in range(depth)]
-
-        use_fc_norm = self.global_pool == 'avg'
-        self.norm = nn.Identity() if use_fc_norm else norm_layer(embed_dim)
-        self.fc_norm = norm_layer(embed_dim) if use_fc_norm else nn.Identity()
-        self.head_drop = nn.Dropout(drop_rate)
-        self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+            
+        # pre_norm if using cls token features, fc_norm otherwise
+        # cls -> norm -> ...
+        # pool -> norm -> ...
+        #use_fc_norm = self.global_pool == 'avg'
+        #self.norm = nn.Identity() if use_fc_norm else norm_layer(embed_dim)
+        #self.fc_norm = norm_layer(embed_dim) if use_fc_norm else nn.Identity()
+        #self.head_drop = nn.Dropout(drop_rate)
+        #self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = NormMlpClassifierHead(
+                self.num_features,
+                num_classes,
+                pool_type=global_pool,
+                drop_rate=drop_rate,
+                norm_layer=norm_layer,
+            )
 
         self.apply(self._init_weights)
         if self.pos_embed is not None:
