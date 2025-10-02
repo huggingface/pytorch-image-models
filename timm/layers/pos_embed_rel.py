@@ -500,8 +500,8 @@ class RelPosBiasTf(nn.Module):
         vocab_width = 2 * window_size[1] - 1
         self.bias_shape = (self.num_heads, vocab_height, vocab_width)
         self.relative_position_bias_table = nn.Parameter(torch.empty(self.bias_shape, **dd))
-        self.register_buffer('height_lookup', generate_lookup_tensor(window_size[0], device=device), persistent=False)
-        self.register_buffer('width_lookup', generate_lookup_tensor(window_size[1], device=device), persistent=False)
+        self.register_buffer('height_lookup', generate_lookup_tensor(window_size[0], **dd), persistent=False)
+        self.register_buffer('width_lookup', generate_lookup_tensor(window_size[1], **dd), persistent=False)
         self.init_weights()
 
     def init_weights(self):

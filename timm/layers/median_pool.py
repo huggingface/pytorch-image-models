@@ -16,7 +16,7 @@ class MedianPool2d(nn.Module):
          same: override padding and enforce same padding, boolean
     """
     def __init__(self, kernel_size=3, stride=1, padding=0, same=False):
-        super(MedianPool2d, self).__init__()
+        super().__init__()
         self.k = to_2tuple(kernel_size)
         self.stride = to_2tuple(stride)
         self.padding = to_4tuple(padding)  # convert to l, r, t, b

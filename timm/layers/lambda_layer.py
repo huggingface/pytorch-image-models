@@ -31,9 +31,12 @@ from .helpers import to_2tuple, make_divisible
 from .weight_init import trunc_normal_
 
 
-def rel_pos_indices(size):
+def rel_pos_indices(size, device=None):
     size = to_2tuple(size)
-    pos = torch.stack(ndgrid(torch.arange(size[0]), torch.arange(size[1]))).flatten(1)
+    pos = torch.stack(ndgrid(
+        torch.arange(size[0], device=device, dtype=torch.long),
+        torch.arange(size[1], device=device, dtype=torch.long),
+    )).flatten(1)
     rel_pos = pos[:, None, :] - pos[:, :, None]
     rel_pos[0] += size[0] - 1
     rel_pos[1] += size[1] - 1
@@ -111,7 +114,11 @@ class LambdaLayer(nn.Module):
             rel_size = [2 * s - 1 for s in feat_size]
             self.conv_lambda = None
             self.pos_emb = nn.Parameter(torch.empty(rel_size[0], rel_size[1], self.dim_qk, **dd))
-            self.register_buffer('rel_pos_indices', rel_pos_indices(feat_size), persistent=False)
+            self.register_buffer(
+                'rel_pos_indices',
+                rel_pos_indices(feat_size, device=device),
+                persistent=False,
+            )
 
         self.pool = nn.AvgPool2d(2, 2) if stride == 2 else nn.Identity()
 

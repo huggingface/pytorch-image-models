@@ -40,9 +40,18 @@ class InplaceAbn(nn.Module):
         Negative slope for the `leaky_relu` activation.
     """
 
-    def __init__(self, num_features, eps=1e-5, momentum=0.1, affine=True, apply_act=True,
-                 act_layer="leaky_relu", act_param=0.01, drop_layer=None):
-        super(InplaceAbn, self).__init__()
+    def __init__(
+            self,
+            num_features,
+            eps=1e-5,
+            momentum=0.1,
+            affine=True,
+            apply_act=True,
+            act_layer="leaky_relu",
+            act_param=0.01,
+            drop_layer=None,
+    ):
+        super().__init__()
         self.num_features = num_features
         self.affine = affine
         self.eps = eps

@@ -44,7 +44,7 @@ class GatherExcite(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(GatherExcite, self).__init__()
+        super().__init__()
         self.add_maxpool = add_maxpool
         act_layer = get_act_layer(act_layer)
         self.extent = extent

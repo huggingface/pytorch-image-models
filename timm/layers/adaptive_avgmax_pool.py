@@ -57,7 +57,7 @@ def select_adaptive_pool2d(x, pool_type='avg', output_size: _int_tuple_2_t = 1):
 
 class FastAdaptiveAvgPool(nn.Module):
     def __init__(self, flatten: bool = False, input_fmt: F = 'NCHW'):
-        super(FastAdaptiveAvgPool, self).__init__()
+        super().__init__()
         self.flatten = flatten
         self.dim = get_spatial_dim(input_fmt)
 
@@ -67,7 +67,7 @@ class FastAdaptiveAvgPool(nn.Module):
 
 class FastAdaptiveMaxPool(nn.Module):
     def __init__(self, flatten: bool = False, input_fmt: str = 'NCHW'):
-        super(FastAdaptiveMaxPool, self).__init__()
+        super().__init__()
         self.flatten = flatten
         self.dim = get_spatial_dim(input_fmt)
 
@@ -77,7 +77,7 @@ class FastAdaptiveMaxPool(nn.Module):
 
 class FastAdaptiveAvgMaxPool(nn.Module):
     def __init__(self, flatten: bool = False, input_fmt: str = 'NCHW'):
-        super(FastAdaptiveAvgMaxPool, self).__init__()
+        super().__init__()
         self.flatten = flatten
         self.dim = get_spatial_dim(input_fmt)
 
@@ -89,7 +89,7 @@ class FastAdaptiveAvgMaxPool(nn.Module):
 
 class FastAdaptiveCatAvgMaxPool(nn.Module):
     def __init__(self, flatten: bool = False, input_fmt: str = 'NCHW'):
-        super(FastAdaptiveCatAvgMaxPool, self).__init__()
+        super().__init__()
         self.flatten = flatten
         self.dim_reduce = get_spatial_dim(input_fmt)
         if flatten:
@@ -105,7 +105,7 @@ class FastAdaptiveCatAvgMaxPool(nn.Module):
 
 class AdaptiveAvgMaxPool2d(nn.Module):
     def __init__(self, output_size: _int_tuple_2_t = 1):
-        super(AdaptiveAvgMaxPool2d, self).__init__()
+        super().__init__()
         self.output_size = output_size
 
     def forward(self, x):
@@ -114,7 +114,7 @@ class AdaptiveAvgMaxPool2d(nn.Module):
 
 class AdaptiveCatAvgMaxPool2d(nn.Module):
     def __init__(self, output_size: _int_tuple_2_t = 1):
-        super(AdaptiveCatAvgMaxPool2d, self).__init__()
+        super().__init__()
         self.output_size = output_size
 
     def forward(self, x):
@@ -131,7 +131,7 @@ class SelectAdaptivePool2d(nn.Module):
             flatten: bool = False,
             input_fmt: str = 'NCHW',
     ):
-        super(SelectAdaptivePool2d, self).__init__()
+        super().__init__()
         assert input_fmt in ('NCHW', 'NHWC')
         self.pool_type = pool_type or ''  # convert other falsy values to empty string for consistent TS typing
         pool_type = pool_type.lower()

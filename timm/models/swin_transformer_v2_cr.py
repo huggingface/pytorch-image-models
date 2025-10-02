@@ -119,7 +119,7 @@ class WindowMultiHeadAttention(nn.Module):
             dtype=None,
     ) -> None:
         dd = {'device': device, 'dtype': dtype}
-        super(WindowMultiHeadAttention, self).__init__()
+        super().__init__()
         assert dim % num_heads == 0, \
             "The number of input features (in_features) are not divisible by the number of heads (num_heads)."
         self.in_features: int = dim
@@ -261,7 +261,7 @@ class SwinTransformerV2CrBlock(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(SwinTransformerV2CrBlock, self).__init__()
+        super().__init__()
         self.dim: int = dim
         self.feat_size: Tuple[int, int] = feat_size
         self.target_shift_size: Tuple[int, int] = to_2tuple(shift_size)
@@ -466,7 +466,7 @@ class PatchMerging(nn.Module):
             norm_layer: Type of normalization layer to be utilized.
         """
         dd = {'device': device, 'dtype': dtype}
-        super(PatchMerging, self).__init__()
+        super().__init__()
         self.norm = norm_layer(4 * dim, **dd)
         self.reduction = nn.Linear(in_features=4 * dim, out_features=2 * dim, bias=False, **dd)
 
@@ -600,7 +600,7 @@ class SwinTransformerV2CrStage(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(SwinTransformerV2CrStage, self).__init__()
+        super().__init__()
         self.downscale: bool = downscale
         self.grad_checkpointing: bool = False
         self.feat_size: Tuple[int, int] = (feat_size[0] // 2, feat_size[1] // 2) if downscale else feat_size
@@ -727,12 +727,12 @@ class SwinTransformerV2Cr(nn.Module):
             extra_norm_stage: bool = False,
             sequential_attn: bool = False,
             global_pool: str = 'avg',
-            weight_init='skip',
+            weight_init: str = 'skip',
             device=None,
             dtype=None,
             **kwargs: Any
     ) -> None:
-        super(SwinTransformerV2Cr, self).__init__()
+        super().__init__()
         dd = {'device': device, 'dtype': dtype}
         img_size = to_2tuple(img_size)
         self.num_classes: int = num_classes

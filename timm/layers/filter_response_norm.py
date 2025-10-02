@@ -30,7 +30,7 @@ class FilterResponseNormTlu2d(nn.Module):
             **_,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(FilterResponseNormTlu2d, self).__init__()
+        super().__init__()
         self.apply_act = apply_act  # apply activation (non-linearity)
         self.rms = rms
         self.eps = eps
@@ -69,7 +69,7 @@ class FilterResponseNormAct2d(nn.Module):
             **_,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(FilterResponseNormAct2d, self).__init__()
+        super().__init__()
         if act_layer is not None and apply_act:
             self.act = create_act_layer(act_layer, inplace=inplace)
         else:

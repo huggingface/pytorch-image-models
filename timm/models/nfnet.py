@@ -128,7 +128,7 @@ class DownsampleAvg(nn.Module):
             first_dilation: First dilation rate (unused).
             conv_layer: Convolution layer type.
         """
-        super(DownsampleAvg, self).__init__()
+        super().__init__()
         avg_stride = stride if dilation == 1 else 1
         if stride > 1 or dilation > 1:
             avg_pool_fn = AvgPool2dSame if avg_stride == 1 and dilation > 1 else nn.AvgPool2d

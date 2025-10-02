@@ -77,7 +77,7 @@ class BasicBlock(nn.Module):
             drop_path: Optional DropPath layer instance.
         """
         dd = {'device': device, 'dtype': dtype}
-        super(BasicBlock, self).__init__()
+        super().__init__()
 
         assert cardinality == 1, 'BasicBlock only supports cardinality of 1'
         assert base_width == 64, 'BasicBlock does not support changing base width'
@@ -197,7 +197,7 @@ class Bottleneck(nn.Module):
             drop_path: Optional DropPath layer instance.
         """
         dd = {'device': device, 'dtype': dtype}
-        super(Bottleneck, self).__init__()
+        super().__init__()
 
         width = int(math.floor(planes * (base_width / 64)) * cardinality)
         first_planes = width // reduce_first
@@ -524,7 +524,7 @@ class ResNet(nn.Module):
             zero_init_last (bool): zero-init the last weight in residual path (usually last BN affine weight)
             block_args (dict): Extra kwargs to pass through to block module
         """
-        super(ResNet, self).__init__()
+        super().__init__()
         dd = {'device': device, 'dtype': dtype}
         block_args = block_args or dict()
         assert output_stride in (8, 16, 32)

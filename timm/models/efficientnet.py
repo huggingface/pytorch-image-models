@@ -121,7 +121,7 @@ class EfficientNet(nn.Module):
             drop_path_rate: Drop path rate for stochastic depth.
             global_pool: Global pooling type.
         """
-        super(EfficientNet, self).__init__()
+        super().__init__()
         dd = {'device': device, 'dtype': dtype}
         act_layer = act_layer or nn.ReLU
         norm_layer = norm_layer or nn.BatchNorm2d
@@ -377,7 +377,7 @@ class EfficientNetFeatures(nn.Module):
             device=None,
             dtype=None,
     ):
-        super(EfficientNetFeatures, self).__init__()
+        super().__init__()
         dd = {'device': device, 'dtype': dtype}
         act_layer = act_layer or nn.ReLU
         norm_layer = norm_layer or nn.BatchNorm2d

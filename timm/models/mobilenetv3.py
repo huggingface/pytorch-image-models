@@ -89,7 +89,7 @@ class MobileNetV3(nn.Module):
             layer_scale_init_value: Enable layer scale on compatible blocks if not None.
             global_pool: Type of pooling to use for global pooling features of the FC head.
         """
-        super(MobileNetV3, self).__init__()
+        super().__init__()
         dd = {'device': device, 'dtype': dtype}
         act_layer = act_layer or nn.ReLU
         norm_layer = norm_layer or nn.BatchNorm2d
@@ -393,7 +393,7 @@ class MobileNetV3Features(nn.Module):
             drop_path_rate: Stochastic depth rate.
             layer_scale_init_value: Enable layer scale on compatible blocks if not None.
         """
-        super(MobileNetV3Features, self).__init__()
+        super().__init__()
         dd = {'device': device, 'dtype': dtype}
         act_layer = act_layer or nn.ReLU
         norm_layer = norm_layer or nn.BatchNorm2d

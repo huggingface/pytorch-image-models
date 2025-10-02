@@ -38,7 +38,7 @@ class SelectiveKernelAttn(nn.Module):
 
         """
         dd = {'device': device, 'dtype': dtype}
-        super(SelectiveKernelAttn, self).__init__()
+        super().__init__()
         self.num_paths = num_paths
         self.fc_reduce = nn.Conv2d(channels, attn_channels, kernel_size=1, bias=False, **dd)
         self.bn = norm_layer(attn_channels, **dd)
@@ -106,7 +106,7 @@ class SelectiveKernel(nn.Module):
             drop_layer: spatial drop module in convs (drop block, etc)
         """
         dd = {'device': device, 'dtype': dtype}
-        super(SelectiveKernel, self).__init__()
+        super().__init__()
         out_channels = out_channels or in_channels
         kernel_size = kernel_size or [3, 5]  # default to one 3x3 and one 5x5 branch. 5x5 -> 3x3 + dilation
         _kernel_valid(kernel_size)

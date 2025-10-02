@@ -42,8 +42,8 @@ class ConvRelPosEnc(nn.Module):
                     e.g. {window size 1: #attention head split 1, window size 2: #attention head split 2})
                     It will apply different window size to the attention head splits.
         """
-        super().__init__()
         dd = {'device': device, 'dtype': dtype}
+        super().__init__()
 
         if isinstance(window, int):
             # Set the same window size for all attention heads.
@@ -109,8 +109,8 @@ class FactorAttnConvRelPosEnc(nn.Module):
             device=None,
             dtype=None,
     ):
-        super().__init__()
         dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = head_dim ** -0.5
@@ -160,8 +160,8 @@ class ConvPosEnc(nn.Module):
             device=None,
             dtype=None,
     ):
-        super(ConvPosEnc, self).__init__()
         dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.proj = nn.Conv2d(dim, dim, k, 1, k//2, groups=dim, **dd)
 
     def forward(self, x, size: Tuple[int, int]):
@@ -202,8 +202,8 @@ class SerialBlock(nn.Module):
             device=None,
             dtype=None,
     ):
-        super().__init__()
         dd = {'device': device, 'dtype': dtype}
+        super().__init__()
 
         # Conv-Attention.
         self.cpe = shared_cpe
@@ -263,8 +263,8 @@ class ParallelBlock(nn.Module):
             device=None,
             dtype=None,
     ):
-        super().__init__()
         dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         if mlp_ratios is None:
             mlp_ratios = []
 

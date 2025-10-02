@@ -36,7 +36,7 @@ class GlobalContext(nn.Module):
             dtype=None
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(GlobalContext, self).__init__()
+        super().__init__()
         act_layer = get_act_layer(act_layer)
 
         self.conv_attn = nn.Conv2d(channels, 1, kernel_size=1, bias=True, **dd) if use_attn else None

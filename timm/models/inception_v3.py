@@ -31,7 +31,7 @@ class InceptionA(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(InceptionA, self).__init__()
+        super().__init__()
         conv_block = conv_block or ConvNormAct
         self.branch1x1 = conv_block(in_channels, 64, kernel_size=1, **dd)
 
@@ -75,7 +75,7 @@ class InceptionB(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(InceptionB, self).__init__()
+        super().__init__()
         conv_block = conv_block or ConvNormAct
         self.branch3x3 = conv_block(in_channels, 384, kernel_size=3, stride=2, **dd)
 
@@ -111,7 +111,7 @@ class InceptionC(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(InceptionC, self).__init__()
+        super().__init__()
         conv_block = conv_block or ConvNormAct
         self.branch1x1 = conv_block(in_channels, 192, kernel_size=1, **dd)
 
@@ -162,7 +162,7 @@ class InceptionD(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(InceptionD, self).__init__()
+        super().__init__()
         conv_block = conv_block or ConvNormAct
         self.branch3x3_1 = conv_block(in_channels, 192, kernel_size=1, **dd)
         self.branch3x3_2 = conv_block(192, 320, kernel_size=3, stride=2, **dd)
@@ -200,7 +200,7 @@ class InceptionE(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(InceptionE, self).__init__()
+        super().__init__()
         conv_block = conv_block or ConvNormAct
         self.branch1x1 = conv_block(in_channels, 320, kernel_size=1, **dd)
 
@@ -255,7 +255,7 @@ class InceptionAux(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(InceptionAux, self).__init__()
+        super().__init__()
         conv_block = conv_block or ConvNormAct
         self.conv0 = conv_block(in_channels, 128, kernel_size=1, **dd)
         self.conv1 = conv_block(128, 768, kernel_size=5, **dd)
@@ -299,7 +299,7 @@ class InceptionV3(nn.Module):
             device=None,
             dtype=None,
     ):
-        super(InceptionV3, self).__init__()
+        super().__init__()
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.aux_logits = aux_logits

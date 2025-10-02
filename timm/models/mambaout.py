@@ -26,11 +26,11 @@ class Stem(nn.Module):
 
     def __init__(
             self,
-            in_chs=3,
-            out_chs=96,
+            in_chs: int = 3,
+            out_chs: int = 96,
             mid_norm: bool = True,
-            act_layer=nn.GELU,
-            norm_layer=LayerNorm,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = LayerNorm,
             device=None,
             dtype=None,
     ):
@@ -73,9 +73,9 @@ class DownsampleNormFirst(nn.Module):
 
     def __init__(
             self,
-            in_chs=96,
-            out_chs=198,
-            norm_layer=LayerNorm,
+            in_chs: int = 96,
+            out_chs: int = 198,
+            norm_layer: Type[nn.Module] = LayerNorm,
             device=None,
             dtype=None,
     ):
@@ -103,9 +103,9 @@ class Downsample(nn.Module):
 
     def __init__(
             self,
-            in_chs=96,
-            out_chs=198,
-            norm_layer=LayerNorm,
+            in_chs: int = 96,
+            out_chs: int = 198,
+            norm_layer: Type[nn.Module] = LayerNorm,
             device=None,
             dtype=None,
     ):
@@ -135,14 +135,14 @@ class MlpHead(nn.Module):
 
     def __init__(
             self,
-            in_features,
-            num_classes=1000,
-            pool_type='avg',
-            act_layer=nn.GELU,
-            mlp_ratio=4,
-            norm_layer=LayerNorm,
-            drop_rate=0.,
-            bias=True,
+            in_features: int,
+            num_classes: int = 1000,
+            pool_type: str = 'avg',
+            act_layer: Type[nn.Module] = nn.GELU,
+            mlp_ratio: Optional[int] = 4,
+            norm_layer: Type[nn.Module] = LayerNorm,
+            drop_rate: float = 0.,
+            bias: bool = True,
             device=None,
             dtype=None,
     ):
@@ -203,14 +203,14 @@ class GatedConvBlock(nn.Module):
 
     def __init__(
             self,
-            dim,
-            expansion_ratio=8 / 3,
-            kernel_size=7,
-            conv_ratio=1.0,
-            ls_init_value=None,
-            norm_layer=LayerNorm,
-            act_layer=nn.GELU,
-            drop_path=0.,
+            dim: int,
+            expansion_ratio: float = 8 / 3,
+            kernel_size: int = 7,
+            conv_ratio: float = 1.0,
+            ls_init_value: Optional[float] = None,
+            norm_layer: Type[nn.Module] = LayerNorm,
+            act_layer: Type[nn.Module] = nn.GELU,
+            drop_path: float = 0.,
             device=None,
             dtype=None,
             **kwargs

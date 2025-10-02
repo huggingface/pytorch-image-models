@@ -34,7 +34,7 @@ class ChannelAttn(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(ChannelAttn, self).__init__()
+        super().__init__()
         if not rd_channels:
             rd_channels = make_divisible(channels * rd_ratio, rd_divisor, round_limit=0.)
         self.fc1 = nn.Conv2d(channels, rd_channels, 1, bias=mlp_bias, **dd)
@@ -63,7 +63,7 @@ class LightChannelAttn(ChannelAttn):
             device=None,
             dtype=None
     ):
-        super(LightChannelAttn, self).__init__(
+        super().__init__(
             channels, rd_ratio, rd_channels, rd_divisor, act_layer, gate_layer, mlp_bias, device=device, dtype=dtype)
 
     def forward(self, x):
@@ -82,8 +82,8 @@ class SpatialAttn(nn.Module):
             device=None,
             dtype=None,
     ):
-        super(SpatialAttn, self).__init__()
-        self.conv = ConvNormAct(2, 1, kernel_size, apply_act=False)
+        super().__init__()
+        self.conv = ConvNormAct(2, 1, kernel_size, apply_act=False, device=device, dtype=dtype)
         self.gate = create_act_layer(gate_layer)
 
     def forward(self, x):
@@ -102,8 +102,8 @@ class LightSpatialAttn(nn.Module):
             device=None,
             dtype=None,
     ):
-        super(LightSpatialAttn, self).__init__()
-        self.conv = ConvNormAct(1, 1, kernel_size, apply_act=False)
+        super().__init__()
+        self.conv = ConvNormAct(1, 1, kernel_size, apply_act=False, device=device, dtype=dtype)
         self.gate = create_act_layer(gate_layer)
 
     def forward(self, x):
@@ -127,7 +127,7 @@ class CbamModule(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(CbamModule, self).__init__()
+        super().__init__()
         self.channel = ChannelAttn(
             channels,
             rd_ratio=rd_ratio,
@@ -161,7 +161,7 @@ class LightCbamModule(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(LightCbamModule, self).__init__()
+        super().__init__()
         self.channel = LightChannelAttn(
             channels,
             rd_ratio=rd_ratio,

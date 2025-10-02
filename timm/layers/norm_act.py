@@ -78,7 +78,7 @@ class BatchNormAct2d(nn.BatchNorm2d):
     ):
         try:
             factory_kwargs = {'device': device, 'dtype': dtype}
-            super(BatchNormAct2d, self).__init__(
+            super().__init__(
                 num_features,
                 eps=eps,
                 momentum=momentum,
@@ -88,7 +88,7 @@ class BatchNormAct2d(nn.BatchNorm2d):
             )
         except TypeError:
             # NOTE for backwards compat with old PyTorch w/o factory device/dtype support
-            super(BatchNormAct2d, self).__init__(
+            super().__init__(
                 num_features,
                 eps=eps,
                 momentum=momentum,
@@ -386,7 +386,7 @@ class GroupNormAct(nn.GroupNorm):
             device=None,
             dtype=None,
     ):
-        super(GroupNormAct, self).__init__(
+        super().__init__(
             _num_groups(num_channels, num_groups, group_size),
             num_channels,
             eps=eps,
@@ -425,7 +425,7 @@ class GroupNorm1Act(nn.GroupNorm):
             device=None,
             dtype=None,
     ):
-        super(GroupNorm1Act, self).__init__(1, num_channels, eps=eps, affine=affine, device=device, dtype=dtype)
+        super().__init__(1, num_channels, eps=eps, affine=affine, device=device, dtype=dtype)
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
         self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
 
@@ -456,7 +456,7 @@ class LayerNormAct(nn.LayerNorm):
             drop_layer: Optional[Type[nn.Module]] = None,
             **kwargs,
     ):
-        super(LayerNormAct, self).__init__(normalization_shape, eps=eps, elementwise_affine=affine, **kwargs)
+        super().__init__(normalization_shape, eps=eps, elementwise_affine=affine, **kwargs)
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
         self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
 

@@ -9,6 +9,7 @@ to the original paper with some modifications of my own to better balance param 
 Hacked together by / Copyright 2020 Ross Wightman
 """
 import math
+from typing import Optional, Type
 
 from torch import nn as nn
 
@@ -24,27 +25,27 @@ class SelectiveKernelBasic(nn.Module):
 
     def __init__(
             self,
-            inplanes,
-            planes,
-            stride=1,
-            downsample=None,
-            cardinality=1,
-            base_width=64,
-            sk_kwargs=None,
-            reduce_first=1,
-            dilation=1,
-            first_dilation=None,
-            act_layer=nn.ReLU,
-            norm_layer=nn.BatchNorm2d,
-            attn_layer=None,
-            aa_layer=None,
-            drop_block=None,
-            drop_path=None,
+            inplanes: int,
+            planes: int,
+            stride: int = 1,
+            downsample: Optional[nn.Module] = None,
+            cardinality: int = 1,
+            base_width: int = 64,
+            sk_kwargs: Optional[dict] = None,
+            reduce_first: int = 1,
+            dilation: int = 1,
+            first_dilation: Optional[int] = None,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            attn_layer: Optional[Type[nn.Module]] = None,
+            aa_layer: Optional[Type[nn.Module]] = None,
+            drop_block: Optional[nn.Module] = None,
+            drop_path: Optional[nn.Module] = None,
             device=None,
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(SelectiveKernelBasic, self).__init__()
+        super().__init__()
 
         sk_kwargs = sk_kwargs or {}
         conv_kwargs = dict(act_layer=act_layer, norm_layer=norm_layer, **dd)
@@ -101,27 +102,27 @@ class SelectiveKernelBottleneck(nn.Module):
 
     def __init__(
             self,
-            inplanes,
-            planes,
-            stride=1,
-            downsample=None,
-            cardinality=1,
-            base_width=64,
-            sk_kwargs=None,
-            reduce_first=1,
-            dilation=1,
-            first_dilation=None,
-            act_layer=nn.ReLU,
-            norm_layer=nn.BatchNorm2d,
-            attn_layer=None,
-            aa_layer=None,
-            drop_block=None,
-            drop_path=None,
+            inplanes: int,
+            planes: int,
+            stride: int = 1,
+            downsample: Optional[nn.Module] = None,
+            cardinality: int = 1,
+            base_width: int = 64,
+            sk_kwargs: Optional[dict] = None,
+            reduce_first: int = 1,
+            dilation: int = 1,
+            first_dilation: Optional[int] = None,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            attn_layer: Optional[Type[nn.Module]] = None,
+            aa_layer: Optional[Type[nn.Module]] = None,
+            drop_block: Optional[nn.Module] = None,
+            drop_path: Optional[nn.Module] = None,
             device=None,
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(SelectiveKernelBottleneck, self).__init__()
+        super().__init__()
 
         sk_kwargs = sk_kwargs or {}
         conv_kwargs = dict(act_layer=act_layer, norm_layer=norm_layer, **dd)

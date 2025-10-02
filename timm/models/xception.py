@@ -141,7 +141,7 @@ class Xception(nn.Module):
         Args:
             num_classes: number of classes
         """
-        super(Xception, self).__init__()
+        super().__init__()
         dd = {'device': device, 'dtype': dtype}
         self.drop_rate = drop_rate
         self.global_pool = global_pool

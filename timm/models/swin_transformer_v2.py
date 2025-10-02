@@ -33,7 +33,10 @@ __all__ = ['SwinTransformerV2']  # model_registry will add each entrypoint fn to
 _int_or_tuple_2_t = Union[int, Tuple[int, int]]
 
 
-def window_partition(x: torch.Tensor, window_size: Tuple[int, int]) -> torch.Tensor:
+def window_partition(
+        x: torch.Tensor,
+        window_size: Tuple[int, int],
+) -> torch.Tensor:
     """Partition into non-overlapping windows.
 
     Args:
@@ -50,7 +53,11 @@ def window_partition(x: torch.Tensor, window_size: Tuple[int, int]) -> torch.Ten
 
 
 @register_notrace_function  # reason: int argument is a Proxy
-def window_reverse(windows: torch.Tensor, window_size: Tuple[int, int], img_size: Tuple[int, int]) -> torch.Tensor:
+def window_reverse(
+        windows: torch.Tensor,
+        window_size: Tuple[int, int],
+        img_size: Tuple[int, int],
+) -> torch.Tensor:
     """Merge windows back to feature map.
 
     Args:
@@ -131,7 +138,7 @@ class WindowAttention(nn.Module):
         self.proj_drop = nn.Dropout(proj_drop)
         self.softmax = nn.Softmax(dim=-1)
 
-        self._make_pair_wise_relative_positions(device=device)
+        self._make_pair_wise_relative_positions(**dd)
 
     def _make_pair_wise_relative_positions(self, device=None, dtype=None) -> None:
         """Create pair-wise relative position index and coordinates table."""
@@ -314,7 +321,7 @@ class SwinTransformerV2Block(nn.Module):
 
         self.register_buffer(
             "attn_mask",
-            None if self.dynamic_mask else self.get_attn_mask(),
+            None if self.dynamic_mask else self.get_attn_mask(**dd),
             persistent=False,
         )
 

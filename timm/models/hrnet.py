@@ -9,7 +9,7 @@ Original header:
   Modified by Ke Sun (sunk@mail.ustc.edu.cn)
 """
 import logging
-from typing import List, Type, Optional
+from typing import Dict, List, Type, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -358,17 +358,17 @@ class HighResolutionModule(nn.Module):
     def __init__(
             self,
             num_branches: int,
-            block_types,
-            num_blocks,
-            num_in_chs,
-            num_channels,
+            block_types: Type[nn.Module],
+            num_blocks: Tuple[int, ...],
+            num_in_chs: List[int],
+            num_channels: Tuple[int, ...],
             fuse_method: str,
             multi_scale_output: bool = True,
             device=None,
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(HighResolutionModule, self).__init__()
+        super().__init__()
         self._check_branches(
             num_branches,
             block_types,
@@ -500,7 +500,7 @@ class HighResolutionModule(nn.Module):
 class SequentialList(nn.Sequential):
 
     def __init__(self, *args):
-        super(SequentialList, self).__init__(*args)
+        super().__init__(*args)
 
     @torch.jit._overload_method  # noqa: F811
     def forward(self, x):
@@ -534,7 +534,7 @@ class HighResolutionNet(nn.Module):
 
     def __init__(
             self,
-            cfg,
+            cfg: Dict,
             in_chans: int = 3,
             num_classes: int = 1000,
             output_stride: int = 32,
@@ -546,7 +546,7 @@ class HighResolutionNet(nn.Module):
             **kwargs,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(HighResolutionNet, self).__init__()
+        super().__init__()
         self.num_classes = num_classes
         assert output_stride == 32  # FIXME support dilation
 
@@ -857,7 +857,7 @@ class HighResolutionNetFeatures(HighResolutionNet):
             **kwargs,
     ):
         assert feature_location in ('incre', '')
-        super(HighResolutionNetFeatures, self).__init__(
+        super().__init__(
             cfg,
             in_chans=in_chans,
             num_classes=num_classes,

@@ -26,8 +26,20 @@ import torch.nn.functional as F
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, calculate_drop_path_rates, create_classifier, trunc_normal_, _assert
-from timm.layers import create_conv2d, create_pool2d, to_ntuple, use_fused_attn, LayerNorm
+from timm.layers import (
+    PatchEmbed,
+    Mlp,
+    DropPath,
+    calculate_drop_path_rates,
+    create_classifier,
+    trunc_normal_,
+    _assert,
+    create_conv2d,
+    create_pool2d,
+    to_ntuple,
+    use_fused_attn,
+    LayerNorm,
+)
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
@@ -219,10 +231,10 @@ class NestLevel(nn.Module):
             qkv_bias: bool = True,
             proj_drop: float = 0.,
             attn_drop: float = 0.,
-            drop_path=[],
+            drop_path: Optional[List[float]] = None,
             norm_layer: Optional[Type[nn.Module]] = None,
             act_layer: Optional[Type[nn.Module]] = None,
-            pad_type: str= '',
+            pad_type: str = '',
             device=None,
             dtype=None,
     ):
@@ -249,7 +261,7 @@ class NestLevel(nn.Module):
                 qkv_bias=qkv_bias,
                 proj_drop=proj_drop,
                 attn_drop=attn_drop,
-                drop_path=drop_path[i],
+                drop_path=drop_path[i] if drop_path else None,
                 norm_layer=norm_layer,
                 act_layer=act_layer,
                 **dd,

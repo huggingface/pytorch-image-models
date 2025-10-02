@@ -6,7 +6,7 @@ Res2Net additions from: https://github.com/gasvn/Res2Net/
 Res2Net Paper: `Res2Net: A New Multi-scale Backbone Architecture` - https://arxiv.org/abs/1904.01169
 """
 import math
-from typing import List, Optional, Type
+from typing import List, Optional, Tuple, Type
 
 import torch
 import torch.nn as nn
@@ -143,16 +143,16 @@ class DlaBottle2neck(nn.Module):
     expansion = 2
 
     def __init__(
-        self,
-        inplanes: int,
-        outplanes: int,
-        stride: int = 1,
-        dilation: int = 1,
-        scale: int = 4,
-        cardinality: int = 8,
-        base_width: int = 4,
-        device=None,
-        dtype=None,
+            self,
+            inplanes: int,
+            outplanes: int,
+            stride: int = 1,
+            dilation: int = 1,
+            scale: int = 4,
+            cardinality: int = 8,
+            base_width: int = 4,
+            device=None,
+            dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
         super().__init__()
@@ -342,8 +342,8 @@ class DlaTree(nn.Module):
 class DLA(nn.Module):
     def __init__(
             self,
-            levels,
-            channels,
+            levels: Tuple[int, ...],
+            channels: Tuple[int, ...],
             output_stride: int = 32,
             num_classes: int = 1000,
             in_chans: int = 3,
@@ -357,7 +357,7 @@ class DLA(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(DLA, self).__init__()
+        super().__init__()
         self.channels = channels
         self.num_classes = num_classes
         self.cardinality = cardinality

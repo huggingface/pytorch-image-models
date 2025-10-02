@@ -48,7 +48,7 @@ class DenseLayer(nn.Module):
             grad_checkpointing: Use gradient checkpointing.
         """
         dd = {'device': device, 'dtype': dtype}
-        super(DenseLayer, self).__init__()
+        super().__init__()
         self.add_module('norm1', norm_layer(num_input_features, **dd)),
         self.add_module('conv1', nn.Conv2d(
             num_input_features, bn_size * growth_rate, kernel_size=1, stride=1, bias=False, **dd)),
@@ -150,7 +150,7 @@ class DenseBlock(nn.ModuleDict):
             grad_checkpointing: Use gradient checkpointing.
         """
         dd = {'device': device, 'dtype': dtype}
-        super(DenseBlock, self).__init__()
+        super().__init__()
         for i in range(num_layers):
             layer = DenseLayer(
                 num_input_features + i * growth_rate,
@@ -203,7 +203,7 @@ class DenseTransition(nn.Sequential):
             aa_layer: Anti-aliasing layer class.
         """
         dd = {'device': device, 'dtype': dtype}
-        super(DenseTransition, self).__init__()
+        super().__init__()
         self.add_module('norm', norm_layer(num_input_features, **dd))
         self.add_module('conv', nn.Conv2d(
             num_input_features, num_output_features, kernel_size=1, stride=1, bias=False, **dd))
@@ -269,7 +269,7 @@ class DenseNet(nn.Module):
         """
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
-        super(DenseNet, self).__init__()
+        super().__init__()
         norm_layer = get_norm_act_layer(norm_layer, act_layer=act_layer)
 
         # Stem

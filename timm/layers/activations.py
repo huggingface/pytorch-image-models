@@ -19,7 +19,7 @@ def swish(x, inplace: bool = False):
 
 class Swish(nn.Module):
     def __init__(self, inplace: bool = False):
-        super(Swish, self).__init__()
+        super().__init__()
         self.inplace = inplace
 
     def forward(self, x):
@@ -37,7 +37,7 @@ class Mish(nn.Module):
     """Mish: A Self Regularized Non-Monotonic Neural Activation Function - https://arxiv.org/abs/1908.08681
     """
     def __init__(self, inplace: bool = False):
-        super(Mish, self).__init__()
+        super().__init__()
 
     def forward(self, x):
         return mish(x)
@@ -50,7 +50,7 @@ def sigmoid(x, inplace: bool = False):
 # PyTorch has this, but not with a consistent inplace argument interface
 class Sigmoid(nn.Module):
     def __init__(self, inplace: bool = False):
-        super(Sigmoid, self).__init__()
+        super().__init__()
         self.inplace = inplace
 
     def forward(self, x):
@@ -64,7 +64,7 @@ def tanh(x, inplace: bool = False):
 # PyTorch has this, but not with a consistent inplace argument interface
 class Tanh(nn.Module):
     def __init__(self, inplace: bool = False):
-        super(Tanh, self).__init__()
+        super().__init__()
         self.inplace = inplace
 
     def forward(self, x):
@@ -78,7 +78,7 @@ def hard_swish(x, inplace: bool = False):
 
 class HardSwish(nn.Module):
     def __init__(self, inplace: bool = False):
-        super(HardSwish, self).__init__()
+        super().__init__()
         self.inplace = inplace
 
     def forward(self, x):
@@ -94,7 +94,7 @@ def hard_sigmoid(x, inplace: bool = False):
 
 class HardSigmoid(nn.Module):
     def __init__(self, inplace: bool = False):
-        super(HardSigmoid, self).__init__()
+        super().__init__()
         self.inplace = inplace
 
     def forward(self, x):
@@ -114,7 +114,7 @@ def hard_mish(x, inplace: bool = False):
 
 class HardMish(nn.Module):
     def __init__(self, inplace: bool = False):
-        super(HardMish, self).__init__()
+        super().__init__()
         self.inplace = inplace
 
     def forward(self, x):
@@ -125,7 +125,7 @@ class PReLU(nn.PReLU):
     """Applies PReLU (w/ dummy inplace arg)
     """
     def __init__(self, num_parameters: int = 1, init: float = 0.25, inplace: bool = False) -> None:
-        super(PReLU, self).__init__(num_parameters=num_parameters, init=init)
+        super().__init__(num_parameters=num_parameters, init=init)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         return F.prelu(input, self.weight)
@@ -139,7 +139,7 @@ class GELU(nn.Module):
     """Applies the Gaussian Error Linear Units function (w/ dummy inplace arg)
     """
     def __init__(self, inplace: bool = False):
-        super(GELU, self).__init__()
+        super().__init__()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         return F.gelu(input)
@@ -153,7 +153,7 @@ class GELUTanh(nn.Module):
     """Applies the Gaussian Error Linear Units function (w/ dummy inplace arg)
     """
     def __init__(self, inplace: bool = False):
-        super(GELUTanh, self).__init__()
+        super().__init__()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         return F.gelu(input, approximate='tanh')
@@ -167,7 +167,7 @@ class QuickGELU(nn.Module):
     """Applies the Gaussian Error Linear Units function (w/ dummy inplace arg)
     """
     def __init__(self, inplace: bool = False):
-        super(QuickGELU, self).__init__()
+        super().__init__()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         return quick_gelu(input)

@@ -142,7 +142,7 @@ class TResNet(nn.Module):
             device=None,
             dtype=None,
     ) -> None:
-        super(TResNet, self).__init__()
+        super().__init__()
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.drop_rate = drop_rate

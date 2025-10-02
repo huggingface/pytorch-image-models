@@ -340,7 +340,7 @@ class DownsampleConv(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(DownsampleConv, self).__init__()
+        super().__init__()
         self.conv = conv_layer(in_chs, out_chs, 1, stride=stride, **dd)
         self.norm = nn.Identity() if preact else norm_layer(out_chs, apply_act=False, **dd)
 
@@ -373,7 +373,7 @@ class DownsampleAvg(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(DownsampleAvg, self).__init__()
+        super().__init__()
         avg_stride = stride if dilation == 1 else 1
         if stride > 1 or dilation > 1:
             avg_pool_fn = AvgPool2dSame if avg_stride == 1 and dilation > 1 else nn.AvgPool2d
@@ -414,7 +414,7 @@ class ResNetStage(nn.Module):
             norm_layer: Optional[Callable] = None,
             **block_kwargs: Any,
     ):
-        super(ResNetStage, self).__init__()
+        super().__init__()
         self.grad_checkpointing = False
 
         first_dilation = 1 if dilation in (1, 2) else 2

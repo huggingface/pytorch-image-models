@@ -15,7 +15,7 @@ _logger = logging.getLogger(__name__)
 
 class TestTimePoolHead(nn.Module):
     def __init__(self, base, original_pool=7):
-        super(TestTimePoolHead, self).__init__()
+        super().__init__()
         self.base = base
         self.original_pool = original_pool
         base_fc = self.base.get_classifier()

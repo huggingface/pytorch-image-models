@@ -6,6 +6,8 @@ Adapted from original PyTorch impl w/ weights at https://github.com/zhanghang198
 
 Modified for torchscript compat, and consistency with timm by Ross Wightman
 """
+from typing import Optional, Type
+
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
@@ -23,30 +25,30 @@ class ResNestBottleneck(nn.Module):
 
     def __init__(
             self,
-            inplanes,
-            planes,
-            stride=1,
-            downsample=None,
-            radix=1,
-            cardinality=1,
-            base_width=64,
-            avd=False,
-            avd_first=False,
-            is_first=False,
-            reduce_first=1,
-            dilation=1,
-            first_dilation=None,
-            act_layer=nn.ReLU,
-            norm_layer=nn.BatchNorm2d,
-            attn_layer=None,
-            aa_layer=None,
-            drop_block=None,
-            drop_path=None,
+            inplanes: int,
+            planes: int,
+            stride: int = 1,
+            downsample: Optional[nn.Module] = None,
+            radix: int = 1,
+            cardinality: int = 1,
+            base_width: int = 64,
+            avd: bool = False,
+            avd_first: bool = False,
+            is_first: bool = False,
+            reduce_first: int = 1,
+            dilation: int = 1,
+            first_dilation: Optional[int] = None,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            attn_layer: Optional[Type[nn.Module]] = None,
+            aa_layer: Optional[Type[nn.Module]] = None,
+            drop_block: Optional[Type[nn.Module]] = None,
+            drop_path: Optional[nn.Module] = None,
             device=None,
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(ResNestBottleneck, self).__init__()
+        super().__init__()
         assert reduce_first == 1  # not supported
         assert attn_layer is None, 'attn_layer is not supported'  # not supported
         assert aa_layer is None, 'aa_layer is not supported'  # TODO not yet supported

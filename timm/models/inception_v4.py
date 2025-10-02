@@ -25,7 +25,7 @@ class Mixed3a(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(Mixed3a, self).__init__()
+        super().__init__()
         self.maxpool = nn.MaxPool2d(3, stride=2)
         self.conv = conv_block(64, 96, kernel_size=3, stride=2, **dd)
 
@@ -44,7 +44,7 @@ class Mixed4a(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(Mixed4a, self).__init__()
+        super().__init__()
 
         self.branch0 = nn.Sequential(
             conv_block(160, 64, kernel_size=1, stride=1, **dd),
@@ -73,7 +73,7 @@ class Mixed5a(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(Mixed5a, self).__init__()
+        super().__init__()
         self.conv = conv_block(192, 192, kernel_size=3, stride=2, **dd)
         self.maxpool = nn.MaxPool2d(3, stride=2)
 
@@ -92,7 +92,7 @@ class InceptionA(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(InceptionA, self).__init__()
+        super().__init__()
         self.branch0 = conv_block(384, 96, kernel_size=1, stride=1, **dd)
 
         self.branch1 = nn.Sequential(
@@ -128,7 +128,7 @@ class ReductionA(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(ReductionA, self).__init__()
+        super().__init__()
         self.branch0 = conv_block(384, 384, kernel_size=3, stride=2, **dd)
 
         self.branch1 = nn.Sequential(
@@ -155,7 +155,7 @@ class InceptionB(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(InceptionB, self).__init__()
+        super().__init__()
         self.branch0 = conv_block(1024, 384, kernel_size=1, stride=1, **dd)
 
         self.branch1 = nn.Sequential(
@@ -194,7 +194,7 @@ class ReductionB(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(ReductionB, self).__init__()
+        super().__init__()
 
         self.branch0 = nn.Sequential(
             conv_block(1024, 192, kernel_size=1, stride=1, **dd),
@@ -226,7 +226,7 @@ class InceptionC(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(InceptionC, self).__init__()
+        super().__init__()
 
         self.branch0 = conv_block(1536, 256, kernel_size=1, stride=1, **dd)
 
@@ -281,7 +281,7 @@ class InceptionV4(nn.Module):
             dtype=None,
     ) -> None:
         dd = {'device': device, 'dtype': dtype}
-        super(InceptionV4, self).__init__()
+        super().__init__()
         assert output_stride == 32
         self.num_classes = num_classes
         self.num_features = self.head_hidden_size = 1536
