@@ -84,7 +84,7 @@ class ConvNorm(nn.Module):
     ):
         dd = {'device': device, 'dtype': dtype}
         norm_kwargs = norm_kwargs or {}
-        super(ConvNorm, self).__init__()
+        super().__init__()
         self.conv = create_conv2d(
             in_channels,
             out_channels,

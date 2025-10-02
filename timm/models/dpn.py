@@ -31,7 +31,7 @@ class CatBnAct(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(CatBnAct, self).__init__()
+        super().__init__()
         self.bn = norm_layer(in_chs, eps=0.001, **dd)
 
     @torch.jit._overload_method  # noqa: F811
@@ -63,7 +63,7 @@ class BnActConv2d(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(BnActConv2d, self).__init__()
+        super().__init__()
         self.bn = norm_layer(in_chs, eps=0.001, **dd)
         self.conv = create_conv2d(in_chs, out_chs, kernel_size, stride=stride, groups=groups, **dd)
 
@@ -86,7 +86,7 @@ class DualPathBlock(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(DualPathBlock, self).__init__()
+        super().__init__()
         self.num_1x1_c = num_1x1_c
         self.inc = inc
         self.b = b
@@ -189,7 +189,7 @@ class DPN(nn.Module):
             device=None,
             dtype=None,
     ):
-        super(DPN, self).__init__()
+        super().__init__()
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.drop_rate = drop_rate

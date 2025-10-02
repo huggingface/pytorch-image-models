@@ -260,7 +260,7 @@ class FeatureDictNet(nn.ModuleDict):
                 first element e.g. `x[0]`
             flatten_sequential: Flatten first two-levels of sequential modules in model (re-writes model modules)
         """
-        super(FeatureDictNet, self).__init__()
+        super().__init__()
         self.feature_info = _get_feature_info(model, out_indices)
         self.output_fmt = Format(output_fmt)
         self.concat = feature_concat

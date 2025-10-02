@@ -35,8 +35,8 @@ class ConvNormAct(nn.Module):
             device=None,
             dtype=None,
     ):
-        super(ConvNormAct, self).__init__()
         dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         conv_kwargs = {**dd, **(conv_kwargs or {})}
         norm_kwargs = {**dd, **(norm_kwargs or {})}
         act_kwargs = act_kwargs or {}

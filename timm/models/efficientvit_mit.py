@@ -63,7 +63,7 @@ class ConvNormAct(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(ConvNormAct, self).__init__()
+        super().__init__()
         self.dropout = nn.Dropout(dropout, inplace=False)
         self.conv = create_conv2d(
             in_channels,
@@ -100,7 +100,7 @@ class DSConv(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(DSConv, self).__init__()
+        super().__init__()
         use_bias = val2tuple(use_bias, 2)
         norm_layer = val2tuple(norm_layer, 2)
         act_layer = val2tuple(act_layer, 2)
@@ -148,7 +148,7 @@ class ConvBlock(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(ConvBlock, self).__init__()
+        super().__init__()
         use_bias = val2tuple(use_bias, 2)
         norm_layer = val2tuple(norm_layer, 2)
         act_layer = val2tuple(act_layer, 2)
@@ -197,7 +197,7 @@ class MBConv(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(MBConv, self).__init__()
+        super().__init__()
         use_bias = val2tuple(use_bias, 3)
         norm_layer = val2tuple(norm_layer, 3)
         act_layer = val2tuple(act_layer, 3)
@@ -258,7 +258,7 @@ class FusedMBConv(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(FusedMBConv, self).__init__()
+        super().__init__()
         use_bias = val2tuple(use_bias, 2)
         norm_layer = val2tuple(norm_layer, 2)
         act_layer = val2tuple(act_layer, 2)
@@ -311,7 +311,7 @@ class LiteMLA(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(LiteMLA, self).__init__()
+        super().__init__()
         self.eps = eps
         heads = heads or int(in_channels // dim * heads_ratio)
         total_dim = heads * dim
@@ -409,7 +409,7 @@ class EfficientVitBlock(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(EfficientVitBlock, self).__init__()
+        super().__init__()
         self.context_module = ResidualBlock(
             LiteMLA(
                 in_channels=in_channels,
@@ -447,7 +447,7 @@ class ResidualBlock(nn.Module):
             shortcut: Optional[nn.Module] = None,
             pre_norm: Optional[nn.Module] = None,
     ):
-        super(ResidualBlock, self).__init__()
+        super().__init__()
         self.pre_norm = pre_norm if pre_norm is not None else nn.Identity()
         self.main = main
         self.shortcut = shortcut
@@ -581,7 +581,7 @@ class EfficientVitStage(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(EfficientVitStage, self).__init__()
+        super().__init__()
         blocks = [ResidualBlock(
             build_local_block(
                 in_channels=in_chs,
@@ -647,7 +647,7 @@ class EfficientVitLargeStage(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(EfficientVitLargeStage, self).__init__()
+        super().__init__()
         blocks = [ResidualBlock(
             build_local_block(
                 in_channels=in_chs,
@@ -716,7 +716,7 @@ class ClassifierHead(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(ClassifierHead, self).__init__()
+        super().__init__()
         self.widths = widths
         self.num_features = widths[-1]
 
@@ -772,7 +772,7 @@ class EfficientVit(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(EfficientVit, self).__init__()
+        super().__init__()
         self.grad_checkpointing = False
         self.global_pool = global_pool
         self.num_classes = num_classes
@@ -930,7 +930,7 @@ class EfficientVitLarge(nn.Module):
         dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(EfficientVitLarge, self).__init__()
+        super().__init__()
         self.grad_checkpointing = False
         self.global_pool = global_pool
         self.num_classes = num_classes

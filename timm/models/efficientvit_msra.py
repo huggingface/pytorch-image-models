@@ -468,7 +468,7 @@ class EfficientVitMsra(nn.Module):
             device=None,
             dtype=None,
     ):
-        super(EfficientVitMsra, self).__init__()
+        super().__init__()
         dd = {'device': device, 'dtype': dtype}
         self.grad_checkpointing = False
         self.num_classes = num_classes
@@ -548,7 +548,7 @@ class EfficientVitMsra(nn.Module):
                 assert num_classes == 0
                 self.global_pool = nn.Identity()
         self.head = NormLinear(
-            self.num_features, num_classes, drop=self.drop_rate, **dd) if num_classes > 0 else torch.nn.Identity()
+            self.num_features, num_classes, drop=self.drop_rate) if num_classes > 0 else torch.nn.Identity()
 
     def forward_intermediates(
             self,

@@ -42,7 +42,7 @@ class SEModule(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(SEModule, self).__init__()
+        super().__init__()
         self.add_maxpool = add_maxpool
         if not rd_channels:
             rd_channels = make_divisible(channels * rd_ratio, rd_divisor, round_limit=0.)
@@ -79,7 +79,8 @@ class EffectiveSEModule(nn.Module):
             dtype=None,
             **_,
     ):
-        super(EffectiveSEModule, self).__init__()
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.add_maxpool = add_maxpool
         self.fc = nn.Conv2d(channels, channels, kernel_size=1, padding=0, device=device, dtype=dtype)
         self.gate = create_act_layer(gate_layer)

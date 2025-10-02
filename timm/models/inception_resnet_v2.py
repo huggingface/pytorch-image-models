@@ -24,7 +24,7 @@ class Mixed_5b(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(Mixed_5b, self).__init__()
+        super().__init__()
         conv_block = conv_block or ConvNormAct
 
         self.branch0 = conv_block(192, 96, kernel_size=1, stride=1, **dd)
@@ -63,7 +63,7 @@ class Block35(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(Block35, self).__init__()
+        super().__init__()
         self.scale = scale
         conv_block = conv_block or ConvNormAct
 
@@ -102,7 +102,7 @@ class Mixed_6a(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(Mixed_6a, self).__init__()
+        super().__init__()
         conv_block = conv_block or ConvNormAct
 
         self.branch0 = conv_block(320, 384, kernel_size=3, stride=2, **dd)
@@ -132,7 +132,7 @@ class Block17(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(Block17, self).__init__()
+        super().__init__()
         self.scale = scale
         conv_block = conv_block or ConvNormAct
 
@@ -165,7 +165,7 @@ class Mixed_7a(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(Mixed_7a, self).__init__()
+        super().__init__()
         conv_block = conv_block or ConvNormAct
 
         self.branch0 = nn.Sequential(
@@ -206,7 +206,7 @@ class Block8(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(Block8, self).__init__()
+        super().__init__()
         self.scale = scale
         conv_block = conv_block or ConvNormAct
 
@@ -246,7 +246,7 @@ class InceptionResnetV2(nn.Module):
             device=None,
             dtype=None,
     ) -> None:
-        super(InceptionResnetV2, self).__init__()
+        super().__init__()
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.num_features = self.head_hidden_size = 1536

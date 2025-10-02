@@ -13,7 +13,7 @@ support for extras like dilation, switchable BN/activations, feature extraction,
 """
 import math
 from collections import OrderedDict
-from typing import Type, Optional
+from typing import Type, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -239,7 +239,7 @@ class SENet(nn.Module):
     def __init__(
             self,
             block: Type[nn.Module],
-            layers,
+            layers: Tuple[int, ...],
             groups: int,
             reduction: int,
             drop_rate: float = 0.2,

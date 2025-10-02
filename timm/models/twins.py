@@ -50,7 +50,7 @@ class LocallyGroupedAttn(nn.Module):
     ):
         dd = {'device': device, 'dtype': dtype}
         assert ws != 1
-        super(LocallyGroupedAttn, self).__init__()
+        super().__init__()
         assert dim % num_heads == 0, f"dim {dim} should be divided by num_heads {num_heads}."
 
         self.dim = dim
@@ -264,7 +264,7 @@ class PosConv(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(PosConv, self).__init__()
+        super().__init__()
         self.proj = nn.Sequential(
             nn.Conv2d(in_chans, embed_dim, 3, stride, 1, bias=True, groups=embed_dim, **dd),
         )

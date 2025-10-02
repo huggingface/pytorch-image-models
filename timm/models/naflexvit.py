@@ -631,7 +631,7 @@ class NaFlexEmbeds(nn.Module):
             padding_mode='border',
         ).to(dtype=x.dtype)  # (B, C, H_out, W_out)
 
-        bi = torch.arange(B, device=device).unsqueeze(1)
+        bi = torch.arange(B, device=device, dtype=torch.long).unsqueeze(1)
         x += pos_embed[bi, :, patch_coord[..., 0], patch_coord[..., 1]]  # NOTE leave as '+='
 
     def _apply_learned_pos_embed(
@@ -776,7 +776,7 @@ class NaFlexEmbeds(nn.Module):
         pe_x = _interp1d(self.pos_embed_x, scale=scale_x, out_length=grid_size_x)
         pe_y = _interp1d(self.pos_embed_y, scale=scale_y, out_length=grid_size_y)
 
-        bi = torch.arange(B, device=device).unsqueeze(1)
+        bi = torch.arange(B, device=device, dtype=torch.long).unsqueeze(1)
         x += pe_x[bi, :, 0, patch_coord[..., 1]] + pe_y[bi, :, 0, patch_coord[..., 0]]
 
     def _apply_factorized_pos_embed(
@@ -1937,6 +1937,8 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
     ),
     'naflexvit_base_patch16_map.untrained': _cfg(),
+    'naflexvit_so150m2_patch16_reg1_gap.untrained': _cfg(),
+    'naflexvit_so150m2_patch16_reg1_map.untrained': _cfg(),
 
     # SigLIP-2 NaFlex vit encoder weights
     'naflexvit_base_patch16_siglip.v2_webli': _cfg(

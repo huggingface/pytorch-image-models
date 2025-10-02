@@ -2,7 +2,7 @@
 
 Hacked together by / Copyright 2019, Ross Wightman
 """
-from typing import Callable, Dict, Optional, Type
+from typing import Callable, Dict, Optional, Type, Union
 
 import torch
 import torch.nn as nn
@@ -94,9 +94,9 @@ class ConvBnAct(nn.Module):
             stride: int = 1,
             dilation: int = 1,
             group_size: int = 0,
-            pad_type: str = '',
+            pad_type: Union[int, str] = '',
             skip: bool = False,
-            act_layer: LayerType = nn.ReLU,
+            act_layer: Optional[LayerType] = nn.ReLU,
             norm_layer: LayerType = nn.BatchNorm2d,
             aa_layer: Optional[LayerType] = None,
             drop_path_rate: float = 0.,

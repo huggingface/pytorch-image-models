@@ -5,7 +5,7 @@ import torch.nn as nn
 class SpaceToDepth(nn.Module):
     bs: torch.jit.Final[int]
 
-    def __init__(self, block_size=4):
+    def __init__(self, block_size: int = 4):
         super().__init__()
         assert block_size == 4
         self.bs = block_size

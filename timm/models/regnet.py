@@ -312,7 +312,7 @@ class Bottleneck(nn.Module):
             drop_path_rate: Stochastic depth drop rate.
         """
         dd = {'device': device, 'dtype': dtype}
-        super(Bottleneck, self).__init__()
+        super().__init__()
         act_layer = get_act_layer(act_layer)
         bottleneck_chs = int(round(out_chs * bottle_ratio))
         groups = bottleneck_chs // group_size
@@ -417,7 +417,7 @@ class PreBottleneck(nn.Module):
             drop_path_rate: Stochastic depth drop rate.
         """
         dd = {'device': device, 'dtype': dtype}
-        super(PreBottleneck, self).__init__()
+        super().__init__()
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
         bottleneck_chs = int(round(out_chs * bottle_ratio))
         groups = bottleneck_chs // group_size
@@ -510,7 +510,7 @@ class RegStage(nn.Module):
             block_fn: Block class to use.
             **block_kwargs: Additional block arguments.
         """
-        super(RegStage, self).__init__()
+        super().__init__()
         self.grad_checkpointing = False
 
         first_dilation = 1 if dilation in (1, 2) else 2

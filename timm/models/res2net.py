@@ -3,6 +3,7 @@ Adapted from Official Pytorch impl at: https://github.com/gasvn/Res2Net/
 Paper: `Res2Net: A New Multi-scale Backbone Architecture` - https://arxiv.org/abs/1904.01169
 """
 import math
+from typing import Optional, Type
 
 import torch
 import torch.nn as nn
@@ -23,24 +24,24 @@ class Bottle2neck(nn.Module):
 
     def __init__(
             self,
-            inplanes,
-            planes,
-            stride=1,
-            downsample=None,
-            cardinality=1,
-            base_width=26,
-            scale=4,
-            dilation=1,
-            first_dilation=None,
-            act_layer=nn.ReLU,
-            norm_layer=None,
-            attn_layer=None,
+            inplanes: int,
+            planes: int,
+            stride: int = 1,
+            downsample: Optional[nn.Module] = None,
+            cardinality: int = 1,
+            base_width: int = 26,
+            scale: int = 4,
+            dilation: int = 1,
+            first_dilation: Optional[int] = None,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            norm_layer: Optional[Type[nn.Module]] = None,
+            attn_layer: Optional[Type[nn.Module]] = None,
             device=None,
             dtype=None,
             **_,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(Bottle2neck, self).__init__()
+        super().__init__()
         self.scale = scale
         self.is_first = stride > 1 or downsample is not None
         self.num_scales = max(1, scale - 1)

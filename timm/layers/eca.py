@@ -74,7 +74,7 @@ class EcaModule(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(EcaModule, self).__init__()
+        super().__init__()
         if channels is not None:
             t = int(abs(math.log(channels, 2) + beta) / gamma)
             kernel_size = max(t if t % 2 else t + 1, 3)
@@ -144,7 +144,7 @@ class CecaModule(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(CecaModule, self).__init__()
+        super().__init__()
         if channels is not None:
             t = int(abs(math.log(channels, 2) + beta) / gamma)
             kernel_size = max(t if t % 2 else t + 1, 3)

@@ -509,7 +509,7 @@ class NASNetALarge(nn.Module):
             device=None,
             dtype=None,
     ):
-        super(NASNetALarge, self).__init__()
+        super().__init__()
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.stem_size = stem_size

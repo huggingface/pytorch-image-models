@@ -16,6 +16,8 @@ Official Deepmind JAX code: https://github.com/deepmind/deepmind-research/tree/m
 
 Hacked together by / copyright Ross Wightman, 2021.
 """
+from typing import Optional, Tuple, Union
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -32,15 +34,15 @@ class StdConv2d(nn.Conv2d):
     """
     def __init__(
             self,
-            in_channel,
-            out_channels,
-            kernel_size,
-            stride=1,
-            padding=None,
-            dilation=1,
-            groups=1,
-            bias=False,
-            eps=1e-6,
+            in_channel: int,
+            out_channels: int,
+            kernel_size: Union[int, Tuple[int, int]],
+            stride: Union[int, Tuple[int, int]] = 1,
+            padding: Optional[Union[int, Tuple[int, int]]] = None,
+            dilation: Union[int, Tuple[int, int]] = 1,
+            groups: int = 1,
+            bias: bool = False,
+            eps: float = 1e-6,
             device=None,
             dtype=None,
     ):
@@ -73,15 +75,15 @@ class StdConv2dSame(nn.Conv2d):
     """
     def __init__(
             self,
-            in_channel,
-            out_channels,
-            kernel_size,
-            stride=1,
-            padding='SAME',
-            dilation=1,
-            groups=1,
-            bias=False,
-            eps=1e-6,
+            in_channel: int,
+            out_channels: int,
+            kernel_size: Union[int, Tuple[int, int]],
+            stride: Union[int, Tuple[int, int]] = 1,
+            padding: str = 'SAME',
+            dilation: Union[int, Tuple[int, int]] = 1,
+            groups: int = 1,
+            bias: bool = False,
+            eps: float = 1e-6,
             device=None,
             dtype=None,
     ):
@@ -118,17 +120,17 @@ class ScaledStdConv2d(nn.Conv2d):
 
     def __init__(
             self,
-            in_channels,
-            out_channels,
-            kernel_size,
-            stride=1,
-            padding=None,
-            dilation=1,
-            groups=1,
-            bias=True,
-            gamma=1.0,
-            eps=1e-6,
-            gain_init=1.0,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: Union[int, Tuple[int, int]],
+            stride: Union[int, Tuple[int, int]] = 1,
+            padding: Optional[Union[int, Tuple[int, int], str]] = None,
+            dilation: Union[int, Tuple[int, int]] = 1,
+            groups: int = 1,
+            bias: bool = True,
+            gamma: float = 1.0,
+            eps: float = 1e-6,
+            gain_init: float = 1.0,
             device=None,
             dtype=None,
     ):
@@ -179,17 +181,17 @@ class ScaledStdConv2dSame(nn.Conv2d):
 
     def __init__(
             self,
-            in_channels,
-            out_channels,
-            kernel_size,
-            stride=1,
-            padding='SAME',
-            dilation=1,
-            groups=1,
-            bias=True,
-            gamma=1.0,
-            eps=1e-6,
-            gain_init=1.0,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: Union[int, Tuple[int, int]],
+            stride: Union[int, Tuple[int, int]] = 1,
+            padding: str = 'SAME',
+            dilation: Union[int, Tuple[int, int]] = 1,
+            groups: int = 1,
+            bias: bool = True,
+            gamma: float = 1.0,
+            eps: float = 1e-6,
+            gain_init: float = 1.0,
             device=None,
             dtype=None,
     ):

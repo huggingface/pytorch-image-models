@@ -8,6 +8,8 @@ Hacked together by / Copyright 2020 Ross Wightman
 
 import math
 from functools import partial
+from typing import Union, Tuple
+
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
@@ -43,20 +45,20 @@ class CondConv2d(nn.Module):
 
     def __init__(
             self,
-            in_channels,
-            out_channels,
-            kernel_size=3,
-            stride=1,
-            padding='',
-            dilation=1,
-            groups=1,
-            bias=False,
-            num_experts=4,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: Union[int, Tuple[int, int]] = 3,
+            stride: Union[int, Tuple[int, int]] = 1,
+            padding: Union[int, Tuple[int, int], str] = '',
+            dilation: Union[int, Tuple[int, int]] = 1,
+            groups: int = 1,
+            bias: bool = False,
+            num_experts: int = 4,
             device=None,
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(CondConv2d, self).__init__()
+        super().__init__()
 
         self.in_channels = in_channels
         self.out_channels = out_channels

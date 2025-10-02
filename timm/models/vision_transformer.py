@@ -354,14 +354,14 @@ class ParallelThingsBlock(nn.Module):
             device = None,
             dtype = None
     ) -> None:
-        super().__init__()
         dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.num_parallel = num_parallel
         self.attns = nn.ModuleList()
         self.ffns = nn.ModuleList()
         for _ in range(num_parallel):
             self.attns.append(nn.Sequential(OrderedDict([
-                ('norm', norm_layer(dim)),
+                ('norm', norm_layer(dim, **dd)),
                 ('attn', Attention(
                     dim,
                     num_heads=num_heads,

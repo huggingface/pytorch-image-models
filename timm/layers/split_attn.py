@@ -6,6 +6,8 @@ Adapted from original PyTorch impl at https://github.com/zhanghang1989/ResNeSt
 
 Modified for torchscript compat, performance, and consistency with timm by Ross Wightman
 """
+from typing import Optional, Type, Union
+
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -14,8 +16,8 @@ from .helpers import make_divisible
 
 
 class RadixSoftmax(nn.Module):
-    def __init__(self, radix, cardinality):
-        super(RadixSoftmax, self).__init__()
+    def __init__(self, radix: int, cardinality: int):
+        super().__init__()
         self.radix = radix
         self.cardinality = cardinality
 
@@ -35,25 +37,25 @@ class SplitAttn(nn.Module):
     """
     def __init__(
             self,
-            in_channels,
-            out_channels=None,
-            kernel_size=3,
-            stride=1,
-            padding=None,
-            dilation=1,
-            groups=1,
-            bias=False,
-            radix=2,
-            rd_ratio=0.25,
-            rd_channels=None,
-            rd_divisor=8,
-            act_layer=nn.ReLU,
-            norm_layer=None,
-            drop_layer=None,
+            in_channels: int,
+            out_channels: Optional[int] = None,
+            kernel_size: int = 3,
+            stride: int = 1,
+            padding: Optional[int] = None,
+            dilation: int = 1,
+            groups: int = 1,
+            bias: bool = False,
+            radix: int = 2,
+            rd_ratio: float = 0.25,
+            rd_channels: Optional[int] = None,
+            rd_divisor: int = 8,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            norm_layer: Optional[Type[nn.Module]] = None,
+            drop_layer: Optional[Type[nn.Module]] = None,
             **kwargs,
     ):
         dd = {'device': kwargs.pop('device', None), 'dtype': kwargs.pop('dtype', None)}
-        super(SplitAttn, self).__init__()
+        super().__init__()
         out_channels = out_channels or in_channels
         self.radix = radix
         mid_chs = out_channels * radix

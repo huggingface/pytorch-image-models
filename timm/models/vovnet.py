@@ -29,7 +29,7 @@ __all__ = ['VovNet']  # model_registry will add each entrypoint fn to this
 
 class SequentialAppendList(nn.Sequential):
     def __init__(self, *args, **kwargs):
-        super(SequentialAppendList, self).__init__(*args)
+        super().__init__(*args)
 
     def forward(self, x: torch.Tensor, concat_list: List[torch.Tensor]) -> torch.Tensor:
         for i, module in enumerate(self):
@@ -59,7 +59,7 @@ class OsaBlock(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(OsaBlock, self).__init__()
+        super().__init__()
 
         self.residual = residual
         self.depthwise = depthwise
@@ -125,7 +125,7 @@ class OsaStage(nn.Module):
             dtype=None,
     ):
         dd = {'device': device, 'dtype': dtype}
-        super(OsaStage, self).__init__()
+        super().__init__()
         self.grad_checkpointing = False
 
         if downsample:
@@ -170,7 +170,7 @@ class VovNet(nn.Module):
 
     def __init__(
             self,
-            cfg,
+            cfg: dict,
             in_chans: int = 3,
             num_classes: int = 1000,
             global_pool: str = 'avg',
@@ -196,7 +196,7 @@ class VovNet(nn.Module):
             drop_path_rate (float): Stochastic depth drop-path rate (default: 0.)
             kwargs (dict): Extra kwargs overlayed onto cfg
         """
-        super(VovNet, self).__init__()
+        super().__init__()
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.drop_rate = drop_rate

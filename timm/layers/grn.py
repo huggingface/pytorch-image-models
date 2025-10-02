@@ -18,9 +18,16 @@ from torch import nn as nn
 class GlobalResponseNorm(nn.Module):
     """ Global Response Normalization layer
     """
-    def __init__(self, dim, eps=1e-6, channels_last=True, device=None, dtype=None):
-        super().__init__()
+    def __init__(
+            self,
+            dim: int,
+            eps: float = 1e-6,
+            channels_last: bool = True,
+            device=None,
+            dtype=None,
+    ):
         dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.eps = eps
         if channels_last:
             self.spatial_dim = (1, 2)

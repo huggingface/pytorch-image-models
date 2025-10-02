@@ -14,7 +14,8 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from timm.layers import (
-    DropPath, calculate_drop_path_rates,
+    DropPath,
+    calculate_drop_path_rates,
     trunc_normal_,
     create_conv2d,
     ConvNormAct,
@@ -82,7 +83,7 @@ class MobileOneBlock(nn.Module):
             num_conv_branches: Number of linear conv branches.
         """
         dd = {'device': device, 'dtype': dtype}
-        super(MobileOneBlock, self).__init__()
+        super().__init__()
         self.inference_mode = inference_mode
         self.groups = num_groups(group_size, in_chs)
         self.stride = stride
@@ -243,7 +244,8 @@ class MobileOneBlock(nn.Module):
         return kernel_final, bias_final
 
     def _fuse_bn_tensor(
-        self, branch: Union[nn.Sequential, nn.BatchNorm2d]
+            self,
+            branch: Union[nn.Sequential, nn.BatchNorm2d]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Method to fuse batchnorm layer with preceding conv layer.
         Reference: https://github.com/DingXiaoH/RepVGG/blob/main/repvgg.py#L95
@@ -322,7 +324,7 @@ class ReparamLargeKernelConv(nn.Module):
             inference_mode: If True, instantiates model in inference mode. Default: ``False``
         """
         dd = {'device': device, 'dtype': dtype}
-        super(ReparamLargeKernelConv, self).__init__()
+        super().__init__()
         self.stride = stride
         self.groups = num_groups(group_size, in_chs)
         self.in_chs = in_chs
@@ -421,7 +423,8 @@ class ReparamLargeKernelConv(nn.Module):
 
     @staticmethod
     def _fuse_bn(
-        conv: nn.Conv2d, bn: nn.BatchNorm2d
+            conv: nn.Conv2d,
+            bn: nn.BatchNorm2d
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Method to fuse batchnorm layer with conv layer.
 
@@ -627,7 +630,14 @@ class PatchEmbed(nn.Module):
 
 
 class LayerScale2d(nn.Module):
-    def __init__(self, dim, init_values=1e-5, inplace=False, device=None, dtype=None):
+    def __init__(
+            self,
+            dim: int,
+            init_values: float = 1e-5,
+            inplace: bool = False,
+            device=None,
+            dtype=None,
+    ):
         super().__init__()
         self.inplace = inplace
         self.gamma = nn.Parameter(init_values * torch.ones(dim, 1, 1, device=device, dtype=dtype))
@@ -645,9 +655,9 @@ class RepMixer(nn.Module):
 
     def __init__(
             self,
-            dim,
-            kernel_size=3,
-            layer_scale_init_value=1e-5,
+            dim: int,
+            kernel_size: int = 3,
+            layer_scale_init_value: Optional[float] = 1e-5,
             inference_mode: bool = False,
             device=None,
             dtype=None,
@@ -824,7 +834,7 @@ class RepConditionalPosEnc(nn.Module):
             dim: int,
             dim_out: Optional[int] = None,
             spatial_shape: Union[int, Tuple[int, int]] = (7, 7),
-            inference_mode=False,
+            inference_mode: bool = False,
             device=None,
             dtype=None,
     ) -> None:
@@ -1070,10 +1080,10 @@ class FastVitStage(nn.Module):
             act_layer: Type[nn.Module] = nn.GELU,
             norm_layer: Type[nn.Module] = nn.BatchNorm2d,
             proj_drop_rate: float = 0.0,
-            drop_path_rate: float = 0.0,
+            drop_path_rate: Union[List[float], float] = 0.0,
             layer_scale_init_value: Optional[float] = 1e-5,
-            lkc_use_act=False,
-            inference_mode=False,
+            lkc_use_act: bool = False,
+            inference_mode: bool = False,
             device=None,
             dtype=None,
     ):

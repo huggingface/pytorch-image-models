@@ -129,7 +129,7 @@ class DropBlock2d(nn.Module):
             inplace: bool = False,
             batchwise: bool = False,
             fast: bool = True):
-        super(DropBlock2d, self).__init__()
+        super().__init__()
         self.drop_prob = drop_prob
         self.gamma_scale = gamma_scale
         self.block_size = block_size
@@ -173,7 +173,7 @@ class DropPath(nn.Module):
     """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks).
     """
     def __init__(self, drop_prob: float = 0., scale_by_keep: bool = True):
-        super(DropPath, self).__init__()
+        super().__init__()
         self.drop_prob = drop_prob
         self.scale_by_keep = scale_by_keep
 

@@ -49,8 +49,8 @@ class GPSA(nn.Module):
             device=None,
             dtype=None,
     ):
-        super().__init__()
         dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.num_heads = num_heads
         self.dim = dim
         head_dim = dim // num_heads
@@ -65,7 +65,7 @@ class GPSA(nn.Module):
         self.pos_proj = nn.Linear(3, num_heads, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
         self.gating_param = nn.Parameter(torch.ones(self.num_heads, **dd))
-        self.rel_indices: torch.Tensor = torch.zeros(1, 1, 1, 3)  # silly torchscript hack, won't work with None
+        self.rel_indices: torch.Tensor = torch.zeros(1, 1, 1, 3, **dd)  # silly torchscript hack, won't work with None
 
     def forward(self, x):
         B, N, C = x.shape
@@ -120,7 +120,10 @@ class GPSA(nn.Module):
     def get_rel_indices(self, num_patches: int) -> torch.Tensor:
         img_size = int(num_patches ** .5)
         rel_indices = torch.zeros(1, num_patches, num_patches, 3)
-        ind = torch.arange(img_size).view(1, -1) - torch.arange(img_size).view(-1, 1)
+        ind = (
+                torch.arange(img_size, dtype=torch.float32).view(1, -1)
+                - torch.arange(img_size, dtype=torch.float32).view(-1, 1)
+        )
         indx = ind.repeat(img_size, img_size)
         indy = ind.repeat_interleave(img_size, dim=0).repeat_interleave(img_size, dim=1)
         indd = indx ** 2 + indy ** 2
@@ -128,7 +131,8 @@ class GPSA(nn.Module):
         rel_indices[:, :, :, 1] = indy.unsqueeze(0)
         rel_indices[:, :, :, 0] = indx.unsqueeze(0)
         device = self.qk.weight.device
-        return rel_indices.to(device)
+        dtype = self.qk.weight.dtype
+        return rel_indices.to(device=device, dtype=dtype)
 
 
 class MHSA(nn.Module):
@@ -142,8 +146,8 @@ class MHSA(nn.Module):
             device=None,
             dtype=None,
     ):
-        super().__init__()
         dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = head_dim ** -0.5
@@ -161,12 +165,15 @@ class MHSA(nn.Module):
         attn_map = attn_map.softmax(dim=-1).mean(0)
 
         img_size = int(N ** .5)
-        ind = torch.arange(img_size).view(1, -1) - torch.arange(img_size).view(-1, 1)
+        ind = (
+                torch.arange(img_size, dtype=torch.float32).view(1, -1)
+                - torch.arange(img_size, dtype=torch.float32).view(-1, 1)
+        )
         indx = ind.repeat(img_size, img_size)
         indy = ind.repeat_interleave(img_size, dim=0).repeat_interleave(img_size, dim=1)
         indd = indx ** 2 + indy ** 2
         distances = indd ** .5
-        distances = distances.to(x.device)
+        distances = distances.to(attn_map.device, attn_map.dtype)
 
         dist = torch.einsum('nm,hnm->h', (distances, attn_map)) / N
         if return_map:
@@ -207,8 +214,8 @@ class Block(nn.Module):
             device=None,
             dtype=None,
     ):
-        super().__init__()
         dd = {'device': device, 'dtype': dtype}
+        super().__init__()
         self.norm1 = norm_layer(dim, **dd)
         self.use_gpsa = use_gpsa
         if self.use_gpsa:
@@ -289,7 +296,12 @@ class ConVit(nn.Module):
 
         if hybrid_backbone is not None:
             self.patch_embed = HybridEmbed(
-                hybrid_backbone, img_size=img_size, in_chans=in_chans, embed_dim=embed_dim, **dd)
+                hybrid_backbone,
+                img_size=img_size,
+                in_chans=in_chans,
+                embed_dim=embed_dim,
+                **dd,
+            )
         else:
             self.patch_embed = PatchEmbed(
                 img_size=img_size,

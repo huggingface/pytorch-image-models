@@ -549,7 +549,7 @@ class MbConvBlock(nn.Module):
             drop_path: Drop path rate.
         """
         dd = {'device': device, 'dtype': dtype}
-        super(MbConvBlock, self).__init__()
+        super().__init__()
         norm_act_layer = partial(get_norm_act_layer(cfg.norm_layer, cfg.act_layer), eps=cfg.norm_eps)
         mid_chs = make_divisible((out_chs if cfg.expand_output else in_chs) * cfg.expand_ratio)
         groups = num_groups(cfg.group_size, mid_chs)

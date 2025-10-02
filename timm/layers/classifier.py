@@ -95,7 +95,7 @@ class ClassifierHead(nn.Module):
             pool_type: Global pooling type, pooling disabled if empty string ('').
             drop_rate: Pre-classifier dropout rate.
         """
-        super(ClassifierHead, self).__init__()
+        super().__init__()
         self.in_features = in_features
         self.use_conv = use_conv
         self.input_fmt = input_fmt
@@ -258,7 +258,7 @@ class ClNormMlpClassifierHead(nn.Module):
         norm_layer = get_norm_layer(norm_layer)
         act_layer = get_act_layer(act_layer)
 
-        self.norm = norm_layer(in_features)
+        self.norm = norm_layer(in_features, **dd)
         if hidden_size:
             self.pre_logits = nn.Sequential(OrderedDict([
                 ('fc', nn.Linear(in_features, hidden_size, **dd)),
