@@ -1112,6 +1112,11 @@ class RotaryEmbeddingDinoV3(nn.Module):
         self.register_buffer("pos_embed_cached", rope_embed, persistent=False)
         self.feat_shape = feat_shape
 
+    def update_feat_shape(self, feat_shape: List[int]):
+        if self.feat_shape is not None and feat_shape != self.feat_shape:
+            # only update if feat_shape was set (valid cache) and different from previous value
+            self._cache_embed(feat_shape)
+
     def get_embed(self, shape: Optional[List[int]] = None) -> torch.Tensor:
         """Generate rope_embed matching DINOv3 RopePositionEmbedding numerics.
 

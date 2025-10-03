@@ -1302,7 +1302,7 @@ def _dinov3_cfg(url: str = '', **kwargs) -> Dict[str, Any]:
     return {
         'url': url,
         'num_classes': 0, 'input_size': (3, 256, 256), 'pool_size': None,
-        'crop_pct': 1.0, 'interpolation': 'bicubic', 'min_input_size': (3, 128, 128),
+        'crop_pct': 1.0, 'interpolation': 'bicubic', 'fixed_input_size': True,
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'patch_embed.proj', 'classifier': 'head',
         'license': 'dinov3', **kwargs
