@@ -31,7 +31,7 @@ def param_groups_weight_decay(
             continue
 
         # Determine if this is a "simple" parameter for fallback optimizer (if available)
-        is_simple = _matches_pattern(name, no_weight_decay_list)
+        is_simple = _matches_pattern(name, simple_params_list)
 
         # Determine weight decay
         matches_pattern = _matches_pattern(name, no_weight_decay_list)
