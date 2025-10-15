@@ -13,6 +13,7 @@ from .lion import Lion
 from .lookahead import Lookahead
 from .madgrad import MADGRAD
 from .mars import Mars
+from .muon import Muon
 from .nadam import NAdamLegacy
 from .nadamw import NAdamW
 from .nvnovograd import NvNovoGrad

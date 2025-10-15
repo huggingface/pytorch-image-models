@@ -1,3 +1,4 @@
+import fnmatch
 import logging
 from itertools import islice
 from typing import Collection, Optional
@@ -10,27 +11,54 @@ from timm.models import group_parameters
 _logger = logging.getLogger(__name__)
 
 
+def _matches_pattern(name: str, patterns: Collection[str]) -> bool:
+    """Check if parameter name matches any pattern (supports wildcards)."""
+    return any(fnmatch.fnmatch(name, pattern) for pattern in patterns)
+
+
 def param_groups_weight_decay(
         model: nn.Module,
         weight_decay: float = 1e-5,
         no_weight_decay_list: Collection[str] = (),
+        simple_params_list: Collection[str] = (),
 ):
-    no_weight_decay_list = set(no_weight_decay_list)
     decay = []
+    decay_simple = []
     no_decay = []
+    no_decay_simple = []
     for name, param in model.named_parameters():
         if not param.requires_grad:
             continue
 
-        if param.ndim <= 1 or name.endswith(".bias") or name in no_weight_decay_list:
-            no_decay.append(param)
+        # Determine if this is a "simple" parameter for fallback optimizer (if available)
+        is_simple = _matches_pattern(name, no_weight_decay_list)
+
+        # Determine weight decay
+        matches_pattern = _matches_pattern(name, no_weight_decay_list)
+        if param.ndim <= 1 or name.endswith(".bias") or matches_pattern:
+            # No weight decay
+            if is_simple:
+                no_decay_simple.append(param)
+            else:
+                no_decay.append(param)
         else:
-            decay.append(param)
+            # With weight decay
+            if is_simple:
+                decay_simple.append(param)
+            else:
+                decay.append(param)
 
-    return [
-        {'params': no_decay, 'weight_decay': 0.},
-        {'params': decay, 'weight_decay': weight_decay}]
+    groups = []
+    if decay:
+        groups.append({'params': decay, 'weight_decay': weight_decay})
+    if decay_simple:
+        groups.append({'params': decay_simple, 'weight_decay': weight_decay, 'simple': True})
+    if no_decay:
+        groups.append({'params': no_decay, 'weight_decay': 0.})
+    if no_decay_simple:
+        groups.append({'params': no_decay_simple, 'weight_decay': 0., 'simple': True})
 
+    return groups
 
 def _group(it, size):
     it = iter(it)
@@ -70,9 +98,9 @@ def param_groups_layer_decay(
         model: nn.Module,
         weight_decay: float = 0.05,
         no_weight_decay_list: Collection[str] = (),
+        simple_params_list: Collection[str] = (),
         weight_decay_exclude_1d: bool = True,
         layer_decay: float = .75,
-        end_layer_decay: Optional[float] = None,
         min_scale: float = 0.,
         no_opt_scale: Optional[float] = None,
         verbose: bool = False,
@@ -81,7 +109,6 @@ def param_groups_layer_decay(
     Parameter groups for layer-wise lr decay & weight decay
     Based on BEiT: https://github.com/microsoft/unilm/blob/master/beit/optim_factory.py#L58
     """
-    no_weight_decay_list = set(no_weight_decay_list)
     param_group_names = {}  # NOTE for debugging
     param_groups = {}
 
@@ -99,8 +126,12 @@ def param_groups_layer_decay(
         if not param.requires_grad:
             continue
 
-        # no decay: all 1D parameters and model specific ones
-        if (weight_decay_exclude_1d and param.ndim <= 1) or name in no_weight_decay_list:
+        # Determine if this is a "simple" parameter for fallback optimizer (if available)
+        is_simple = _matches_pattern(name, simple_params_list)
+
+        # Determine weight decay
+        if (weight_decay_exclude_1d and param.ndim <= 1) or _matches_pattern(name, no_weight_decay_list):
+            # no weight decay for 1D parameters and model specific ones
             g_decay = "no_decay"
             this_decay = 0.
         else:
@@ -114,11 +145,14 @@ def param_groups_layer_decay(
             param.requires_grad = False
             continue
 
-        group_name = "layer_%d_%s" % (layer_id, g_decay)
+        simple_suffix = "_simple" if is_simple else ""
+        group_name = "layer_%d_%s%s" % (layer_id, g_decay, simple_suffix)
+
         if group_name not in param_groups:
             param_group_names[group_name] = {
                 "lr_scale": this_scale,
                 "weight_decay": this_decay,
+                "simple": is_simple,
                 "param_names": [],
             }
             param_groups[group_name] = {
@@ -126,6 +160,8 @@ def param_groups_layer_decay(
                 "weight_decay": this_decay,
                 "params": [],
             }
+            if is_simple:
+                param_groups[group_name]["simple"] = True
 
         param_group_names[group_name]["param_names"].append(name)
         param_groups[group_name]["params"].append(param)

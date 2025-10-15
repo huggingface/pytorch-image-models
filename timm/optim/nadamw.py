@@ -167,7 +167,7 @@ def nadamw(
         eps: float,
         caution: bool,
         maximize: bool,
-        max_lr: float,
+        max_lr: Optional[float],
 ) -> None:
     r"""Functional API that performs NAdamW algorithm computation.
       See NAdamW class for details.
