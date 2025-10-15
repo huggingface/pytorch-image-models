@@ -31,6 +31,7 @@ from .lion import Lion
 from .lookahead import Lookahead
 from .madgrad import MADGRAD
 from .mars import Mars
+from .muon import Muon
 from .nadam import NAdamLegacy
 from .nadamw import NAdamW
 from .nvnovograd import NvNovoGrad
@@ -869,6 +870,14 @@ def _register_other_optimizers(registry: OptimizerRegistry) -> None:
             name='mars',
             opt_class=Mars,
             description='Unleashing the Power of Variance Reduction for Training Large Models',
+            has_betas=True,
+        ),
+        OptimInfo(
+            name='muon',
+            opt_class=Muon,
+            description='MomentUm Orthogonalized by Newton-schulz with AdamW fallback for 1D params',
+            has_momentum=True,
+            has_eps=True,
             has_betas=True,
         ),
         OptimInfo(
