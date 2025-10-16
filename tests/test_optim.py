@@ -552,7 +552,7 @@ def test_lookahead_radam(optimizer):
     )
 
 
-def test_param_groups_layer_decay_with_end_decay():
+def test_param_groups_layer_decay_with_min():
     model = torch.nn.Sequential(
         torch.nn.Linear(10, 5),
         torch.nn.ReLU(),
@@ -563,12 +563,12 @@ def test_param_groups_layer_decay_with_end_decay():
         model,
         weight_decay=0.05,
         layer_decay=0.75,
-        end_layer_decay=0.5,
+        min_scale=0.5,
         verbose=True
     )
     
     assert len(param_groups) > 0
-    # Verify layer scaling is applied with end decay
+    # Verify layer scaling is applied with a min scale
     for group in param_groups:
         assert 'lr_scale' in group
         assert group['lr_scale'] <= 1.0
