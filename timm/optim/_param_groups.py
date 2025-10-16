@@ -21,7 +21,12 @@ def param_groups_weight_decay(
         weight_decay: float = 1e-5,
         no_weight_decay_list: Collection[str] = (),
         simple_params_list: Collection[str] = (),
+        simple_no_weight_decay: bool = False,
 ):
+    # Merge no_weight_decay into simple_params if requested
+    if simple_no_weight_decay:
+        simple_params_list = set(simple_params_list) | set(no_weight_decay_list)
+
     decay = []
     decay_simple = []
     no_decay = []
@@ -99,6 +104,7 @@ def param_groups_layer_decay(
         weight_decay: float = 0.05,
         no_weight_decay_list: Collection[str] = (),
         simple_params_list: Collection[str] = (),
+        simple_no_weight_decay: bool = False,
         weight_decay_exclude_1d: bool = True,
         layer_decay: float = .75,
         min_scale: float = 0.,
@@ -109,6 +115,10 @@ def param_groups_layer_decay(
     Parameter groups for layer-wise lr decay & weight decay
     Based on BEiT: https://github.com/microsoft/unilm/blob/master/beit/optim_factory.py#L58
     """
+    # Merge no_weight_decay into simple_params if requested
+    if simple_no_weight_decay:
+        simple_params_list = set(simple_params_list) | set(no_weight_decay_list)
+
     param_group_names = {}  # NOTE for debugging
     param_groups = {}
 

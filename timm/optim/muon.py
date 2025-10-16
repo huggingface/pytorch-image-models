@@ -16,6 +16,7 @@ Based on implementation by Keller Jordan, see
 
 Hacked together by Ross Wightman
 """
+import logging
 import numbers
 from typing import List, Mapping, Optional, Sequence, Tuple, Union
 
@@ -24,6 +25,8 @@ import torch
 from ._types import ParamsT
 from .adamw import adamw
 from .nadamw import nadamw
+
+_logger = logging.getLogger(__name__)
 
 # Constants from Keller Jordan's Muon
 MUON_EPS = 1e-7
@@ -95,7 +98,7 @@ def zeropower_via_newtonschulz(
         steps: Number of Newton-Schulz iterations
         coefficients: Coefficients (a, b, c) for the iteration
         eps: Numerical stability epsilon for norm
-        safety_factor: Multiplicative safety factor for norm (1.01 is common safety value)
+        safety_factor: Multiplicative safety factor for norm (1.01 is common safety value in 'polar express' variants)
         dtype: Computation dtype
 
     Returns:
@@ -159,6 +162,78 @@ def get_lr_scale(
         return (out_chs / in_chs) ** 0.5
     else:
         assert False, f'Invalid scaling function "{adjust_lr_fn}"'
+
+
+def _is_suitable_for_muon(
+        param: torch.Tensor,
+        min_dim_size: int = 4,
+        max_aspect_ratio: float = 128.,
+        return_reason: bool = False,
+) -> Union[bool, Tuple[bool, str]]:
+    """Check if a parameter is suitable for Muon optimization.
+
+    Args:
+        param: Parameter tensor
+        min_dim_size: Minimum size for non-unit dimensions
+        max_aspect_ratio: Maximum allowed aspect ratio
+        return_reason: If True, return (bool, reason_string), else just bool (faster)
+
+    Returns:
+        If return_reason=False: bool indicating suitability
+        If return_reason=True: Tuple of (is_suitable, reason_string)
+
+    Examples:
+        (64, 128) -> True (or (True, "ok") if return_reason=True)
+        (96, 3, 4, 4) -> True - will be flattened to (96, 48)
+        (4, 2048) -> False - extreme aspect ratio
+        (64,) -> False - insufficient dims
+        (1, 196, 768) -> False - leading unit dims
+
+    NOTE: these rules were created to balance complexity with covering common timm model cases
+    Please let me know if there are non-optimal cases that you run into.
+    """
+
+    s = param.shape
+    # Must have at least 2 non-unit dimensions
+    if param.ndim < 2 or sum(1 for dim_size in s if dim_size > 1) < 2:
+        return (False, "insufficient_dims") if return_reason else False
+
+    # Unit dimension in first two positions indicates:
+    # - Position embeddings (1, seq, dim)
+    # - Depthwise convs (out, 1, h, w)
+    # - Other degenerate cases possibly not caught by first rule
+    if s[0] == 1 or s[1] == 1:
+        return (False, "leading_unit_dims") if return_reason else False
+
+    if param.ndim >= 3:
+        # For 3D+ tensors, check what dimensions will be AFTER flattening
+        # since that's what gets passed to Newton-Schulz iteration
+        # Flatten mode: (out, in, *spatial) -> (out, in * spatial_prod)
+        out_ch = s[0]
+        in_ch_with_spatial = 1
+        for d in s[1:]:
+            in_ch_with_spatial *= d
+        check_dims = (out_ch, in_ch_with_spatial)
+    else:
+        # For 2D tensors, check as-is
+        check_dims = s
+
+    # Both dims should be >= minimum size
+    min_size = min(check_dims)
+    if min_size < min_dim_size:
+        if return_reason:
+            return False, f"min_dim_too_small:{min_size}"
+        return False
+
+    # Aspect ratio shouldn't be too extreme
+    max_size = max(check_dims)
+    aspect_ratio = max_size / min_size
+    if aspect_ratio > max_aspect_ratio:
+        if return_reason:
+            return False, f"extreme_aspect_ratio:{aspect_ratio:.1f}"
+        return False
+
+    return (True, "ok") if return_reason else True
 
 
 def reshape_for_muon(
@@ -320,6 +395,7 @@ class Muon(torch.optim.Optimizer):
             normalize_spatial: bool = True,
             adamw_lr: Optional[float] = None,
             betas: Tuple[float, float] = (0.9, 0.95),
+            verbose: bool = False,
     ):
         """ Create Muon optimizer.
         Args:
@@ -337,6 +413,7 @@ class Muon(torch.optim.Optimizer):
             normalize_spatial: Whether to normalize by sqrt(spatial_size) in batched mode
             adamw_lr: Learning rate for AdamW (1D params), defaults to lr if not specified
             betas: AdamW beta coefficients
+            verbose: Log parameter routing decisions (Muon vs AdamW)
 
         Example:
             ```python
@@ -375,6 +452,7 @@ class Muon(torch.optim.Optimizer):
             normalize_spatial=normalize_spatial,
             adamw_lr=adamw_lr if adamw_lr is not None else lr,
             betas=betas,
+            verbose=verbose,
         )
         super().__init__(params, defaults)
 
@@ -385,6 +463,13 @@ class Muon(torch.optim.Optimizer):
         if closure is not None:
             with torch.enable_grad():
                 loss = closure()
+
+        verbose = self.defaults.get("verbose", False)
+
+        # Tracking for logging (populated on first encounter of each param)
+        muon_count = 0
+        adamw_count = 0
+        routing_reasons = {} if verbose else None
 
         for group in self.param_groups:
             # Separate params into Muon and AdamW groups
@@ -405,18 +490,51 @@ class Muon(torch.optim.Optimizer):
                 if p.grad.is_sparse:
                     raise RuntimeError("Muon does not support sparse gradients")
 
-                # Determine if we should use Muon or AdamW fallback
-                force_adamw = p.ndim < 2 or group.get("simple", False)
-
                 state = self.state[p]
 
-                if force_adamw:
+                # Determine routing on first encounter (cache in state)
+                if "use_muon" not in state:
+                    # Check explicit simple flag first
+                    reason = None
+                    if group.get("simple", False):
+                        state["use_muon"] = False
+                        if verbose:
+                            reason = "simple_flag"
+                    else:
+                        # Check shape suitability
+                        if verbose:
+                            suitable, reason = _is_suitable_for_muon(p, return_reason=True)
+                        else:
+                            suitable = _is_suitable_for_muon(p, return_reason=False)
+                        state["use_muon"] = suitable
+
+                    # Track routing decision for logging
+                    if routing_reasons is not None and reason is not None:
+                        shape_str = "x".join(str(s) for s in p.shape)
+                        if shape_str not in routing_reasons:
+                            routing_reasons[shape_str] = []
+                        routing_reasons[shape_str].append(reason)
+
+                # Use cached routing decision
+                use_muon = state["use_muon"]
+                if use_muon:
+                    # Collect Muon params
+                    muon_params.append(p)
+                    muon_grads.append(p.grad)
+                    muon_count += 1
+
+                    # State initialization for Muon
+                    if "momentum_buffer" not in state:
+                        state["momentum_buffer"] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                    muon_momentum_bufs.append(state["momentum_buffer"])
+                else:
                     # Collect AdamW/NAdamW params
                     adamw_params.append(p)
                     adamw_grads.append(p.grad)
+                    adamw_count += 1
 
-                    # State initialization
-                    if len(state) == 0:
+                    # State initialization for AdamW
+                    if "step" not in state:
                         state["step"] = torch.tensor(0.)
                         state["exp_avg"] = torch.zeros_like(p, memory_format=torch.preserve_format)
                         state["exp_avg_sq"] = torch.zeros_like(p, memory_format=torch.preserve_format)
@@ -424,14 +542,6 @@ class Muon(torch.optim.Optimizer):
                     adamw_exp_avgs.append(state["exp_avg"])
                     adamw_exp_avg_sqs.append(state["exp_avg_sq"])
                     adamw_state_steps.append(state["step"])
-                else:
-                    # Collect Muon params
-                    muon_params.append(p)
-                    muon_grads.append(p.grad)
-
-                    if len(state) == 0:
-                        state["momentum_buffer"] = torch.zeros_like(p, memory_format=torch.preserve_format)
-                    muon_momentum_bufs.append(state["momentum_buffer"])
 
             # Apply Muon updates
             if muon_params:
@@ -495,12 +605,41 @@ class Muon(torch.optim.Optimizer):
                         max_lr=None,
                 )
 
+        # Log routing summary when we have new routing decisions
+        if routing_reasons and len(routing_reasons) > 0:
+            # Concise summary
+            _logger.info(f"Muon parameter routing: {muon_count} Muon, {adamw_count} AdamW")
+
+            # Group by reason for detailed breakdown
+            reason_groups = {}
+            for shape_str, reasons in sorted(routing_reasons.items()):
+                for reason in reasons:
+                    if reason not in reason_groups:
+                        reason_groups[reason] = []
+                    reason_groups[reason].append(shape_str)
+
+            # Log summary counts per reason
+            reason_summary = []
+            for reason, shapes in sorted(reason_groups.items()):
+                reason_summary.append(f"{reason}={len(shapes)}")
+            _logger.info(f"  Breakdown: {', '.join(reason_summary)}")
+
+            # Detailed breakdown at INFO level
+            if _logger.isEnabledFor(logging.INFO):
+                for reason, shapes in sorted(reason_groups.items()):
+                    optimizer_name = "Muon" if reason == "ok" else "AdamW"
+                    _logger.info(f"    {reason} -> {optimizer_name}:")
+                    for shape in shapes[:10]:
+                        _logger.info(f"      {shape}")
+                    if len(shapes) > 10:
+                        _logger.info(f"      ... and {len(shapes) - 10} more")
+
         return loss
 
 
 def resolve_ns_coefficients(
-    value: Union[str, Sequence[float], Sequence[Sequence[float]]],
-    presets: Mapping[str, Sequence[Sequence[float]]]
+        value: Union[str, Sequence[float], Sequence[Sequence[float]]],
+        presets: Mapping[str, Sequence[Sequence[float]]]
 ) -> List[Tuple[float, float, float]]:
     # tiny helpers (kept inline for succinctness)
     is_seq = lambda x: isinstance(x, Sequence) and not isinstance(x, (str, bytes))
