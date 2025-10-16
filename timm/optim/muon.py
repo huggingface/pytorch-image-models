@@ -385,7 +385,7 @@ class Muon(torch.optim.Optimizer):
             lr: float = 0.02,
             weight_decay: float = 0,
             momentum: float = 0.95,
-            nesterov: bool = True,
+            nesterov: bool = False,
             ns_steps: int = DEFAULT_NS_STEPS,
             ns_coefficients: NSCoeff = "quintic",
             eps: float = MUON_EPS,
