@@ -49,14 +49,14 @@ def param_groups_weight_decay(
                 decay.append(param)
 
     groups = []
-    if decay:
-        groups.append({'params': decay, 'weight_decay': weight_decay})
-    if decay_simple:
-        groups.append({'params': decay_simple, 'weight_decay': weight_decay, 'simple': True})
     if no_decay:
         groups.append({'params': no_decay, 'weight_decay': 0.})
+    if decay:
+        groups.append({'params': decay, 'weight_decay': weight_decay})
     if no_decay_simple:
         groups.append({'params': no_decay_simple, 'weight_decay': 0., 'simple': True})
+    if decay_simple:
+        groups.append({'params': decay_simple, 'weight_decay': weight_decay, 'simple': True})
 
     return groups
 
