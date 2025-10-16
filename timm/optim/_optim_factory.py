@@ -885,6 +885,15 @@ def _register_other_optimizers(registry: OptimizerRegistry) -> None:
             has_betas=True,
         ),
         OptimInfo(
+            name='nmuon',
+            opt_class=Muon,
+            description='MomentUm Orthogonalized by Newton-schulz with Nesterov and NAdamW fallback for 1D params',
+            has_momentum=True,
+            has_eps=True,
+            has_betas=True,
+            defaults={'nesterov': True}
+        ),
+        OptimInfo(
             name='novograd',
             opt_class=NvNovoGrad,
             description='Normalized Adam with L2 norm gradient normalization',
