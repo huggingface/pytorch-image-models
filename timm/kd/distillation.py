@@ -1,6 +1,6 @@
 """Knowledge Distillation helpers for training with a teacher model."""
 import logging
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -22,7 +22,6 @@ class DistillationTeacher(nn.Module):
         model_name: Name of the teacher model to create
         num_classes: Number of output classes
         in_chans: Number of input channels
-        pretrained: Whether to load pretrained weights
         device: Device to place the model on (default: 'cuda')
         dtype: Model dtype (default: None, uses float32)
     """
@@ -32,6 +31,7 @@ class DistillationTeacher(nn.Module):
             model_name: str,
             num_classes: int,
             in_chans: int = 3,
+            pretrained_path: Optional[str] = None,
             device: torch.device = torch.device('cuda'),
             dtype: torch.dtype = None,
     ):
@@ -39,11 +39,19 @@ class DistillationTeacher(nn.Module):
 
         _logger.info(f"Creating KD teacher model: '{model_name}'")
 
+        pretrained_kwargs = {'pretrained': True}
+        if pretrained_path:
+            # specify a local checkpoint path to load pretrained weights from
+            pretrained_kwargs['pretrained_cfg_overlay'] = dict(
+                file=pretrained_path,
+                num_classes=num_classes,  # needed to avoid head adaptation?
+            )
+
         model_kd = create_model(
             model_name=model_name,
             num_classes=num_classes,
-            pretrained=True,
             in_chans=in_chans,
+            **pretrained_kwargs,
         )
 
         model_kd = model_kd.to(device=device, dtype=dtype)
