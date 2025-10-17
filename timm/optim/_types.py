@@ -1,8 +1,12 @@
 from typing import Any, Dict, Iterable, Union, Protocol, Type
 try:
-    from typing import TypeAlias, TypeVar
+    from typing import TypeAlias
 except ImportError:
-    from typing_extensions import TypeAlias, TypeVar
+    from typing_extensions import TypeAlias
+try:
+    from typing import TypeVar
+except ImportError:
+    from typing_extensions import TypeVar
 
 import torch
 import torch.optim
