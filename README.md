@@ -12,6 +12,17 @@
 
 ## What's New
 
+## Oct 16, 2025
+* Add an impl of the Muon optimizer (based on https://github.com/KellerJordan/Muon) with customizations
+  * extra flexibility and improved handling for conv weights and fallbacks for weight shapes not suited for orthogonalization
+  * small speedup for NS iterations by reducing allocs and using fused (b)add(b)mm ops
+  * by default uses AdamW (or NAdamW if `nesterov=True`) updates if muon not suitable for parameter shape (or excluded via param group flag)
+  * like torch impl, select from several LR scale adjustment fns via `adjust_lr_fn`
+  * select from several NS coefficient presets or specify your own via `ns_coefficients`
+* First 2 steps of 'meta' device model initalization supported
+  * Fix several ops that were breaking creation under 'meta' device context
+  * Add device & dtype factory kwarg support to all models and modules (anything inherting from nn.Module) in `timm`
+
 ## Sept 21, 2025
 * Remap DINOv3 ViT weight tags from `lvd_1689m` -> `lvd1689m` to match (same for `sat_493m` -> `sat493m`)
 * Release 1.0.20
