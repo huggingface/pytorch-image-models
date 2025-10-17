@@ -41,7 +41,7 @@ from timm.models import create_model, safe_model_name, resume_checkpoint, load_c
 from timm.optim import create_optimizer_v2, optimizer_kwargs
 from timm.scheduler import create_scheduler_v2, scheduler_kwargs
 from timm.utils import ApexScaler, NativeScaler
-from timm.utils.model_kd import build_kd_model, add_kd_loss
+from timm.kd import DistillationTeacher, apply_kd_loss
 
 try:
     from apex import amp
@@ -491,11 +491,6 @@ def main():
 
     utils.random_seed(args.seed, args.rank)
 
-    # Create the KD teacher model if specified
-    model_kd = None
-    if args.kd_model_name is not None:
-        model_kd = build_kd_model(args)
-
     if args.fuser:
         utils.set_jit_fuser(args.fuser)
     if args.fast_norm:
@@ -544,6 +539,17 @@ def main():
 
     if args.grad_checkpointing:
         model.set_grad_checkpointing(enable=True)
+
+    # Create the KD teacher model if specified
+    model_kd = None
+    if args.kd_model_name is not None:
+        model_kd = DistillationTeacher(
+            model_name=args.kd_model_name,
+            num_classes=args.num_classes,
+            in_chans=in_chans,
+            device=device,
+            dtype=model_dtype,
+        )
 
     if utils.is_primary(args):
         _logger.info(
@@ -1188,7 +1194,15 @@ def train_one_epoch(
 
                 # KD logic
                 if model_kd is not None:
-                    _loss= add_kd_loss(_loss, output, input, model, model_kd, args)
+                    _loss = apply_kd_loss(
+                        loss=_loss,
+                        student_output=output,
+                        input=input,
+                        student_model=model,
+                        teacher_model=model_kd,
+                        alpha_kd=args.alpha_kd,
+                        use_kd_only=args.use_kd_only_loss,
+                    )
 
             if accum_steps > 1:
                 _loss /= accum_steps
