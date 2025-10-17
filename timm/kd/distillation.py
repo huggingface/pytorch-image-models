@@ -128,7 +128,7 @@ def apply_kd_loss(
     prob_s = torch.nn.functional.log_softmax(student_output, dim=-1)
 
     # Teacher probability calculation
-    with torch.inference_mode():
+    with torch.no_grad():
         input_kd = teacher_model.normalize_input(input, student_model)
         out_t = teacher_model.model(input_kd.detach())
         prob_t = torch.nn.functional.softmax(out_t, dim=-1)
