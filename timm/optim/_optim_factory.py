@@ -5,7 +5,7 @@ Hacked together by / Copyright 2021 Ross Wightman
 import logging
 from dataclasses import dataclass
 from functools import partial
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type, Union
+from typing import Any, Callable, Collection, Dict, List, Optional, Set, Tuple, Type, Union
 from fnmatch import fnmatch
 import importlib
 
@@ -234,7 +234,8 @@ class OptimizerRegistry:
             momentum: float = 0.9,
             foreach: Optional[bool] = None,
             weight_decay_exclude_1d: bool = True,
-            simple_no_weight_decay: bool = False,
+            fallback_list: Collection[str] = (),
+            fallback_no_weight_decay: bool = False,
             layer_decay: Optional[float] = None,
             layer_decay_min_scale: Optional[float] = None,
             layer_decay_no_opt_scale: Optional[float] = None,
@@ -251,7 +252,8 @@ class OptimizerRegistry:
             momentum: Momentum factor for applicable optimizers
             foreach: Enable/disable foreach operation
             weight_decay_exclude_1d: Whether to skip weight decay for 1d params (biases and norm affine)
-            simple_no_weight_decay: If True, params in no_weight_decay list will use simple/fallback optimizer (e.g., AdamW for Muon)
+            fallback_list: Collection of parameter name patterns to use fallback optimizer for hybrid optimizers
+            fallback_no_weight_decay: If True, params in no_weight_decay list will use fallback optimizer (e.g., AdamW for Muon)
             layer_decay: Layer-wise learning rate decay
             layer_scale_min_scale: Minimum layer scale factor clamp value
             layer_scale_no_opt_scale: Layer scale below which optimization is disabled
@@ -279,7 +281,8 @@ class OptimizerRegistry:
                     weight_decay=weight_decay,
                     layer_decay=layer_decay,
                     no_weight_decay_list=no_weight_decay,
-                    simple_no_weight_decay=simple_no_weight_decay,
+                    fallback_list=fallback_list,
+                    fallback_no_weight_decay=fallback_no_weight_decay,
                     weight_decay_exclude_1d=weight_decay_exclude_1d,
                     min_scale=layer_decay_min_scale,
                     no_opt_scale=layer_decay_no_opt_scale,
@@ -290,7 +293,8 @@ class OptimizerRegistry:
                     model_or_params,
                     weight_decay=weight_decay,
                     no_weight_decay_list=no_weight_decay,
-                    simple_no_weight_decay=simple_no_weight_decay,
+                    fallback_list=fallback_list,
+                    fallback_no_weight_decay=fallback_no_weight_decay,
                 )
                 weight_decay = 0.
             else:
@@ -1167,7 +1171,8 @@ def create_optimizer_v2(
         momentum: float = 0.9,
         foreach: Optional[bool] = None,
         filter_bias_and_bn: bool = True,
-        simple_no_weight_decay: bool = False,
+        fallback_list: Collection[str] = (),
+        fallback_no_weight_decay: bool = False,
         layer_decay: Optional[float] = None,
         layer_decay_min_scale: float = 0.0,
         layer_decay_no_opt_scale: Optional[float] = None,
@@ -1195,8 +1200,10 @@ def create_optimizer_v2(
         filter_bias_and_bn: If True, bias, norm layer parameters (all 1d params) will not have
             weight decay applied. Only used when model_or_params is a model and
             weight_decay > 0.
-        simple_no_weight_decay: If True, params in model's no_weight_decay() list will use
-            simple/fallback optimizer for hybrid optimizers (e.g., AdamW for Muon).
+        fallback_list: Collection of parameter name patterns to use fallback optimizer for
+            hybrid optimizers (e.g., AdamW for Muon). Supports wildcard matching.
+        fallback_no_weight_decay: If True, params in model's no_weight_decay() list will use
+            fallback optimizer for hybrid optimizers (e.g., AdamW for Muon).
         layer_decay: Optional layer-wise learning rate decay factor. If provided,
             learning rates will be scaled by layer_decay^(max_depth - layer_depth).
             Only used when model_or_params is a model.
@@ -1247,7 +1254,8 @@ def create_optimizer_v2(
         momentum=momentum,
         foreach=foreach,
         weight_decay_exclude_1d=filter_bias_and_bn,
-        simple_no_weight_decay=simple_no_weight_decay,
+        fallback_list=fallback_list,
+        fallback_no_weight_decay=fallback_no_weight_decay,
         layer_decay=layer_decay,
         layer_decay_min_scale=layer_decay_min_scale,
         layer_decay_no_opt_scale=layer_decay_no_opt_scale,

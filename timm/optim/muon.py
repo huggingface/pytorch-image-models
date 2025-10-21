@@ -376,7 +376,7 @@ class Muon(torch.optim.Optimizer):
     """Muon - MomentUm Orthogonalized by Newton-schulz
 
     Combines Muon for 2D+ parameters (weight matrices) with AdamW for 1D parameters (biases, norms) and
-    parameter groups with 'simple=True' set.
+    parameter groups with 'use_fallback=True' set (or 'use_muon=False' for compatibility).
     """
 
     def __init__(
@@ -423,7 +423,7 @@ class Muon(torch.optim.Optimizer):
             # Manual control over parameter groups
             optimizer = Muon([
                 {'params': weight_matrices, 'lr': 0.02},
-                {'params': biases, 'simple': True, 'lr': 3e-4}, # use AdamW if simple=True
+                {'params': biases, 'use_fallback': True, 'lr': 3e-4}, # use AdamW if use_fallback=True
             ])
             ```
         """
@@ -494,12 +494,18 @@ class Muon(torch.optim.Optimizer):
 
                 # Determine routing on first encounter (cache in state)
                 if "use_muon" not in state:
-                    # Check explicit simple flag first
+                    # Check explicit flags first (support both 'use_fallback' and 'use_muon' for compatibility)
                     reason = None
-                    if group.get("simple", False):
+                    if group.get("use_fallback", False):
+                        # use_fallback=True means use AdamW (use_muon=False)
                         state["use_muon"] = False
                         if verbose:
-                            reason = "simple_flag"
+                            reason = "use_fallback_flag"
+                    elif "use_muon" in group:
+                        # Explicit use_muon flag for compatibility with other Muon implementations
+                        state["use_muon"] = group["use_muon"]
+                        if verbose:
+                            reason = "use_muon_flag"
                     else:
                         # Check shape suitability
                         if verbose:
