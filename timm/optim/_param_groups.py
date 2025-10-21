@@ -1,3 +1,4 @@
+import fnmatch
 import logging
 from itertools import islice
 from typing import Collection, Optional
@@ -10,27 +11,59 @@ from timm.models import group_parameters
 _logger = logging.getLogger(__name__)
 
 
+def _matches_pattern(name: str, patterns: Collection[str]) -> bool:
+    """Check if parameter name matches any pattern (supports wildcards)."""
+    return any(fnmatch.fnmatch(name, pattern) for pattern in patterns)
+
+
 def param_groups_weight_decay(
         model: nn.Module,
         weight_decay: float = 1e-5,
         no_weight_decay_list: Collection[str] = (),
+        fallback_list: Collection[str] = (),
+        fallback_no_weight_decay: bool = False,
 ):
-    no_weight_decay_list = set(no_weight_decay_list)
+    # Merge no_weight_decay into fallback_list if requested
+    if fallback_no_weight_decay:
+        fallback_list = set(fallback_list) | set(no_weight_decay_list)
+
     decay = []
+    decay_fallback = []
     no_decay = []
+    no_decay_fallback = []
     for name, param in model.named_parameters():
         if not param.requires_grad:
             continue
 
-        if param.ndim <= 1 or name.endswith(".bias") or name in no_weight_decay_list:
-            no_decay.append(param)
+        # Determine if this is a "fallback" parameter for fallback optimizer (if available)
+        is_fallback = _matches_pattern(name, fallback_list)
+
+        # Determine weight decay
+        matches_pattern = _matches_pattern(name, no_weight_decay_list)
+        if param.ndim <= 1 or name.endswith(".bias") or matches_pattern:
+            # No weight decay
+            if is_fallback:
+                no_decay_fallback.append(param)
+            else:
+                no_decay.append(param)
         else:
-            decay.append(param)
+            # With weight decay
+            if is_fallback:
+                decay_fallback.append(param)
+            else:
+                decay.append(param)
 
-    return [
-        {'params': no_decay, 'weight_decay': 0.},
-        {'params': decay, 'weight_decay': weight_decay}]
+    groups = []
+    if no_decay:
+        groups.append({'params': no_decay, 'weight_decay': 0.})
+    if decay:
+        groups.append({'params': decay, 'weight_decay': weight_decay})
+    if no_decay_fallback:
+        groups.append({'params': no_decay_fallback, 'weight_decay': 0., 'use_fallback': True})
+    if decay_fallback:
+        groups.append({'params': decay_fallback, 'weight_decay': weight_decay, 'use_fallback': True})
 
+    return groups
 
 def _group(it, size):
     it = iter(it)
@@ -70,9 +103,10 @@ def param_groups_layer_decay(
         model: nn.Module,
         weight_decay: float = 0.05,
         no_weight_decay_list: Collection[str] = (),
+        fallback_list: Collection[str] = (),
+        fallback_no_weight_decay: bool = False,
         weight_decay_exclude_1d: bool = True,
         layer_decay: float = .75,
-        end_layer_decay: Optional[float] = None,
         min_scale: float = 0.,
         no_opt_scale: Optional[float] = None,
         verbose: bool = False,
@@ -81,7 +115,10 @@ def param_groups_layer_decay(
     Parameter groups for layer-wise lr decay & weight decay
     Based on BEiT: https://github.com/microsoft/unilm/blob/master/beit/optim_factory.py#L58
     """
-    no_weight_decay_list = set(no_weight_decay_list)
+    # Merge no_weight_decay into fallback_list if requested
+    if fallback_no_weight_decay:
+        fallback_list = set(fallback_list) | set(no_weight_decay_list)
+
     param_group_names = {}  # NOTE for debugging
     param_groups = {}
 
@@ -99,8 +136,12 @@ def param_groups_layer_decay(
         if not param.requires_grad:
             continue
 
-        # no decay: all 1D parameters and model specific ones
-        if (weight_decay_exclude_1d and param.ndim <= 1) or name in no_weight_decay_list:
+        # Determine if this is a "fallback" parameter for fallback optimizer (if available)
+        is_fallback = _matches_pattern(name, fallback_list)
+
+        # Determine weight decay
+        if (weight_decay_exclude_1d and param.ndim <= 1) or _matches_pattern(name, no_weight_decay_list):
+            # no weight decay for 1D parameters and model specific ones
             g_decay = "no_decay"
             this_decay = 0.
         else:
@@ -114,11 +155,14 @@ def param_groups_layer_decay(
             param.requires_grad = False
             continue
 
-        group_name = "layer_%d_%s" % (layer_id, g_decay)
+        fallback_suffix = "_fallback" if is_fallback else ""
+        group_name = "layer_%d_%s%s" % (layer_id, g_decay, fallback_suffix)
+
         if group_name not in param_groups:
             param_group_names[group_name] = {
                 "lr_scale": this_scale,
                 "weight_decay": this_decay,
+                "use_fallback": is_fallback,
                 "param_names": [],
             }
             param_groups[group_name] = {
@@ -126,6 +170,8 @@ def param_groups_layer_decay(
                 "weight_decay": this_decay,
                 "params": [],
             }
+            if is_fallback:
+                param_groups[group_name]["use_fallback"] = True
 
         param_group_names[group_name]["param_names"].append(name)
         param_groups[group_name]["params"].append(param)

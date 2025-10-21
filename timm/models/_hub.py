@@ -535,7 +535,7 @@ def _get_safe_alternatives(filename: str) -> Iterable[str]:
         yield filename[:-4] + ".safetensors"
 
 
-def _get_license_from_hf_hub(model_id: str | None, hf_hub_id: str | None) -> str | None:
+def _get_license_from_hf_hub(model_id: Optional[str], hf_hub_id: Optional[str]) -> Optional[str]:
     """Retrieve license information for a model from Hugging Face Hub.
 
     Fetches the license field from the model card metadata on Hugging Face Hub
