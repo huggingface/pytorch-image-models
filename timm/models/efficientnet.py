@@ -458,13 +458,14 @@ def _create_effnet(variant, pretrained=False, **kwargs):
             kwargs_filter = ('num_classes', 'num_features', 'head_conv', 'global_pool')
             model_cls = EfficientNetFeatures
             features_mode = 'cls'
+    pretrained_strict = kwargs.pop('pretrained_strict', True)
 
     model = build_model_with_cfg(
         model_cls,
         variant,
         pretrained,
         features_only=features_mode == 'cfg',
-        pretrained_strict=features_mode != 'cls',
+        pretrained_strict=pretrained_strict and features_mode != 'cls',
         kwargs_filter=kwargs_filter,
         **kwargs,
     )
@@ -1446,12 +1447,16 @@ default_cfgs = generate_default_cfgs({
     'efficientnet_b3_g8_gn.untrained': _cfg(
         input_size=(3, 288, 288), pool_size=(9, 9), test_input_size=(3, 320, 320), crop_pct=1.0),
     'efficientnet_blur_b0.untrained': _cfg(),
-    'efficientnet_h_b5.untrained': _cfg(
-        url='', input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0),
+    'efficientnet_h_b5.sw_r448_e450_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0,
+        crop_mode='squash', test_input_size=(3, 576, 576)),
     'efficientnet_x_b3.untrained': _cfg(
         url='', input_size=(3, 288, 288), pool_size=(9, 9), crop_pct=0.95),
-    'efficientnet_x_b5.untrained': _cfg(
-        url='', input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0),
+    'efficientnet_x_b5.sw_r448_e450_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0,
+        crop_mode='squash', test_input_size=(3, 576, 576)),
 
     'efficientnet_es.ra_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_es_ra-f111e99c.pth',
