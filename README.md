@@ -12,6 +12,10 @@
 
 ## What's New
 
+## Oct 31, 2025 🎃
+* Update imagenet & OOD variant result csv files to include a few new models and verify correctness over several torch & timm versions
+* EfficientNet-X and EfficientNet-H B5 model weights added as part of a hparam search for AdamW vs Muon (still iterating on Muon runs)
+
 ## Oct 16-20, 2025
 * Add an impl of the Muon optimizer (based on https://github.com/KellerJordan/Muon) with customizations
   * extra flexibility and improved handling for conv weights and fallbacks for weight shapes not suited for orthogonalization
