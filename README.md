@@ -12,6 +12,10 @@
 
 ## What's New
 
+## Nov 4, 2025
+* Fix LayerScale / LayerScale2d init bug (init values ignored), introduced in 1.0.21. Thanks https://github.com/Ilya-Fradlin
+* Release 1.0.22
+
 ## Oct 31, 2025 🎃
 * Update imagenet & OOD variant result csv files to include a few new models and verify correctness over several torch & timm versions
 * EfficientNet-X and EfficientNet-H B5 model weights added as part of a hparam search for AdamW vs Muon (still iterating on Muon runs)
