@@ -370,6 +370,8 @@ group.add_argument('--worker-seeding', type=str, default='all',
                    help='worker seed mode (default: all)')
 group.add_argument('--log-interval', type=int, default=50, metavar='N',
                    help='how many batches to wait before logging training status')
+group.add_argument('--val-interval', type=int, default=1, metavar='N',
+                   help='how many epochs between validation and checkpointing')
 group.add_argument('--recovery-interval', type=int, default=0, metavar='N',
                    help='how many batches to wait before writing recovery checkpoint')
 group.add_argument('--checkpoint-hist', type=int, default=10, metavar='N',
@@ -1013,6 +1015,16 @@ def main():
                     _logger.info("Distributing BatchNorm running means and vars")
                 utils.distribute_bn(model, args.world_size, args.dist_bn == 'reduce')
 
+            if (epoch + 1) % args.val_interval != 0:
+                if utils.is_primary(args):
+                    _logger.info("Skipping eval and checkpointing ")
+                if lr_scheduler is not None:
+                    # step LR for next epoch
+                    # careful when using metric dependent lr_scheduler
+                    lr_scheduler.step(epoch + 1, metric=None)
+                # skip validation and metric logic
+                continue
+
             if loader_eval is not None:
                 eval_metrics = validate(
                     model,
@@ -1252,7 +1264,7 @@ def train_one_epoch(
         update_time_m.update(time.time() - update_start_time)
         update_start_time = time_now
 
-        if update_idx % args.log_interval == 0:
+        if update_idx % args.log_interval == 0 or last_batch:
             lrl = [param_group['lr'] for param_group in optimizer.param_groups]
             lr = sum(lrl) / len(lrl)
 
