@@ -74,14 +74,14 @@ class Scheduler(ABC):
             return None
         return self._get_lr(t)
 
-    def step(self, epoch: int, metric: float = None) -> None:
+    def step(self, epoch: int, metric: Optional[float] = None) -> None:
         self.metric = metric
         values = self._get_values(epoch, on_epoch=True)
         if values is not None:
             values = self._add_noise(values, epoch)
             self.update_groups(values)
 
-    def step_update(self, num_updates: int, metric: float = None):
+    def step_update(self, num_updates: int, metric: Optional[float] = None):
         self.metric = metric
         values = self._get_values(num_updates, on_epoch=False)
         if values is not None:

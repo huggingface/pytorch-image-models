@@ -5,7 +5,7 @@ Adapts PyTorch plateau scheduler and allows application of noise, warmup.
 Hacked together by / Copyright 2020 Ross Wightman
 """
 import torch
-from typing import List
+from typing import List, Optional
 
 from .scheduler import Scheduler
 
@@ -86,12 +86,14 @@ class PlateauLRScheduler(Scheduler):
                     param_group['lr'] = self.restore_lr[i]
                 self.restore_lr = None
 
-            self.lr_scheduler.step(metric, epoch)  # step the base scheduler
+            # step the base scheduler if metric given
+            if metric is not None:
+                self.lr_scheduler.step(metric, epoch)
 
             if self._is_apply_noise(epoch):
                 self._apply_noise(epoch)
 
-    def step_update(self, num_updates: int, metric: float = None):
+    def step_update(self, num_updates: int, metric: Optional[float] = None):
         return None
 
     def _apply_noise(self, epoch):
