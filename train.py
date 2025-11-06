@@ -1015,14 +1015,16 @@ def main():
                     _logger.info("Distributing BatchNorm running means and vars")
                 utils.distribute_bn(model, args.world_size, args.dist_bn == 'reduce')
 
-            if (epoch + 1) % args.val_interval != 0:
+            epoch_p_1 = epoch + 1
+            if epoch_p_1 % args.val_interval != 0 and epoch_p_1 != num_epochs:
                 if utils.is_primary(args):
                     _logger.info("Skipping eval and checkpointing ")
                 if lr_scheduler is not None:
-                    # step LR for next epoch
-                    # careful when using metric dependent lr_scheduler
-                    lr_scheduler.step(epoch + 1, metric=None)
-                # skip validation and metric logic
+                    # step LR for next epoch, take care when using metric dependent lr_scheduler
+                    lr_scheduler.step(epoch_p_1, metric=None)
+                # Skip validation and metric logic
+                # FIXME we could make the logic below able to handle no eval metrics more gracefully,
+                #  but for simplicity opting to just skip for now.
                 continue
 
             if loader_eval is not None:
@@ -1076,7 +1078,7 @@ def main():
 
             if lr_scheduler is not None:
                 # step LR for next epoch
-                lr_scheduler.step(epoch + 1, latest_metric)
+                lr_scheduler.step(epoch_p_1, latest_metric)
 
             latest_results = {
                 'epoch': epoch,
