@@ -41,6 +41,7 @@ from timm.models import create_model, safe_model_name, resume_checkpoint, load_c
 from timm.optim import create_optimizer_v2, optimizer_kwargs
 from timm.scheduler import create_scheduler_v2, scheduler_kwargs
 from timm.utils import ApexScaler, NativeScaler
+from timm.kd import DistillationTeacher, apply_kd_loss
 
 try:
     from apex import amp
@@ -417,6 +418,14 @@ group.add_argument('--naflex-patch-size-probs', type=float, nargs='+', default=N
 group.add_argument('--naflex-loss-scale', default='linear', type=str,
                    help='Scale loss (gradient) by batch_size ("none", "sqrt", or "linear")')
 
+# Knowledge Distillation parameters
+parser.add_argument('--kd-model-name', default=None, type=str,
+                    help='Name of teacher model for knowledge distillation')
+parser.add_argument('--alpha-kd', default=5, type=float,
+                    help='Weight for KD loss (default: 5)')
+parser.add_argument('--use-kd-only-loss', action='store_true', default=False,
+                    help='Use only KD loss, without cross-entropy loss')
+
 
 def _parse_args():
     # Do we have a config file to parse?
@@ -530,6 +539,17 @@ def main():
 
     if args.grad_checkpointing:
         model.set_grad_checkpointing(enable=True)
+
+    # Create the KD teacher model if specified
+    model_kd = None
+    if args.kd_model_name is not None:
+        model_kd = DistillationTeacher(
+            model_name=args.kd_model_name,
+            num_classes=args.num_classes,
+            in_chans=in_chans,
+            device=device,
+            dtype=model_dtype,
+        )
 
     if utils.is_primary(args):
         _logger.info(
@@ -1008,6 +1028,7 @@ def main():
                 mixup_fn=mixup_fn,
                 num_updates_total=num_epochs * updates_per_epoch,
                 naflex_mode=naflex_mode,
+                model_kd=model_kd,
             )
 
             if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
@@ -1123,6 +1144,7 @@ def train_one_epoch(
         mixup_fn=None,
         num_updates_total=None,
         naflex_mode=False,
+        model_kd=None,
 ):
     if args.mixup_off_epoch and epoch >= args.mixup_off_epoch:
         if args.prefetcher and loader.mixup_enabled:
@@ -1169,6 +1191,19 @@ def train_one_epoch(
             with amp_autocast():
                 output = model(input)
                 _loss = loss_fn(output, target)
+
+                # KD logic
+                if model_kd is not None:
+                    _loss = apply_kd_loss(
+                        loss=_loss,
+                        student_output=output,
+                        input=input,
+                        student_model=model,
+                        teacher_model=model_kd,
+                        alpha_kd=args.alpha_kd,
+                        use_kd_only=args.use_kd_only_loss,
+                    )
+
             if accum_steps > 1:
                 _loss /= accum_steps
             return _loss
