@@ -20,8 +20,8 @@ from timm.layers import Format, _assert
 from ._manipulate import checkpoint
 
 __all__ = [
-    'FeatureInfo', 'FeatureHooks', 'FeatureDictNet', 'FeatureListNet', 'FeatureHookNet', 'FeatureGetterNet',
-    'feature_take_indices'
+    'FeatureInfo', 'FeatureHooks', 'FeatureBase', 'FeatureDictNet', 'FeatureListNet', 'FeatureHookNet',
+    'FeatureGetterNet', 'feature_take_indices'
 ]
 
 
@@ -227,7 +227,59 @@ def _get_return_layers(feature_info, out_map):
     return return_layers
 
 
-class FeatureDictNet(nn.ModuleDict):
+class FeatureBase(nn.Module):
+    """ Base class for feature extraction wrappers
+
+    Provides dict-like interface without inheriting from nn.ModuleDict to avoid FSDP2 issues.
+    FSDP2's fully_shard has isinstance checks for (ModuleDict, ModuleList) that cause problems.
+
+    This class delegates dict operations to the underlying _modules OrderedDict.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.feature_info: Optional[FeatureInfo] = None
+        self.output_fmt: Optional[Format] = None
+        self.grad_checkpointing = False
+
+    def set_grad_checkpointing(self, enable: bool = True):
+        self.grad_checkpointing = enable
+
+    # Dict-like interface methods
+    def __getitem__(self, key: str) -> nn.Module:
+        return self._modules[key]
+
+    def __setitem__(self, key: str, module: nn.Module) -> None:
+        self.add_module(key, module)
+
+    def __delitem__(self, key: str) -> None:
+        del self._modules[key]
+
+    def __len__(self) -> int:
+        return len(self._modules)
+
+    def __iter__(self):
+        return iter(self._modules)
+
+    def __contains__(self, key: str) -> bool:
+        return key in self._modules
+
+    def keys(self):
+        return self._modules.keys()
+
+    def values(self):
+        return self._modules.values()
+
+    def items(self):
+        return self._modules.items()
+
+    def update(self, modules: Dict[str, nn.Module]) -> None:
+        """Update _modules with new modules."""
+        for key, module in modules.items():
+            self.add_module(key, module)
+
+
+class FeatureDictNet(FeatureBase):
     """ Feature extractor with OrderedDict return
 
     Wrap a model and extract features as specified by the out indices, the network is
@@ -264,7 +316,6 @@ class FeatureDictNet(nn.ModuleDict):
         self.feature_info = _get_feature_info(model, out_indices)
         self.output_fmt = Format(output_fmt)
         self.concat = feature_concat
-        self.grad_checkpointing = False
         self.return_layers = {}
 
         return_layers = _get_return_layers(self.feature_info, out_map)
@@ -282,9 +333,6 @@ class FeatureDictNet(nn.ModuleDict):
         assert not remaining and len(self.return_layers) == len(return_layers), \
             f'Return layers ({remaining}) are not present in model'
         self.update(layers)
-
-    def set_grad_checkpointing(self, enable: bool = True):
-        self.grad_checkpointing = enable
 
     def _collect(self, x) -> (Dict[str, torch.Tensor]):
         out = OrderedDict()
@@ -345,7 +393,7 @@ class FeatureListNet(FeatureDictNet):
         return list(self._collect(x).values())
 
 
-class FeatureHookNet(nn.ModuleDict):
+class FeatureHookNet(FeatureBase):
     """ FeatureHookNet
 
     Wrap a model and extract features specified by the out indices using forward/forward-pre hooks.
@@ -386,7 +434,6 @@ class FeatureHookNet(nn.ModuleDict):
         self.feature_info = _get_feature_info(model, out_indices)
         self.return_dict = return_dict
         self.output_fmt = Format(output_fmt)
-        self.grad_checkpointing = False
         if no_rewrite is None:
             no_rewrite = not flatten_sequential
         layers = OrderedDict()
@@ -415,9 +462,6 @@ class FeatureHookNet(nn.ModuleDict):
         self.update(layers)
         self.hooks = FeatureHooks(hooks, model.named_modules(), out_map=out_map)
 
-    def set_grad_checkpointing(self, enable: bool = True):
-        self.grad_checkpointing = enable
-
     def forward(self, x):
         for i, (name, module) in enumerate(self.items()):
             if self.grad_checkpointing and not torch.jit.is_scripting():
@@ -432,7 +476,7 @@ class FeatureHookNet(nn.ModuleDict):
         return out if self.return_dict else list(out.values())
 
 
-class FeatureGetterNet(nn.ModuleDict):
+class FeatureGetterNet(FeatureBase):
     """ FeatureGetterNet
 
     Wrap models with a feature getter method, like 'get_intermediate_layers'
@@ -471,6 +515,10 @@ class FeatureGetterNet(nn.ModuleDict):
         self.return_dict = return_dict
         self.output_fmt = Format(output_fmt)
         self.norm = norm
+
+    def set_grad_checkpointing(self, enable: bool = True):
+        self.grad_checkpointing = enable
+        self.model.set_grad_checkpointing(enable=enable)
 
     def forward(self, x):
         features = self.model.forward_intermediates(
