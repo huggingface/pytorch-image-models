@@ -4,6 +4,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 """
 from itertools import repeat
 import collections.abc
+import torch
 
 
 # From PyTorch internals
@@ -41,3 +42,12 @@ def extend_tuple(x, n):
     if pad_n <= 0:
         return x[:n]
     return x + (x[-1],) * pad_n
+
+
+def is_contiguous(tensor: torch.Tensor) -> bool:
+    """Check tensor contiguity with proper handling for TorchScript compilation."""
+    # jit is oh so lovely :/
+    if torch.jit.is_scripting():
+        return tensor.is_contiguous()
+    else:
+        return tensor.is_contiguous(memory_format=torch.contiguous_format)

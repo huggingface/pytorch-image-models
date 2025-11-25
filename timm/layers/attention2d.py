@@ -6,7 +6,7 @@ from torch.nn import functional as F
 
 from .config import use_fused_attn
 from .create_conv2d import create_conv2d
-from .helpers import to_2tuple
+from .helpers import to_2tuple, is_contiguous
 from .pool2d_same import create_pool2d
 
 
@@ -271,6 +271,10 @@ class MultiQueryAttention2d(nn.Module):
         """Run layer computation."""
         B, C, H, W = s = x.shape
 
+        # Force memory contiguity to satisfy GEMM constraints for 1x1 convolutions
+        if not is_contiguous(x):
+            x = x.contiguous()
+
         q = self.query(x)
         # desired q shape: [b, h, k, n x n] - [b, l, h, k]
         q = self._reshape_projected_query(q, self.num_heads, self.key_dim)
@@ -350,6 +354,10 @@ class Attention2d(nn.Module):
 
     def forward(self, x, attn_mask: Optional[torch.Tensor] = None):
         B, C, H, W = x.shape
+
+        # Force memory contiguity to satisfy GEMM constraints for 1x1 convolutions
+        if not is_contiguous(x):
+            x = x.contiguous()
 
         if self.head_first:
             q, k, v = self.qkv(x).view(B, self.num_heads, self.dim_head * 3, -1).chunk(3, dim=2)

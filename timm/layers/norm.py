@@ -21,6 +21,7 @@ from .fast_norm import (
     fast_simple_norm,
     simple_norm,
 )
+from .helpers import is_contiguous
 
 try:
     from torch.nn.functional import rms_norm
@@ -155,12 +156,6 @@ class LayerNorm2dFp32(nn.LayerNorm):
         return x
 
 
-def _is_contiguous(tensor: torch.Tensor) -> bool:
-    # jit is oh so lovely :/
-    if torch.jit.is_scripting():
-        return tensor.is_contiguous()
-    else:
-        return tensor.is_contiguous(memory_format=torch.contiguous_format)
 
 
 def _layer_norm_cf(x: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor, eps: float):
@@ -191,7 +186,7 @@ class LayerNormExp2d(nn.LayerNorm):
         super().__init__(num_channels, eps=eps)
 
     def forward(self, x) -> torch.Tensor:
-        if _is_contiguous(x):
+        if is_contiguous(x):
             x = F.layer_norm(
                 x.permute(0, 2, 3, 1), self.normalized_shape, self.weight, self.bias, self.eps).permute(0, 3, 1, 2)
         else:
