@@ -7,6 +7,7 @@ from functools import partial
 
 from .bottleneck_attn import BottleneckAttn
 from .cbam import CbamModule, LightCbamModule
+from .coord_attn import CoordAttn, EfficientLocalAttn, StripAttn, SimpleCoordAttn
 from .eca import EcaModule, CecaModule
 from .gather_excite import GatherExcite
 from .global_context import GlobalContext
@@ -47,6 +48,14 @@ def get_attn(attn_type):
                 module_cls = CbamModule
             elif attn_type == 'lcbam':
                 module_cls = LightCbamModule
+            elif attn_type == 'coord':
+                module_cls = CoordAttn
+            elif attn_type == 'scoord':
+                module_cls = SimpleCoordAttn
+            elif attn_type == 'ela':
+                module_cls = EfficientLocalAttn
+            elif attn_type == 'strip':
+                module_cls = StripAttn
 
             # Attention / attention-like modules w/ significant params
             # Typically replace some of the existing workhorse convs in a network architecture.
