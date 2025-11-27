@@ -41,7 +41,7 @@ from timm.models import create_model, safe_model_name, resume_checkpoint, load_c
 from timm.optim import create_optimizer_v2, optimizer_kwargs
 from timm.scheduler import create_scheduler_v2, scheduler_kwargs
 from timm.utils import ApexScaler, NativeScaler
-from timm.kd import DistillationTeacher, apply_kd_loss
+from timm.task import DistillationTeacher, ClassificationTask, LogitDistillationTask, FeatureDistillationTask
 
 try:
     from apex import amp
@@ -421,10 +421,21 @@ group.add_argument('--naflex-loss-scale', default='linear', type=str,
 # Knowledge Distillation parameters
 parser.add_argument('--kd-model-name', default=None, type=str,
                     help='Name of teacher model for knowledge distillation')
-parser.add_argument('--alpha-kd', default=5, type=float,
-                    help='Weight for KD loss (default: 5)')
-parser.add_argument('--use-kd-only-loss', action='store_true', default=False,
-                    help='Use only KD loss, without cross-entropy loss')
+parser.add_argument('--kd-distill-type', default='logit', type=str, choices=['logit', 'feature'],
+                    help='Type of distillation: "logit" for output distillation, "feature" for intermediate features (default: logit)')
+parser.add_argument('--kd-loss-type', default='kl', type=str,
+                    help='Loss function for logit distillation (default: kl). Currently only "kl" supported, reserved for future extensions.')
+parser.add_argument('--distill-loss-weight', default=None, type=float,
+                    help='Weight for distillation loss. If both weights specified: loss = task_weight * task + distill_weight * distill. '
+                         'If only task_weight: loss = task_weight * task + (1-task_weight) * distill. Default: 1.0 if only this specified.')
+parser.add_argument('--task-loss-weight', default=None, type=float,
+                    help='Weight for task (classification) loss. See --distill-loss-weight for weighting modes. Default: 1.0 if unspecified.')
+parser.add_argument('--kd-temperature', default=4.0, type=float,
+                    help='Temperature for softmax in distillation (default: 4.0, typical range: 1-4)')
+parser.add_argument('--kd-student-feature-dim', default=None, type=int,
+                    help='Student model feature dimension (auto-detected from model.head_hidden_size or model.num_features if not specified)')
+parser.add_argument('--kd-teacher-feature-dim', default=None, type=int,
+                    help='Teacher model feature dimension (auto-detected from model.head_hidden_size or model.num_features if not specified)')
 
 
 def _parse_args():
@@ -540,16 +551,8 @@ def main():
     if args.grad_checkpointing:
         model.set_grad_checkpointing(enable=True)
 
-    # Create the KD teacher model if specified
-    model_kd = None
-    if args.kd_model_name is not None:
-        model_kd = DistillationTeacher(
-            model_name=args.kd_model_name,
-            num_classes=args.num_classes,
-            in_chans=in_chans,
-            device=device,
-            dtype=model_dtype,
-        )
+    # Create training task (classification or distillation)
+    task = None
 
     if utils.is_primary(args):
         _logger.info(
@@ -677,22 +680,22 @@ def main():
             )
 
     # setup distributed training
-    if args.distributed:
-        if has_apex and use_amp == 'apex':
-            # Apex DDP preferred unless native amp is activated
-            if utils.is_primary(args):
-                _logger.info("Using NVIDIA APEX DistributedDataParallel.")
-            model = ApexDDP(model, delay_allreduce=True)
-        else:
-            if utils.is_primary(args):
-                _logger.info("Using native Torch DistributedDataParallel.")
-            model = NativeDDP(model, device_ids=[device], broadcast_buffers=not args.no_ddp_bb)
-        # NOTE: EMA model does not need to be wrapped by DDP
+    # if args.distributed:
+    #     if has_apex and use_amp == 'apex':
+    #         # Apex DDP preferred unless native amp is activated
+    #         if utils.is_primary(args):
+    #             _logger.info("Using NVIDIA APEX DistributedDataParallel.")
+    #         model = ApexDDP(model, delay_allreduce=True)
+    #     else:
+    #         if utils.is_primary(args):
+    #             _logger.info("Using native Torch DistributedDataParallel.")
+    #         model = NativeDDP(model, device_ids=[device], broadcast_buffers=not args.no_ddp_bb)
+    #     # NOTE: EMA model does not need to be wrapped by DDP
 
-    if args.torchcompile:
-        # torch compile should be done after DDP
-        assert has_compile, 'A version of torch w/ torch.compile() is required for --compile, possibly a nightly.'
-        model = torch.compile(model, backend=args.torchcompile, mode=args.torchcompile_mode)
+    # if args.torchcompile:
+    #     # torch compile should be done after DDP
+    #     assert has_compile, 'A version of torch w/ torch.compile() is required for --compile, possibly a nightly.'
+    #     model = torch.compile(model, backend=args.torchcompile, mode=args.torchcompile_mode)
 
     # create the train and eval datasets
     if args.data and not args.data_dir:
@@ -927,6 +930,69 @@ def main():
     train_loss_fn = train_loss_fn.to(device=device)
     validate_loss_fn = nn.CrossEntropyLoss().to(device=device)
 
+    # Setup training task (classification or distillation)
+    if args.kd_model_name is not None:
+        # Create teacher model
+        teacher = DistillationTeacher(
+            model_name=args.kd_model_name,
+            num_classes=args.num_classes,
+            in_chans=in_chans,
+            device=device,
+            dtype=model_dtype,
+        )
+
+        # Create distillation task
+        if args.kd_distill_type == 'logit':
+            task = LogitDistillationTask(
+                student_model=model,
+                teacher=teacher,
+                criterion=train_loss_fn,
+                loss_type=args.kd_loss_type,
+                distill_loss_weight=args.distill_loss_weight,
+                task_loss_weight=args.task_loss_weight,
+                temperature=args.kd_temperature,
+                device=device,
+                dtype=model_dtype,
+                verbose=utils.is_primary(args),
+            )
+        elif args.kd_distill_type == 'feature':
+            task = FeatureDistillationTask(
+                student_model=model,
+                teacher=teacher,
+                criterion=train_loss_fn,
+                distill_loss_weight=args.distill_loss_weight,
+                task_loss_weight=args.task_loss_weight,
+                student_feature_dim=args.kd_student_feature_dim,
+                teacher_feature_dim=args.kd_teacher_feature_dim,
+                device=device,
+                dtype=model_dtype,
+                verbose=utils.is_primary(args),
+            )
+        else:
+            raise ValueError(f"Unknown distillation type: {args.kd_distill_type}")
+    else:
+        # Standard classification task
+        task = ClassificationTask(
+            model=model,
+            criterion=train_loss_fn,
+            device=device,
+            dtype=model_dtype,
+            verbose=utils.is_primary(args),
+        )
+
+    # Prepare task for distributed training
+    if args.distributed:
+        if utils.is_primary(args):
+            _logger.info("Preparing task for distributed training")
+        task.prepare_distributed(device_ids=[device])
+
+    # Compile task if requested (should be done after DDP)
+    if args.torchcompile:
+        assert has_compile, 'A version of torch w/ torch.compile() is required for --compile, possibly a nightly.'
+        if utils.is_primary(args):
+            _logger.info(f"Compiling task with backend={args.torchcompile}, mode={args.torchcompile_mode}")
+        task = torch.compile(task, backend=args.torchcompile, mode=args.torchcompile_mode)
+
     # setup checkpoint saver and eval metric tracking
     eval_metric = args.eval_metric if loader_eval is not None else 'loss'
     decreasing_metric = eval_metric == 'loss'
@@ -1015,8 +1081,8 @@ def main():
                 model,
                 loader_train,
                 optimizer,
-                train_loss_fn,
                 args,
+                task=task,
                 device=device,
                 lr_scheduler=lr_scheduler,
                 saver=saver,
@@ -1028,7 +1094,6 @@ def main():
                 mixup_fn=mixup_fn,
                 num_updates_total=num_epochs * updates_per_epoch,
                 naflex_mode=naflex_mode,
-                model_kd=model_kd,
             )
 
             if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
@@ -1131,8 +1196,8 @@ def train_one_epoch(
         model,
         loader,
         optimizer,
-        loss_fn,
         args,
+        task=None,
         device=torch.device('cuda'),
         lr_scheduler=None,
         saver=None,
@@ -1144,7 +1209,6 @@ def train_one_epoch(
         mixup_fn=None,
         num_updates_total=None,
         naflex_mode=False,
-        model_kd=None,
 ):
     if args.mixup_off_epoch and epoch >= args.mixup_off_epoch:
         if args.prefetcher and loader.mixup_enabled:
@@ -1189,24 +1253,13 @@ def train_one_epoch(
 
         def _forward():
             with amp_autocast():
-                output = model(input)
-                _loss = loss_fn(output, target)
-
-                # KD logic
-                if model_kd is not None:
-                    _loss = apply_kd_loss(
-                        loss=_loss,
-                        student_output=output,
-                        input=input,
-                        student_model=model,
-                        teacher_model=model_kd,
-                        alpha_kd=args.alpha_kd,
-                        use_kd_only=args.use_kd_only_loss,
-                    )
+                # Task handles the complete forward pass and loss computation
+                result = task(input, target)
+                _loss = result['loss']
 
             if accum_steps > 1:
                 _loss /= accum_steps
-            return _loss
+            return _loss, result
 
         def _backward(_loss):
             if loss_scaler is not None:
@@ -1255,13 +1308,13 @@ def train_one_epoch(
 
             if has_no_sync and not need_update:
                 with model.no_sync():
-                    loss = _forward()
+                    loss, result = _forward()
                     scaled_loss = local_scale * loss
                     if dist_scale is not None:
                         scaled_loss *= dist_scale
                     _backward(scaled_loss)
             else:
-                loss = _forward()
+                loss, result = _forward()
                 scaled_loss = local_scale * loss
                 if dist_scale is not None:
                     scaled_loss *= dist_scale
@@ -1273,10 +1326,10 @@ def train_one_epoch(
 
             if has_no_sync and not need_update:
                 with model.no_sync():
-                    loss = _forward()
+                    loss, result = _forward()
                     _backward(loss)
             else:
-                loss = _forward()
+                loss, result = _forward()
                 _backward(loss)
 
         losses_m.update(loss.item() * accum_steps, batch_size)
