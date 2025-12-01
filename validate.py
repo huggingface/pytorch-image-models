@@ -28,11 +28,6 @@ from timm.models import create_model, load_checkpoint, is_model, list_models
 from timm.utils import accuracy, AverageMeter, natural_key, setup_default_logging, set_jit_fuser, \
     decay_batch_step, check_batch_size_retry, ParseKwargs, reparameterize_model
 
-try:
-    from apex import amp
-    has_apex = True
-except ImportError:
-    has_apex = False
 
 try:
     from functorch.compile import memory_efficient_fusion
@@ -124,11 +119,9 @@ parser.add_argument('--channels-last', action='store_true', default=False,
 parser.add_argument('--device', default='cuda', type=str,
                     help="Device (accelerator) to use.")
 parser.add_argument('--amp', action='store_true', default=False,
-                    help='use NVIDIA Apex AMP or Native AMP for mixed precision training')
+                    help='use Native AMP for mixed precision inference')
 parser.add_argument('--amp-dtype', default='float16', type=str,
                     help='lower precision AMP dtype (default: float16)')
-parser.add_argument('--amp-impl', default='native', type=str,
-                    help='AMP impl to use, "native" or "apex" (default: native)')
 parser.add_argument('--model-dtype', default=None, type=str,
                    help='Model dtype override (non-AMP) (default: float32)')
 parser.add_argument('--tf-preprocessing', action='store_true', default=False,
@@ -197,22 +190,14 @@ def validate(args):
         assert args.model_dtype in ('float32', 'float16', 'bfloat16')
         model_dtype = getattr(torch, args.model_dtype)
 
-    # resolve AMP arguments based on PyTorch / Apex availability
-    use_amp = None
+    # resolve AMP arguments based on PyTorch availability
     amp_autocast = suppress
     if args.amp:
         assert model_dtype is None or model_dtype == torch.float32, 'float32 model dtype must be used with AMP'
-        if args.amp_impl == 'apex':
-            assert has_apex, 'AMP impl specified as APEX but APEX is not installed.'
-            assert args.amp_dtype == 'float16'
-            use_amp = 'apex'
-            _logger.info('Validating in mixed precision with NVIDIA APEX AMP.')
-        else:
-            assert args.amp_dtype in ('float16', 'bfloat16')
-            use_amp = 'native'
-            amp_dtype = torch.bfloat16 if args.amp_dtype == 'bfloat16' else torch.float16
-            amp_autocast = partial(torch.autocast, device_type=device.type, dtype=amp_dtype)
-            _logger.info('Validating in mixed precision with native PyTorch AMP.')
+        assert args.amp_dtype in ('float16', 'bfloat16')
+        amp_dtype = torch.bfloat16 if args.amp_dtype == 'bfloat16' else torch.float16
+        amp_autocast = partial(torch.autocast, device_type=device.type, dtype=amp_dtype)
+        _logger.info('Validating in mixed precision with native PyTorch AMP.')
     else:
         _logger.info(f'Validating in {model_dtype or torch.float32}. AMP not enabled.')
 
@@ -266,7 +251,6 @@ def validate(args):
         model = model.to(memory_format=torch.channels_last)
 
     if args.torchscript:
-        assert not use_amp == 'apex', 'Cannot use APEX AMP with torchscripted model'
         model = torch.jit.script(model)
     elif args.torchcompile:
         assert has_compile, 'A version of torch w/ torch.compile() is required for --compile, possibly a nightly.'
@@ -275,9 +259,6 @@ def validate(args):
     elif args.aot_autograd:
         assert has_functorch, "functorch is needed for --aot-autograd"
         model = memory_efficient_fusion(model)
-
-    if use_amp == 'apex':
-        model = amp.initialize(model, opt_level='O1')
 
     if args.num_gpu > 1:
         model = torch.nn.DataParallel(model, device_ids=list(range(args.num_gpu)))

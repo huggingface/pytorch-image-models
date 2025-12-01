@@ -25,13 +25,6 @@ from timm.optim import create_optimizer_v2
 from timm.utils import setup_default_logging, set_jit_fuser, decay_batch_step, check_batch_size_retry, ParseKwargs,\
     reparameterize_model
 
-has_apex = False
-try:
-    from apex import amp
-    has_apex = True
-except ImportError:
-    pass
-
 try:
     from deepspeed.profiling.flops_profiler import get_model_profile
     has_deepspeed_profiling = True
