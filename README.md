@@ -12,6 +12,10 @@
 
 ## What's New
 
+## Dec 1, 2025
+* Add lightweight task abstraction, add logits and feature distillation support to train script via new tasks.
+* Remove old APEX AMP support
+
 ## Nov 4, 2025
 * Fix LayerScale / LayerScale2d init bug (init values ignored), introduced in 1.0.21. Thanks https://github.com/Ilya-Fradlin
 * Release 1.0.22
