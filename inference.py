@@ -24,12 +24,6 @@ from timm.models import create_model
 from timm.utils import AverageMeter, setup_default_logging, set_jit_fuser, ParseKwargs
 
 try:
-    from apex import amp
-    has_apex = True
-except ImportError:
-    has_apex = False
-
-try:
     from functorch.compile import memory_efficient_fusion
     has_functorch = True
 except ImportError as e:
@@ -170,7 +164,7 @@ def main():
         assert args.model_dtype in ('float32', 'float16', 'bfloat16')
         model_dtype = getattr(torch, args.model_dtype)
 
-    # resolve AMP arguments based on PyTorch / Apex availability
+    # resolve AMP arguments based on PyTorch availability
     amp_autocast = suppress
     if args.amp:
         assert model_dtype is None or model_dtype == torch.float32, 'float32 model dtype must be used with AMP'

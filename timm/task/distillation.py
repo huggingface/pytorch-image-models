@@ -1,6 +1,6 @@
 """Knowledge distillation training tasks and components."""
 import logging
-from typing import Dict, Optional, Literal, Tuple
+from typing import Dict, Optional, Tuple
 
 import torch
 import torch.nn as nn

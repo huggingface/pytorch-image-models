@@ -30,7 +30,6 @@ import torch
 import torch.nn as nn
 import torchvision.utils
 import yaml
-from torch.nn.parallel import DistributedDataParallel as NativeDDP
 
 from timm import utils
 from timm.data import create_dataset, create_loader, create_naflex_loader, resolve_data_config, \
@@ -40,16 +39,8 @@ from timm.loss import JsdCrossEntropy, SoftTargetCrossEntropy, BinaryCrossEntrop
 from timm.models import create_model, safe_model_name, resume_checkpoint, load_checkpoint, model_parameters
 from timm.optim import create_optimizer_v2, optimizer_kwargs
 from timm.scheduler import create_scheduler_v2, scheduler_kwargs
-from timm.utils import ApexScaler, NativeScaler
+from timm.utils import NativeScaler
 from timm.task import DistillationTeacher, ClassificationTask, LogitDistillationTask, FeatureDistillationTask
-
-try:
-    from apex import amp
-    from apex.parallel import DistributedDataParallel as ApexDDP
-    from apex.parallel import convert_syncbn_model
-    has_apex = True
-except ImportError:
-    has_apex = False
 
 
 try:
@@ -174,11 +165,9 @@ group = parser.add_argument_group('Device parameters')
 group.add_argument('--device', default='cuda', type=str,
                     help="Device (accelerator) to use.")
 group.add_argument('--amp', action='store_true', default=False,
-                   help='use NVIDIA Apex AMP or Native AMP for mixed precision training')
+                   help='use AMP for mixed precision training')
 group.add_argument('--amp-dtype', default='float16', type=str,
                    help='lower precision AMP dtype (default: float16)')
-group.add_argument('--amp-impl', default='native', type=str,
-                   help='AMP impl to use, "native" or "apex" (default: native)')
 group.add_argument('--model-dtype', default=None, type=str,
                    help='Model dtype override (non-AMP) (default: float32)')
 group.add_argument('--no-ddp-bb', action='store_true', default=False,
@@ -346,7 +335,7 @@ group.add_argument('--bn-momentum', type=float, default=None,
 group.add_argument('--bn-eps', type=float, default=None,
                    help='BatchNorm epsilon override (if not None)')
 group.add_argument('--sync-bn', action='store_true',
-                   help='Enable NVIDIA Apex or Torch synchronized BatchNorm.')
+                   help='Enable synchronized BatchNorm.')
 group.add_argument('--dist-bn', type=str, default='reduce',
                    help='Distribute BatchNorm stats between nodes after each epoch ("broadcast", "reduce", or "")')
 group.add_argument('--split-bn', action='store_true',
@@ -485,18 +474,11 @@ def main():
         if model_dtype == torch.float16:
             _logger.warning('float16 is not recommended for training, for half precision bfloat16 is recommended.')
 
-    # resolve AMP arguments based on PyTorch / Apex availability
-    use_amp = None
+    # resolve AMP arguments based on PyTorch availability
     amp_dtype = torch.float16
     if args.amp:
         assert model_dtype is None or model_dtype == torch.float32, 'float32 model dtype must be used with AMP'
-        if args.amp_impl == 'apex':
-            assert has_apex, 'AMP impl specified as APEX but APEX is not installed.'
-            use_amp = 'apex'
-            assert args.amp_dtype == 'float16'
-        else:
-            use_amp = 'native'
-            assert args.amp_dtype in ('float16', 'bfloat16')
+        assert args.amp_dtype in ('float16', 'bfloat16')
         if args.amp_dtype == 'bfloat16':
             amp_dtype = torch.bfloat16
 
@@ -580,12 +562,7 @@ def main():
     if args.distributed and args.sync_bn:
         args.dist_bn = ''  # disable dist_bn when sync BN active
         assert not args.split_bn
-        if has_apex and use_amp == 'apex':
-            # Apex SyncBN used with Apex AMP
-            # WARNING this won't currently work with models using BatchNormAct2d
-            model = convert_syncbn_model(model)
-        else:
-            model = convert_sync_batchnorm(model)
+        model = convert_sync_batchnorm(model)
         if utils.is_primary(args):
             _logger.info(
                 'Converted model to use Synchronized BatchNorm. WARNING: You may have issues if using '
@@ -598,7 +575,6 @@ def main():
 
     if args.torchscript:
         assert not args.torchcompile
-        assert not use_amp == 'apex', 'Cannot use APEX AMP with torchscripted model'
         assert not args.sync_bn, 'Cannot use SyncBatchNorm with torchscripted model'
         model = torch.jit.script(model)
 
@@ -632,13 +608,7 @@ def main():
     # setup automatic mixed-precision (AMP) loss scaling and op casting
     amp_autocast = suppress  # do nothing
     loss_scaler = None
-    if use_amp == 'apex':
-        assert device.type == 'cuda'
-        model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
-        loss_scaler = ApexScaler()
-        if utils.is_primary(args):
-            _logger.info('Using NVIDIA APEX AMP. Training in mixed precision.')
-    elif use_amp == 'native':
+    if args.amp:
         amp_autocast = partial(torch.autocast, device_type=device.type, dtype=amp_dtype)
         if device.type in ('cuda',) and amp_dtype == torch.float16:
             # loss scaler only used for float16 (half) dtype, bfloat16 does not need it
@@ -678,24 +648,6 @@ def main():
                 backend=args.torchcompile,
                 mode=args.torchcompile_mode,
             )
-
-    # setup distributed training
-    # if args.distributed:
-    #     if has_apex and use_amp == 'apex':
-    #         # Apex DDP preferred unless native amp is activated
-    #         if utils.is_primary(args):
-    #             _logger.info("Using NVIDIA APEX DistributedDataParallel.")
-    #         model = ApexDDP(model, delay_allreduce=True)
-    #     else:
-    #         if utils.is_primary(args):
-    #             _logger.info("Using native Torch DistributedDataParallel.")
-    #         model = NativeDDP(model, device_ids=[device], broadcast_buffers=not args.no_ddp_bb)
-    #     # NOTE: EMA model does not need to be wrapped by DDP
-
-    # if args.torchcompile:
-    #     # torch compile should be done after DDP
-    #     assert has_compile, 'A version of torch w/ torch.compile() is required for --compile, possibly a nightly.'
-    #     model = torch.compile(model, backend=args.torchcompile, mode=args.torchcompile_mode)
 
     # create the train and eval datasets
     if args.data and not args.data_dir:
@@ -1176,6 +1128,9 @@ def main():
 
     except KeyboardInterrupt:
         pass
+
+    if args.distributed:
+        torch.distributed.destroy_process_group()
 
     if best_metric is not None:
         # log best metric as tracked by checkpoint saver
