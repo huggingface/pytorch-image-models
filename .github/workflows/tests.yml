@@ -16,11 +16,11 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        python: ['3.10', '3.12']
-        torch: [{base: '1.13.0', vision: '0.14.0'}, {base: '2.5.1', vision: '0.20.1'}]
+        python: ['3.10', '3.13']
+        torch: [{base: '1.13.0', vision: '0.14.0'}, {base: '2.9.1', vision: '0.24.1'}]
         testmarker: ['-k "not test_models"', '-m base', '-m cfg', '-m torchscript', '-m features', '-m fxforward', '-m fxbackward']
         exclude:
-          - python: '3.12'
+          - python: '3.13'
             torch: {base: '1.13.0', vision: '0.14.0'}
     runs-on: ${{ matrix.os }}
 
