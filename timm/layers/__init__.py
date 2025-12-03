@@ -18,7 +18,7 @@ from .adaptive_avgmax_pool import (
 from .attention import Attention, AttentionRope, maybe_add_mask
 from .attention2d import MultiQueryAttention2d, Attention2d, MultiQueryAttentionV2
 from .attention_pool import AttentionPoolLatent
-from .attention_pool2d import AttentionPool2d, RotAttentionPool2d, RotaryEmbedding
+from .attention_pool2d import AttentionPool2d, RotAttentionPool2d
 from .blur_pool import BlurPool2d, create_aa
 from .classifier import create_classifier, ClassifierHead, NormMlpClassifierHead, ClNormMlpClassifierHead
 from .cond_conv2d import CondConv2d, get_condconv_initializer
@@ -107,7 +107,9 @@ from .padding import get_padding, get_same_padding, pad_same
 from .patch_dropout import PatchDropout, PatchDropoutWithIndices, patch_dropout_forward
 from .patch_embed import PatchEmbed, PatchEmbedWithSize, PatchEmbedInterpolator, resample_patch_embed
 from .pool1d import global_pool_nlc
+from .other_pool import LsePlus2d, LsePlus1d, SimPool2d, SimPool1d
 from .pool2d_same import AvgPool2dSame, create_pool2d
+from .slot_pool import SlotPool, SlotPool2d
 from .pos_embed import resample_abs_pos_embed, resample_abs_pos_embed_nhwc
 from .pos_embed_rel import (
     RelPosMlp,

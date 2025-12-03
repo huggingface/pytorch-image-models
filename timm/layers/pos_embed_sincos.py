@@ -1164,13 +1164,19 @@ def create_rope_embed(
         Rotary embedding module
     """
     if rope_type == 'base':
+        kwargs.pop('rotate_half', None)  # doesn't support
         return RotaryEmbedding(dim=dim // num_heads, **kwargs)
     elif rope_type == 'cat':
+        kwargs.pop('rotate_half', None)  # doesn't support
         return RotaryEmbeddingCat(dim=dim // num_heads, **kwargs)
     elif rope_type == 'mixed':
         # Mixed requires depth parameter, generates differing embeddings per layer and head
+        kwargs.pop('in_pixels', None)  # doesn't support
+        kwargs.pop('ref_feat_shape', None)  # doesn't support
         return RotaryEmbeddingMixed(dim=dim, num_heads=num_heads, **kwargs)
     elif rope_type == 'dinov3':
+        kwargs.pop('in_pixels', None)  # doesn't support
+        kwargs.pop('ref_feat_shape', None)  # doesn't support
         return RotaryEmbeddingDinoV3(dim=dim // num_heads, **kwargs)
     else:
         raise ValueError(f"Unknown RoPE type: {rope_type}")

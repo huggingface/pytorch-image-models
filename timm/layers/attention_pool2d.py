@@ -15,7 +15,7 @@ import torch.nn as nn
 from .config import use_fused_attn
 from .helpers import to_2tuple
 from .pos_embed import resample_abs_pos_embed
-from .pos_embed_sincos import apply_rot_embed, RotaryEmbedding
+from .pos_embed_sincos import apply_rot_embed_cat, create_rope_embed
 from .weight_init import trunc_normal_
 
 
@@ -44,6 +44,7 @@ class RotAttentionPool2d(nn.Module):
             pool_type: str = 'token',
             class_token: bool = False,
             drop_rate: float = 0.,
+            rope_type: str = 'cat',
             device=None,
             dtype=None,
     ):
@@ -65,6 +66,7 @@ class RotAttentionPool2d(nn.Module):
         self.pool_type = pool_type.lower()
         self.scale = self.head_dim ** -0.5
         self.fused_attn = use_fused_attn()
+        self.rope_type = rope_type
 
         if class_token:
             self.cls_token = nn.Parameter(torch.zeros(1, embed_dim, **dd))
@@ -80,7 +82,16 @@ class RotAttentionPool2d(nn.Module):
             self.qkv = nn.Linear(in_features, embed_dim * 3, bias=qkv_bias, **dd)
         self.drop = nn.Dropout(drop_rate)
         self.proj = nn.Linear(embed_dim, self.out_features, **dd)
-        self.pos_embed = RotaryEmbedding(self.head_dim, in_pixels=False, ref_feat_shape=ref_feat_size, **dd)
+
+        self.pos_embed = create_rope_embed(
+            rope_type=rope_type,
+            dim=embed_dim,
+            num_heads=num_heads,
+            in_pixels=False,
+            ref_feat_shape=ref_feat_size,
+            rotate_half=False,
+            **dd,
+        )
 
     def init_weights(self, zero_init_last: bool = False):
         if self.qkv is None:
@@ -129,9 +140,12 @@ class RotAttentionPool2d(nn.Module):
             x = self.qkv(x).reshape(B, N + 1, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
             q, k, v = x.unbind(0)
 
-        rse, rce = self.pos_embed.get_embed((H, W))
-        q = torch.cat([q[:, :, :1, :], apply_rot_embed(q[:, :, 1:, :], rse, rce)], dim=2).type_as(v)
-        k = torch.cat([k[:, :, :1, :], apply_rot_embed(k[:, :, 1:, :], rse, rce)], dim=2).type_as(v)
+        rope = self.pos_embed.get_embed((H, W))
+        if isinstance(rope, tuple):
+            # RotaryEmbedding returns (sin, cos) tuple - concatenate for apply_rot_embed_cat
+            rope = torch.cat(rope, dim=-1)
+        q = torch.cat([q[:, :, :1, :], apply_rot_embed_cat(q[:, :, 1:, :], rope)], dim=2).type_as(v)
+        k = torch.cat([k[:, :, :1, :], apply_rot_embed_cat(k[:, :, 1:, :], rope)], dim=2).type_as(v)
 
         if self.fused_attn:
             x = nn.functional.scaled_dot_product_attention(q, k, v)
