@@ -20,104 +20,97 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .grid import ndgrid
-
 
 def drop_block_2d(
-        x,
-        drop_prob: float = 0.1,
-        block_size: int = 7,
-        gamma_scale: float = 1.0,
-        with_noise: bool = False,
-        inplace: bool = False,
-        batchwise: bool = False
-):
-    """ DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
-
-    DropBlock with an experimental gaussian noise option. This layer has been tested on a few training
-    runs with success, but needs further validation and possibly optimization for lower runtime impact.
-    """
-    B, C, H, W = x.shape
-    total_size = W * H
-    clipped_block_size = min(block_size, min(W, H))
-    # seed_drop_rate, the gamma parameter
-    gamma = gamma_scale * drop_prob * total_size / clipped_block_size ** 2 / (
-            (W - block_size + 1) * (H - block_size + 1))
-
-    # Forces the block to be inside the feature map.
-    w_i, h_i = ndgrid(torch.arange(W, device=x.device), torch.arange(H, device=x.device))
-    valid_block = ((w_i >= clipped_block_size // 2) & (w_i < W - (clipped_block_size - 1) // 2)) & \
-                  ((h_i >= clipped_block_size // 2) & (h_i < H - (clipped_block_size - 1) // 2))
-    valid_block = torch.reshape(valid_block, (1, 1, H, W)).to(dtype=x.dtype)
-
-    if batchwise:
-        # one mask for whole batch, quite a bit faster
-        uniform_noise = torch.rand((1, C, H, W), dtype=x.dtype, device=x.device)
-    else:
-        uniform_noise = torch.rand_like(x)
-    block_mask = ((2 - gamma - valid_block + uniform_noise) >= 1).to(dtype=x.dtype)
-    block_mask = -F.max_pool2d(
-        -block_mask,
-        kernel_size=clipped_block_size,  # block_size,
-        stride=1,
-        padding=clipped_block_size // 2)
-
-    if with_noise:
-        normal_noise = torch.randn((1, C, H, W), dtype=x.dtype, device=x.device) if batchwise else torch.randn_like(x)
-        if inplace:
-            x.mul_(block_mask).add_(normal_noise * (1 - block_mask))
-        else:
-            x = x * block_mask + normal_noise * (1 - block_mask)
-    else:
-        normalize_scale = (block_mask.numel() / block_mask.to(dtype=torch.float32).sum().add(1e-7)).to(x.dtype)
-        if inplace:
-            x.mul_(block_mask * normalize_scale)
-        else:
-            x = x * block_mask * normalize_scale
-    return x
-
-
-def drop_block_fast_2d(
         x: torch.Tensor,
         drop_prob: float = 0.1,
         block_size: int = 7,
         gamma_scale: float = 1.0,
         with_noise: bool = False,
         inplace: bool = False,
+        couple_channels: bool = True,
+        scale_by_keep: bool = True,
 ):
     """ DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
 
-    DropBlock with an experimental gaussian noise option. Simplied from above without concern for valid
-    block mask at edges.
+    DropBlock with an experimental gaussian noise option.
+
+    Args:
+        x: Input tensor of shape (B, C, H, W).
+        drop_prob: Probability of dropping a block.
+        block_size: Size of the block to drop.
+        gamma_scale: Scale factor for the drop probability.
+        with_noise: If True, add gaussian noise to dropped regions instead of zeros.
+        inplace: If True, perform operation in-place.
+        couple_channels: If True, all channels share the same drop mask (per the original paper).
+            If False, each channel gets an independent mask.
+        scale_by_keep: If True, scale kept activations to maintain expected values.
+
+    Returns:
+        Tensor with dropped blocks, same shape as input.
     """
     B, C, H, W = x.shape
-    total_size = W * H
-    clipped_block_size = min(block_size, min(W, H))
-    gamma = gamma_scale * drop_prob * total_size / clipped_block_size ** 2 / (
-            (W - block_size + 1) * (H - block_size + 1))
+    kh, kw = min(block_size, H), min(block_size, W)
 
-    block_mask = torch.empty_like(x).bernoulli_(gamma)
-    block_mask = F.max_pool2d(
-        block_mask.to(x.dtype), kernel_size=clipped_block_size, stride=1, padding=clipped_block_size // 2)
+    # Compute gamma (seed drop rate) - probability of dropping each spatial location
+    gamma = float(gamma_scale * drop_prob * H * W) / float(kh * kw) / float((H - kh + 1) * (W - kw + 1))
+
+    # Generate drop mask: 1 at block centers to drop, 0 elsewhere
+    # couple_channels=True means all channels share same spatial mask (matches paper)
+    noise_shape = (B, 1 if couple_channels else C, H, W)
+    with torch.no_grad():
+        block_mask = torch.empty(noise_shape, dtype=x.dtype, device=x.device).bernoulli_(gamma)
+
+        # Expand block centers to full blocks using max pooling
+        block_mask = F.max_pool2d(
+            block_mask,
+            kernel_size=(kh, kw),
+            stride=1,
+            padding=(kh // 2, kw // 2),
+        )
+        # Handle even kernel sizes - max_pool2d output is 1 larger in each even dimension
+        if kh % 2 == 0 or kw % 2 == 0:
+            # Fix for even kernels proposed by https://github.com/crutcher
+            block_mask = block_mask[..., (kh + 1) % 2:, (kw + 1) % 2:]
+
+        keep_mask = 1. - block_mask
 
     if with_noise:
-        normal_noise = torch.empty_like(x).normal_()
+        with torch.no_grad():
+            noise = torch.empty_like(keep_mask).normal_()
+            noise.mul_(block_mask)
+
         if inplace:
-            x.mul_(1. - block_mask).add_(normal_noise * block_mask)
+            x.mul_(keep_mask).add_(noise)
         else:
-            x = x * (1. - block_mask) + normal_noise * block_mask
+            x = x * keep_mask + noise
     else:
-        block_mask = 1 - block_mask
-        normalize_scale = (block_mask.numel() / block_mask.to(dtype=torch.float32).sum().add(1e-6)).to(dtype=x.dtype)
+        if scale_by_keep:
+            with torch.no_grad():
+                # Normalize to maintain expected values (scale up kept activations)
+                normalize_scale = keep_mask.numel() / keep_mask.to(dtype=torch.float32).sum().add(1e-7)
+                keep_mask.mul_(normalize_scale.to(x.dtype))
+
         if inplace:
-            x.mul_(block_mask * normalize_scale)
+            x.mul_(keep_mask)
         else:
-            x = x * block_mask * normalize_scale
+            x = x * keep_mask
+
     return x
 
 
 class DropBlock2d(nn.Module):
     """ DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
+
+    Args:
+        drop_prob: Probability of dropping a block.
+        block_size: Size of the block to drop.
+        gamma_scale: Scale factor for the drop probability.
+        with_noise: If True, add gaussian noise to dropped regions instead of zeros.
+        inplace: If True, perform operation in-place.
+        couple_channels: If True, all channels share the same drop mask (per the original paper).
+            If False, each channel gets an independent mask.
+        scale_by_keep: If True, scale kept activations to maintain expected values.
     """
 
     def __init__(
@@ -127,26 +120,39 @@ class DropBlock2d(nn.Module):
             gamma_scale: float = 1.0,
             with_noise: bool = False,
             inplace: bool = False,
-            batchwise: bool = False,
-            fast: bool = True):
+            couple_channels: bool = True,
+            scale_by_keep: bool = True,
+            **kwargs,
+    ):
         super().__init__()
         self.drop_prob = drop_prob
         self.gamma_scale = gamma_scale
         self.block_size = block_size
         self.with_noise = with_noise
         self.inplace = inplace
-        self.batchwise = batchwise
-        self.fast = fast  # FIXME finish comparisons of fast vs not
+        self.couple_channels = couple_channels
+        self.scale_by_keep = scale_by_keep
+
+        # Backwards compatibility: silently consume args removed in v1.0.23, warn on unknown
+        deprecated_args = {'batchwise', 'fast'}
+        for k in kwargs:
+            if k not in deprecated_args:
+                import warnings
+                warnings.warn(f"DropBlock2d() got unexpected keyword argument '{k}'")
 
     def forward(self, x):
         if not self.training or not self.drop_prob:
             return x
-        if self.fast:
-            return drop_block_fast_2d(
-                x, self.drop_prob, self.block_size, self.gamma_scale, self.with_noise, self.inplace)
-        else:
-            return drop_block_2d(
-                x, self.drop_prob, self.block_size, self.gamma_scale, self.with_noise, self.inplace, self.batchwise)
+        return drop_block_2d(
+            x,
+            drop_prob=self.drop_prob,
+            block_size=self.block_size,
+            gamma_scale=self.gamma_scale,
+            with_noise=self.with_noise,
+            inplace=self.inplace,
+            couple_channels=self.couple_channels,
+            scale_by_keep=self.scale_by_keep,
+        )
 
 
 def drop_path(x, drop_prob: float = 0., training: bool = False, scale_by_keep: bool = True):
