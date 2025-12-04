@@ -132,6 +132,7 @@ class NaFlexVitCfg:
     act_layer: Optional[str] = None  # Activation layer for MLP blocks
     block_fn: Optional[str] = None  # Transformer block implementation class name
     mlp_layer: Optional[str] = None  # MLP implementation class name
+    attn_layer: Optional[str] = None  # Attention layer implementation (e.g., 'attn', 'diff')
 
     # EVA-specific parameters
     attn_type: str = 'standard'  # Attention type: 'standard', 'eva', 'rope'
@@ -289,13 +290,15 @@ def get_block_fn(cfg: NaFlexVitCfg) -> Callable:
     else:
         # Standard ViT block
         block_fn = cfg.block_fn or Block
+        block_kwargs = {}
         if cfg.scale_mlp_norm or cfg.scale_attn_inner_norm:
             # param names differ between EVA vs non-EVA block types
-            block_fn = partial(
-                block_fn,
-                scale_mlp_norm=cfg.scale_mlp_norm,
-                scale_attn_norm=cfg.scale_attn_inner_norm
-            )
+            block_kwargs['scale_mlp_norm'] = cfg.scale_mlp_norm
+            block_kwargs['scale_attn_norm'] = cfg.scale_attn_inner_norm
+        if cfg.attn_layer:
+            block_kwargs['attn_layer'] = cfg.attn_layer
+        if block_kwargs:
+            block_fn = partial(block_fn, **block_kwargs)
         return block_fn
 
 
@@ -1214,6 +1217,7 @@ class NaFlexVit(nn.Module):
                 norm_layer=norm_layer,
                 act_layer=act_layer,
                 mlp_layer=mlp_layer,
+                depth=i,
                 **dd,
             )
             for i in range(cfg.depth)
