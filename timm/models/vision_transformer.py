@@ -47,6 +47,7 @@ from timm.data import (
 )
 from timm.layers import (
     Attention,
+    DiffAttention,
     AttentionPoolLatent,
     PatchEmbed,
     Mlp,
@@ -79,6 +80,49 @@ __all__ = ['VisionTransformer']  # model_registry will add each entrypoint fn to
 _logger = logging.getLogger(__name__)
 
 
+ATTN_LAYERS = {
+    '': Attention,
+    'attn': Attention,
+    'diff': DiffAttention,
+}
+
+
+def _create_attn(
+        attn_layer: LayerType,
+        dim: int,
+        num_heads: int,
+        qkv_bias: bool = False,
+        qk_norm: bool = False,
+        scale_norm: bool = False,
+        proj_bias: bool = True,
+        attn_drop: float = 0.,
+        proj_drop: float = 0.,
+        norm_layer: Optional[Type[nn.Module]] = None,
+        depth: int = 0,
+        **kwargs,
+) -> nn.Module:
+    if isinstance(attn_layer, str):
+        attn_layer = ATTN_LAYERS.get(attn_layer, None)
+        assert attn_layer is not None, f'Unknown attn_layer: {attn_layer}'
+
+    # Only pass depth to attention layers that use it
+    if issubclass(attn_layer, DiffAttention):
+        kwargs['depth'] = depth
+
+    return attn_layer(
+        dim,
+        num_heads=num_heads,
+        qkv_bias=qkv_bias,
+        qk_norm=qk_norm,
+        scale_norm=scale_norm,
+        proj_bias=proj_bias,
+        attn_drop=attn_drop,
+        proj_drop=proj_drop,
+        norm_layer=norm_layer,
+        **kwargs,
+    )
+
+
 class Block(nn.Module):
     """Transformer block with pre-normalization."""
 
@@ -99,6 +143,8 @@ class Block(nn.Module):
             act_layer: Type[nn.Module] = nn.GELU,
             norm_layer: Type[nn.Module] = LayerNorm,
             mlp_layer: Type[nn.Module] = Mlp,
+            attn_layer: LayerType = Attention,
+            depth: int = 0,
             device=None,
             dtype=None,
     ) -> None:
@@ -118,12 +164,15 @@ class Block(nn.Module):
             act_layer: Activation layer.
             norm_layer: Normalization layer.
             mlp_layer: MLP layer.
+            attn_layer: Attention layer type (class or string).
+            depth: Block index, passed to attention layer for depth-dependent init.
         """
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
 
         self.norm1 = norm_layer(dim, **dd)
-        self.attn = Attention(
+        self.attn = _create_attn(
+            attn_layer,
             dim,
             num_heads=num_heads,
             qkv_bias=qkv_bias,
@@ -133,7 +182,8 @@ class Block(nn.Module):
             attn_drop=attn_drop,
             proj_drop=proj_drop,
             norm_layer=norm_layer,
-            **dd
+            depth=depth,
+            **dd,
         )
         self.ls1 = LayerScale(dim, init_values=init_values, **dd) if init_values else nn.Identity()
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -175,14 +225,17 @@ class ResPostBlock(nn.Module):
             act_layer: Type[nn.Module] = nn.GELU,
             norm_layer: Type[nn.Module] = LayerNorm,
             mlp_layer: Type[nn.Module] = Mlp,
-            device = None,
-            dtype = None,
+            attn_layer: LayerType = Attention,
+            depth: int = 0,
+            device=None,
+            dtype=None,
     ) -> None:
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
         self.init_values = init_values
 
-        self.attn = Attention(
+        self.attn = _create_attn(
+            attn_layer,
             dim,
             num_heads=num_heads,
             qkv_bias=qkv_bias,
@@ -192,6 +245,7 @@ class ResPostBlock(nn.Module):
             attn_drop=attn_drop,
             proj_drop=proj_drop,
             norm_layer=norm_layer,
+            depth=depth,
             **dd,
         )
         self.norm1 = norm_layer(dim, **dd)
@@ -351,8 +405,10 @@ class ParallelThingsBlock(nn.Module):
             act_layer: Type[nn.Module] = nn.GELU,
             norm_layer: Type[nn.Module] = LayerNorm,
             mlp_layer: Type[nn.Module] = Mlp,
-            device = None,
-            dtype = None
+            attn_layer: LayerType = Attention,
+            depth: int = 0,
+            device=None,
+            dtype=None,
     ) -> None:
         dd = {'device': device, 'dtype': dtype}
         super().__init__()
@@ -362,7 +418,8 @@ class ParallelThingsBlock(nn.Module):
         for _ in range(num_parallel):
             self.attns.append(nn.Sequential(OrderedDict([
                 ('norm', norm_layer(dim, **dd)),
-                ('attn', Attention(
+                ('attn', _create_attn(
+                    attn_layer,
                     dim,
                     num_heads=num_heads,
                     qkv_bias=qkv_bias,
@@ -372,6 +429,7 @@ class ParallelThingsBlock(nn.Module):
                     attn_drop=attn_drop,
                     proj_drop=proj_drop,
                     norm_layer=norm_layer,
+                    depth=depth,
                     **dd,
                 )),
                 ('ls', LayerScale(dim, init_values=init_values, **dd) if init_values else nn.Identity()),
@@ -482,6 +540,7 @@ class VisionTransformer(nn.Module):
             act_layer: Optional[LayerType] = None,
             block_fn: Type[nn.Module] = Block,
             mlp_layer: Type[nn.Module] = Mlp,
+            attn_layer: LayerType = Attention,
             device=None,
             dtype=None,
     ) -> None:
@@ -592,6 +651,8 @@ class VisionTransformer(nn.Module):
                 norm_layer=norm_layer,
                 act_layer=act_layer,
                 mlp_layer=mlp_layer,
+                attn_layer=attn_layer,
+                depth=i,
                 **dd,
             )
             for i in range(depth)])

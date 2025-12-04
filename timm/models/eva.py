@@ -389,6 +389,7 @@ class EvaBlockPostNorm(nn.Module):
             attn_head_dim: Optional[int] = None,
             device=None,
             dtype=None,
+            **kwargs,
     ):
         """ Initialize the post-norm EVA transformer block.
 
