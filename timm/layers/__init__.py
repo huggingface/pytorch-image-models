@@ -109,7 +109,6 @@ from .patch_embed import PatchEmbed, PatchEmbedWithSize, PatchEmbedInterpolator,
 from .pool1d import global_pool_nlc
 from .other_pool import LsePlus2d, LsePlus1d, SimPool2d, SimPool1d
 from .pool2d_same import AvgPool2dSame, create_pool2d
-from .slot_pool import SlotPool, SlotPool2d
 from .pos_embed import resample_abs_pos_embed, resample_abs_pos_embed_nhwc
 from .pos_embed_rel import (
     RelPosMlp,

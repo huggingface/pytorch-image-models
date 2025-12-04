@@ -37,7 +37,7 @@ class LsePlus2d(nn.Module):
             self,
             r: float = 10.0,
             r_learnable: bool = True,
-            flatten: bool = False,
+            flatten: bool = True,
             device=None,
             dtype=None,
     ):
@@ -118,7 +118,6 @@ class SimPool2d(nn.Module):
             qk_norm: bool = False,
             gamma: Optional[float] = None,
             norm_layer: Optional[Type[nn.Module]] = None,
-            flatten: bool = False,
             device=None,
             dtype=None,
     ):
@@ -139,7 +138,6 @@ class SimPool2d(nn.Module):
         self.head_dim = dim // num_heads
         self.scale = self.head_dim ** -0.5
         self.gamma = gamma
-        self.flatten = flatten
         self.fused_attn = use_fused_attn()
 
         norm_layer = norm_layer or nn.LayerNorm
@@ -192,10 +190,8 @@ class SimPool2d(nn.Module):
                 attn = attn.softmax(dim=-1)
                 out = attn @ v
 
-        # (B, num_heads, 1, head_dim) -> (B, C) or (B, 1, C)
-        out = out.transpose(1, 2).reshape(B, 1, C)
-        if self.flatten:
-            out = out.squeeze(1)
+        # (B, num_heads, 1, head_dim) -> (B, C) or (B, C)
+        out = out.transpose(1, 2).reshape(B, C)
         return out
 
 
