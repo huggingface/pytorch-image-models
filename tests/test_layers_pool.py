@@ -148,14 +148,15 @@ class TestLsePool:
         x = torch.randn(2, 64, 7, 7, device=torch_device)
         pool = LsePlus2d().to(torch_device)
         out = pool(x)
-        assert out.shape == (2, 64, 1, 1)
+        # Default is flatten=True
+        assert out.shape == (2, 64)
 
-    def test_lse_plus_2d_flatten(self):
+    def test_lse_plus_2d_no_flatten(self):
         from timm.layers import LsePlus2d
         x = torch.randn(2, 64, 7, 7, device=torch_device)
-        pool = LsePlus2d(flatten=True).to(torch_device)
+        pool = LsePlus2d(flatten=False).to(torch_device)
         out = pool(x)
-        assert out.shape == (2, 64)
+        assert out.shape == (2, 64, 1, 1)
 
     def test_lse_plus_1d_basic(self):
         from timm.layers import LsePlus1d
@@ -169,7 +170,7 @@ class TestLsePool:
         x = torch.randn(2, 64, 7, 7, device=torch_device)
         pool = LsePlus2d(r=100.0, r_learnable=False).to(torch_device)
         out = pool(x)
-        out_max = x.amax(dim=(2, 3), keepdim=True)
+        out_max = x.amax(dim=(2, 3))
         assert torch.allclose(out, out_max, atol=0.1)
 
     def test_lse_low_r_approximates_avg(self):
@@ -177,7 +178,7 @@ class TestLsePool:
         x = torch.randn(2, 64, 7, 7, device=torch_device)
         pool = LsePlus2d(r=0.01, r_learnable=False).to(torch_device)
         out = pool(x)
-        out_avg = x.mean(dim=(2, 3), keepdim=True)
+        out_avg = x.mean(dim=(2, 3))
         assert torch.allclose(out, out_avg, atol=0.1)
 
     def test_lse_learnable_r_gradient(self):
@@ -200,13 +201,6 @@ class TestSimPool:
         x = torch.randn(2, 64, 7, 7, device=torch_device)
         pool = SimPool2d(dim=64).to(torch_device)
         out = pool(x)
-        assert out.shape == (2, 1, 64)
-
-    def test_simpool_2d_flatten(self):
-        from timm.layers import SimPool2d
-        x = torch.randn(2, 64, 7, 7, device=torch_device)
-        pool = SimPool2d(dim=64, flatten=True).to(torch_device)
-        out = pool(x)
         assert out.shape == (2, 64)
 
     def test_simpool_1d_basic(self):
@@ -220,14 +214,14 @@ class TestSimPool:
         from timm.layers import SimPool2d
         x = torch.randn(2, 64, 7, 7, device=torch_device)
         for num_heads in [1, 2, 4, 8]:
-            pool = SimPool2d(dim=64, num_heads=num_heads, flatten=True).to(torch_device)
+            pool = SimPool2d(dim=64, num_heads=num_heads).to(torch_device)
             out = pool(x)
             assert out.shape == (2, 64)
 
     def test_simpool_with_gamma(self):
         from timm.layers import SimPool2d
         x = torch.randn(2, 64, 7, 7, device=torch_device)
-        pool = SimPool2d(dim=64, gamma=2.0, flatten=True).to(torch_device)
+        pool = SimPool2d(dim=64, gamma=2.0).to(torch_device)
         out = pool(x)
         assert out.shape == (2, 64)
         assert not torch.isnan(out).any()
@@ -235,73 +229,9 @@ class TestSimPool:
     def test_simpool_qk_norm(self):
         from timm.layers import SimPool2d
         x = torch.randn(2, 64, 7, 7, device=torch_device)
-        pool = SimPool2d(dim=64, qk_norm=True, flatten=True).to(torch_device)
+        pool = SimPool2d(dim=64, qk_norm=True).to(torch_device)
         out = pool(x)
         assert out.shape == (2, 64)
-
-
-# Slot Pool Tests
-
-class TestSlotPool:
-    """Test Slot Attention pooling layers."""
-
-    def test_slot_pool_basic(self):
-        from timm.layers import SlotPool
-        x = torch.randn(2, 49, 64, device=torch_device)
-        pool = SlotPool(dim=64).to(torch_device)
-        out = pool(x)
-        assert out.shape == (2, 64)
-
-    def test_slot_pool_2d_basic(self):
-        from timm.layers import SlotPool2d
-        x = torch.randn(2, 64, 7, 7, device=torch_device)
-        pool = SlotPool2d(dim=64).to(torch_device)
-        out = pool(x)
-        assert out.shape == (2, 64)
-
-    def test_slot_pool_multi_slot(self):
-        from timm.layers import SlotPool
-        x = torch.randn(2, 49, 64, device=torch_device)
-        for num_slots in [1, 2, 4, 8]:
-            pool = SlotPool(dim=64, num_slots=num_slots).to(torch_device)
-            out = pool(x)
-            assert out.shape == (2, 64)
-
-    def test_slot_pool_iterations(self):
-        from timm.layers import SlotPool
-        x = torch.randn(2, 49, 64, device=torch_device)
-        for iters in [1, 2, 3, 5]:
-            pool = SlotPool(dim=64, iters=iters).to(torch_device)
-            out = pool(x)
-            assert out.shape == (2, 64)
-
-    def test_slot_pool_pool_types(self):
-        from timm.layers import SlotPool
-        x = torch.randn(2, 49, 64, device=torch_device)
-        for pool_type in ['max', 'avg', 'first']:
-            pool = SlotPool(dim=64, num_slots=4, pool_type=pool_type).to(torch_device)
-            out = pool(x)
-            assert out.shape == (2, 64)
-
-    def test_slot_pool_stochastic_train_mode(self):
-        from timm.layers import SlotPool
-        x = torch.randn(2, 49, 64, device=torch_device)
-        pool = SlotPool(dim=64, stochastic_init=True).to(torch_device)
-        pool.train()
-        out1 = pool(x)
-        out2 = pool(x)
-        # Should differ in train mode with stochastic init
-        assert not torch.allclose(out1, out2)
-
-    def test_slot_pool_stochastic_eval_mode(self):
-        from timm.layers import SlotPool
-        x = torch.randn(2, 49, 64, device=torch_device)
-        pool = SlotPool(dim=64, stochastic_init=True).to(torch_device)
-        pool.eval()
-        out1 = pool(x)
-        out2 = pool(x)
-        # Should be deterministic in eval mode
-        assert torch.allclose(out1, out2)
 
 
 # Common Tests (Gradient, JIT, dtype)
@@ -314,8 +244,6 @@ class TestPoolingCommon:
         ('LsePlus1d', {}, (2, 49, 64)),
         ('SimPool2d', {'dim': 64}, (2, 64, 7, 7)),
         ('SimPool1d', {'dim': 64}, (2, 49, 64)),
-        ('SlotPool', {'dim': 64}, (2, 49, 64)),
-        ('SlotPool2d', {'dim': 64}, (2, 64, 7, 7)),
         ('SelectAdaptivePool2d', {'pool_type': 'avg', 'flatten': True}, (2, 64, 7, 7)),
         ('AttentionPoolLatent', {'in_features': 64, 'num_heads': 4}, (2, 49, 64)),
         ('AttentionPool2d', {'in_features': 64, 'feat_size': 7}, (2, 64, 7, 7)),
@@ -336,8 +264,6 @@ class TestPoolingCommon:
         ('LsePlus1d', {}, (2, 49, 64)),
         ('SimPool2d', {'dim': 64}, (2, 64, 7, 7)),
         ('SimPool1d', {'dim': 64}, (2, 49, 64)),
-        ('SlotPool', {'dim': 64, 'iters': 2}, (2, 49, 64)),
-        ('SlotPool2d', {'dim': 64, 'iters': 2}, (2, 64, 7, 7)),
         ('AttentionPool2d', {'in_features': 64, 'feat_size': 7}, (2, 64, 7, 7)),
         ('RotAttentionPool2d', {'in_features': 64, 'ref_feat_size': 7}, (2, 64, 7, 7)),
     ])
@@ -352,12 +278,10 @@ class TestPoolingCommon:
         assert torch.allclose(out_orig, out_script, atol=1e-5)
 
     @pytest.mark.parametrize('pool_cls,kwargs,input_shape', [
-        ('LsePlus2d', {'flatten': True}, (2, 64, 7, 7)),
+        ('LsePlus2d', {}, (2, 64, 7, 7)),
         ('LsePlus1d', {}, (2, 49, 64)),
-        ('SimPool2d', {'dim': 64, 'flatten': True}, (2, 64, 7, 7)),
+        ('SimPool2d', {'dim': 64}, (2, 64, 7, 7)),
         ('SimPool1d', {'dim': 64}, (2, 49, 64)),
-        ('SlotPool', {'dim': 64}, (2, 49, 64)),
-        ('SlotPool2d', {'dim': 64}, (2, 64, 7, 7)),
         ('AttentionPool2d', {'in_features': 64, 'feat_size': 7}, (2, 64, 7, 7)),
         ('RotAttentionPool2d', {'in_features': 64, 'ref_feat_size': 7}, (2, 64, 7, 7)),
     ])
@@ -372,9 +296,8 @@ class TestPoolingCommon:
         assert torch.allclose(out1, out2)
 
     @pytest.mark.parametrize('pool_cls,kwargs,input_shape', [
-        ('LsePlus2d', {'flatten': True}, (2, 64, 7, 7)),
-        ('SimPool2d', {'dim': 64, 'flatten': True}, (2, 64, 7, 7)),
-        ('SlotPool2d', {'dim': 64}, (2, 64, 7, 7)),
+        ('LsePlus2d', {}, (2, 64, 7, 7)),
+        ('SimPool2d', {'dim': 64}, (2, 64, 7, 7)),
         ('RotAttentionPool2d', {'in_features': 64, 'ref_feat_size': 7}, (2, 64, 7, 7)),
     ])
     def test_different_spatial_sizes(self, pool_cls, kwargs, input_shape):
