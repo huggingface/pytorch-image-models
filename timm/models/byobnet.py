@@ -42,6 +42,7 @@ from timm.layers import (
     NormMlpClassifierHead,
     ConvNormAct,
     BatchNormAct2d,
+    DropBlock2d,
     EvoNorm2dS0a,
     AttentionPool2d,
     RotAttentionPool2d,
@@ -1339,11 +1340,42 @@ def update_block_kwargs(block_kwargs: Dict[str, Any], block_cfg: ByoBlockCfg, mo
     block_kwargs.update(override_kwargs(block_cfg.block_kwargs, model_cfg.block_kwargs))
 
 
+def drop_blocks(
+        drop_prob: float = 0.,
+        block_size: int = 3,
+        num_stages: int = 4,
+) -> List[Optional[partial]]:
+    """Create DropBlock layer partials for each stage.
+
+    DropBlock is applied to the last two stages only, following common practice.
+    The block_size specifies the size for the final stage; the second-to-last
+    stage uses a larger block size scaled to account for 2x larger feature maps.
+
+    Args:
+        drop_prob: Drop probability for DropBlock.
+        block_size: Block size for the final stage. Second-to-last stage
+            uses `block_size * 2 - 1` to scale with feature map size.
+        num_stages: Number of stages in the model.
+
+    Returns:
+        List of DropBlock partial instances or None for each stage.
+    """
+    assert num_stages >= 2
+    dbs = [None] * num_stages
+    if drop_prob:
+        # Scale block size for second-to-last stage (2x larger feature maps)
+        dbs[-2] = partial(DropBlock2d, drop_prob=drop_prob, block_size=block_size * 2 - 1, gamma_scale=0.25)
+        dbs[-1] = partial(DropBlock2d, drop_prob=drop_prob, block_size=block_size, gamma_scale=1.00)
+    return dbs
+
+
 def create_byob_stages(
         cfg: ByoModelCfg,
         drop_path_rate: float,
         output_stride: int,
         stem_feat: Dict[str, Any],
+        drop_block_rate: float = 0.,
+        drop_block_size: int = 3,
         feat_size: Optional[int] = None,
         layers: Optional[LayerFn] = None,
         block_kwargs_fn: Optional[Callable] = update_block_kwargs,
@@ -1353,8 +1385,10 @@ def create_byob_stages(
     layers = layers or LayerFn()
     feature_info = []
     block_cfgs = [expand_blocks_cfg(s) for s in cfg.blocks]
+    num_stages = len(block_cfgs)
     depths = [sum([bc.d for bc in stage_bcs]) for stage_bcs in block_cfgs]
     dpr = calculate_drop_path_rates(drop_path_rate, depths, stagewise=True)
+    dbs = drop_blocks(drop_block_rate, drop_block_size, num_stages)
     dilation = 1
     net_stride = stem_feat['reduction']
     prev_chs = stem_feat['num_chs']
@@ -1384,6 +1418,7 @@ def create_byob_stages(
                 group_size=group_size,
                 bottle_ratio=block_cfg.br,
                 downsample=cfg.downsample,
+                drop_block=dbs[stage_idx],
                 drop_path_rate=dpr[stage_idx][block_idx],
                 layers=layers,
                 device=device,
@@ -1437,6 +1472,8 @@ class ByobNet(nn.Module):
             output_stride: int = 32,
             img_size: Optional[Union[int, Tuple[int, int]]] = None,
             drop_rate: float = 0.,
+            drop_block_rate: float = 0.,
+            drop_block_size: int = 3,
             drop_path_rate: float = 0.,
             zero_init_last: bool = True,
             device=None,
@@ -1452,6 +1489,8 @@ class ByobNet(nn.Module):
             output_stride: Output stride of network, one of (8, 16, 32).
             img_size: Image size for fixed image size models (i.e. self-attn).
             drop_rate: Classifier dropout rate.
+            drop_block_rate: DropBlock drop rate.
+            drop_block_size: DropBlock block size for final stage (scales up for earlier stages).
             drop_path_rate: Stochastic depth drop-path rate.
             zero_init_last: Zero-init last weight of residual path.
             **kwargs: Extra kwargs overlayed onto cfg.
@@ -1490,6 +1529,8 @@ class ByobNet(nn.Module):
             drop_path_rate,
             output_stride,
             stem_feat[-1],
+            drop_block_rate=drop_block_rate,
+            drop_block_size=drop_block_size,
             layers=stage_layers,
             feat_size=feat_size,
             **dd,
