@@ -300,7 +300,9 @@ class ParallelScalingBlock(nn.Module):
             drop_path: float = 0.,
             act_layer: Type[nn.Module] = nn.GELU,
             norm_layer: Type[nn.Module] = LayerNorm,
-            mlp_layer: Optional[Type[nn.Module]] = None,
+            mlp_layer: Optional[Type[nn.Module]] = None,  # not used
+            attn_layer: Optional[LayerType] = None,  # not used
+            depth: int = 0,  # not used
             device = None,
             dtype = None,
     ) -> None:
