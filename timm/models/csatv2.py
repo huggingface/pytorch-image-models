@@ -470,11 +470,6 @@ class CSATv2(nn.Module):
         x = self.forward_head(x)
         return x
 
-
-# --- Components like LayerNorm, GRN, DropPath, FeedForward, PosCNN, trunc_normal_ ---
-# (이 부분은 einops와 무관하므로 위 코드와 동일하게 유지합니다. 여기서는 공간 절약을 위해 생략)
-# 기존 코드의 LayerNorm, GRN, DropPath, FeedForward, PosCNN, trunc_normal_ 함수를 그대로 사용하세요.
-
 class LayerNorm(nn.Module):
     def __init__(self, normalized_shape, eps=1e-6, data_format="channels_last"):
         super().__init__()
@@ -609,4 +604,5 @@ def csatv2(pretrained: bool = False, **kwargs) -> CSATv2:
         img_size=kwargs.pop('img_size', 512),
         num_classes=kwargs.pop('num_classes', 1000),
     )
+
     return _create_csatv2('csatv2', pretrained, **dict(model_args, **kwargs))
