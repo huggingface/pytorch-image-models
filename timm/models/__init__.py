@@ -7,6 +7,7 @@ from .convit import *
 from .convmixer import *
 from .convnext import *
 from .crossvit import *
+from .csatv2 import *
 from .cspnet import *
 from .davit import *
 from .deit import *
