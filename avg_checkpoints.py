@@ -47,7 +47,7 @@ def checkpoint_metric(checkpoint_path):
     if not checkpoint_path or not os.path.isfile(checkpoint_path):
         return {}
     print("=> Extracting metric from checkpoint '{}'".format(checkpoint_path))
-    checkpoint = torch.load(checkpoint_path, map_location='cpu')
+    checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
     metric = None
     if 'metric' in checkpoint:
         metric = checkpoint['metric']
