@@ -402,6 +402,14 @@ def test_muon(optimizer):
     _test_model(optimizer, dict(lr=1e-3))
 
 
+@pytest.mark.parametrize('optimizer',  ['adamuon', 'nadamuon'])
+def test_adamuon(optimizer):
+    _test_rosenbrock(
+        lambda params: create_optimizer_v2(params, optimizer, lr=1e-3)
+    )
+    _test_model(optimizer, dict(lr=1e-3))
+
+
 @pytest.mark.parametrize('optimizer',  ['adopt', 'adoptw'])
 def test_adopt(optimizer):
     _test_rosenbrock(

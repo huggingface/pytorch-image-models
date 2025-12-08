@@ -898,6 +898,24 @@ def _register_other_optimizers(registry: OptimizerRegistry) -> None:
             defaults={'nesterov': True}
         ),
         OptimInfo(
+            name='adamuon',
+            opt_class=Muon,
+            description='AdaMuon: Muon with adaptive second moment estimation on orthogonalized directions',
+            has_momentum=True,
+            has_eps=True,
+            has_betas=True,
+            defaults={'algo': 'adamuon'}
+        ),
+        OptimInfo(
+            name='nadamuon',
+            opt_class=Muon,
+            description='AdaMuon with Nesterov momentum and NAdamW fallback for 1D params',
+            has_momentum=True,
+            has_eps=True,
+            has_betas=True,
+            defaults={'algo': 'adamuon', 'nesterov': True}
+        ),
+        OptimInfo(
             name='novograd',
             opt_class=NvNovoGrad,
             description='Normalized Adam with L2 norm gradient normalization',
