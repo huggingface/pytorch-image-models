@@ -194,8 +194,12 @@ class Block(nn.Module):
 
         # Spatial Attention logic
         attention = self.attention(x)
-        # Upsampling to match x spatial size
-        x = x * nn.UpsamplingBilinear2d(x.shape[2:])(attention)
+
+        # [Fix] nn.UpsamplingBilinear2d 클래스 생성 -> F.interpolate 함수 사용
+        # align_corners=False가 최신 기본값에 가깝습니다. (성능 차이는 미미함)
+        attention = F.interpolate(attention, size=x.shape[2:], mode='bilinear', align_corners=False)
+
+        x = x * attention
 
         x = input + self.drop_path(x)
         return x
@@ -236,6 +240,11 @@ class TransformerBlock(nn.Module):
             self.pool1 = nn.MaxPool2d(3, 2, 1)
             self.pool2 = nn.MaxPool2d(3, 2, 1)
             self.proj = nn.Conv2d(inp, oup, 1, 1, 0, bias=False)
+        else:
+            # [Fix] JIT 컴파일 에러 방지: 사용하지 않더라도 속성을 정의해야 함
+            self.pool1 = nn.Identity()
+            self.pool2 = nn.Identity()
+            self.proj = nn.Identity()
 
         # Attention block components
         # Note: In old code, PreNorm wrapped Attention. Here we split them.
@@ -476,6 +485,12 @@ class CSATv2(nn.Module):
 # 기존 코드의 LayerNorm, GRN, DropPath, FeedForward, PosCNN, trunc_normal_ 함수를 그대로 사용하세요.
 
 class LayerNorm(nn.Module):
+    """ LayerNorm that supports two data formats: channels_last (default) or channels_first.
+    The ordering of the dimensions in the inputs. channels_last corresponds to inputs with
+    shape (batch_size, height, width, channels) while channels_first corresponds to inputs
+    with shape (batch_size, channels, height, width).
+    """
+
     def __init__(self, normalized_shape, eps=1e-6, data_format="channels_last"):
         super().__init__()
         self.weight = nn.Parameter(torch.ones(normalized_shape))
@@ -489,7 +504,9 @@ class LayerNorm(nn.Module):
     def forward(self, x):
         if self.data_format == "channels_last":
             return F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
-        elif self.data_format == "channels_first":
+        else:
+            # [Fix] elif -> else로 변경
+            # JIT이 "모든 경로에서 Tensor가 반환됨"을 알 수 있게 함
             u = x.mean(1, keepdim=True)
             s = (x - u).pow(2).mean(1, keepdim=True)
             x = (x - u) / torch.sqrt(s + self.eps)
