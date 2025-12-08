@@ -2703,11 +2703,14 @@ default_cfgs = {
     'vit_wee_patch16_reg1_gap_256.sbb_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_dwee_patch16_reg1_gap_256.sbb_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), crop_pct=0.95),
     'vit_pwee_patch16_reg1_gap_256.sbb_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_dpwee_patch16_reg1_gap_256.sbb_in1k': _cfg(
-        #hf_hub_id='timm/',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_little_patch16_reg1_gap_256.sbb_in12k_ft_in1k': _cfg(
         hf_hub_id='timm/',
@@ -4209,6 +4212,17 @@ def vit_wee_patch16_reg1_gap_256(pretrained: bool = False, **kwargs) -> VisionTr
 
 
 @register_model
+def vit_dwee_patch16_reg1_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=256, depth=14, num_heads=4, init_values=1e-5, mlp_ratio=5,
+        class_token=False, no_embed_class=True, reg_tokens=1, global_pool='avg', attn_layer='diff',
+    )
+    model = _create_vision_transformer(
+        'vit_dwee_patch16_reg1_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
 def vit_pwee_patch16_reg1_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
     model_args = dict(
         patch_size=16, embed_dim=256, depth=16, num_heads=4, init_values=1e-5, mlp_ratio=5,
@@ -4228,6 +4242,7 @@ def vit_dpwee_patch16_reg1_gap_256(pretrained: bool = False, **kwargs) -> Vision
     model = _create_vision_transformer(
         'vit_dpwee_patch16_reg1_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
+
 
 @register_model
 def vit_little_patch16_reg1_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
