@@ -66,11 +66,14 @@ class _DCT1D(nn.Module):
         factory_kwargs = dict(device=device, dtype=dtype)
         super(_DCT1D, self).__init__()
         kernel = {'2': _dct_kernel_type_2, '3': _dct_kernel_type_3}
-        self.weights = nn.Parameter(kernel[f'{kernel_type}'](kernel_size, orthonormal, **factory_kwargs).T, False)
+        dct_weights = kernel[f'{kernel_type}'](kernel_size, orthonormal, **factory_kwargs).T
+        self.register_buffer('weights', dct_weights)
+
         self.register_parameter('bias', None)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return nn.functional.linear(x, self.weights, self.bias)
+
 
 
 class _DCT2D(nn.Module):
@@ -96,6 +99,7 @@ class Learnable_DCT2D(nn.Module):
         self.Y_Conv = nn.Conv2d(kernel_size ** 2, 24, kernel_size=1, padding=0)
         self.Cb_Conv = nn.Conv2d(kernel_size ** 2, 4, kernel_size=1, padding=0)
         self.Cr_Conv = nn.Conv2d(kernel_size ** 2, 4, kernel_size=1, padding=0)
+
         self.mean = torch.tensor(mean, requires_grad=False)
         self.var = torch.tensor(var, requires_grad=False)
         self.imagenet_mean = torch.tensor([0.485, 0.456, 0.406], requires_grad=False)
@@ -113,9 +117,14 @@ class Learnable_DCT2D(nn.Module):
         return x
 
     def frequncy_normalize(self, x):
-        x[:, 0, ].sub_(self.mean.to(x.device)[0]).div_((self.var.to(x.device)[0] ** 0.5 + 1e-8))
-        x[:, 1, ].sub_(self.mean.to(x.device)[1]).div_((self.var.to(x.device)[1] ** 0.5 + 1e-8))
-        x[:, 2, ].sub_(self.mean.to(x.device)[2]).div_((self.var.to(x.device)[2] ** 0.5 + 1e-8))
+
+        mean_tensor = self.mean.to(x.device)
+        var_tensor = self.var.to(x.device)
+
+        std = var_tensor ** 0.5 + 1e-8
+
+        x = (x - mean_tensor) / std
+
         return x
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -181,11 +190,13 @@ class Block(nn.Module):
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.attention = Spatial_Attention()
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         input = x
         x = self.dwconv(x)
         x = x.permute(0, 2, 3, 1)
+
         x = self.norm(x)
+
         x = self.pwconv1(x)
         x = self.act(x)
         x = self.grn(x)
@@ -194,11 +205,9 @@ class Block(nn.Module):
 
         # Spatial Attention logic
         attention = self.attention(x)
-
-        # [Fix] create nn.UpsamplingBilinear2d class  -> use F.interpolate function
-        attention = F.interpolate(attention, size=x.shape[2:], mode='bilinear', align_corners=False)
-
-        x = x * attention
+        # x = x * nn.UpsamplingBilinear2d(size=x.shape[2:])(attention)
+        up_attn = F.interpolate(attention, size=x.shape[2:], mode='bilinear', align_corners=True)
+        x = x * up_attn
 
         x = input + self.drop_path(x)
         return x
@@ -223,11 +232,6 @@ class Spatial_Attention(nn.Module):
 
 
 class TransformerBlock(nn.Module):
-    """
-    Refactored TransformerBlock without einops and PreNorm class wrapper.
-    Manual reshaping is performed in forward().
-    """
-
     def __init__(self, inp, oup, heads=8, dim_head=32, img_size=None, downsample=False, dropout=0.):
         super().__init__()
         hidden_dim = int(inp * 4)
@@ -240,15 +244,16 @@ class TransformerBlock(nn.Module):
             self.pool2 = nn.MaxPool2d(3, 2, 1)
             self.proj = nn.Conv2d(inp, oup, 1, 1, 0, bias=False)
         else:
-            # [Fix] Prevent JIT compile error
+            # [change] for use TorchScript all variable need to declare for Identity
             self.pool1 = nn.Identity()
             self.pool2 = nn.Identity()
             self.proj = nn.Identity()
 
         # Attention block components
-        # Note: In old code, PreNorm wrapped Attention. Here we split them.
         self.attn_norm = nn.LayerNorm(inp)
-        self.attn = Attention(inp, oup, heads, dim_head, dropout)
+        # self.attn = Attention(inp, oup, heads, dim_head, dropout)
+        self.attn = Attention(inp, oup, heads, dim_head, dropout, img_size=img_size)
+
 
         # FeedForward block components
         self.ff_norm = nn.LayerNorm(oup)
@@ -316,7 +321,7 @@ class Attention(nn.Module):
     Refactored Attention without einops.rearrange.
     """
 
-    def __init__(self, inp, oup, heads=8, dim_head=32, dropout=0.):
+    def __init__(self, inp, oup, heads=8, dim_head=32, dropout=0., img_size=None):
         super().__init__()
         inner_dim = dim_head * heads
         project_out = not (heads == 1 and dim_head == inp)
@@ -332,7 +337,8 @@ class Attention(nn.Module):
             nn.Linear(inner_dim, oup),
             nn.Dropout(dropout)
         ) if project_out else nn.Identity()
-        self.pos_embed = PosCNN(in_chans=inp)
+        # self.pos_embed = PosCNN(in_chans=inp)
+        self.pos_embed = PosCNN(in_chans=inp, img_size=img_size)
 
     def forward(self, x):
         # x shape: (B, N, C)
@@ -387,6 +393,16 @@ class CSATv2(nn.Module):
         self.img_size = img_size
 
         dims = [32, 72, 168, 386]
+        self.num_features = dims[-1]
+        self.head_hidden_size = self.num_features
+
+        self.feature_info = [
+            dict(num_chs=32, reduction=8, module='dct'),
+            dict(num_chs=dims[1], reduction=16, module='stages1'),
+            dict(num_chs=dims[2], reduction=32, module='stages2'),
+            dict(num_chs=dims[3], reduction=64, module='stages3'),
+            dict(num_chs=dims[3], reduction=64, module='stages4'),
+        ]
         channel_order = "channels_first"
         depths = [2, 2, 6, 4]
         dp_rates = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
@@ -479,17 +495,7 @@ class CSATv2(nn.Module):
         return x
 
 
-# --- Components like LayerNorm, GRN, DropPath, FeedForward, PosCNN, trunc_normal_ ---
-# (이 부분은 einops와 무관하므로 위 코드와 동일하게 유지합니다. 여기서는 공간 절약을 위해 생략)
-# 기존 코드의 LayerNorm, GRN, DropPath, FeedForward, PosCNN, trunc_normal_ 함수를 그대로 사용하세요.
-
 class LayerNorm(nn.Module):
-    """ LayerNorm that supports two data formats: channels_last (default) or channels_first.
-    The ordering of the dimensions in the inputs. channels_last corresponds to inputs with
-    shape (batch_size, height, width, channels) while channels_first corresponds to inputs
-    with shape (batch_size, channels, height, width).
-    """
-
     def __init__(self, normalized_shape, eps=1e-6, data_format="channels_last"):
         super().__init__()
         self.weight = nn.Parameter(torch.ones(normalized_shape))
@@ -500,12 +506,10 @@ class LayerNorm(nn.Module):
             raise NotImplementedError
         self.normalized_shape = (normalized_shape,)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.data_format == "channels_last":
             return F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
-        else:
-            # [Fix] change elif -> else
-            # JIT should know Tensor return path of all cases.
+        else: #elif self.data_format == "channels_first":
             u = x.mean(1, keepdim=True)
             s = (x - u).pow(2).mean(1, keepdim=True)
             x = (x - u) / torch.sqrt(s + self.eps)
@@ -561,19 +565,40 @@ class FeedForward(nn.Module):
 
 
 class PosCNN(nn.Module):
-    def __init__(self, in_chans):
+    def __init__(self, in_chans, img_size=None):
         super(PosCNN, self).__init__()
         self.proj = nn.Conv2d(in_chans, in_chans, kernel_size=3, stride=1, padding=1, bias=True, groups=in_chans)
+        self.img_size = img_size
+
+    # ignore JIT + safety variable type change
+    @torch.jit.ignore
+    def _get_dynamic_size(self, N):
+        # 1. Eager Mode (normal execution)
+        if isinstance(N, int):
+            s = int(N ** 0.5)
+            return s, s
+
+        # 2. FX Tracing & Runtime
+        # if n is Proxy or Tensor, change to float Tensor
+        N_float = N * torch.tensor(1.0)  # float promotion (Proxy 호환)
+        s = (N_float ** 0.5).to(torch.int)
+        return s, s
 
     def forward(self, x):
         B, N, C = x.shape
         feat_token = x
-        H, W = int(N ** 0.5), int(N ** 0.5)
+
+        # JIT mode vs others
+        if torch.jit.is_scripting():
+            H = int(N ** 0.5)
+            W = H
+        else:
+            H, W = self._get_dynamic_size(N)
+
         cnn_feat = feat_token.transpose(1, 2).view(B, C, H, W)
         x = self.proj(cnn_feat) + cnn_feat
         x = x.flatten(2).transpose(1, 2)
         return x
-
 
 def trunc_normal_(tensor, mean=0., std=1., a=-2., b=2.):
     return _no_grad_trunc_normal_(tensor, mean, std, a, b)
@@ -605,9 +630,10 @@ default_cfgs = generate_default_cfgs({
         'std': (0.229, 0.224, 0.225),
         'interpolation': 'bilinear',
         'crop_pct': 1.0,
+        'classifier': 'head',
+        'first_conv': [],
     },
 })
-
 
 def _create_csatv2(variant: str, pretrained: bool = False, **kwargs) -> CSATv2:
     return build_model_with_cfg(
