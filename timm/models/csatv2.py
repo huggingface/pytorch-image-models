@@ -189,9 +189,9 @@ class LearnableDct2d(nn.Module):
         self.unfold = nn.Unfold(kernel_size=(kernel_size, kernel_size), stride=(kernel_size, kernel_size))
         self.transform = Dct2d(kernel_size, kernel_type, orthonormal, **factory_kwargs)
         self.permutation = _zigzag_permutation(kernel_size, kernel_size)
-        self.Y_Conv = nn.Conv2d(kernel_size ** 2, 24, kernel_size=1, padding=0)
-        self.Cb_Conv = nn.Conv2d(kernel_size ** 2, 4, kernel_size=1, padding=0)
-        self.Cr_Conv = nn.Conv2d(kernel_size ** 2, 4, kernel_size=1, padding=0)
+        self.conv_y = nn.Conv2d(kernel_size ** 2, 24, kernel_size=1, padding=0)
+        self.conv_cb = nn.Conv2d(kernel_size ** 2, 4, kernel_size=1, padding=0)
+        self.conv_cr = nn.Conv2d(kernel_size ** 2, 4, kernel_size=1, padding=0)
 
         self.register_buffer('mean', torch.tensor(_DCT_MEAN), persistent=False)
         self.register_buffer('var', torch.tensor(_DCT_VAR), persistent=False)
@@ -228,9 +228,9 @@ class LearnableDct2d(nn.Module):
         x = self._frequency_normalize(x)
         x = x.reshape(b, h // self.k, w // self.k, c, -1)
         x = x.permute(0, 3, 4, 1, 2).contiguous()
-        x_y = self.Y_Conv(x[:, 0])
-        x_cb = self.Cb_Conv(x[:, 1])
-        x_cr = self.Cr_Conv(x[:, 2])
+        x_y = self.conv_y(x[:, 0])
+        x_cb = self.conv_cb(x[:, 1])
+        x_cr = self.conv_cr(x[:, 2])
         return torch.cat([x_y, x_cb, x_cr], dim=1)
 
 
@@ -697,8 +697,11 @@ def checkpoint_filter_fn(state_dict: dict, model: nn.Module) -> dict:
 
     out_dict = {}
     for k, v in state_dict.items():
-        # Remap dct -> stem_dct
+        # Remap dct -> stem_dct, and Y_Conv/Cb_Conv/Cr_Conv -> conv_y/conv_cb/conv_cr
         k = re.sub(r'^dct\.', 'stem_dct.', k)
+        k = k.replace('.Y_Conv.', '.conv_y.')
+        k = k.replace('.Cb_Conv.', '.conv_cb.')
+        k = k.replace('.Cr_Conv.', '.conv_cr.')
 
         # Remap stage names with index adjustments for downsample relocation
         k = re.sub(r'^stages([1-4])\.(\d+)\.(.*)$', remap_stage, k)
