@@ -13,10 +13,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from timm.layers import trunc_normal_, DropPath, Mlp, LayerNorm2d, Attention
+from timm.layers import trunc_normal_, DropPath, Mlp, LayerNorm2d, Attention, NormMlpClassifierHead
 from timm.layers.grn import GlobalResponseNorm
 from timm.models._builder import build_model_with_cfg
 from timm.models._features import feature_take_indices
+from timm.models._manipulate import checkpoint, checkpoint_seq
 from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['CSATv2', 'csatv2']
@@ -477,6 +478,7 @@ class CSATv2(nn.Module):
         super().__init__()
         self.num_classes = num_classes
         self.global_pool = global_pool
+        self.grad_checkpointing = False
 
         dims = [32, 72, 168, 386]
         self.num_features = dims[-1]
@@ -530,8 +532,7 @@ class CSATv2(nn.Module):
             ),
         )
 
-        self.norm = nn.LayerNorm(dims[-1], eps=1e-6)
-        self.head = nn.Linear(dims[-1], num_classes) if num_classes > 0 else nn.Identity()
+        self.head = NormMlpClassifierHead(dims[-1], num_classes, pool_type=global_pool)
 
         self.apply(self._init_weights)
 
@@ -543,16 +544,24 @@ class CSATv2(nn.Module):
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
-        return self.head
+        return self.head.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: str = 'avg') -> None:
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
         self.num_classes = num_classes
-        self.global_pool = global_pool
-        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        if global_pool is not None:
+            self.global_pool = global_pool
+        self.head.reset(num_classes, pool_type=global_pool)
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable: bool = True) -> None:
+        self.grad_checkpointing = enable
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         x = self.stem_dct(x)
-        x = self.stages(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.stages, x)
+        else:
+            x = self.stages(x)
         return x
 
     def forward_intermediates(
@@ -593,7 +602,10 @@ class CSATv2(nn.Module):
             stages = self.stages[:max_index] if max_index > 0 else []
 
         for feat_idx, stage in enumerate(stages):
-            x = stage(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(stage, x)
+            else:
+                x = stage(x)
             if feat_idx + 1 in take_indices:  # +1 because stem is index 0
                 intermediates.append(x)
 
@@ -624,18 +636,14 @@ class CSATv2(nn.Module):
         self.stages = self.stages[:max_index] if max_index > 0 else nn.Sequential()
 
         if prune_norm:
-            self.norm = nn.Identity()
+            self.head.norm = nn.Identity()
         if prune_head:
             self.reset_classifier(0, '')
 
         return take_indices
 
     def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
-        x = x.mean(dim=(-2, -1))
-        x = self.norm(x)
-        if pre_logits:
-            return x
-        return self.head(x)
+        return self.head(x, pre_logits=pre_logits)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.forward_features(x)
@@ -651,7 +659,7 @@ default_cfgs = generate_default_cfgs({
         'std': (0.229, 0.224, 0.225),
         'interpolation': 'bilinear',
         'crop_pct': 1.0,
-        'classifier': 'head',
+        'classifier': 'head.fc',
         'first_conv': [],
     },
 })
@@ -664,7 +672,7 @@ def checkpoint_filter_fn(state_dict: dict, model: nn.Module) -> dict:
     1. Stage naming: stages1/2/3/4 -> stages.0/1/2/3
     2. Downsample position: moved from end of stage N to start of stage N+1
     """
-    if 'grn.weight' in state_dict or 'stages.0.0.grn.weight' in state_dict:
+    if 'stages.0.0.grn.weight' in state_dict:
         return state_dict  # Already in timm format
 
     import re
@@ -729,6 +737,10 @@ def checkpoint_filter_fn(state_dict: dict, model: nn.Module) -> dict:
 
         if '.attn.pos_embed.' in k:
             k = k.replace('.attn.pos_embed.', '.pos_embed.')
+
+        # Remap head -> head.fc, norm -> head.norm (order matters)
+        k = re.sub(r'^head\.', 'head.fc.', k)
+        k = re.sub(r'^norm\.', 'head.norm.', k)
 
         out_dict[k] = v
 
