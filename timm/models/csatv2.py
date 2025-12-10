@@ -774,12 +774,13 @@ def checkpoint_filter_fn(state_dict: dict, model: nn.Module) -> dict:
 
 
 def _create_csatv2(variant: str, pretrained: bool = False, **kwargs) -> CSATv2:
+    out_indices = kwargs.pop('out_indices', (1, 2, 3, 4))
     return build_model_with_cfg(
         CSATv2,
         variant,
         pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
-        feature_cfg=dict(out_indices=(0, 1, 2, 3, 4), flatten_sequential=True),
+        feature_cfg=dict(out_indices=out_indices, flatten_sequential=True),
         default_cfg=default_cfgs[variant],
         **kwargs,
     )
