@@ -102,21 +102,21 @@ def _dct_kernel_type_2(
         dtype=None,
 ) -> torch.Tensor:
     """Generate Type-II DCT kernel matrix."""
-    factory_kwargs = dict(device=device, dtype=dtype)
-    x = torch.eye(kernel_size, **factory_kwargs)
+    dd = dict(device=device, dtype=dtype)
+    x = torch.eye(kernel_size, **dd)
     v = x.clone().contiguous().view(-1, kernel_size)
     v = torch.cat([v, v.flip([1])], dim=-1)
     v = torch.fft.fft(v, dim=-1)[:, :kernel_size]
     try:
-        k = torch.tensor(-1j, **factory_kwargs) * torch.pi * torch.arange(kernel_size, **factory_kwargs)[None, :]
+        k = torch.tensor(-1j, **dd) * torch.pi * torch.arange(kernel_size, **dd)[None, :]
     except AttributeError:
-        k = torch.tensor(-1j, **factory_kwargs) * math.pi * torch.arange(kernel_size, **factory_kwargs)[None, :]
+        k = torch.tensor(-1j, **dd) * math.pi * torch.arange(kernel_size, **dd)[None, :]
     k = torch.exp(k / (kernel_size * 2))
     v = v * k
     v = v.real
     if orthonormal:
-        v[:, 0] = v[:, 0] * torch.sqrt(torch.tensor(1 / (kernel_size * 4), **factory_kwargs))
-        v[:, 1:] = v[:, 1:] * torch.sqrt(torch.tensor(1 / (kernel_size * 2), **factory_kwargs))
+        v[:, 0] = v[:, 0] * torch.sqrt(torch.tensor(1 / (kernel_size * 4), **dd))
+        v[:, 1:] = v[:, 1:] * torch.sqrt(torch.tensor(1 / (kernel_size * 2), **dd))
     v = v.contiguous().view(*x.shape)
     return v
 
@@ -142,10 +142,10 @@ class Dct1d(nn.Module):
             device=None,
             dtype=None,
     ) -> None:
-        factory_kwargs = dict(device=device, dtype=dtype)
+        dd = dict(device=device, dtype=dtype)
         super().__init__()
         kernel = {'2': _dct_kernel_type_2, '3': _dct_kernel_type_3}
-        dct_weights = kernel[f'{kernel_type}'](kernel_size, orthonormal, **factory_kwargs).T
+        dct_weights = kernel[f'{kernel_type}'](kernel_size, orthonormal, **dd).T
         self.register_buffer('weights', dct_weights)
         self.register_parameter('bias', None)
 
@@ -164,9 +164,9 @@ class Dct2d(nn.Module):
             device=None,
             dtype=None,
     ) -> None:
-        factory_kwargs = dict(device=device, dtype=dtype)
+        dd = dict(device=device, dtype=dtype)
         super().__init__()
-        self.transform = Dct1d(kernel_size, kernel_type, orthonormal, **factory_kwargs)
+        self.transform = Dct1d(kernel_size, kernel_type, orthonormal, **dd)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.transform(self.transform(x).transpose(-1, -2)).transpose(-1, -2)
@@ -183,20 +183,20 @@ class LearnableDct2d(nn.Module):
             device=None,
             dtype=None,
     ) -> None:
-        factory_kwargs = dict(device=device, dtype=dtype)
+        dd = dict(device=device, dtype=dtype)
         super().__init__()
         self.k = kernel_size
         self.unfold = nn.Unfold(kernel_size=(kernel_size, kernel_size), stride=(kernel_size, kernel_size))
-        self.transform = Dct2d(kernel_size, kernel_type, orthonormal, **factory_kwargs)
+        self.transform = Dct2d(kernel_size, kernel_type, orthonormal, **dd)
         self.permutation = _zigzag_permutation(kernel_size, kernel_size)
-        self.conv_y = nn.Conv2d(kernel_size ** 2, 24, kernel_size=1, padding=0)
-        self.conv_cb = nn.Conv2d(kernel_size ** 2, 4, kernel_size=1, padding=0)
-        self.conv_cr = nn.Conv2d(kernel_size ** 2, 4, kernel_size=1, padding=0)
+        self.conv_y = nn.Conv2d(kernel_size ** 2, 24, kernel_size=1, padding=0, **dd)
+        self.conv_cb = nn.Conv2d(kernel_size ** 2, 4, kernel_size=1, padding=0, **dd)
+        self.conv_cr = nn.Conv2d(kernel_size ** 2, 4, kernel_size=1, padding=0, **dd)
 
-        self.register_buffer('mean', torch.tensor(_DCT_MEAN), persistent=False)
-        self.register_buffer('var', torch.tensor(_DCT_VAR), persistent=False)
-        self.register_buffer('imagenet_mean', torch.tensor([0.485, 0.456, 0.406]), persistent=False)
-        self.register_buffer('imagenet_std', torch.tensor([0.229, 0.224, 0.225]), persistent=False)
+        self.register_buffer('mean', torch.tensor(_DCT_MEAN, device=device), persistent=False)
+        self.register_buffer('var', torch.tensor(_DCT_VAR, device=device), persistent=False)
+        self.register_buffer('imagenet_mean', torch.tensor([0.485, 0.456, 0.406], device=device), persistent=False)
+        self.register_buffer('imagenet_std', torch.tensor([0.229, 0.224, 0.225], device=device), persistent=False)
 
     def _denormalize(self, x: torch.Tensor) -> torch.Tensor:
         """Convert from ImageNet normalized to [0, 255] range."""
@@ -245,11 +245,11 @@ class Dct2dStats(nn.Module):
             device=None,
             dtype=None,
     ) -> None:
-        factory_kwargs = dict(device=device, dtype=dtype)
+        dd = dict(device=device, dtype=dtype)
         super().__init__()
         self.k = kernel_size
         self.unfold = nn.Unfold(kernel_size=(kernel_size, kernel_size), stride=(kernel_size, kernel_size))
-        self.transform = Dct2d(kernel_size, kernel_type, orthonormal, **factory_kwargs)
+        self.transform = Dct2d(kernel_size, kernel_type, orthonormal, **dd)
         self.permutation = _zigzag_permutation(kernel_size, kernel_size)
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -276,16 +276,19 @@ class Block(nn.Module):
             self,
             dim: int,
             drop_path: float = 0.,
+            device=None,
+            dtype=None,
     ) -> None:
+        dd = dict(device=device, dtype=dtype)
         super().__init__()
-        self.dwconv = nn.Conv2d(dim, dim, kernel_size=7, padding=3, groups=dim)
-        self.norm = nn.LayerNorm(dim, eps=1e-6)
-        self.pwconv1 = nn.Linear(dim, 4 * dim)
+        self.dwconv = nn.Conv2d(dim, dim, kernel_size=7, padding=3, groups=dim, **dd)
+        self.norm = nn.LayerNorm(dim, eps=1e-6, **dd)
+        self.pwconv1 = nn.Linear(dim, 4 * dim, **dd)
         self.act = nn.GELU()
-        self.grn = GlobalResponseNorm(4 * dim, channels_last=True)
-        self.pwconv2 = nn.Linear(4 * dim, dim)
+        self.grn = GlobalResponseNorm(4 * dim, channels_last=True, **dd)
+        self.pwconv2 = nn.Linear(4 * dim, dim, **dd)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.attention = SpatialAttention()
+        self.attention = SpatialAttention(**dd)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         shortcut = x
@@ -312,16 +315,21 @@ class SpatialTransformerBlock(nn.Module):
     positions. Used inside SpatialAttention where input is 1 channel at 7x7 resolution.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+            self,
+            device=None,
+            dtype=None,
+    ) -> None:
+        dd = dict(device=device, dtype=dtype)
         super().__init__()
         # Single-head attention with 1-dim q/k/v (no output projection needed)
-        self.pos_embed = PosConv(in_chans=1)
-        self.norm1 = nn.LayerNorm(1)
-        self.qkv = nn.Linear(1, 3, bias=False)
+        self.pos_embed = PosConv(in_chans=1, **dd)
+        self.norm1 = nn.LayerNorm(1, **dd)
+        self.qkv = nn.Linear(1, 3, bias=False, **dd)
 
         # Feedforward: 1 -> 4 -> 1
-        self.norm2 = nn.LayerNorm(1)
-        self.mlp = Mlp(1, 4, 1, act_layer=nn.GELU)
+        self.norm2 = nn.LayerNorm(1, **dd)
+        self.mlp = Mlp(1, 4, 1, act_layer=nn.GELU, **dd)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, C, H, W = x.shape
@@ -354,11 +362,16 @@ class SpatialTransformerBlock(nn.Module):
 class SpatialAttention(nn.Module):
     """Spatial attention module using channel statistics and transformer."""
 
-    def __init__(self) -> None:
+    def __init__(
+            self,
+            device=None,
+            dtype=None,
+    ) -> None:
+        dd = dict(device=device, dtype=dtype)
         super().__init__()
         self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
-        self.conv = nn.Conv2d(2, 1, kernel_size=7, padding=3)
-        self.attention = SpatialTransformerBlock()
+        self.conv = nn.Conv2d(2, 1, kernel_size=7, padding=3, **dd)
+        self.attention = SpatialTransformerBlock(**dd)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x_avg = x.mean(dim=1, keepdim=True)
@@ -382,7 +395,10 @@ class TransformerBlock(nn.Module):
             downsample: bool = False,
             attn_drop: float = 0.,
             proj_drop: float = 0.,
+            device=None,
+            dtype=None,
     ) -> None:
+        dd = dict(device=device, dtype=dtype)
         super().__init__()
         hidden_dim = int(inp * 4)
         self.downsample = downsample
@@ -390,14 +406,14 @@ class TransformerBlock(nn.Module):
         if self.downsample:
             self.pool1 = nn.MaxPool2d(3, 2, 1)
             self.pool2 = nn.MaxPool2d(3, 2, 1)
-            self.proj = nn.Conv2d(inp, oup, 1, 1, 0, bias=False)
+            self.proj = nn.Conv2d(inp, oup, 1, 1, 0, bias=False, **dd)
         else:
             self.pool1 = nn.Identity()
             self.pool2 = nn.Identity()
             self.proj = nn.Identity()
 
-        self.pos_embed = PosConv(in_chans=inp)
-        self.norm1 = nn.LayerNorm(inp)
+        self.pos_embed = PosConv(in_chans=inp, **dd)
+        self.norm1 = nn.LayerNorm(inp, **dd)
         self.attn = Attention(
             dim=inp,
             num_heads=num_heads,
@@ -405,10 +421,11 @@ class TransformerBlock(nn.Module):
             dim_out=oup,
             attn_drop=attn_drop,
             proj_drop=proj_drop,
+            **dd,
         )
 
-        self.norm2 = nn.LayerNorm(oup)
-        self.mlp = Mlp(oup, hidden_dim, oup, act_layer=nn.GELU, drop=proj_drop)
+        self.norm2 = nn.LayerNorm(oup, **dd)
+        self.mlp = Mlp(oup, hidden_dim, oup, act_layer=nn.GELU, drop=proj_drop, **dd)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.downsample:
@@ -448,9 +465,12 @@ class PosConv(nn.Module):
     def __init__(
             self,
             in_chans: int,
+            device=None,
+            dtype=None,
     ) -> None:
+        dd = dict(device=device, dtype=dtype)
         super().__init__()
-        self.proj = nn.Conv2d(in_chans, in_chans, kernel_size=3, stride=1, padding=1, bias=True, groups=in_chans)
+        self.proj = nn.Conv2d(in_chans, in_chans, kernel_size=3, stride=1, padding=1, bias=True, groups=in_chans, **dd)
 
     def forward(self, x: torch.Tensor, size: Tuple[int, int]) -> torch.Tensor:
         B, N, C = x.shape
@@ -473,8 +493,11 @@ class CSATv2(nn.Module):
             in_chans: int = 3,
             drop_path_rate: float = 0.0,
             global_pool: str = 'avg',
+            device=None,
+            dtype=None,
             **kwargs,
     ) -> None:
+        dd = dict(device=device, dtype=dtype)
         super().__init__()
         self.num_classes = num_classes
         self.global_pool = global_pool
@@ -495,44 +518,44 @@ class CSATv2(nn.Module):
         depths = [2, 2, 6, 4]
         dp_rates = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
 
-        self.stem_dct = LearnableDct2d(8)
+        self.stem_dct = LearnableDct2d(8, **dd)
 
         self.stages = nn.Sequential(
             nn.Sequential(
-                Block(dim=dims[0], drop_path=dp_rates[0]),
-                Block(dim=dims[0], drop_path=dp_rates[1]),
-                LayerNorm2d(dims[0], eps=1e-6),
+                Block(dim=dims[0], drop_path=dp_rates[0], **dd),
+                Block(dim=dims[0], drop_path=dp_rates[1], **dd),
+                LayerNorm2d(dims[0], eps=1e-6, **dd),
             ),
             nn.Sequential(
-                nn.Conv2d(dims[0], dims[1], kernel_size=2, stride=2),
-                Block(dim=dims[1], drop_path=dp_rates[2]),
-                Block(dim=dims[1], drop_path=dp_rates[3]),
-                LayerNorm2d(dims[1], eps=1e-6),
+                nn.Conv2d(dims[0], dims[1], kernel_size=2, stride=2, **dd),
+                Block(dim=dims[1], drop_path=dp_rates[2], **dd),
+                Block(dim=dims[1], drop_path=dp_rates[3], **dd),
+                LayerNorm2d(dims[1], eps=1e-6, **dd),
             ),
             nn.Sequential(
-                nn.Conv2d(dims[1], dims[2], kernel_size=2, stride=2),
-                Block(dim=dims[2], drop_path=dp_rates[4]),
-                Block(dim=dims[2], drop_path=dp_rates[5]),
-                Block(dim=dims[2], drop_path=dp_rates[6]),
-                Block(dim=dims[2], drop_path=dp_rates[7]),
-                Block(dim=dims[2], drop_path=dp_rates[8]),
-                Block(dim=dims[2], drop_path=dp_rates[9]),
-                TransformerBlock(inp=dims[2], oup=dims[2]),
-                TransformerBlock(inp=dims[2], oup=dims[2]),
-                LayerNorm2d(dims[2], eps=1e-6),
+                nn.Conv2d(dims[1], dims[2], kernel_size=2, stride=2, **dd),
+                Block(dim=dims[2], drop_path=dp_rates[4], **dd),
+                Block(dim=dims[2], drop_path=dp_rates[5], **dd),
+                Block(dim=dims[2], drop_path=dp_rates[6], **dd),
+                Block(dim=dims[2], drop_path=dp_rates[7], **dd),
+                Block(dim=dims[2], drop_path=dp_rates[8], **dd),
+                Block(dim=dims[2], drop_path=dp_rates[9], **dd),
+                TransformerBlock(inp=dims[2], oup=dims[2], **dd),
+                TransformerBlock(inp=dims[2], oup=dims[2], **dd),
+                LayerNorm2d(dims[2], eps=1e-6, **dd),
             ),
             nn.Sequential(
-                nn.Conv2d(dims[2], dims[3], kernel_size=2, stride=2),
-                Block(dim=dims[3], drop_path=dp_rates[10]),
-                Block(dim=dims[3], drop_path=dp_rates[11]),
-                Block(dim=dims[3], drop_path=dp_rates[12]),
-                Block(dim=dims[3], drop_path=dp_rates[13]),
-                TransformerBlock(inp=dims[3], oup=dims[3]),
-                TransformerBlock(inp=dims[3], oup=dims[3]),
+                nn.Conv2d(dims[2], dims[3], kernel_size=2, stride=2, **dd),
+                Block(dim=dims[3], drop_path=dp_rates[10], **dd),
+                Block(dim=dims[3], drop_path=dp_rates[11], **dd),
+                Block(dim=dims[3], drop_path=dp_rates[12], **dd),
+                Block(dim=dims[3], drop_path=dp_rates[13], **dd),
+                TransformerBlock(inp=dims[3], oup=dims[3], **dd),
+                TransformerBlock(inp=dims[3], oup=dims[3], **dd),
             ),
         )
 
-        self.head = NormMlpClassifierHead(dims[-1], num_classes, pool_type=global_pool)
+        self.head = NormMlpClassifierHead(dims[-1], num_classes, pool_type=global_pool, **dd)
 
         self.apply(self._init_weights)
 
