@@ -288,7 +288,7 @@ class Block(nn.Module):
         self.grn = GlobalResponseNorm(4 * dim, channels_last=True, **dd)
         self.pwconv2 = nn.Linear(4 * dim, dim, **dd)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.attention = SpatialAttention(**dd)
+        self.attn = SpatialAttention(**dd)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         shortcut = x
@@ -301,9 +301,9 @@ class Block(nn.Module):
         x = self.pwconv2(x)
         x = x.permute(0, 3, 1, 2)
 
-        attention = self.attention(x)
-        up_attn = F.interpolate(attention, size=x.shape[2:], mode='bilinear', align_corners=True)
-        x = x * up_attn
+        attn = self.attn(x)
+        attn = F.interpolate(attn, size=x.shape[2:], mode='bilinear', align_corners=True)
+        x = x * attn
 
         return shortcut + self.drop_path(x)
 
@@ -371,7 +371,7 @@ class SpatialAttention(nn.Module):
         super().__init__()
         self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
         self.conv = nn.Conv2d(2, 1, kernel_size=7, padding=3, **dd)
-        self.attention = SpatialTransformerBlock(**dd)
+        self.attn = SpatialTransformerBlock(**dd)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x_avg = x.mean(dim=1, keepdim=True)
@@ -379,7 +379,7 @@ class SpatialAttention(nn.Module):
         x = torch.cat([x_avg, x_max], dim=1)
         x = self.avgpool(x)
         x = self.conv(x)
-        x = self.attention(x)
+        x = self.attn(x)
         return x
 
 
@@ -395,6 +395,7 @@ class TransformerBlock(nn.Module):
             downsample: bool = False,
             attn_drop: float = 0.,
             proj_drop: float = 0.,
+            drop_path: float = 0.,
             device=None,
             dtype=None,
     ) -> None:
@@ -423,9 +424,11 @@ class TransformerBlock(nn.Module):
             proj_drop=proj_drop,
             **dd,
         )
+        self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         self.norm2 = nn.LayerNorm(oup, **dd)
         self.mlp = Mlp(oup, hidden_dim, oup, act_layer=nn.GELU, drop=proj_drop, **dd)
+        self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.downsample:
@@ -437,7 +440,7 @@ class TransformerBlock(nn.Module):
             x_t = self.pos_embed(x_t, (H, W))
             x_t = self.attn(x_t)
             x_t = x_t.transpose(1, 2).reshape(B, -1, H, W)
-            x = shortcut + x_t
+            x = shortcut + self.drop_path1(x_t)
         else:
             B, C, H, W = x.shape
             shortcut = x
@@ -446,7 +449,7 @@ class TransformerBlock(nn.Module):
             x_t = self.pos_embed(x_t, (H, W))
             x_t = self.attn(x_t)
             x_t = x_t.transpose(1, 2).reshape(B, -1, H, W)
-            x = shortcut + x_t
+            x = shortcut + self.drop_path1(x_t)
 
         # MLP block
         B, C, H, W = x.shape
@@ -454,7 +457,7 @@ class TransformerBlock(nn.Module):
         x_t = x.flatten(2).transpose(1, 2)
         x_t = self.mlp(self.norm2(x_t))
         x_t = x_t.transpose(1, 2).reshape(B, C, H, W)
-        x = shortcut + x_t
+        x = shortcut + self.drop_path2(x_t)
 
         return x
 
@@ -491,7 +494,11 @@ class CSATv2(nn.Module):
             self,
             num_classes: int = 1000,
             in_chans: int = 3,
+            dims: Tuple[int, ...] = (32, 72, 168, 386),
+            depths: Tuple[int, ...] = (2, 2, 8, 6),
+            transformer_depths: Tuple[int, ...] = (0, 0, 2, 2),
             drop_path_rate: float = 0.0,
+            transformer_drop_path: bool = False,
             global_pool: str = 'avg',
             device=None,
             dtype=None,
@@ -499,61 +506,52 @@ class CSATv2(nn.Module):
     ) -> None:
         dd = dict(device=device, dtype=dtype)
         super().__init__()
+        if in_chans != 3:
+            warnings.warn(
+                f'CSATv2 is designed for 3-channel RGB input. '
+                f'in_chans={in_chans} may not work correctly with the DCT stem.'
+            )
         self.num_classes = num_classes
         self.global_pool = global_pool
         self.grad_checkpointing = False
 
-        dims = [32, 72, 168, 386]
         self.num_features = dims[-1]
         self.head_hidden_size = self.num_features
 
-        self.feature_info = [
-            dict(num_chs=dims[0], reduction=8, module='stem_dct'),
-            dict(num_chs=dims[0], reduction=8, module='stages.0'),
-            dict(num_chs=dims[1], reduction=16, module='stages.1'),
-            dict(num_chs=dims[2], reduction=32, module='stages.2'),
-            dict(num_chs=dims[3], reduction=64, module='stages.3'),
-        ]
+        # Build feature_info dynamically
+        self.feature_info = [dict(num_chs=dims[0], reduction=8, module='stem_dct')]
+        reduction = 8
+        for i, dim in enumerate(dims):
+            if i > 0:
+                reduction *= 2
+            self.feature_info.append(dict(num_chs=dim, reduction=reduction, module=f'stages.{i}'))
 
-        depths = [2, 2, 6, 4]
-        dp_rates = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
+        # Build drop path rates for all blocks (0 for transformer blocks when transformer_drop_path=False)
+        total_blocks = sum(depths) if transformer_drop_path else sum(d - t for d, t in zip(depths, transformer_depths))
+        dp_iter = iter(torch.linspace(0, drop_path_rate, total_blocks).tolist())
+        dp_rates = []
+        for depth, t_depth in zip(depths, transformer_depths):
+            dp_rates += [next(dp_iter) for _ in range(depth - t_depth)]
+            dp_rates += [next(dp_iter) if transformer_drop_path else 0. for _ in range(t_depth)]
 
         self.stem_dct = LearnableDct2d(8, **dd)
 
-        self.stages = nn.Sequential(
-            nn.Sequential(
-                Block(dim=dims[0], drop_path=dp_rates[0], **dd),
-                Block(dim=dims[0], drop_path=dp_rates[1], **dd),
-                LayerNorm2d(dims[0], eps=1e-6, **dd),
-            ),
-            nn.Sequential(
-                nn.Conv2d(dims[0], dims[1], kernel_size=2, stride=2, **dd),
-                Block(dim=dims[1], drop_path=dp_rates[2], **dd),
-                Block(dim=dims[1], drop_path=dp_rates[3], **dd),
-                LayerNorm2d(dims[1], eps=1e-6, **dd),
-            ),
-            nn.Sequential(
-                nn.Conv2d(dims[1], dims[2], kernel_size=2, stride=2, **dd),
-                Block(dim=dims[2], drop_path=dp_rates[4], **dd),
-                Block(dim=dims[2], drop_path=dp_rates[5], **dd),
-                Block(dim=dims[2], drop_path=dp_rates[6], **dd),
-                Block(dim=dims[2], drop_path=dp_rates[7], **dd),
-                Block(dim=dims[2], drop_path=dp_rates[8], **dd),
-                Block(dim=dims[2], drop_path=dp_rates[9], **dd),
-                TransformerBlock(inp=dims[2], oup=dims[2], **dd),
-                TransformerBlock(inp=dims[2], oup=dims[2], **dd),
-                LayerNorm2d(dims[2], eps=1e-6, **dd),
-            ),
-            nn.Sequential(
-                nn.Conv2d(dims[2], dims[3], kernel_size=2, stride=2, **dd),
-                Block(dim=dims[3], drop_path=dp_rates[10], **dd),
-                Block(dim=dims[3], drop_path=dp_rates[11], **dd),
-                Block(dim=dims[3], drop_path=dp_rates[12], **dd),
-                Block(dim=dims[3], drop_path=dp_rates[13], **dd),
-                TransformerBlock(inp=dims[3], oup=dims[3], **dd),
-                TransformerBlock(inp=dims[3], oup=dims[3], **dd),
-            ),
-        )
+        # Build stages dynamically
+        dp_iter = iter(dp_rates)
+        stages = []
+        for i, (dim, depth, t_depth) in enumerate(zip(dims, depths, transformer_depths)):
+            layers = (
+                # Downsample at start of stage (except first stage)
+                ([nn.Conv2d(dims[i - 1], dim, kernel_size=2, stride=2, **dd)] if i > 0 else []) +
+                # Conv blocks
+                [Block(dim=dim, drop_path=next(dp_iter), **dd) for _ in range(depth - t_depth)] +
+                # Transformer blocks at end of stage
+                [TransformerBlock(inp=dim, oup=dim, drop_path=next(dp_iter), **dd) for _ in range(t_depth)] +
+                # Trailing LayerNorm (except last stage)
+                ([LayerNorm2d(dim, eps=1e-6, **dd)] if i < len(depths) - 1 else [])
+            )
+            stages.append(nn.Sequential(*layers))
+        self.stages = nn.Sequential(*stages)
 
         self.head = NormMlpClassifierHead(dims[-1], num_classes, pool_type=global_pool, **dd)
 
@@ -748,20 +746,28 @@ def checkpoint_filter_fn(state_dict: dict, model: nn.Module) -> dict:
         elif '.attn_norm.' in k:
             k = k.replace('.attn_norm.', '.norm1.')
 
-        # SpatialTransformerBlock: flatten .attention.attention.attn. -> .attention.attention.
-        # and remap to_qkv -> qkv
-        if '.attention.attention.attn.' in k:
-            k = k.replace('.attention.attention.attn.to_qkv.', '.attention.attention.qkv.')
-            k = k.replace('.attention.attention.attn.', '.attention.attention.')
+        # Block.attention -> Block.attn (SpatialAttention)
+        # SpatialAttention.attention -> SpatialAttention.attn (SpatialTransformerBlock)
+        # Handle nested .attention.attention. first, then remaining .attention.
+        if '.attention.attention.' in k:
+            # SpatialTransformerBlock inner attn: remap to_qkv -> qkv
+            k = k.replace('.attention.attention.attn.to_qkv.', '.attn.attn.qkv.')
+            k = k.replace('.attention.attention.attn.', '.attn.attn.')
+            k = k.replace('.attention.attention.', '.attn.attn.')
+        elif '.attention.' in k:
+            # Block.attention -> Block.attn (catches SpatialAttention.conv etc)
+            k = k.replace('.attention.', '.attn.')
 
         # TransformerBlock: remap attention layer names
         # to_qkv -> qkv, to_out.0 -> proj, attn.pos_embed -> pos_embed
+        # Note: only for TransformerBlock, not SpatialTransformerBlock (which has .attn.attn.)
         if '.attn.to_qkv.' in k:
             k = k.replace('.attn.to_qkv.', '.attn.qkv.')
         elif '.attn.to_out.0.' in k:
             k = k.replace('.attn.to_out.0.', '.attn.proj.')
 
-        if '.attn.pos_embed.' in k:
+        # TransformerBlock: .attn.pos_embed -> .pos_embed (but not .attn.attn.pos_embed)
+        if '.attn.pos_embed.' in k and '.attn.attn.' not in k:
             k = k.replace('.attn.pos_embed.', '.pos_embed.')
 
         # Remap head -> head.fc, norm -> head.norm (order matters)
