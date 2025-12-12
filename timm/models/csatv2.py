@@ -147,7 +147,7 @@ class Dct1d(nn.Module):
         super().__init__()
         kernel = {'2': _dct_kernel_type_2, '3': _dct_kernel_type_3}
         dct_weights = kernel[f'{kernel_type}'](kernel_size, orthonormal, **dd).T
-        self.register_buffer('weights', dct_weights)
+        self.register_buffer('weights', dct_weights.contiguous())
         self.register_parameter('bias', None)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -705,7 +705,7 @@ def _cfg(url='', **kwargs):
 
 default_cfgs = generate_default_cfgs({
     'csatv2': _cfg(
-        url='https://huggingface.co/Hyunil/CSATv2/resolve/main/CSATv2_ImageNet_timm.pth'
+        hf_hub_id='timm/',
     ),
     'csatv2_21m': _cfg(),
 })
