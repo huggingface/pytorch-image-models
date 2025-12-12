@@ -12,6 +12,17 @@
 
 ## What's New
 
+## Dec 12, 2025
+* Add CSATV2 model (thanks https://github.com/gusdlf93) -- a lightweight but high res model with DCT stem & spatial attention. https://huggingface.co/Hyunil/CSATv2
+* Add AdaMuon and NAdaMuon optimizer support to existing `timm` Muon impl. Appears more competitive vs AdamW with familiar hparams for image tasks.
+* End of year PR cleanup, merge aspects of several long open PR
+  * Merge differential attention (`DiffAttention`), add corresponding `DiffParallelScalingBlock` (for ViT), train some wee vits
+    * https://huggingface.co/timm/vit_dwee_patch16_reg1_gap_256.sbb_in1k
+    * https://huggingface.co/timm/vit_dpwee_patch16_reg1_gap_256.sbb_in1k
+  * Add a few pooling modules, `LsePlus` and `SimPool`
+  * Cleanup, optimize `DropBlock2d` (also add support to ByobNet based models)
+* Bump unit tests to PyTorch 2.9.1 + Python 3.13 on upper end, lower still PyTorch 1.13 + Python 3.10
+  
 ## Dec 1, 2025
 * Add lightweight task abstraction, add logits and feature distillation support to train script via new tasks.
 * Remove old APEX AMP support
