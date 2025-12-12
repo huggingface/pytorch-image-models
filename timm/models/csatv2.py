@@ -211,7 +211,6 @@ class LearnableDct2d(nn.Module):
         dd = dict(device=device, dtype=dtype)
         super().__init__()
         self.k = kernel_size
-        self.unfold = nn.Unfold(kernel_size=(kernel_size, kernel_size), stride=(kernel_size, kernel_size))
         self.transform = Dct2d(kernel_size, kernel_type, orthonormal, **dd)
         self.permutation = _zigzag_permutation(kernel_size, kernel_size)
 
@@ -222,19 +221,21 @@ class LearnableDct2d(nn.Module):
 
         self.register_buffer('mean', torch.tensor(_DCT_MEAN, device=device), persistent=False)
         self.register_buffer('var', torch.tensor(_DCT_VAR, device=device), persistent=False)
-        self.register_buffer('imagenet_mean', torch.tensor([0.485, 0.456, 0.406], device=device), persistent=False)
-        self.register_buffer('imagenet_std', torch.tensor([0.229, 0.224, 0.225], device=device), persistent=False)
+        # Shape (3, 1, 1) for BCHW broadcasting
+        self.register_buffer('imagenet_mean', torch.tensor([0.485, 0.456, 0.406], device=device).view(3, 1, 1), persistent=False)
+        self.register_buffer('imagenet_std', torch.tensor([0.229, 0.224, 0.225], device=device).view(3, 1, 1), persistent=False)
 
     def _denormalize(self, x: torch.Tensor) -> torch.Tensor:
         """Convert from ImageNet normalized to [0, 255] range."""
         return x.mul(self.imagenet_std).add_(self.imagenet_mean) * 255
 
     def _rgb_to_ycbcr(self, x: torch.Tensor) -> torch.Tensor:
-        """Convert RGB to YCbCr color space."""
-        y = (x[:, :, :, 0] * 0.299) + (x[:, :, :, 1] * 0.587) + (x[:, :, :, 2] * 0.114)
-        cb = 0.564 * (x[:, :, :, 2] - y) + 128
-        cr = 0.713 * (x[:, :, :, 0] - y) + 128
-        return torch.stack([y, cb, cr], dim=-1)
+        """Convert RGB to YCbCr color space (BCHW input/output)."""
+        r, g, b = x[:, 0], x[:, 1], x[:, 2]
+        y = r * 0.299 + g * 0.587 + b * 0.114
+        cb = 0.564 * (b - y) + 128
+        cr = 0.713 * (r - y) + 128
+        return torch.stack([y, cb, cr], dim=1)
 
     def _frequency_normalize(self, x: torch.Tensor) -> torch.Tensor:
         """Normalize DCT coefficients using precomputed statistics."""
@@ -243,12 +244,11 @@ class LearnableDct2d(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         b, c, h, w = x.shape
-        x = x.permute(0, 2, 3, 1)
         x = self._denormalize(x)
         x = self._rgb_to_ycbcr(x)
-        x = x.permute(0, 3, 1, 2)
-        x = self.unfold(x).transpose(-1, -2)
-        x = x.reshape(b, h // self.k, w // self.k, c, self.k, self.k)
+        # Extract non-overlapping k x k patches
+        x = x.reshape(b, c, h // self.k, self.k, w // self.k, self.k)  # (B, C, H//k, k, W//k, k)
+        x = x.permute(0, 2, 4, 1, 3, 5)  # (B, H//k, W//k, C, k, k)
         x = self.transform(x)
         x = x.reshape(-1, c, self.k * self.k)
         x = x[:, :, self.permutation]
@@ -275,14 +275,14 @@ class Dct2dStats(nn.Module):
         dd = dict(device=device, dtype=dtype)
         super().__init__()
         self.k = kernel_size
-        self.unfold = nn.Unfold(kernel_size=(kernel_size, kernel_size), stride=(kernel_size, kernel_size))
         self.transform = Dct2d(kernel_size, kernel_type, orthonormal, **dd)
         self.permutation = _zigzag_permutation(kernel_size, kernel_size)
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         b, c, h, w = x.shape
-        x = self.unfold(x).transpose(-1, -2)
-        x = x.reshape(b, h // self.k, w // self.k, c, self.k, self.k)
+        # Extract non-overlapping k x k patches
+        x = x.reshape(b, c, h // self.k, self.k, w // self.k, self.k)  # (B, C, H//k, k, W//k, k)
+        x = x.permute(0, 2, 4, 1, 3, 5)  # (B, H//k, W//k, C, k, k)
         x = self.transform(x)
         x = x.reshape(-1, c, self.k * self.k)
         x = x[:, :, self.permutation]
