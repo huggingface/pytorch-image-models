@@ -6,6 +6,7 @@ Paper: TBD
 """
 import math
 import warnings
+from functools import reduce
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
@@ -172,6 +173,23 @@ class Dct2d(nn.Module):
         return self.transform(self.transform(x).transpose(-1, -2)).transpose(-1, -2)
 
 
+def _split_out_chs(out_chs: int, ratio=(24, 4, 4)):
+    # reduce ratio to smallest integers (24,4,4) -> (6,1,1)
+    g = reduce(math.gcd, ratio)
+    r = tuple(x // g for x in ratio)
+    denom = sum(r)
+
+    assert out_chs % denom == 0 and out_chs >= denom, (
+        f"out_chs={out_chs} can't be split into Y/Cb/Cr with ratio {ratio} "
+        f"(reduced {r}); out_chs must be a multiple of {denom}."
+    )
+
+    unit = out_chs // denom
+    y, cb, cr = (ri * unit for ri in r)
+    assert y + cb + cr == out_chs and min(y, cb, cr) > 0
+    return y, cb, cr
+
+
 class LearnableDct2d(nn.Module):
     """Learnable 2D DCT stem with RGB to YCbCr conversion and frequency selection."""
 
@@ -180,6 +198,7 @@ class LearnableDct2d(nn.Module):
             kernel_size: int,
             kernel_type: int = 2,
             orthonormal: bool = True,
+            out_chs: int = 32,
             device=None,
             dtype=None,
     ) -> None:
@@ -189,9 +208,11 @@ class LearnableDct2d(nn.Module):
         self.unfold = nn.Unfold(kernel_size=(kernel_size, kernel_size), stride=(kernel_size, kernel_size))
         self.transform = Dct2d(kernel_size, kernel_type, orthonormal, **dd)
         self.permutation = _zigzag_permutation(kernel_size, kernel_size)
-        self.conv_y = nn.Conv2d(kernel_size ** 2, 24, kernel_size=1, padding=0, **dd)
-        self.conv_cb = nn.Conv2d(kernel_size ** 2, 4, kernel_size=1, padding=0, **dd)
-        self.conv_cr = nn.Conv2d(kernel_size ** 2, 4, kernel_size=1, padding=0, **dd)
+
+        y_ch, cb_ch, cr_ch = _split_out_chs(out_chs, ratio=(24, 4, 4))
+        self.conv_y  = nn.Conv2d(kernel_size ** 2, y_ch,  kernel_size=1, padding=0, **dd)
+        self.conv_cb = nn.Conv2d(kernel_size ** 2, cb_ch, kernel_size=1, padding=0, **dd)
+        self.conv_cr = nn.Conv2d(kernel_size ** 2, cr_ch, kernel_size=1, padding=0, **dd)
 
         self.register_buffer('mean', torch.tensor(_DCT_MEAN, device=device), persistent=False)
         self.register_buffer('var', torch.tensor(_DCT_VAR, device=device), persistent=False)
@@ -534,7 +555,7 @@ class CSATv2(nn.Module):
             dp_rates += [next(dp_iter) for _ in range(depth - t_depth)]
             dp_rates += [next(dp_iter) if transformer_drop_path else 0. for _ in range(t_depth)]
 
-        self.stem_dct = LearnableDct2d(8, **dd)
+        self.stem_dct = LearnableDct2d(8, out_chs=dims[0], **dd)
 
         # Build stages dynamically
         dp_iter = iter(dp_rates)
@@ -671,18 +692,22 @@ class CSATv2(nn.Module):
         return self.forward_head(x)
 
 
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 512, 512),
+        'mean': (0.485, 0.456, 0.406), 'std': (0.229, 0.224, 0.225),
+        'interpolation': 'bilinear', 'crop_pct': 1.0,
+        'classifier': 'head.fc', 'first_conv': [],
+        **kwargs,
+    }
+
+
 default_cfgs = generate_default_cfgs({
-    'csatv2': {
-        'url': 'https://huggingface.co/Hyunil/CSATv2/resolve/main/CSATv2_ImageNet_timm.pth',
-        'num_classes': 1000,
-        'input_size': (3, 512, 512),
-        'mean': (0.485, 0.456, 0.406),
-        'std': (0.229, 0.224, 0.225),
-        'interpolation': 'bilinear',
-        'crop_pct': 1.0,
-        'classifier': 'head.fc',
-        'first_conv': [],
-    },
+    'csatv2': _cfg(
+        url='https://huggingface.co/Hyunil/CSATv2/resolve/main/CSATv2_ImageNet_timm.pth'
+    ),
+    'csatv2_21m': _cfg(),
 })
 
 
@@ -690,93 +715,82 @@ def checkpoint_filter_fn(state_dict: dict, model: nn.Module) -> dict:
     """Remap original CSATv2 checkpoint to timm format.
 
     Handles two key structural changes:
-    1. Stage naming: stages1/2/3/4 -> stages.0/1/2/3
-    2. Downsample position: moved from end of stage N to start of stage N+1
+    1) Stage naming: stages1/2/3/4 -> stages.0/1/2/3
+    2) Downsample position: moved from end of stage N to start of stage N+1
     """
-    if 'stages.0.0.grn.weight' in state_dict:
-        return state_dict  # Already in timm format
+    if "stages.0.0.grn.weight" in state_dict:
+        return state_dict  # already in timm format
 
     import re
 
-    # Downsample indices in original checkpoint (Conv2d at end of each stage)
-    # These move to index 0 of the next stage
-    downsample_idx = {1: 3, 2: 3, 3: 9}  # stage -> downsample index
+    # FIXME this downsample idx is wired to the original 'csatv2' model size
+    downsample_idx = {1: 3, 2: 3, 3: 9}  # original stage -> downsample index
 
-    def remap_stage(m):
-        stage = int(m.group(1))
-        idx = int(m.group(2))
-        rest = m.group(3)
+    dct_re   = re.compile(r"^dct\.")
+    stage_re = re.compile(r"^stages([1-4])\.(\d+)\.(.*)$")
+    head_re  = re.compile(r"^head\.")
+    norm_re  = re.compile(r"^norm\.")
+
+    def remap_stage(m: re.Match) -> str:
+        stage, idx, rest = int(m.group(1)), int(m.group(2)), m.group(3)
         if stage in downsample_idx and idx == downsample_idx[stage]:
-            # Downsample moves to start of next stage
-            return f'stages.{stage}.0.{rest}'
-        elif stage == 1:
-            # Stage 1 -> stages.0, indices unchanged
-            return f'stages.0.{idx}.{rest}'
-        else:
-            # Stages 2-4 -> stages.1-3, indices shift +1 (after downsample)
-            return f'stages.{stage - 1}.{idx + 1}.{rest}'
+            return f"stages.{stage}.0.{rest}"                 # move downsample to next stage @0
+        if stage == 1:
+            return f"stages.0.{idx}.{rest}"                  # stage1 -> stages.0
+        return f"stages.{stage - 1}.{idx + 1}.{rest}"        # stage2-4 -> stages.1-3, shift +1
 
-    out_dict = {}
+    out = {}
     for k, v in state_dict.items():
-        # Remap dct -> stem_dct, and Y_Conv/Cb_Conv/Cr_Conv -> conv_y/conv_cb/conv_cr
-        k = re.sub(r'^dct\.', 'stem_dct.', k)
-        k = k.replace('.Y_Conv.', '.conv_y.')
-        k = k.replace('.Cb_Conv.', '.conv_cb.')
-        k = k.replace('.Cr_Conv.', '.conv_cr.')
+        # dct -> stem_dct, and Y/Cb/Cr conv names
+        k = dct_re.sub("stem_dct.", k)
+        k = (k.replace(".Y_Conv.",  ".conv_y.")
+               .replace(".Cb_Conv.", ".conv_cb.")
+               .replace(".Cr_Conv.", ".conv_cr."))
 
-        # Remap stage names with index adjustments for downsample relocation
-        k = re.sub(r'^stages([1-4])\.(\d+)\.(.*)$', remap_stage, k)
+        # stage remap + downsample relocation
+        k = stage_re.sub(remap_stage, k)
 
-        # Remap GRN: gamma/beta -> weight/bias with reshape
-        if 'grn.gamma' in k:
-            k = k.replace('grn.gamma', 'grn.weight')
-            v = v.reshape(-1)
-        elif 'grn.beta' in k:
-            k = k.replace('grn.beta', 'grn.bias')
-            v = v.reshape(-1)
+        # GRN: gamma/beta -> weight/bias (reshape)
+        if "grn.gamma" in k:
+            k, v = k.replace("grn.gamma", "grn.weight"), v.reshape(-1)
+        elif "grn.beta" in k:
+            k, v = k.replace("grn.beta", "grn.bias"), v.reshape(-1)
 
-        # Remap FeedForward (nn.Sequential) to Mlp: net.0 -> fc1, net.3 -> fc2
-        # Also rename ff -> mlp, ff_norm -> norm2, attn_norm -> norm1
-        if '.ff.net.0.' in k:
-            k = k.replace('.ff.net.0.', '.mlp.fc1.')
-        elif '.ff.net.3.' in k:
-            k = k.replace('.ff.net.3.', '.mlp.fc2.')
-        elif '.ff_norm.' in k:
-            k = k.replace('.ff_norm.', '.norm2.')
-        elif '.attn_norm.' in k:
-            k = k.replace('.attn_norm.', '.norm1.')
+        # FeedForward(nn.Sequential) -> Mlp + norm renames
+        if ".ff.net.0." in k:
+            k = k.replace(".ff.net.0.", ".mlp.fc1.")
+        elif ".ff.net.3." in k:
+            k = k.replace(".ff.net.3.", ".mlp.fc2.")
+        elif ".ff_norm." in k:
+            k = k.replace(".ff_norm.", ".norm2.")
+        elif ".attn_norm." in k:
+            k = k.replace(".attn_norm.", ".norm1.")
 
-        # Block.attention -> Block.attn (SpatialAttention)
-        # SpatialAttention.attention -> SpatialAttention.attn (SpatialTransformerBlock)
-        # Handle nested .attention.attention. first, then remaining .attention.
-        if '.attention.attention.' in k:
-            # SpatialTransformerBlock inner attn: remap to_qkv -> qkv
-            k = k.replace('.attention.attention.attn.to_qkv.', '.attn.attn.qkv.')
-            k = k.replace('.attention.attention.attn.', '.attn.attn.')
-            k = k.replace('.attention.attention.', '.attn.attn.')
-        elif '.attention.' in k:
-            # Block.attention -> Block.attn (catches SpatialAttention.conv etc)
-            k = k.replace('.attention.', '.attn.')
+        # attention -> attn (handle nested first)
+        if ".attention.attention." in k:
+            k = (k.replace(".attention.attention.attn.to_qkv.", ".attn.attn.qkv.")
+                   .replace(".attention.attention.attn.",        ".attn.attn.")
+                   .replace(".attention.attention.",             ".attn.attn."))
+        elif ".attention." in k:
+            k = k.replace(".attention.", ".attn.")
 
-        # TransformerBlock: remap attention layer names
-        # to_qkv -> qkv, to_out.0 -> proj, attn.pos_embed -> pos_embed
-        # Note: only for TransformerBlock, not SpatialTransformerBlock (which has .attn.attn.)
-        if '.attn.to_qkv.' in k:
-            k = k.replace('.attn.to_qkv.', '.attn.qkv.')
-        elif '.attn.to_out.0.' in k:
-            k = k.replace('.attn.to_out.0.', '.attn.proj.')
+        # TransformerBlock attention name remaps
+        if ".attn.to_qkv." in k:
+            k = k.replace(".attn.to_qkv.", ".attn.qkv.")
+        elif ".attn.to_out.0." in k:
+            k = k.replace(".attn.to_out.0.", ".attn.proj.")
 
-        # TransformerBlock: .attn.pos_embed -> .pos_embed (but not .attn.attn.pos_embed)
-        if '.attn.pos_embed.' in k and '.attn.attn.' not in k:
-            k = k.replace('.attn.pos_embed.', '.pos_embed.')
+        # .attn.pos_embed -> .pos_embed (but not SpatialTransformerBlock's .attn.attn.pos_embed)
+        if ".attn.pos_embed." in k and ".attn.attn." not in k:
+            k = k.replace(".attn.pos_embed.", ".pos_embed.")
 
-        # Remap head -> head.fc, norm -> head.norm (order matters)
-        k = re.sub(r'^head\.', 'head.fc.', k)
-        k = re.sub(r'^norm\.', 'head.norm.', k)
+        # head -> head.fc, norm -> head.norm (order matters)
+        k = head_re.sub("head.fc.", k)
+        k = norm_re.sub("head.norm.", k)
 
-        out_dict[k] = v
+        out[k] = v
 
-    return out_dict
+    return out
 
 
 def _create_csatv2(variant: str, pretrained: bool = False, **kwargs) -> CSATv2:
@@ -795,3 +809,15 @@ def _create_csatv2(variant: str, pretrained: bool = False, **kwargs) -> CSATv2:
 @register_model
 def csatv2(pretrained: bool = False, **kwargs) -> CSATv2:
     return _create_csatv2('csatv2', pretrained, **kwargs)
+
+
+@register_model
+def csatv2_21m(pretrained: bool = False, **kwargs) -> CSATv2:
+    # experimental ~20-21M param larger model to validate flexible arch spec
+    model_args = dict(
+        dims = (48, 96, 224, 448),
+        depths = (3, 3, 10, 8),
+        transformer_depths = (0, 0, 4, 3)
+
+    )
+    return _create_csatv2('csatv2_21m', pretrained, **dict(model_args, **kwargs))
