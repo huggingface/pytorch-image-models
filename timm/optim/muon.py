@@ -602,6 +602,7 @@ def _single_tensor_adamuon(
         # RMS-aligned rescaling: normalize by update norm, then scale by shape factor
         # Used by AdaMuon paper approach (match_rms_adamw), not by μP approach (rms_to_rms)
         if use_rms_norm:
+            # eq(8) in AdaMuon paper, 0.2 / RMS(update) = 0.2 * sqrt(ndim) / frob(update)
             update_norm = update_adaptive.norm().add_(eps)
             update_adaptive = update_adaptive / update_norm
 

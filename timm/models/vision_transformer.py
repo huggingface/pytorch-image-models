@@ -2703,10 +2703,16 @@ default_cfgs = {
     'vit_wee_patch16_reg1_gap_256.sbb_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_dwee_patch16_reg1_gap_256.sbb_nadamuon_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), crop_pct=0.95),
     'vit_dwee_patch16_reg1_gap_256.sbb_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_pwee_patch16_reg1_gap_256.sbb_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_dpwee_patch16_reg1_gap_256.sbb_nadamuon_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_dpwee_patch16_reg1_gap_256.sbb_in1k': _cfg(
