@@ -20,7 +20,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import SqueezeExcite, trunc_normal_, to_ntuple, to_2tuple
+from timm.layers import SqueezeExcite, SelectAdaptivePool2d, trunc_normal_, to_ntuple, to_2tuple
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint, checkpoint_seq
@@ -388,7 +388,6 @@ class RepVit(nn.Module):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
         self.grad_checkpointing = False
-        self.global_pool = global_pool
         self.embed_dim = embed_dim
         self.num_classes = num_classes
 
@@ -425,6 +424,7 @@ class RepVit(nn.Module):
         self.stages = nn.Sequential(*stages)
 
         self.num_features = self.head_hidden_size = embed_dim[-1]
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
         self.head_drop = nn.Dropout(drop_rate)
         self.head = RepVitClassifier(embed_dim[-1], num_classes, distillation, **dd)
 
@@ -443,8 +443,7 @@ class RepVit(nn.Module):
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, distillation: bool = False, device=None, dtype=None):
         self.num_classes = num_classes
-        if global_pool is not None:
-            self.global_pool = global_pool
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
         dd = {'device': device, 'dtype': dtype}
         self.head = RepVitClassifier(self.embed_dim[-1], num_classes, distillation, **dd)
 
@@ -520,8 +519,7 @@ class RepVit(nn.Module):
         return x
 
     def forward_head(self, x, pre_logits: bool = False):
-        if self.global_pool == 'avg':
-            x = x.mean((2, 3), keepdim=False)
+        x = self.global_pool(x)
         x = self.head_drop(x)
         if pre_logits:
             return x

@@ -30,6 +30,7 @@ from timm.layers import (
     ConvNormAct,
     LayerScale2d,
     DropPath,
+    SelectAdaptivePool2d,
     calculate_drop_path_rates,
     trunc_normal_,
     to_2tuple,
@@ -611,7 +612,6 @@ class EfficientFormerV2(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         assert global_pool in ('avg', '')
         self.num_classes = num_classes
-        self.global_pool = global_pool
         self.feature_info = []
         img_size = to_2tuple(img_size)
         norm_layer = partial(get_norm_layer(norm_layer), eps=norm_eps)
@@ -655,6 +655,7 @@ class EfficientFormerV2(nn.Module):
 
         # Classifier head
         self.num_features = self.head_hidden_size = embed_dims[-1]
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
         self.norm = norm_layer(embed_dims[-1], **dd)
         self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(embed_dims[-1], num_classes, **dd) if num_classes > 0 else nn.Identity()
@@ -697,8 +698,7 @@ class EfficientFormerV2(nn.Module):
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
-        if global_pool is not None:
-            self.global_pool = global_pool
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
         self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
         self.head_dist = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
@@ -780,8 +780,7 @@ class EfficientFormerV2(nn.Module):
         return x
 
     def forward_head(self, x, pre_logits: bool = False):
-        if self.global_pool == 'avg':
-            x = x.mean(dim=(2, 3))
+        x = self.global_pool(x)
         x = self.head_drop(x)
         if pre_logits:
             return x

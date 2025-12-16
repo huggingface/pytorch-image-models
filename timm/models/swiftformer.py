@@ -18,7 +18,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, Linear, LayerType, to_2tuple, trunc_normal_
+from timm.layers import DropPath, Linear, LayerType, SelectAdaptivePool2d, to_2tuple, trunc_normal_
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
@@ -368,7 +368,6 @@ class SwiftFormer(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         assert output_stride == 32
         self.num_classes = num_classes
-        self.global_pool = global_pool
         self.feature_info = []
 
         self.stem = nn.Sequential(
@@ -411,6 +410,7 @@ class SwiftFormer(nn.Module):
 
         # Classifier head
         self.num_features  = self.head_hidden_size = out_chs = embed_dims[-1]
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
         self.norm = nn.BatchNorm2d(out_chs, **dd)
         self.head_drop = nn.Dropout(drop_rate)
         self.head = Linear(out_chs, num_classes, **dd) if num_classes > 0 else nn.Identity()
@@ -457,8 +457,7 @@ class SwiftFormer(nn.Module):
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
-        if global_pool is not None:
-            self.global_pool = global_pool
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
         device, dtype = self.head.weight.device, self.head.weight.dtype if hasattr(self.head, 'weight') else (None, None)
         self.head = Linear(self.num_features, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
         self.head_dist = Linear(self.num_features, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
@@ -540,8 +539,7 @@ class SwiftFormer(nn.Module):
         return x
 
     def forward_head(self, x: torch.Tensor, pre_logits: bool = False):
-        if self.global_pool == 'avg':
-            x = x.mean(dim=(2, 3))
+        x = self.global_pool(x)
         x = self.head_drop(x)
         if pre_logits:
             return x
