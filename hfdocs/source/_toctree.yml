@@ -11,8 +11,10 @@
 - sections:
   - local: feature_extraction
     title: Using Pretrained Models as Feature Extractors
+  - local: hparams
+    title: Hyper-Parameters (HParams)
   - local: training_script
-    title: Training With The Official Training Script
+    title: Using The Official Training Script
   - local: hf_hub
     title: Share and Load Models from the 🤗 Hugging Face Hub
   title: Tutorials
