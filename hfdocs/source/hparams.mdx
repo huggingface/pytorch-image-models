@@ -1,0 +1,33 @@
+# HParams
+Over the years, many `timm` models have been trained with various hyper-parameters as the libraries and models evolved. I don't have a record of every instance, but have recorded instances of many that can serve as a very good starting point.
+
+## Tags
+Most `timm` trained models have an identifier in their pretrained tag that relates them (roughly) to a family / version of hparams I've used over the years.
+
+| Tag(s) | Description | Optimizer | LR Schedule | Other Notes |
+|--------|-------------|-----------|-------------|-------------|
+| `a1h` | Based on [ResNet Strikes Back](https://arxiv.org/abs/2110.00476) `A1` recipe | LAMB | Cosine with warmup | Stronger dropout, stochastic depth, and RandAugment than paper `A1` recipe |
+| `ah` | Based on [ResNet Strikes Back](https://arxiv.org/abs/2110.00476) `A1` recipe | LAMB | Cosine with warmup | No CutMix. Stronger dropout, stochastic depth, and RandAugment than paper `A1` recipe |
+| `a1`, `a2`, `a3` | ResNet Strikes Back `A{1,2,3}` recipe | LAMB with BCE loss | Cosine with warmup | — |
+| `b1`, `b2`, `b1k`, `b2k` | Based on [ResNet Strikes Back](https://arxiv.org/abs/2110.00476) `B` recipe (equivalent to `timm` `RA2` recipes) | RMSProp (TF 1.0 behaviour) | Step (exponential decay w/ staircase) with warmup | — |
+| `c`, `c1`, `c2`, `c3` | Based on [ResNet Strikes Back](https://arxiv.org/abs/2110.00476) `C` recipes | SGD (Nesterov) with AGC | Cosine with warmup | — |
+| `ch` | Based on [ResNet Strikes Back](https://arxiv.org/abs/2110.00476) `C` recipes | SGD (Nesterov) with AGC | Cosine with warmup | Stronger dropout, stochastic depth, and RandAugment than paper `C1`/`C2` recipes |
+| `d`, `d1`, `d2` | Based on [ResNet Strikes Back](https://arxiv.org/abs/2110.00476) `D` recipe | AdamW with BCE loss | Cosine with warmup | — |
+| `sw` | Based on Swin Transformer train/pretrain recipe (basis of DeiT and ConvNeXt recipes) | AdamW with gradient clipping, EMA | Cosine with warmup | — |
+| `ra`, `ra2`, `ra3`, `racm`, `raa` | RandAugment recipes. Inspired by EfficientNet RandAugment recipes. Covered by `B` recipe in [ResNet Strikes Back](https://arxiv.org/abs/2110.00476). | RMSProp (TF 1.0 behaviour), EMA | Step (exponential decay w/ staircase) with warmup | — |
+| `ra4` | RandAugment v4. Inspired by MobileNetV4 hparams. | - |
+| `am` | AugMix recipe | SGD (Nesterov) with JSD loss | Cosine with warmup | — |
+| `ram` | AugMix (with RandAugment) recipe | SGD (Nesterov) with JSD loss | Cosine with warmup | — |
+| `bt` | Bag-of-Tricks recipe | SGD (Nesterov) | Cosine with warmup | — |
+
+## Config File Gists
+I've collected several of the hparam families in a series of gists. These can be downloaded and used with the `--config hparam.yaml` argument with the `timm` train script. Some adjustment is always required for the LR vs effective global batch size.
+
+| Tag | Key Model Architectures | Gist Link |
+|-----|------------------------|-----------|
+| `ra2` | ResNet, EfficientNet, RegNet, NFNet | [Link](https://gist.github.com/rwightman/07839a82d0f50e42840168bc43df70b3) |
+| `ra3` | RegNet | [Link](https://gist.github.com/rwightman/37252f8d7d850a94e43f1fcb7b3b8322) |
+| `ra4` | MobileNetV4 | [Link](https://gist.github.com/rwightman/f6705cb65c03daeebca8aa129b1b94ad) |
+| `sw` | ViT, ConvNeXt, CoAtNet, MaxViT | [Link](https://gist.github.com/rwightman/943c0fe59293b44024bbd2d5d23e6303) |
+| `sbb` | ViT | [Link](https://gist.github.com/rwightman/fb37c339efd2334177ff99a8083ebbc4) |
+| — | Tiny Test Models | [Link](https://gist.github.com/rwightman/9ba8efc39a546426e99055720d2f705f) |
