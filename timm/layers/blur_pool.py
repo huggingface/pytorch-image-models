@@ -46,22 +46,24 @@ class BlurPool2d(nn.Module):
         self.stride = stride
         self.pad_mode = pad_mode
         self.padding = [get_padding(filt_size, stride, dilation=1)] * 4
-
-        # (0.5 + 0.5 x)^N => coefficients = C(N,k) / 2^N,  k = 0..N
-        coeffs = torch.tensor(
-            [comb(filt_size - 1, k) for k in range(filt_size)],
-            device='cpu',
-            dtype=torch.float32,
-        ) / (2 ** (filt_size - 1))  # normalise so coefficients sum to 1
-        blur_filter = (coeffs[:, None] * coeffs[None, :])[None, None, :, :]
-        if channels is not None:
-            blur_filter = blur_filter.repeat(self.channels, 1, 1, 1)
-
         self.register_buffer(
             'filt',
-            blur_filter.to(device=device, dtype=dtype),
+            self._create_blur_filter(device=device, dtype=dtype),
             persistent=False,
         )
+
+    def _create_blur_filter(self, device=None, dtype=None) -> torch.Tensor:
+        """Create the blur filter tensor."""
+        # (0.5 + 0.5 x)^N => coefficients = C(N,k) / 2^N,  k = 0..N
+        coeffs = torch.tensor(
+            [comb(self.filt_size - 1, k) for k in range(self.filt_size)],
+            device='cpu',
+            dtype=torch.float32,
+        ) / (2 ** (self.filt_size - 1))  # normalise so coefficients sum to 1
+        blur_filter = (coeffs[:, None] * coeffs[None, :])[None, None, :, :]
+        if self.channels is not None:
+            blur_filter = blur_filter.repeat(self.channels, 1, 1, 1)
+        return blur_filter.to(device=device, dtype=dtype)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = F.pad(x, self.padding, mode=self.pad_mode)
@@ -72,6 +74,14 @@ class BlurPool2d(nn.Module):
             channels = self.channels
             weight = self.filt
         return F.conv2d(x, weight, stride=self.stride, groups=channels)
+
+    def init_non_persistent_buffers(
+            self,
+            device: torch.device,
+            dtype: torch.dtype,
+    ) -> None:
+        """Initialize non-persistent buffers."""
+        self.register_buffer('filt', self._create_blur_filter(device=device, dtype=dtype), persistent=False)
 
 
 def _normalize_aa_layer(aa_layer: LayerType) -> Callable[..., nn.Module]:

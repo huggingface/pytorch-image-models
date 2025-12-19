@@ -246,6 +246,19 @@ class Attention(nn.Module):
         x = self.proj_drop(x)
         return x
 
+    def init_non_persistent_buffers(
+            self,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+    ) -> None:
+        """Initialize non-persistent buffers."""
+        device = device or self.proj.weight.device
+        dtype = dtype or self.proj.weight.dtype
+        if self.k_bias is not None:
+            self.register_buffer('k_bias', torch.zeros(self.k_bias.shape, device=device, dtype=dtype), persistent=False)
+        if self.relative_position_index is not None:
+            self.register_buffer('relative_position_index', gen_relative_position_index(self.window_size, device=device), persistent=False)
+
 
 class Block(nn.Module):
     """Transformer block with attention and MLP.

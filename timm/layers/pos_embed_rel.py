@@ -311,6 +311,20 @@ class RelPosBias(nn.Module):
     def forward(self, attn, shared_rel_pos: Optional[torch.Tensor] = None):
         return attn + self.get_bias()
 
+    def init_non_persistent_buffers(
+            self,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+    ) -> None:
+        """Initialize non-persistent buffers."""
+        device = device or self.relative_position_bias_table.device
+        prefix_tokens = 1 if self.bias_shape[0] > self.window_area else 0
+        self.register_buffer(
+            'relative_position_index',
+            gen_relative_position_index(self.window_size, class_token=prefix_tokens > 0, device=device).view(-1),
+            persistent=False,
+        )
+
 
 def gen_relative_log_coords(
         win_size: Tuple[int, int],
@@ -367,6 +381,8 @@ class RelPosMlp(nn.Module):
         self.prefix_tokens = prefix_tokens
         self.num_heads = num_heads
         self.bias_shape = (self.window_area,) * 2 + (num_heads,)
+        self.mode = mode
+        self.pretrained_window_size = pretrained_window_size
         if mode == 'swin':
             self.bias_act = nn.Sigmoid()
             self.bias_gain = 16
@@ -414,6 +430,25 @@ class RelPosMlp(nn.Module):
 
     def forward(self, attn, shared_rel_pos: Optional[torch.Tensor] = None):
         return attn + self.get_bias()
+
+    def init_non_persistent_buffers(
+            self,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+    ) -> None:
+        """Initialize non-persistent buffers."""
+        device = device or self.mlp.fc1.weight.device
+        dtype = dtype or self.mlp.fc1.weight.dtype
+        self.register_buffer(
+            'relative_position_index',
+            gen_relative_position_index(self.window_size, device=device).view(-1),
+            persistent=False,
+        )
+        self.register_buffer(
+            'rel_coords_log',
+            gen_relative_log_coords(self.window_size, self.pretrained_window_size, mode=self.mode, device=device, dtype=dtype),
+            persistent=False,
+        )
 
 
 def generate_lookup_tensor(
@@ -519,3 +554,14 @@ class RelPosBiasTf(nn.Module):
 
     def forward(self, attn, shared_rel_pos: Optional[torch.Tensor] = None):
         return attn + self.get_bias()
+
+    def init_non_persistent_buffers(
+            self,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+    ) -> None:
+        """Initialize non-persistent buffers."""
+        device = device or self.relative_position_bias_table.device
+        dtype = dtype or self.relative_position_bias_table.dtype
+        self.register_buffer('height_lookup', generate_lookup_tensor(self.window_size[0], device=device, dtype=dtype), persistent=False)
+        self.register_buffer('width_lookup', generate_lookup_tensor(self.window_size[1], device=device, dtype=dtype), persistent=False)

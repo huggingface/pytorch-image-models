@@ -5,6 +5,17 @@ from torch import nn
 from torch.nn.init import _calculate_fan_in_and_fan_out
 
 
+def is_meta_device(device) -> bool:
+    """Check if targeting meta device (explicit arg or context manager)."""
+    if device is not None:
+        return str(device) == 'meta'
+    # Check context manager (PyTorch 2.0+)
+    if hasattr(torch, 'get_default_device'):
+        default_device = torch.get_default_device()
+        return default_device is not None and default_device.type == 'meta'
+    return False
+
+
 def _trunc_normal_(tensor, mean, std, a, b):
     # Cut & paste from PyTorch official master until it's in a few official releases - RW
     # Method based on https://people.sc.fsu.edu/~jburkardt/presentations/truncated_normal.pdf

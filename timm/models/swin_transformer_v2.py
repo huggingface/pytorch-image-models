@@ -138,10 +138,24 @@ class WindowAttention(nn.Module):
         self.proj_drop = nn.Dropout(proj_drop)
         self.softmax = nn.Softmax(dim=-1)
 
-        self._make_pair_wise_relative_positions(**dd)
+        # Initialize non-persistent buffers (skip computation on meta device)
+        relative_coords_table = None
+        relative_position_index = None
+        if device is None or str(device) != 'meta':
+            relative_coords_table, relative_position_index = self._make_pair_wise_relative_positions(**dd)
+        self.register_buffer("relative_coords_table", relative_coords_table, persistent=False)
+        self.register_buffer("relative_position_index", relative_position_index, persistent=False)
 
-    def _make_pair_wise_relative_positions(self, device=None, dtype=None) -> None:
-        """Create pair-wise relative position index and coordinates table."""
+    def _make_pair_wise_relative_positions(
+            self,
+            device=None,
+            dtype=None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Compute pair-wise relative position index and coordinates table.
+
+        Returns:
+            Tuple of (relative_coords_table, relative_position_index)
+        """
         # get relative_coords_table
         relative_coords_h = torch.arange(
             -(self.window_size[0] - 1), self.window_size[0], device=device, dtype=torch.float32)
@@ -158,7 +172,7 @@ class WindowAttention(nn.Module):
         relative_coords_table *= 8  # normalize to -8, 8
         relative_coords_table = torch.sign(relative_coords_table) * torch.log2(
             torch.abs(relative_coords_table) + 1.0) / math.log2(8)
-        self.register_buffer("relative_coords_table", relative_coords_table.to(dtype=dtype), persistent=False)
+        relative_coords_table = relative_coords_table.to(dtype=dtype)
 
         # get pair-wise relative position index for each token inside the window
         coords_h = torch.arange(self.window_size[0], device=device, dtype=torch.long)
@@ -171,7 +185,8 @@ class WindowAttention(nn.Module):
         relative_coords[:, :, 1] += self.window_size[1] - 1
         relative_coords[:, :, 0] *= 2 * self.window_size[1] - 1
         relative_position_index = relative_coords.sum(-1)  # Wh*Ww, Wh*Ww
-        self.register_buffer("relative_position_index", relative_position_index, persistent=False)
+
+        return relative_coords_table, relative_position_index
 
     def set_window_size(self, window_size: Tuple[int, int]) -> None:
         """Update window size and regenerate relative position tables.
@@ -185,7 +200,29 @@ class WindowAttention(nn.Module):
             device = self.relative_coords_table.device
             dtype = self.relative_coords_table.dtype
             self.window_size = window_size
+            relative_coords_table, relative_position_index = \
+                self._make_pair_wise_relative_positions(device=device, dtype=dtype)
+            self.register_buffer("relative_coords_table", relative_coords_table, persistent=False)
+            self.register_buffer("relative_position_index", relative_position_index, persistent=False)
+
+    def init_non_persistent_buffers(
+            self,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+    ) -> None:
+        """Initialize non-persistent buffers."""
+        device = device or self.logit_scale.device
+        dtype = dtype or self.logit_scale.dtype
+
+        # Reinit relative position buffers
+        relative_coords_table, relative_position_index = \
             self._make_pair_wise_relative_positions(device=device, dtype=dtype)
+        self.register_buffer("relative_coords_table", relative_coords_table, persistent=False)
+        self.register_buffer("relative_position_index", relative_position_index, persistent=False)
+
+        # Reinit k_bias (constant zeros buffer)
+        if self.k_bias is not None:
+            self.register_buffer('k_bias', torch.zeros(self.dim, device=device, dtype=dtype), persistent=False)
 
     def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """Forward pass of window attention.

@@ -234,6 +234,16 @@ class WindowAttention(nn.Module):
         x = self.proj_drop(x)
         return x
 
+    def init_non_persistent_buffers(
+            self,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+    ) -> None:
+        """Initialize non-persistent buffers."""
+        device = device or self.proj.weight.device
+        win_h, win_w = self.window_size
+        self.register_buffer('relative_position_index', get_relative_position_index(win_h, win_w, device=device), persistent=False)
+
 
 class SwinTransformerBlock(nn.Module):
     """Swin Transformer Block.
@@ -459,6 +469,22 @@ class SwinTransformerBlock(nn.Module):
         x = x + self.drop_path2(self.mlp(self.norm2(x)))
         x = x.reshape(B, H, W, C)
         return x
+
+    def init_non_persistent_buffers(
+            self,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+    ) -> None:
+        """Initialize non-persistent buffers."""
+        device = device or self.norm1.weight.device
+        dtype = dtype or self.norm1.weight.dtype
+        # Reinitialize attn_mask if not using dynamic mask
+        if not self.dynamic_mask and self.attn_mask is not None:
+            new_mask = self.get_attn_mask(device=device, dtype=dtype)
+            if new_mask is not None:
+                self.register_buffer('attn_mask', new_mask, persistent=False)
+        # Also reinitialize nested WindowAttention buffers
+        self.attn.init_non_persistent_buffers(device=device, dtype=dtype)
 
 
 class PatchMerging(nn.Module):

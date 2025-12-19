@@ -150,6 +150,7 @@ from .test_time_pool import TestTimePoolHead, apply_test_time_pool
 from .trace_utils import _assert, _float_to_int
 from .typing import LayerType, PadType, disable_compiler
 from .weight_init import (
+    is_meta_device,
     trunc_normal_,
     trunc_normal_tf_,
     variance_scaling_,
