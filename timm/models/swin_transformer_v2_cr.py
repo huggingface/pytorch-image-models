@@ -221,6 +221,14 @@ class WindowMultiHeadAttention(nn.Module):
         x = self.proj_drop(x)
         return x
 
+    def init_non_persistent_buffers(
+            self,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+    ) -> None:
+        """Initialize non-persistent buffers."""
+        self._make_pair_wise_relative_positions()
+
 
 class SwinTransformerV2CrBlock(nn.Module):
     r"""This class implements the Swin transformer block.
@@ -444,6 +452,22 @@ class SwinTransformerV2CrBlock(nn.Module):
         x = self.norm3(x)  # main-branch norm enabled for some blocks / stages (every 6 for Huge/Giant)
         x = x.reshape(B, H, W, C)
         return x
+
+    def init_non_persistent_buffers(
+            self,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+    ) -> None:
+        """Initialize non-persistent buffers."""
+        device = device or self.norm1.weight.device
+        dtype = dtype or self.norm1.weight.dtype
+        # Reinitialize attn_mask if not using dynamic mask
+        if not self.dynamic_mask and self.attn_mask is not None:
+            new_mask = self.get_attn_mask(device=device, dtype=dtype)
+            if new_mask is not None:
+                self.register_buffer('attn_mask', new_mask, persistent=False)
+        # Also reinitialize nested WindowMultiHeadAttention buffers
+        self.attn.init_non_persistent_buffers(device=device, dtype=dtype)
 
 
 class PatchMerging(nn.Module):

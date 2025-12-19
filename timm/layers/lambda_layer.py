@@ -156,3 +156,16 @@ class LambdaLayer(nn.Module):
         out = (content_out + position_out).transpose(-1, -2).reshape(B, C, H, W)  # B, C (num_heads * V), H, W
         out = self.pool(out)
         return out
+
+    def init_non_persistent_buffers(
+            self,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+    ) -> None:
+        """Initialize non-persistent buffers."""
+        if self.rel_pos_indices is None:
+            return
+        device = device or self.qkv.weight.device
+        # Compute feat_size from pos_emb shape: rel_size = 2 * feat_size - 1
+        feat_size = ((self.pos_emb.shape[0] + 1) // 2, (self.pos_emb.shape[1] + 1) // 2)
+        self.register_buffer('rel_pos_indices', rel_pos_indices(feat_size, device=device), persistent=False)

@@ -242,6 +242,17 @@ class EvaAttention(nn.Module):
         x = self.proj_drop(x)
         return x
 
+    def init_non_persistent_buffers(
+            self,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+    ) -> None:
+        """Initialize non-persistent buffers."""
+        device = device or self.proj.weight.device
+        dtype = dtype or self.proj.weight.dtype
+        if self.k_bias is not None:
+            self.register_buffer('k_bias', torch.zeros(self.k_bias.shape, device=device, dtype=dtype), persistent=False)
+
 
 class EvaBlock(nn.Module):
 

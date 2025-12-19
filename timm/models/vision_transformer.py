@@ -396,6 +396,17 @@ class ParallelScalingBlock(nn.Module):
         x = x + self.drop_path(self.ls(y))
         return x
 
+    def init_non_persistent_buffers(
+            self,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+    ) -> None:
+        """Initialize non-persistent buffers."""
+        device = device or self.in_proj.weight.device
+        dtype = dtype or self.in_proj.weight.dtype
+        if self.qkv_bias is not None:
+            self.register_buffer('qkv_bias', torch.zeros(self.qkv_bias.shape, device=device, dtype=dtype), persistent=False)
+
 
 class DiffParallelScalingBlock(nn.Module):
     """ Parallel ViT block with Differential Attention (MLP & Attention in parallel).
@@ -560,6 +571,17 @@ class DiffParallelScalingBlock(nn.Module):
         # Add residual w/ drop path & layer scale applied
         x = x + self.drop_path(self.ls(y))
         return x
+
+    def init_non_persistent_buffers(
+            self,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+    ) -> None:
+        """Initialize non-persistent buffers."""
+        device = device or self.in_proj.weight.device
+        dtype = dtype or self.in_proj.weight.dtype
+        if self.qkv_bias is not None:
+            self.register_buffer('qkv_bias', torch.zeros(self.qkv_bias.shape, device=device, dtype=dtype), persistent=False)
 
 
 class ParallelThingsBlock(nn.Module):

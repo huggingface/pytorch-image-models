@@ -299,6 +299,27 @@ class Attention(torch.nn.Module):
         x = self.proj(x)
         return x
 
+    def init_non_persistent_buffers(
+            self,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+    ) -> None:
+        """Initialize non-persistent buffers."""
+        device = device or self.proj.weight.device
+        # Recompute attention_bias_idxs
+        points = list(itertools.product(range(self.resolution[0]), range(self.resolution[1])))
+        N = len(points)
+        attention_offsets = {}
+        idxs = []
+        for p1 in points:
+            for p2 in points:
+                offset = (abs(p1[0] - p2[0]), abs(p1[1] - p2[1]))
+                if offset not in attention_offsets:
+                    attention_offsets[offset] = len(attention_offsets)
+                idxs.append(attention_offsets[offset])
+        self.register_buffer('attention_bias_idxs', torch.tensor(idxs, device=device, dtype=torch.long).view(N, N), persistent=False)
+        self.attention_bias_cache = {}
+
 
 class TinyVitBlock(nn.Module):
     """ TinyViT Block.
