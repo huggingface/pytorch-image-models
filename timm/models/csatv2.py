@@ -12,7 +12,7 @@ Refined for timm by Ross Wightman
 """
 import math
 import warnings
-from functools import reduce
+from functools import partial, reduce
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
@@ -114,10 +114,10 @@ def _dct_kernel_type_2(
     v = x.clone().contiguous().view(-1, kernel_size)
     v = torch.cat([v, v.flip([1])], dim=-1)
     v = torch.fft.fft(v, dim=-1)[:, :kernel_size]
-    try:
-        k = torch.tensor(-1j, **dd) * torch.pi * torch.arange(kernel_size, **dd)[None, :]
-    except AttributeError:
-        k = torch.tensor(-1j, **dd) * math.pi * torch.arange(kernel_size, **dd)[None, :]
+    k = (
+        torch.tensor(-1j, device=device, dtype=torch.complex64) * torch.pi
+        * torch.arange(kernel_size, device=device, dtype=torch.long)[None, :]
+    )
     k = torch.exp(k / (kernel_size * 2))
     v = v * k
     v = v.real
@@ -219,11 +219,30 @@ class LearnableDct2d(nn.Module):
         self.conv_cb = nn.Conv2d(kernel_size ** 2, cb_ch, kernel_size=1, padding=0, **dd)
         self.conv_cr = nn.Conv2d(kernel_size ** 2, cr_ch, kernel_size=1, padding=0, **dd)
 
-        self.register_buffer('mean', torch.tensor(_DCT_MEAN, device=device), persistent=False)
-        self.register_buffer('var', torch.tensor(_DCT_VAR, device=device), persistent=False)
+        # Register empty buffers for DCT normalization statistics
+        self.register_buffer('mean', torch.empty(3, 64, device=device, dtype=dtype), persistent=False)
+        self.register_buffer('var', torch.empty(3, 64, device=device, dtype=dtype), persistent=False)
         # Shape (3, 1, 1) for BCHW broadcasting
-        self.register_buffer('imagenet_mean', torch.tensor([0.485, 0.456, 0.406], device=device).view(3, 1, 1), persistent=False)
-        self.register_buffer('imagenet_std', torch.tensor([0.229, 0.224, 0.225], device=device).view(3, 1, 1), persistent=False)
+        self.register_buffer('imagenet_mean', torch.empty(3, 1, 1, device=device, dtype=dtype), persistent=False)
+        self.register_buffer('imagenet_std', torch.empty(3, 1, 1, device=device, dtype=dtype), persistent=False)
+
+        if not self.mean.is_meta:
+            self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        """Initialize buffers."""
+        self._init_buffers()
+
+    def _init_buffers(self) -> None:
+        """Compute and fill non-persistent buffer values."""
+        self.mean.copy_(torch.tensor(_DCT_MEAN))
+        self.var.copy_(torch.tensor(_DCT_VAR))
+        self.imagenet_mean.copy_(torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1))
+        self.imagenet_std.copy_(torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1))
+
+    def init_non_persistent_buffers(self) -> None:
+        """Initialize non-persistent buffers."""
+        self._init_buffers()
 
     def _denormalize(self, x: torch.Tensor) -> torch.Tensor:
         """Convert from ImageNet normalized to [0, 255] range."""
@@ -582,13 +601,19 @@ class CSATv2(nn.Module):
 
         self.head = NormMlpClassifierHead(dims[-1], num_classes, pool_type=global_pool, **dd)
 
-        self.apply(self._init_weights)
+        if not self.stem_dct.conv_y.weight.is_meta:
+            self.init_weights(needs_reset=False)
 
-    def _init_weights(self, m: nn.Module) -> None:
+    def init_weights(self, needs_reset: bool = True):
+        self.apply(partial(self._init_weights, needs_reset=needs_reset))
+
+    def _init_weights(self, m: nn.Module, needs_reset: bool = True) -> None:
         if isinstance(m, (nn.Conv2d, nn.Linear)):
             trunc_normal_(m.weight, std=0.02)
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
+        elif needs_reset and hasattr(m, 'reset_parameters'):
+            m.reset_parameters()
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:

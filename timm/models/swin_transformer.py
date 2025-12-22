@@ -144,12 +144,12 @@ class WindowAttention(nn.Module):
 
         # define a parameter table of relative position bias, shape: 2*Wh-1 * 2*Ww-1, nH
         self.relative_position_bias_table = nn.Parameter(
-            torch.zeros((2 * win_h - 1) * (2 * win_w - 1), num_heads, **dd))
+            torch.empty((2 * win_h - 1) * (2 * win_w - 1), num_heads, **dd))
 
-        # get pair-wise relative position index for each token inside the window
+        # register empty buffer for relative position index
         self.register_buffer(
             "relative_position_index",
-            get_relative_position_index(win_h, win_w, device=device),
+            torch.empty(win_h * win_w, win_h * win_w, device=device, dtype=torch.long),
             persistent=False,
         )
 
@@ -157,9 +157,22 @@ class WindowAttention(nn.Module):
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(attn_dim, dim, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
-
-        trunc_normal_(self.relative_position_bias_table, std=.02)
         self.softmax = nn.Softmax(dim=-1)
+
+        if not self.proj.weight.is_meta:
+            self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        """Initialize parameters and buffers."""
+        trunc_normal_(self.relative_position_bias_table, std=.02)
+        self._init_buffers()
+
+    def _init_buffers(self) -> None:
+        """Compute and fill non-persistent buffer values."""
+        win_h, win_w = self.window_size
+        self.relative_position_index.copy_(
+            get_relative_position_index(win_h, win_w, device=self.relative_position_index.device)
+        )
 
     def set_window_size(self, window_size: Tuple[int, int]) -> None:
         """Update window size & interpolate position embeddings
@@ -234,15 +247,9 @@ class WindowAttention(nn.Module):
         x = self.proj_drop(x)
         return x
 
-    def init_non_persistent_buffers(
-            self,
-            device: Optional[torch.device] = None,
-            dtype: Optional[torch.dtype] = None,
-    ) -> None:
+    def init_non_persistent_buffers(self) -> None:
         """Initialize non-persistent buffers."""
-        device = device or self.proj.weight.device
-        win_h, win_w = self.window_size
-        self.register_buffer('relative_position_index', get_relative_position_index(win_h, win_w, device=device), persistent=False)
+        self._init_buffers()
 
 
 class SwinTransformerBlock(nn.Module):
@@ -322,11 +329,23 @@ class SwinTransformerBlock(nn.Module):
         )
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-        self.register_buffer(
-            "attn_mask",
-            None if self.dynamic_mask else self.get_attn_mask(**dd),
-            persistent=False,
-        )
+        # Register buffer as None initially, will be computed in reset_parameters if needed
+        self.register_buffer("attn_mask", None, persistent=False)
+
+        if not self.norm1.weight.is_meta:
+            self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        """Initialize parameters and buffers."""
+        self._init_buffers()
+
+    def _init_buffers(self) -> None:
+        """Compute and fill non-persistent buffer values."""
+        if not self.dynamic_mask:
+            device = self.norm1.weight.device
+            dtype = self.norm1.weight.dtype
+            attn_mask = self.get_attn_mask(device=device, dtype=dtype)
+            self.register_buffer("attn_mask", attn_mask, persistent=False)
 
     def get_attn_mask(
             self,
@@ -470,21 +489,9 @@ class SwinTransformerBlock(nn.Module):
         x = x.reshape(B, H, W, C)
         return x
 
-    def init_non_persistent_buffers(
-            self,
-            device: Optional[torch.device] = None,
-            dtype: Optional[torch.dtype] = None,
-    ) -> None:
+    def init_non_persistent_buffers(self) -> None:
         """Initialize non-persistent buffers."""
-        device = device or self.norm1.weight.device
-        dtype = dtype or self.norm1.weight.dtype
-        # Reinitialize attn_mask if not using dynamic mask
-        if not self.dynamic_mask and self.attn_mask is not None:
-            new_mask = self.get_attn_mask(device=device, dtype=dtype)
-            if new_mask is not None:
-                self.register_buffer('attn_mask', new_mask, persistent=False)
-        # Also reinitialize nested WindowAttention buffers
-        self.attn.init_non_persistent_buffers(device=device, dtype=dtype)
+        self._init_buffers()
 
 
 class PatchMerging(nn.Module):
@@ -797,19 +804,24 @@ class SwinTransformer(nn.Module):
             input_fmt=self.output_fmt,
             **dd,
         )
-        if weight_init != 'skip':
-            self.init_weights(weight_init)
+
+        self.weight_init_mode = weight_init
+        if not self.patch_embed.proj.weight.is_meta:
+            self.init_weights(needs_reset=False)
 
     @torch.jit.ignore
-    def init_weights(self, mode: str = '') -> None:
+    def init_weights(self, mode: str = '', needs_reset: bool = True) -> None:
         """Initialize model weights.
 
         Args:
             mode: Weight initialization mode ('jax', 'jax_nlhb', 'moco', or '').
+            needs_reset: If True, call reset_parameters() on modules that have it.
+                Set to False when modules have already self-initialized in __init__.
         """
+        mode = mode or self.weight_init_mode
         assert mode in ('jax', 'jax_nlhb', 'moco', '')
         head_bias = -math.log(self.num_classes) if 'nlhb' in mode else 0.
-        named_apply(get_init_weights_vit(mode, head_bias=head_bias), self)
+        named_apply(get_init_weights_vit(mode, head_bias=head_bias, needs_reset=needs_reset), self)
 
     @torch.jit.ignore
     def no_weight_decay(self) -> Set[str]:

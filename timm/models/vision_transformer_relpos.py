@@ -362,24 +362,37 @@ class VisionTransformerRelPos(nn.Module):
         self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
-        if weight_init != 'skip':
-            self.init_weights(weight_init)
-        if fix_init:
-            self.fix_init_weight()
+        self.weight_init_mode = weight_init
+        self.fix_init = fix_init
+        if not self.patch_embed.proj.weight.is_meta:
+            self.init_weights(needs_reset=False)
 
-    def init_weights(self, mode=''):
-        assert mode in ('jax', 'moco', '')
+    def fix_init_weight(self) -> None:
+        """Apply weight initialization fix (scaling w/ layer index)."""
+        with torch.no_grad():
+            for layer_id, layer in enumerate(self.blocks):
+                scale = math.sqrt(2.0 * (layer_id + 1))
+                layer.attn.proj.weight.div_(scale)
+                layer.mlp.fc2.weight.div_(scale)
+
+    def init_weights(self, mode: str = '', needs_reset: bool = True) -> None:
+        """Initialize model weights.
+
+        Args:
+            mode: Weight initialization mode ('jax', 'jax_nlhb', 'moco', or '').
+            needs_reset: If True, call reset_parameters() on modules (default for after to_empty()).
+                If False, skip reset_parameters() (for __init__ where modules already self-initialized).
+        """
+        mode = mode or self.weight_init_mode
+        assert mode in ('jax', 'jax_nlhb', 'moco', '')
+        head_bias = -math.log(self.num_classes) if 'nlhb' in mode else 0.
         if self.cls_token is not None:
             nn.init.normal_(self.cls_token, std=1e-6)
-        named_apply(get_init_weights_vit(mode), self)
 
-    def fix_init_weight(self):
-        def rescale(param, _layer_id):
-            param.div_(math.sqrt(2.0 * _layer_id))
+        named_apply(get_init_weights_vit(mode, head_bias, needs_reset=needs_reset), self)
 
-        for layer_id, layer in enumerate(self.blocks):
-            rescale(layer.attn.proj.weight.data, layer_id + 1)
-            rescale(layer.mlp.fc2.weight.data, layer_id + 1)
+        if self.fix_init:
+            self.fix_init_weight()
 
     @torch.jit.ignore
     def no_weight_decay(self):

@@ -160,9 +160,9 @@ class EvaAttention(nn.Module):
             self.qkv = nn.Linear(dim, attn_dim * 3, bias=False, **dd)
             self.q_proj = self.k_proj = self.v_proj = None
             if qkv_bias:
-                self.q_bias = nn.Parameter(torch.zeros(attn_dim, **dd))
-                self.register_buffer('k_bias', torch.zeros(attn_dim, **dd), persistent=False)
-                self.v_bias = nn.Parameter(torch.zeros(attn_dim, **dd))
+                self.q_bias = nn.Parameter(torch.empty(attn_dim, **dd))
+                self.register_buffer('k_bias', torch.empty(attn_dim, **dd), persistent=False)
+                self.v_bias = nn.Parameter(torch.empty(attn_dim, **dd))
             else:
                 self.q_bias = self.k_bias = self.v_bias = None
         else:
@@ -177,6 +177,21 @@ class EvaAttention(nn.Module):
         self.norm = norm_layer(attn_dim, **dd) if scale_norm else nn.Identity()
         self.proj = nn.Linear(attn_dim, dim, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
+
+        if not self.proj.weight.is_meta:
+            self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        """Initialize parameters and buffers."""
+        if self.q_bias is not None:
+            nn.init.zeros_(self.q_bias)
+            nn.init.zeros_(self.v_bias)
+        self._init_buffers()
+
+    def _init_buffers(self) -> None:
+        """Compute and fill non-persistent buffer values."""
+        if self.k_bias is not None:
+            self.k_bias.zero_()
 
     def forward(
             self,
@@ -242,16 +257,9 @@ class EvaAttention(nn.Module):
         x = self.proj_drop(x)
         return x
 
-    def init_non_persistent_buffers(
-            self,
-            device: Optional[torch.device] = None,
-            dtype: Optional[torch.dtype] = None,
-    ) -> None:
+    def init_non_persistent_buffers(self) -> None:
         """Initialize non-persistent buffers."""
-        device = device or self.proj.weight.device
-        dtype = dtype or self.proj.weight.dtype
-        if self.k_bias is not None:
-            self.register_buffer('k_bias', torch.zeros(self.k_bias.shape, device=device, dtype=dtype), persistent=False)
+        self._init_buffers()
 
 
 class EvaBlock(nn.Module):
@@ -321,7 +329,8 @@ class EvaBlock(nn.Module):
             rotate_half=rotate_half,
             **dd,
         )
-        self.gamma_1 = nn.Parameter(init_values * torch.ones(dim, **dd)) if init_values is not None else None
+        self.init_values = init_values
+        self.gamma_1 = nn.Parameter(torch.empty(dim, **dd)) if init_values is not None else None
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         self.norm2 = norm_layer(dim, **dd)
@@ -357,8 +366,17 @@ class EvaBlock(nn.Module):
                 drop=proj_drop,
                 **dd,
             )
-        self.gamma_2 = nn.Parameter(init_values * torch.ones(dim, **dd)) if init_values is not None else None
+        self.gamma_2 = nn.Parameter(torch.empty(dim, **dd)) if init_values is not None else None
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
+        if not self.norm1.weight.is_meta:
+            self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        """Initialize parameters."""
+        if self.gamma_1 is not None:
+            nn.init.constant_(self.gamma_1, self.init_values)
+            nn.init.constant_(self.gamma_2, self.init_values)
 
     def forward(
             self,
@@ -717,42 +735,49 @@ class Eva(nn.Module):
         self.fc_norm = norm_layer(embed_dim, **dd) if activate_fc_norm else nn.Identity()
         self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head_init_scale = head_init_scale
 
-        self.init_weights(head_init_scale=head_init_scale)
+        if not self.patch_embed.proj.weight.is_meta:
+            self.init_weights(needs_reset=False)
 
-    def init_weights(self, head_init_scale=None):
-        self.apply(self._init_weights)
+    def init_weights(self, needs_reset: bool = True):
+        self.apply(partial(self._init_weights, needs_reset=needs_reset))
         if self.pos_embed is not None:
             trunc_normal_(self.pos_embed, std=.02)
         if self.cls_token is not None:
             trunc_normal_(self.cls_token, std=.02)
         if self.reg_token is not None:
             trunc_normal_(self.reg_token, std=.02)
+
         self.fix_init_weight()
-        if head_init_scale and isinstance(self.head, nn.Linear):
+
+        if self.head_init_scale and isinstance(self.head, nn.Linear):
             trunc_normal_(self.head.weight, std=.02)
-            self.head.weight.data.mul_(head_init_scale)
-            self.head.bias.data.mul_(head_init_scale)
+            with torch.no_grad():
+                self.head.weight.mul_(self.head_init_scale)
+                self.head.bias.mul_(self.head_init_scale)
 
     def fix_init_weight(self) -> None:
         """Fix initialization weights by rescaling based on layer depth."""
-        def rescale(param, layer_id):
-            param.div_(math.sqrt(2.0 * layer_id))
+        with torch.no_grad():
+            for layer_id, layer in enumerate(self.blocks):
+                scale = math.sqrt(2.0 * (layer_id + 1))
+                layer.attn.proj.weight.div_(scale)
+                layer.mlp.fc2.weight.div_(scale)
 
-        for layer_id, layer in enumerate(self.blocks):
-            rescale(layer.attn.proj.weight.data, layer_id + 1)
-            rescale(layer.mlp.fc2.weight.data, layer_id + 1)
-
-    def _init_weights(self, m: nn.Module) -> None:
-        """Initialize weights for Linear layers.
+    def _init_weights(self, m: nn.Module, needs_reset: bool = True) -> None:
+        """Initialize weights for Linear layers and call reset_parameters on modules.
 
         Args:
             m: Module to initialize.
+            needs_reset: Whether to call reset_parameters() on modules.
         """
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=.02)
             if m.bias is not None:
                 nn.init.zeros_(m.bias)
+        elif needs_reset and hasattr(m, 'reset_parameters') and m is not self:
+            m.reset_parameters()
 
     @torch.jit.ignore
     def no_weight_decay(self) -> Set[str]:
