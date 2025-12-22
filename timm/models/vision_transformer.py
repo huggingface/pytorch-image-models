@@ -325,8 +325,9 @@ class ParallelScalingBlock(nn.Module):
             self.register_buffer('qkv_bias', None)
             self.register_parameter('mlp_bias', None)
         else:
-            self.register_buffer('qkv_bias', torch.zeros(3 * dim, **dd), persistent=False)
-            self.mlp_bias = nn.Parameter(torch.zeros(mlp_hidden_dim, **dd))
+            # Register empty buffer with correct shape
+            self.register_buffer('qkv_bias', torch.empty(3 * dim, **dd), persistent=False)
+            self.mlp_bias = nn.Parameter(torch.empty(mlp_hidden_dim, **dd))
 
         self.q_norm = norm_layer(self.head_dim, **dd) if qk_norm else nn.Identity()
         self.k_norm = norm_layer(self.head_dim, **dd) if qk_norm else nn.Identity()
@@ -348,6 +349,20 @@ class ParallelScalingBlock(nn.Module):
 
         self.ls = LayerScale(dim, init_values=init_values, **dd) if init_values is not None else nn.Identity()
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
+        if not self.in_proj.weight.is_meta:
+            self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        """Initialize parameters and buffers."""
+        if self.mlp_bias is not None:
+            nn.init.zeros_(self.mlp_bias)
+        self._init_buffers()
+
+    def _init_buffers(self) -> None:
+        """Compute and fill non-persistent buffer values."""
+        if self.qkv_bias is not None:
+            self.qkv_bias.zero_()
 
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         B, N, C = x.shape
@@ -396,16 +411,9 @@ class ParallelScalingBlock(nn.Module):
         x = x + self.drop_path(self.ls(y))
         return x
 
-    def init_non_persistent_buffers(
-            self,
-            device: Optional[torch.device] = None,
-            dtype: Optional[torch.dtype] = None,
-    ) -> None:
+    def init_non_persistent_buffers(self) -> None:
         """Initialize non-persistent buffers."""
-        device = device or self.in_proj.weight.device
-        dtype = dtype or self.in_proj.weight.dtype
-        if self.qkv_bias is not None:
-            self.register_buffer('qkv_bias', torch.zeros(self.qkv_bias.shape, device=device, dtype=dtype), persistent=False)
+        self._init_buffers()
 
 
 class DiffParallelScalingBlock(nn.Module):
@@ -458,8 +466,9 @@ class DiffParallelScalingBlock(nn.Module):
             self.register_buffer('qkv_bias', None)
             self.register_parameter('mlp_bias', None)
         else:
-            self.register_buffer('qkv_bias', torch.zeros(3 * dim, **dd), persistent=False)
-            self.mlp_bias = nn.Parameter(torch.zeros(mlp_hidden_dim, **dd))
+            # Register empty buffer with correct shape
+            self.register_buffer('qkv_bias', torch.empty(3 * dim, **dd), persistent=False)
+            self.mlp_bias = nn.Parameter(torch.empty(mlp_hidden_dim, **dd))
 
         self.q_norm = norm_layer(self.head_dim, **dd) if qk_norm else nn.Identity()
         self.k_norm = norm_layer(self.head_dim, **dd) if qk_norm else nn.Identity()
@@ -491,12 +500,17 @@ class DiffParallelScalingBlock(nn.Module):
 
         self.lambda_init = 0.8
         self.set_lambda_init(depth)
-        self.reset_parameters()
+
+        if not self.in_proj.weight.is_meta:
+            self.reset_parameters()
 
     def set_lambda_init(self, depth: int):
         self.lambda_init = 0.8 - 0.6 * math.exp(-0.3 * depth)
 
-    def reset_parameters(self):
+    def reset_parameters(self) -> None:
+        """Initialize parameters and buffers."""
+        if self.mlp_bias is not None:
+            nn.init.zeros_(self.mlp_bias)
         if self.dual_lambda:
             nn.init.zeros_(self.lambda_a)
             nn.init.zeros_(self.lambda_b)
@@ -505,6 +519,12 @@ class DiffParallelScalingBlock(nn.Module):
             nn.init.normal_(self.lambda_k1, mean=0, std=0.1)
             nn.init.normal_(self.lambda_q2, mean=0, std=0.1)
             nn.init.normal_(self.lambda_k2, mean=0, std=0.1)
+        self._init_buffers()
+
+    def _init_buffers(self) -> None:
+        """Compute and fill non-persistent buffer values."""
+        if self.qkv_bias is not None:
+            self.qkv_bias.zero_()
 
     def _compute_lambda(self) -> torch.Tensor:
         if self.lambda_a is not None:
@@ -572,16 +592,9 @@ class DiffParallelScalingBlock(nn.Module):
         x = x + self.drop_path(self.ls(y))
         return x
 
-    def init_non_persistent_buffers(
-            self,
-            device: Optional[torch.device] = None,
-            dtype: Optional[torch.dtype] = None,
-    ) -> None:
+    def init_non_persistent_buffers(self) -> None:
         """Initialize non-persistent buffers."""
-        device = device or self.in_proj.weight.device
-        dtype = dtype or self.in_proj.weight.dtype
-        if self.qkv_bias is not None:
-            self.register_buffer('qkv_bias', torch.zeros(self.qkv_bias.shape, device=device, dtype=dtype), persistent=False)
+        self._init_buffers()
 
 
 class ParallelThingsBlock(nn.Module):
@@ -818,13 +831,13 @@ class VisionTransformer(nn.Module):
         num_patches = self.patch_embed.num_patches
         reduction = self.patch_embed.feat_ratio() if hasattr(self.patch_embed, 'feat_ratio') else patch_size
 
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim, **dd)) if class_token else None
-        self.reg_token = nn.Parameter(torch.zeros(1, reg_tokens, embed_dim, **dd)) if reg_tokens else None
+        self.cls_token = nn.Parameter(torch.empty(1, 1, embed_dim, **dd)) if class_token else None
+        self.reg_token = nn.Parameter(torch.empty(1, reg_tokens, embed_dim, **dd)) if reg_tokens else None
         embed_len = num_patches if no_embed_class else num_patches + self.num_prefix_tokens
         if not pos_embed or pos_embed == 'none':
             self.pos_embed = None
         else:
-            self.pos_embed = nn.Parameter(torch.randn(1, embed_len, embed_dim, **dd) * .02)
+            self.pos_embed = nn.Parameter(torch.empty(1, embed_len, embed_dim, **dd))
         self.pos_drop = nn.Dropout(p=pos_drop_rate)
         if patch_drop_rate > 0:
             self.patch_drop = PatchDropout(
@@ -878,26 +891,28 @@ class VisionTransformer(nn.Module):
         self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
-        if weight_init != 'skip':
-            self.init_weights(weight_init)
-        if fix_init:
-            self.fix_init_weight()
+        self.weight_init_mode = weight_init
+        self.fix_init = fix_init
+        if not self.patch_embed.proj.weight.is_meta:
+            self.init_weights(needs_reset=False)
 
     def fix_init_weight(self) -> None:
         """Apply weight initialization fix (scaling w/ layer index)."""
-        def rescale(param, _layer_id):
-            param.div_(math.sqrt(2.0 * _layer_id))
+        with torch.no_grad():
+            for layer_id, layer in enumerate(self.blocks):
+                scale = math.sqrt(2.0 * (layer_id + 1))
+                layer.attn.proj.weight.div_(scale)
+                layer.mlp.fc2.weight.div_(scale)
 
-        for layer_id, layer in enumerate(self.blocks):
-            rescale(layer.attn.proj.weight.data, layer_id + 1)
-            rescale(layer.mlp.fc2.weight.data, layer_id + 1)
-
-    def init_weights(self, mode: str = '') -> None:
+    def init_weights(self, mode: str = '', needs_reset: bool = True) -> None:
         """Initialize model weights.
 
         Args:
             mode: Weight initialization mode ('jax', 'jax_nlhb', 'moco', or '').
+            needs_reset: If True, call reset_parameters() on modules that have it.
+                Set to False when modules have already self-initialized in __init__.
         """
+        mode = mode or self.weight_init_mode
         assert mode in ('jax', 'jax_nlhb', 'moco', '')
         head_bias = -math.log(self.num_classes) if 'nlhb' in mode else 0.
         if self.pos_embed is not None:
@@ -907,7 +922,10 @@ class VisionTransformer(nn.Module):
         if self.reg_token is not None:
             nn.init.normal_(self.reg_token, std=1e-6)
 
-        named_apply(get_init_weights_vit(mode, head_bias), self)
+        named_apply(get_init_weights_vit(mode, head_bias, needs_reset=needs_reset), self)
+
+        if self.fix_init:
+            self.fix_init_weight()
 
     def _init_weights(self, m: nn.Module) -> None:
         """Initialize weights for a single module (compatibility method)."""
@@ -1257,12 +1275,13 @@ class VisionTransformer(nn.Module):
         return x
 
 
-def init_weights_vit_timm(module: nn.Module, name: str = '') -> None:
+def init_weights_vit_timm(module: nn.Module, name: str = '', needs_reset: bool = True) -> None:
     """ViT weight initialization, original timm impl (for reproducibility).
 
     Args:
         module: Module to initialize.
         name: Module name for context.
+        needs_reset: If True, call reset_parameters() on modules that have it.
     """
     if isinstance(module, nn.Linear):
         trunc_normal_(module.weight, std=.02)
@@ -1270,15 +1289,23 @@ def init_weights_vit_timm(module: nn.Module, name: str = '') -> None:
             nn.init.zeros_(module.bias)
     elif hasattr(module, 'init_weights'):
         module.init_weights()
+    elif needs_reset and hasattr(module, 'reset_parameters'):
+        module.reset_parameters()
 
 
-def init_weights_vit_jax(module: nn.Module, name: str = '', head_bias: float = 0.0) -> None:
+def init_weights_vit_jax(
+        module: nn.Module,
+        name: str = '',
+        head_bias: float = 0.0,
+        needs_reset: bool = True,
+) -> None:
     """ViT weight initialization, matching JAX (Flax) impl.
 
     Args:
         module: Module to initialize.
         name: Module name for context.
         head_bias: Bias value for head layer.
+        needs_reset: If True, call reset_parameters() on modules that have it.
     """
     if isinstance(module, nn.Linear):
         if name.startswith('head'):
@@ -1294,14 +1321,17 @@ def init_weights_vit_jax(module: nn.Module, name: str = '', head_bias: float = 0
             nn.init.zeros_(module.bias)
     elif hasattr(module, 'init_weights'):
         module.init_weights()
+    elif needs_reset and hasattr(module, 'reset_parameters'):
+        module.reset_parameters()
 
 
-def init_weights_vit_moco(module: nn.Module, name: str = '') -> None:
+def init_weights_vit_moco(module: nn.Module, name: str = '', needs_reset: bool = True) -> None:
     """ViT weight initialization, matching moco-v3 impl minus fixed PatchEmbed.
 
     Args:
         module: Module to initialize.
         name: Module name for context.
+        needs_reset: If True, call reset_parameters() on modules that have it.
     """
     if isinstance(module, nn.Linear):
         if 'qkv' in name:
@@ -1314,15 +1344,26 @@ def init_weights_vit_moco(module: nn.Module, name: str = '') -> None:
             nn.init.zeros_(module.bias)
     elif hasattr(module, 'init_weights'):
         module.init_weights()
+    elif needs_reset and hasattr(module, 'reset_parameters'):
+        module.reset_parameters()
 
 
-def get_init_weights_vit(mode: str = 'jax', head_bias: float = 0.0) -> Callable:
-    if 'jax' in mode:
-        return partial(init_weights_vit_jax, head_bias=head_bias)
-    elif 'moco' in mode:
-        return init_weights_vit_moco
+def init_weights_reset_parameters(module: nn.Module, name: str = '', needs_reset: bool = True) -> None:
+    if needs_reset and hasattr(module, 'reset_parameters'):
+        module.reset_parameters()
+
+
+def get_init_weights_vit(mode: str = 'jax', head_bias: float = 0.0, needs_reset: bool = True) -> Callable:
+    if mode.startswith('jax'):
+        return partial(init_weights_vit_jax, head_bias=head_bias, needs_reset=needs_reset)
+    elif mode.startswith('moco'):
+        return partial(init_weights_vit_moco, needs_reset=needs_reset)
+    elif mode == 'skip':
+        # 'skip' means use reset_parameters() init for bwd behaviour compat
+        return partial(init_weights_reset_parameters, needs_reset=needs_reset)
     else:
-        return init_weights_vit_timm
+        # timm init is default
+        return partial(init_weights_vit_timm, needs_reset=needs_reset)
 
 
 def resize_pos_embed(

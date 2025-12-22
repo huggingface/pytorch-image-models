@@ -408,8 +408,8 @@ class NaFlexEmbeds(nn.Module):
         self.num_prefix_tokens += reg_tokens
 
         # Create class and register tokens
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim, **dd)) if class_token else None
-        self.reg_token = nn.Parameter(torch.zeros(1, reg_tokens, embed_dim, **dd)) if reg_tokens else None
+        self.cls_token = nn.Parameter(torch.empty(1, 1, embed_dim, **dd)) if class_token else None
+        self.reg_token = nn.Parameter(torch.empty(1, reg_tokens, embed_dim, **dd)) if reg_tokens else None
 
         # Calculate grid size and number of patches
         self.default_img_size: Optional[Tuple[int, int]] = None
@@ -481,16 +481,31 @@ class NaFlexEmbeds(nn.Module):
             assert self.pos_embed_grid_size is not None
             h, w = self.pos_embed_grid_size
             self.pos_embed_type = 'factorized'
-            self.pos_embed_y = nn.Parameter(torch.randn(1, h, embed_dim, **dd) * .02)
-            self.pos_embed_x = nn.Parameter(torch.randn(1, w, embed_dim, **dd) * .02)
+            self.pos_embed_y = nn.Parameter(torch.empty(1, h, embed_dim, **dd))
+            self.pos_embed_x = nn.Parameter(torch.empty(1, w, embed_dim, **dd))
         else:
             assert self.pos_embed_grid_size is not None
             h, w = self.pos_embed_grid_size
-            self.pos_embed = nn.Parameter(torch.randn(1, h, w, embed_dim, **dd) * .02)
+            self.pos_embed = nn.Parameter(torch.empty(1, h, w, embed_dim, **dd))
             self.pos_embed_type = 'learned'
 
         # Dropout layer
         self.pos_drop = nn.Dropout(p=pos_drop_rate)
+
+        if not self.proj.weight.is_meta:
+            self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        if self.cls_token is not None:
+            nn.init.normal_(self.cls_token, std=1e-6)
+        if self.reg_token is not None:
+            nn.init.normal_(self.reg_token, std=1e-6)
+        if self.pos_embed is not None:
+            nn.init.normal_(self.pos_embed, std=.02)
+        if self.pos_embed_y is not None:
+            nn.init.normal_(self.pos_embed_y, std=.02)
+        if self.pos_embed_x is not None:
+            nn.init.normal_(self.pos_embed_x, std=.02)
 
     def feature_info(self, location) -> Dict[str, Any]:
         """Get feature information for feature extraction.
@@ -1253,10 +1268,10 @@ class NaFlexVit(nn.Module):
         self.head_drop = nn.Dropout(cfg.drop_rate)
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
-        if cfg.weight_init != 'skip':
-            self.init_weights(cfg.weight_init)
-        if cfg.fix_init:
-            self.fix_init_weight()
+        self.weight_init_mode = cfg.weight_init
+        self.fix_init = cfg.fix_init
+        if not self.embeds.proj.weight.is_meta:
+            self.init_weights(cfg.weight_init, needs_reset=False)
 
     def fix_init_weight(self) -> None:
         """Apply initialization weight fix with layer-wise scaling."""
@@ -1275,15 +1290,22 @@ class NaFlexVit(nn.Module):
                 rescale(layer.mlp_out_proj.weight, layer_id + 1)
 
 
-    def init_weights(self, mode: str = '') -> None:
+    def init_weights(self, mode: str = '', needs_reset: bool = True) -> None:
         """Initialize model weights according to specified scheme.
 
         Args:
             mode: Initialization mode ('jax', 'jax_nlhb', 'moco', or '')
+            needs_reset: If True, call reset_parameters() on modules (default for after to_empty()).
+                If False, skip reset_parameters() (for __init__ where modules already self-initialized).
         """
+        mode = mode or self.weight_init_mode
         assert mode in ('jax', 'jax_nlhb', 'moco', '')
         head_bias = -math.log(self.num_classes) if 'nlhb' in mode else 0.
-        named_apply(get_init_weights_vit(mode, head_bias), self)
+
+        named_apply(get_init_weights_vit(mode, head_bias, needs_reset=needs_reset), self)
+
+        if self.fix_init:
+            self.fix_init_weight()
 
     @torch.jit.ignore()
     def load_pretrained(self, checkpoint_path: str, prefix: str = '') -> None:
@@ -1826,16 +1848,21 @@ def _debug_dump_patches(x):
         save_image(patch, f'patch_{i}.jpg', normalize=True)
 
 
-def get_init_weights_vit(mode: str = 'jax', head_bias: float = 0.0) -> Callable:
+def get_init_weights_vit(mode: str = 'jax', head_bias: float = 0.0, needs_reset: bool = True) -> Callable:
     """Function imported from vision_transformer.py to maintain compatibility"""
-    from .vision_transformer import init_weights_vit_jax, init_weights_vit_moco, init_weights_vit_timm
+    from .vision_transformer import (
+        init_weights_vit_jax,
+        init_weights_vit_moco,
+        init_weights_vit_timm,
+        init_weights_reset_parameters,
+    )
 
     if 'jax' in mode:
-        return partial(init_weights_vit_jax, head_bias=head_bias)
+        return partial(init_weights_vit_jax, head_bias=head_bias, needs_reset=needs_reset)
     elif 'moco' in mode:
-        return init_weights_vit_moco
+        return partial(init_weights_vit_moco, needs_reset=needs_reset)
     else:
-        return init_weights_vit_timm
+        return partial(init_weights_vit_timm, needs_reset=needs_reset)
 
 
 def checkpoint_filter_fn(state_dict: Dict[str, Any], model: NaFlexVit) -> Dict[str, Any]:

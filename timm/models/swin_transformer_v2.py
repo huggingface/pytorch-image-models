@@ -13,6 +13,7 @@ Modifications and additions for timm hacked together by / Copyright 2022, Ross W
 # Written by Ze Liu
 # --------------------------------------------------------
 import math
+from functools import partial
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type, Union
 
 import torch
@@ -115,7 +116,7 @@ class WindowAttention(nn.Module):
         self.num_heads = num_heads
         self.qkv_bias_separate = qkv_bias_separate
 
-        self.logit_scale = nn.Parameter(torch.log(10 * torch.ones((num_heads, 1, 1), **dd)))
+        self.logit_scale = nn.Parameter(torch.empty((num_heads, 1, 1), **dd))
 
         # mlp to generate continuous relative position bias
         self.cpb_mlp = nn.Sequential(
@@ -126,9 +127,9 @@ class WindowAttention(nn.Module):
 
         self.qkv = nn.Linear(dim, dim * 3, bias=False, **dd)
         if qkv_bias:
-            self.q_bias = nn.Parameter(torch.zeros(dim, **dd))
-            self.register_buffer('k_bias', torch.zeros(dim, **dd), persistent=False)
-            self.v_bias = nn.Parameter(torch.zeros(dim, **dd))
+            self.q_bias = nn.Parameter(torch.empty(dim, **dd))
+            self.register_buffer('k_bias', torch.empty(dim, **dd), persistent=False)
+            self.v_bias = nn.Parameter(torch.empty(dim, **dd))
         else:
             self.q_bias = None
             self.k_bias = None
@@ -138,13 +139,39 @@ class WindowAttention(nn.Module):
         self.proj_drop = nn.Dropout(proj_drop)
         self.softmax = nn.Softmax(dim=-1)
 
-        # Initialize non-persistent buffers (skip computation on meta device)
-        relative_coords_table = None
-        relative_position_index = None
-        if device is None or str(device) != 'meta':
-            relative_coords_table, relative_position_index = self._make_pair_wise_relative_positions(**dd)
-        self.register_buffer("relative_coords_table", relative_coords_table, persistent=False)
-        self.register_buffer("relative_position_index", relative_position_index, persistent=False)
+        # Register empty buffers with correct shapes
+        win_h, win_w = self.window_size
+        self.register_buffer(
+            "relative_coords_table",
+            torch.empty(1, 2 * win_h - 1, 2 * win_w - 1, 2, **dd),
+            persistent=False,
+        )
+        self.register_buffer(
+            "relative_position_index",
+            torch.empty(win_h * win_w, win_h * win_w, device=device, dtype=torch.long),
+            persistent=False,
+        )
+
+        if not self.proj.weight.is_meta:
+            self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        """Initialize parameters and buffers."""
+        nn.init.constant_(self.logit_scale, math.log(10))
+        if self.q_bias is not None:
+            nn.init.zeros_(self.q_bias)
+            nn.init.zeros_(self.v_bias)
+        self._init_buffers()
+
+    def _init_buffers(self) -> None:
+        """Compute and fill non-persistent buffer values."""
+        if self.k_bias is not None:
+            self.k_bias.zero_()
+        relative_coords_table, relative_position_index = self._make_pair_wise_relative_positions(
+            device=self.proj.weight.device, dtype=self.proj.weight.dtype
+        )
+        self.relative_coords_table.copy_(relative_coords_table)
+        self.relative_position_index.copy_(relative_position_index)
 
     def _make_pair_wise_relative_positions(
             self,
@@ -205,24 +232,9 @@ class WindowAttention(nn.Module):
             self.register_buffer("relative_coords_table", relative_coords_table, persistent=False)
             self.register_buffer("relative_position_index", relative_position_index, persistent=False)
 
-    def init_non_persistent_buffers(
-            self,
-            device: Optional[torch.device] = None,
-            dtype: Optional[torch.dtype] = None,
-    ) -> None:
+    def init_non_persistent_buffers(self) -> None:
         """Initialize non-persistent buffers."""
-        device = device or self.logit_scale.device
-        dtype = dtype or self.logit_scale.dtype
-
-        # Reinit relative position buffers
-        relative_coords_table, relative_position_index = \
-            self._make_pair_wise_relative_positions(device=device, dtype=dtype)
-        self.register_buffer("relative_coords_table", relative_coords_table, persistent=False)
-        self.register_buffer("relative_position_index", relative_position_index, persistent=False)
-
-        # Reinit k_bias (constant zeros buffer)
-        if self.k_bias is not None:
-            self.register_buffer('k_bias', torch.zeros(self.dim, device=device, dtype=dtype), persistent=False)
+        self._init_buffers()
 
     def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """Forward pass of window attention.
@@ -832,20 +844,33 @@ class SwinTransformerV2(nn.Module):
             **dd,
         )
 
-        self.apply(self._init_weights)
-        for bly in self.layers:
-            bly._init_respostnorm()
+        if not self.patch_embed.proj.weight.is_meta:
+            self.init_weights(needs_reset=False)
 
-    def _init_weights(self, m: nn.Module) -> None:
+    def init_weights(self, needs_reset: bool = True) -> None:
         """Initialize model weights.
 
         Args:
+            needs_reset: If True, call reset_parameters() on modules (default for after to_empty()).
+                If False, skip reset_parameters() (for __init__ where modules already self-initialized).
+        """
+        self.apply(partial(self._init_weights, needs_reset=needs_reset))
+        for bly in self.layers:
+            bly._init_respostnorm()
+
+    def _init_weights(self, m: nn.Module, needs_reset: bool = True) -> None:
+        """Initialize weights for Linear layers.
+
+        Args:
             m: Module to initialize.
+            needs_reset: Whether to call reset_parameters() on modules.
         """
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=.02)
-            if isinstance(m, nn.Linear) and m.bias is not None:
+            if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
+        elif needs_reset and hasattr(m, 'reset_parameters'):
+            m.reset_parameters()
 
     def set_input_size(
             self,

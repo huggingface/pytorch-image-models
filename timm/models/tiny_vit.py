@@ -241,23 +241,18 @@ class Attention(torch.nn.Module):
         self.qkv = nn.Linear(dim, num_heads * (self.val_dim + 2 * key_dim), **dd)
         self.proj = nn.Linear(self.out_dim, dim, **dd)
 
-        points = list(itertools.product(range(resolution[0]), range(resolution[1])))
-        N = len(points)
-        attention_offsets = {}
-        idxs = []
-        for p1 in points:
-            for p2 in points:
-                offset = (abs(p1[0] - p2[0]), abs(p1[1] - p2[1]))
-                if offset not in attention_offsets:
-                    attention_offsets[offset] = len(attention_offsets)
-                idxs.append(attention_offsets[offset])
-        self.attention_biases = torch.nn.Parameter(torch.zeros(num_heads, len(attention_offsets), **dd))
+        N = resolution[0] * resolution[1]
+        num_offsets = resolution[0] * resolution[1]  # unique offset count
+        self.attention_biases = torch.nn.Parameter(torch.empty(num_heads, num_offsets, **dd))
         self.register_buffer(
             'attention_bias_idxs',
-            torch.tensor(idxs, device=device, dtype=torch.long).view(N, N),
+            torch.empty((N, N), device=device, dtype=torch.long),
             persistent=False,
         )
         self.attention_bias_cache = {}
+
+        if not self.attention_biases.is_meta:
+            self.reset_parameters()
 
     @torch.no_grad()
     def train(self, mode=True):
@@ -299,14 +294,14 @@ class Attention(torch.nn.Module):
         x = self.proj(x)
         return x
 
-    def init_non_persistent_buffers(
-            self,
-            device: Optional[torch.device] = None,
-            dtype: Optional[torch.dtype] = None,
-    ) -> None:
-        """Initialize non-persistent buffers."""
-        device = device or self.proj.weight.device
-        # Recompute attention_bias_idxs
+    def reset_parameters(self) -> None:
+        """Initialize parameters and buffers."""
+        nn.init.zeros_(self.attention_biases)
+        self._init_buffers()
+
+    def _init_buffers(self) -> None:
+        """Compute and fill non-persistent buffer values."""
+        device = self.attention_bias_idxs.device
         points = list(itertools.product(range(self.resolution[0]), range(self.resolution[1])))
         N = len(points)
         attention_offsets = {}
@@ -317,8 +312,12 @@ class Attention(torch.nn.Module):
                 if offset not in attention_offsets:
                     attention_offsets[offset] = len(attention_offsets)
                 idxs.append(attention_offsets[offset])
-        self.register_buffer('attention_bias_idxs', torch.tensor(idxs, device=device, dtype=torch.long).view(N, N), persistent=False)
+        self.attention_bias_idxs.copy_(torch.tensor(idxs, device=device, dtype=torch.long).view(N, N))
         self.attention_bias_cache = {}
+
+    def init_non_persistent_buffers(self) -> None:
+        """Initialize non-persistent buffers."""
+        self._init_buffers()
 
 
 class TinyVitBlock(nn.Module):
@@ -595,14 +594,19 @@ class TinyVit(nn.Module):
             **dd,
         )
 
-        # init weights
-        self.apply(self._init_weights)
+        if not self.patch_embed.conv1.conv.weight.is_meta:
+            self.init_weights(needs_reset=False)
 
-    def _init_weights(self, m):
+    def init_weights(self, needs_reset: bool = True):
+        self.apply(partial(self._init_weights, needs_reset=needs_reset))
+
+    def _init_weights(self, m: nn.Module, needs_reset: bool = True):
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=.02)
-            if isinstance(m, nn.Linear) and m.bias is not None:
+            if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
+        elif needs_reset and hasattr(m, 'reset_parameters'):
+            m.reset_parameters()
 
     @torch.jit.ignore
     def no_weight_decay_keywords(self):

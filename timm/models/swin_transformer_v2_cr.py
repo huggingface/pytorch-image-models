@@ -29,6 +29,7 @@ Modifications and additions for timm hacked together by / Copyright 2022, Ross W
 # --------------------------------------------------------
 import logging
 import math
+from functools import partial
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 import torch
@@ -141,7 +142,26 @@ class WindowMultiHeadAttention(nn.Module):
             **dd,
         )
         # NOTE old checkpoints used inverse of logit_scale ('tau') following the paper, see conversion fn
-        self.logit_scale = nn.Parameter(torch.log(10 * torch.ones(num_heads, **dd)))
+        self.logit_scale = nn.Parameter(torch.empty(num_heads, **dd))
+
+        # Register empty buffer with correct shape
+        win_h, win_w = self.window_size
+        self.register_buffer(
+            "relative_coordinates_log",
+            torch.empty(win_h * win_w * win_h * win_w, 2, **dd),
+            persistent=False,
+        )
+
+        if not self.proj.weight.is_meta:
+            self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        """Initialize parameters and buffers."""
+        nn.init.constant_(self.logit_scale, math.log(10))
+        self._init_buffers()
+
+    def _init_buffers(self) -> None:
+        """Compute and fill non-persistent buffer values."""
         self._make_pair_wise_relative_positions()
 
     def _make_pair_wise_relative_positions(self) -> None:
@@ -155,11 +175,7 @@ class WindowMultiHeadAttention(nn.Module):
         relative_coordinates = relative_coordinates.permute(1, 2, 0).reshape(-1, 2).float()
         relative_coordinates_log = torch.sign(relative_coordinates) * torch.log(
             1.0 + relative_coordinates.abs())
-        self.register_buffer(
-            "relative_coordinates_log",
-            relative_coordinates_log.to(self.logit_scale.dtype),
-            persistent=False,
-        )
+        self.relative_coordinates_log.copy_(relative_coordinates_log.to(self.logit_scale.dtype))
 
     def set_window_size(self, window_size: Tuple[int, int]) -> None:
         """Update window size and regenerate relative position coordinates.
@@ -221,13 +237,9 @@ class WindowMultiHeadAttention(nn.Module):
         x = self.proj_drop(x)
         return x
 
-    def init_non_persistent_buffers(
-            self,
-            device: Optional[torch.device] = None,
-            dtype: Optional[torch.dtype] = None,
-    ) -> None:
+    def init_non_persistent_buffers(self) -> None:
         """Initialize non-persistent buffers."""
-        self._make_pair_wise_relative_positions()
+        self._init_buffers()
 
 
 class SwinTransformerV2CrBlock(nn.Module):
@@ -307,12 +319,27 @@ class SwinTransformerV2CrBlock(nn.Module):
         # Also being used as final network norm and optional stage ending norm while still in a C-last format.
         self.norm3 = norm_layer(dim, **dd) if extra_norm else nn.Identity()
 
-        self.register_buffer(
-            "attn_mask",
-            None if self.dynamic_mask else self.get_attn_mask(**dd),
-            persistent=False,
-        )
-        self.init_weights()
+        # Register buffer as None initially, will be computed in reset_parameters if needed
+        self.register_buffer("attn_mask", None, persistent=False)
+
+        if not self.norm1.weight.is_meta:
+            self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        """Initialize parameters and buffers."""
+        self._init_buffers()
+        # extra, module specific weight init
+        if self.init_values is not None:
+            nn.init.constant_(self.norm1.weight, self.init_values)
+            nn.init.constant_(self.norm2.weight, self.init_values)
+
+    def _init_buffers(self) -> None:
+        """Compute and fill non-persistent buffer values."""
+        if not self.dynamic_mask:
+            device = self.norm1.weight.device
+            dtype = self.norm1.weight.dtype
+            attn_mask = self.get_attn_mask(device=device, dtype=dtype)
+            self.register_buffer("attn_mask", attn_mask, persistent=False)
 
     def _calc_window_shift(
             self,
@@ -365,12 +392,6 @@ class SwinTransformerV2CrBlock(nn.Module):
         else:
             attn_mask = None
         return attn_mask
-
-    def init_weights(self):
-        # extra, module specific weight init
-        if self.init_values is not None:
-            nn.init.constant_(self.norm1.weight, self.init_values)
-            nn.init.constant_(self.norm2.weight, self.init_values)
 
     def set_input_size(self, feat_size: Tuple[int, int], window_size: Tuple[int, int]) -> None:
         """Method updates the image resolution to be processed and window size and so the pair-wise relative positions.
@@ -453,21 +474,9 @@ class SwinTransformerV2CrBlock(nn.Module):
         x = x.reshape(B, H, W, C)
         return x
 
-    def init_non_persistent_buffers(
-            self,
-            device: Optional[torch.device] = None,
-            dtype: Optional[torch.dtype] = None,
-    ) -> None:
+    def init_non_persistent_buffers(self) -> None:
         """Initialize non-persistent buffers."""
-        device = device or self.norm1.weight.device
-        dtype = dtype or self.norm1.weight.dtype
-        # Reinitialize attn_mask if not using dynamic mask
-        if not self.dynamic_mask and self.attn_mask is not None:
-            new_mask = self.get_attn_mask(device=device, dtype=dtype)
-            if new_mask is not None:
-                self.register_buffer('attn_mask', new_mask, persistent=False)
-        # Also reinitialize nested WindowMultiHeadAttention buffers
-        self.attn.init_non_persistent_buffers(device=device, dtype=dtype)
+        self._init_buffers()
 
 
 class PatchMerging(nn.Module):
@@ -819,10 +828,26 @@ class SwinTransformerV2Cr(nn.Module):
             **dd,
         )
 
-        # current weight init skips custom init and uses pytorch layer defaults, seems to work well
-        # FIXME more experiments needed
-        if weight_init != 'skip':
-            named_apply(init_weights, self)
+        self.weight_init_mode = weight_init
+        if not self.patch_embed.proj.weight.is_meta:
+            self.init_weights(needs_reset=False)
+
+    def init_weights(self, needs_reset: bool = True) -> None:
+        """Initialize model weights.
+
+        Args:
+            needs_reset: If True, call reset_parameters() on modules (default for after to_empty()).
+                If False, skip reset_parameters() (for __init__ where modules already self-initialized).
+        """
+        if self.weight_init_mode == 'skip':
+            # for backward compat, 'skip' calls reset_parameters()
+            def _reset(module, name):
+                if hasattr(module, 'reset_parameters'):
+                    module.reset_parameters()
+            if needs_reset:
+                named_apply(_reset, self)
+        else:
+            named_apply(partial(init_weights_swin, needs_reset=needs_reset), self)
 
     def set_input_size(
             self,
@@ -957,7 +982,7 @@ class SwinTransformerV2Cr(nn.Module):
         return x
 
 
-def init_weights(module: nn.Module, name: str = ''):
+def init_weights_swin(module: nn.Module, name: str = '', needs_reset: bool = True):
     # FIXME WIP determining if there's a better weight init
     if isinstance(module, nn.Linear):
         if 'qkv' in name:
@@ -972,6 +997,8 @@ def init_weights(module: nn.Module, name: str = ''):
             nn.init.zeros_(module.bias)
     elif hasattr(module, 'init_weights'):
         module.init_weights()
+    elif needs_reset and hasattr(module, 'reset_parameters'):
+        module.reset_parameters()
 
 
 def checkpoint_filter_fn(state_dict, model):

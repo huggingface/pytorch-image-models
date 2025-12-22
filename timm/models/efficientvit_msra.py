@@ -9,6 +9,7 @@ Adapted from official impl at https://github.com/microsoft/Cream/tree/main/Effic
 __all__ = ['EfficientVitMsra']
 import itertools
 from collections import OrderedDict
+from functools import partial
 from typing import Dict, List, Optional, Tuple, Type, Union
 
 import torch
@@ -194,8 +195,29 @@ class CascadedGroupAttention(torch.nn.Module):
             ConvNorm(self.val_dim * num_heads, dim, bn_weight_init=0, **dd)
         )
 
-        points = list(itertools.product(range(resolution), range(resolution)))
-        N = len(points)
+        self.resolution = resolution
+        N = resolution * resolution
+        # Number of unique offsets: abs differences range from 0 to resolution-1 for each dim
+        num_offsets = resolution * resolution
+        self.attention_biases = torch.nn.Parameter(torch.empty(num_heads, num_offsets, **dd))
+        self.register_buffer(
+            'attention_bias_idxs',
+            torch.empty((N, N), device=device, dtype=torch.long),
+            persistent=False,
+        )
+        self.attention_bias_cache = {}
+
+        if not self.attention_bias_idxs.is_meta:
+            self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        """Initialize parameters and buffers."""
+        torch.nn.init.zeros_(self.attention_biases)
+        self._init_buffers()
+
+    def _init_buffers(self) -> None:
+        """Compute and fill non-persistent buffer values."""
+        points = list(itertools.product(range(self.resolution), range(self.resolution)))
         attention_offsets = {}
         idxs = []
         for p1 in points:
@@ -204,13 +226,11 @@ class CascadedGroupAttention(torch.nn.Module):
                 if offset not in attention_offsets:
                     attention_offsets[offset] = len(attention_offsets)
                 idxs.append(attention_offsets[offset])
-        self.attention_biases = torch.nn.Parameter(torch.zeros(num_heads, len(attention_offsets), **dd))
-        self.register_buffer(
-            'attention_bias_idxs',
-            torch.tensor(idxs, device=device, dtype=torch.long).view(N, N),
-            persistent=False,
-        )
-        self.attention_bias_cache = {}
+        self.attention_bias_idxs.copy_(torch.tensor(idxs, dtype=torch.long).view(len(points), len(points)))
+
+    def init_non_persistent_buffers(self) -> None:
+        """Initialize non-persistent buffers."""
+        self._init_buffers()
 
     @torch.no_grad()
     def train(self, mode=True):
@@ -515,6 +535,16 @@ class EfficientVitMsra(nn.Module):
         self.num_features = self.head_hidden_size = embed_dim[-1]
         self.head = NormLinear(
             self.num_features, num_classes, drop=self.drop_rate, **dd) if num_classes > 0 else torch.nn.Identity()
+
+        if not self.patch_embed.conv.weight.is_meta:
+            self.init_weights(needs_reset=False)
+
+    def init_weights(self, needs_reset: bool = True):
+        self.apply(partial(self._init_weights, needs_reset=needs_reset))
+
+    def _init_weights(self, m: nn.Module, needs_reset: bool = True) -> None:
+        if needs_reset and hasattr(m, 'reset_parameters'):
+            m.reset_parameters()
 
     @torch.jit.ignore
     def no_weight_decay(self):

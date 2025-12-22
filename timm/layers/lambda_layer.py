@@ -107,29 +107,42 @@ class LambdaLayer(nn.Module):
             self.conv_lambda = nn.Conv3d(1, self.dim_qk, (r, r, 1), padding=(r // 2, r // 2, 0), **dd)
             self.pos_emb = None
             self.rel_pos_indices = None
+            self.feat_size = None
         else:
             # relative pos embedding
             assert feat_size is not None
             feat_size = to_2tuple(feat_size)
+            self.feat_size = feat_size
             rel_size = [2 * s - 1 for s in feat_size]
+            M = feat_size[0] * feat_size[1]
             self.conv_lambda = None
             self.pos_emb = nn.Parameter(torch.empty(rel_size[0], rel_size[1], self.dim_qk, **dd))
             self.register_buffer(
                 'rel_pos_indices',
-                rel_pos_indices(feat_size, device=device),
+                torch.empty((2, M, M), device=device, dtype=torch.long),
                 persistent=False,
             )
 
         self.pool = nn.AvgPool2d(2, 2) if stride == 2 else nn.Identity()
 
-        self.reset_parameters()
+        if not self.qkv.weight.is_meta:
+            self.reset_parameters()
 
-    def reset_parameters(self):
+    def reset_parameters(self) -> None:
+        """Initialize parameters and buffers."""
         trunc_normal_(self.qkv.weight, std=self.qkv.weight.shape[1] ** -0.5)  # fan-in
         if self.conv_lambda is not None:
             trunc_normal_(self.conv_lambda.weight, std=self.dim_qk ** -0.5)
         if self.pos_emb is not None:
             trunc_normal_(self.pos_emb, std=.02)
+        self._init_buffers()
+
+    def _init_buffers(self) -> None:
+        """Compute and fill non-persistent buffer values."""
+        if self.rel_pos_indices is not None:
+            self.rel_pos_indices.copy_(
+                rel_pos_indices(self.feat_size, device=self.rel_pos_indices.device)
+            )
 
     def forward(self, x):
         B, C, H, W = x.shape
@@ -157,15 +170,6 @@ class LambdaLayer(nn.Module):
         out = self.pool(out)
         return out
 
-    def init_non_persistent_buffers(
-            self,
-            device: Optional[torch.device] = None,
-            dtype: Optional[torch.dtype] = None,
-    ) -> None:
+    def init_non_persistent_buffers(self) -> None:
         """Initialize non-persistent buffers."""
-        if self.rel_pos_indices is None:
-            return
-        device = device or self.qkv.weight.device
-        # Compute feat_size from pos_emb shape: rel_size = 2 * feat_size - 1
-        feat_size = ((self.pos_emb.shape[0] + 1) // 2, (self.pos_emb.shape[1] + 1) // 2)
-        self.register_buffer('rel_pos_indices', rel_pos_indices(feat_size, device=device), persistent=False)
+        self._init_buffers()
