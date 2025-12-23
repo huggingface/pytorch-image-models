@@ -819,7 +819,7 @@ class SwinTransformer(nn.Module):
                 Set to False when modules have already self-initialized in __init__.
         """
         mode = mode or self.weight_init_mode
-        assert mode in ('jax', 'jax_nlhb', 'moco', '')
+        assert mode in ('jax', 'jax_nlhb', 'moco', 'skip', '')
         head_bias = -math.log(self.num_classes) if 'nlhb' in mode else 0.
         named_apply(get_init_weights_vit(mode, head_bias=head_bias, needs_reset=needs_reset), self)
 
