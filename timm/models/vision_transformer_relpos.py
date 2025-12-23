@@ -384,7 +384,7 @@ class VisionTransformerRelPos(nn.Module):
                 If False, skip reset_parameters() (for __init__ where modules already self-initialized).
         """
         mode = mode or self.weight_init_mode
-        assert mode in ('jax', 'jax_nlhb', 'moco', '')
+        assert mode in ('jax', 'jax_nlhb', 'moco', 'skip', '')
         head_bias = -math.log(self.num_classes) if 'nlhb' in mode else 0.
         if self.cls_token is not None:
             nn.init.normal_(self.cls_token, std=1e-6)
