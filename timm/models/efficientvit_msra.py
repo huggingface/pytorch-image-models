@@ -536,7 +536,7 @@ class EfficientVitMsra(nn.Module):
         self.head = NormLinear(
             self.num_features, num_classes, drop=self.drop_rate, **dd) if num_classes > 0 else torch.nn.Identity()
 
-        if not self.patch_embed.conv.weight.is_meta:
+        if not self.patch_embed.conv1.conv.weight.is_meta:
             self.init_weights(needs_reset=False)
 
     def init_weights(self, needs_reset: bool = True):
