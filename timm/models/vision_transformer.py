@@ -893,7 +893,7 @@ class VisionTransformer(nn.Module):
 
         self.weight_init_mode = weight_init
         self.fix_init = fix_init
-        if not self.blocks[0].norm1.weight.is_meta:
+        if not next(self.parameters()).is_meta:
             self.init_weights(needs_reset=False)
 
     def fix_init_weight(self) -> None:
