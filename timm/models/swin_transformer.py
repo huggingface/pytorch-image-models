@@ -805,8 +805,8 @@ class SwinTransformer(nn.Module):
             **dd,
         )
 
-        self.weight_init_mode = weight_init
-        if not self.patch_embed.proj.weight.is_meta:
+        self.weight_init_mode = 'reset' if weight_init == 'skip' else weight_init
+        if weight_init != 'skip' and not self.patch_embed.proj.weight.is_meta:
             self.init_weights(needs_reset=False)
 
     @torch.jit.ignore
@@ -819,7 +819,7 @@ class SwinTransformer(nn.Module):
                 Set to False when modules have already self-initialized in __init__.
         """
         mode = mode or self.weight_init_mode
-        assert mode in ('jax', 'jax_nlhb', 'moco', 'skip', '')
+        assert mode in ('jax', 'jax_nlhb', 'moco', 'reset', '')
         head_bias = -math.log(self.num_classes) if 'nlhb' in mode else 0.
         named_apply(get_init_weights_vit(mode, head_bias=head_bias, needs_reset=needs_reset), self)
 

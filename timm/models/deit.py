@@ -39,17 +39,20 @@ class VisionTransformerDistilled(VisionTransformer):
         dd = {'device': kwargs.get('device', None), 'dtype': kwargs.get('dtype', None)}
 
         self.num_prefix_tokens = 2
-        self.dist_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim, **dd))
+        self.dist_token = nn.Parameter(torch.empty(1, 1, self.embed_dim, **dd))
         self.pos_embed = nn.Parameter(
-            torch.zeros(1, self.patch_embed.num_patches + self.num_prefix_tokens, self.embed_dim, **dd))
+            torch.empty(1, self.patch_embed.num_patches + self.num_prefix_tokens, self.embed_dim, **dd))
         self.head_dist = nn.Linear(self.embed_dim, self.num_classes, **dd) if self.num_classes > 0 else nn.Identity()
         self.distilled_training = False  # must set this True to train w/ distillation token
 
-        self.init_weights(weight_init)
+        self.weight_init_mode = 'reset' if weight_init == 'skip' else weight_init
+        if weight_init != 'skip' and not next(self.parameters()).is_meta:
+            self.init_weights(needs_reset=False)
 
-    def init_weights(self, mode=''):
+    def init_weights(self, mode='', needs_reset=True):
+        mode = mode or self.weight_init_mode
         trunc_normal_(self.dist_token, std=.02)
-        super().init_weights(mode=mode)
+        super().init_weights(mode=mode, needs_reset=needs_reset)
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
