@@ -258,7 +258,7 @@ class VisionTransformerRelPos(nn.Module):
             proj_drop_rate: float = 0.,
             attn_drop_rate: float = 0.,
             drop_path_rate: float = 0.,
-            weight_init: Literal['skip', 'jax', 'moco', ''] = 'skip',
+            weight_init: Literal['skip', 'reset', 'jax', 'moco', ''] = 'reset',
             fix_init: bool = False,
             embed_layer: Type[nn.Module] = PatchEmbed,
             norm_layer: Optional[LayerType] = None,
@@ -362,9 +362,9 @@ class VisionTransformerRelPos(nn.Module):
         self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
-        self.weight_init_mode = weight_init
+        self.weight_init_mode = 'reset' if weight_init == 'skip' else weight_init
         self.fix_init = fix_init
-        if not self.patch_embed.proj.weight.is_meta:
+        if weight_init != 'skip' and not self.patch_embed.proj.weight.is_meta:
             self.init_weights(needs_reset=False)
 
     def fix_init_weight(self) -> None:
@@ -384,7 +384,7 @@ class VisionTransformerRelPos(nn.Module):
                 If False, skip reset_parameters() (for __init__ where modules already self-initialized).
         """
         mode = mode or self.weight_init_mode
-        assert mode in ('jax', 'jax_nlhb', 'moco', 'skip', '')
+        assert mode in ('jax', 'jax_nlhb', 'moco', 'reset', '')
         head_bias = -math.log(self.num_classes) if 'nlhb' in mode else 0.
         if self.cls_token is not None:
             nn.init.normal_(self.cls_token, std=1e-6)

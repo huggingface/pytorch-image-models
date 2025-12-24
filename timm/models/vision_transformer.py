@@ -747,7 +747,7 @@ class VisionTransformer(nn.Module):
             proj_drop_rate: float = 0.,
             attn_drop_rate: float = 0.,
             drop_path_rate: float = 0.,
-            weight_init: Literal['skip', 'jax', 'jax_nlhb', 'moco', ''] = '',
+            weight_init: Literal['skip', 'reset', 'jax', 'jax_nlhb', 'moco', ''] = '',
             fix_init: bool = False,
             embed_layer: Callable = PatchEmbed,
             embed_norm_layer: Optional[LayerType] = None,
@@ -891,9 +891,9 @@ class VisionTransformer(nn.Module):
         self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
-        self.weight_init_mode = weight_init
+        self.weight_init_mode = 'reset' if weight_init == 'skip' else weight_init
         self.fix_init = fix_init
-        if not next(self.parameters()).is_meta:
+        if weight_init != 'skip' and not next(self.parameters()).is_meta:
             self.init_weights(needs_reset=False)
 
     def fix_init_weight(self) -> None:
@@ -913,7 +913,7 @@ class VisionTransformer(nn.Module):
                 Set to False when modules have already self-initialized in __init__.
         """
         mode = mode or self.weight_init_mode
-        assert mode in ('jax', 'jax_nlhb', 'moco', 'skip', '')
+        assert mode in ('jax', 'jax_nlhb', 'moco', 'reset', '')
         head_bias = -math.log(self.num_classes) if 'nlhb' in mode else 0.
         if self.pos_embed is not None:
             trunc_normal_(self.pos_embed, std=.02)
@@ -1358,8 +1358,8 @@ def get_init_weights_vit(mode: str = 'jax', head_bias: float = 0.0, needs_reset:
         return partial(init_weights_vit_jax, head_bias=head_bias, needs_reset=needs_reset)
     elif mode.startswith('moco'):
         return partial(init_weights_vit_moco, needs_reset=needs_reset)
-    elif mode == 'skip':
-        # 'skip' means use reset_parameters() init for bwd behaviour compat
+    elif mode == 'reset':
+        # 'reset' means only call reset_parameters() on modules
         return partial(init_weights_reset_parameters, needs_reset=needs_reset)
     else:
         # timm init is default

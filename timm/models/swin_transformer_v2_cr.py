@@ -760,7 +760,7 @@ class SwinTransformerV2Cr(nn.Module):
             extra_norm_stage: bool = False,
             sequential_attn: bool = False,
             global_pool: str = 'avg',
-            weight_init: str = 'skip',
+            weight_init: str = 'reset',
             device=None,
             dtype=None,
             **kwargs: Any
@@ -828,8 +828,8 @@ class SwinTransformerV2Cr(nn.Module):
             **dd,
         )
 
-        self.weight_init_mode = weight_init
-        if not self.patch_embed.proj.weight.is_meta:
+        self.weight_init_mode = 'reset' if weight_init == 'skip' else weight_init
+        if weight_init != 'skip' and not self.patch_embed.proj.weight.is_meta:
             self.init_weights(needs_reset=False)
 
     def init_weights(self, needs_reset: bool = True) -> None:
@@ -839,8 +839,8 @@ class SwinTransformerV2Cr(nn.Module):
             needs_reset: If True, call reset_parameters() on modules (default for after to_empty()).
                 If False, skip reset_parameters() (for __init__ where modules already self-initialized).
         """
-        if self.weight_init_mode == 'skip':
-            # for backward compat, 'skip' calls reset_parameters()
+        if self.weight_init_mode == 'reset':
+            # 'reset' mode only calls reset_parameters()
             def _reset(module, name):
                 if hasattr(module, 'reset_parameters'):
                     module.reset_parameters()
