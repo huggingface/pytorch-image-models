@@ -15,6 +15,14 @@ FormatT = Union[str, Format]
 
 
 def get_spatial_dim(fmt: FormatT):
+    """Return spatial dimension indices for a given tensor format.
+
+    Args:
+        fmt: Tensor format (NCHW, NHWC, NCL, or NLC).
+
+    Returns:
+        Tuple of spatial dimension indices.
+    """
     fmt = Format(fmt)
     if fmt is Format.NLC:
         dim = (1,)
@@ -28,6 +36,14 @@ def get_spatial_dim(fmt: FormatT):
 
 
 def get_channel_dim(fmt: FormatT):
+    """Return channel dimension index for a given tensor format.
+
+    Args:
+        fmt: Tensor format (NCHW, NHWC, NCL, or NLC).
+
+    Returns:
+        Channel dimension index.
+    """
     fmt = Format(fmt)
     if fmt is Format.NHWC:
         dim = 3
@@ -39,6 +55,15 @@ def get_channel_dim(fmt: FormatT):
 
 
 def nchw_to(x: torch.Tensor, fmt: Format):
+    """Convert tensor from NCHW format to specified format.
+
+    Args:
+        x: Input tensor in NCHW format.
+        fmt: Target format.
+
+    Returns:
+        Tensor in target format.
+    """
     if fmt == Format.NHWC:
         x = x.permute(0, 2, 3, 1)
     elif fmt == Format.NLC:
@@ -49,6 +74,15 @@ def nchw_to(x: torch.Tensor, fmt: Format):
 
 
 def nhwc_to(x: torch.Tensor, fmt: Format):
+    """Convert tensor from NHWC format to specified format.
+
+    Args:
+        x: Input tensor in NHWC format.
+        fmt: Target format.
+
+    Returns:
+        Tensor in target format.
+    """
     if fmt == Format.NCHW:
         x = x.permute(0, 3, 1, 2)
     elif fmt == Format.NLC:
