@@ -3,6 +3,14 @@ import torch.nn as nn
 
 
 class SpaceToDepth(nn.Module):
+    """Rearrange spatial dimensions into channel dimension.
+
+    Divides spatial dimensions by block_size and multiplies channels by block_size^2.
+    Used in TResNet as an efficient stem operation.
+
+    Args:
+        block_size: Spatial reduction factor.
+    """
     bs: torch.jit.Final[int]
 
     def __init__(self, block_size: int = 4):
@@ -19,6 +27,14 @@ class SpaceToDepth(nn.Module):
 
 
 class DepthToSpace(nn.Module):
+    """Rearrange channel dimension into spatial dimensions.
+
+    Inverse of SpaceToDepth. Divides channels by block_size^2 and multiplies
+    spatial dimensions by block_size.
+
+    Args:
+        block_size: Spatial expansion factor.
+    """
 
     def __init__(self, block_size):
         super().__init__()
