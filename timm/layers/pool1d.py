@@ -7,6 +7,17 @@ def global_pool_nlc(
         num_prefix_tokens: int = 1,
         reduce_include_prefix: bool = False,
 ):
+    """Apply global pooling to tensor in NLC format.
+
+    Args:
+        x: Input tensor in (batch, length, channels) format.
+        pool_type: Pooling type - 'token', 'avg', 'max', 'avgmax', or empty string.
+        num_prefix_tokens: Number of prefix tokens (e.g., class token) to exclude from pooling.
+        reduce_include_prefix: Whether to include prefix tokens in reduction.
+
+    Returns:
+        Pooled tensor.
+    """
     if not pool_type:
         return x
 

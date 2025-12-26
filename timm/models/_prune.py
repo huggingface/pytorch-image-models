@@ -10,6 +10,15 @@ __all__ = ['extract_layer', 'set_layer', 'adapt_model_from_string', 'adapt_model
 
 
 def extract_layer(model, layer):
+    """Extract a layer from a model using dot-separated path.
+
+    Args:
+        model: PyTorch model.
+        layer: Dot-separated layer path (e.g., 'layer1.0.conv1').
+
+    Returns:
+        Extracted module.
+    """
     layer = layer.split('.')
     module = model
     if hasattr(model, 'module') and layer[0] != 'module':
@@ -28,6 +37,13 @@ def extract_layer(model, layer):
 
 
 def set_layer(model, layer, val):
+    """Set a layer in a model using dot-separated path.
+
+    Args:
+        model: PyTorch model.
+        layer: Dot-separated layer path.
+        val: New value for the layer.
+    """
     layer = layer.split('.')
     module = model
     if hasattr(model, 'module') and layer[0] != 'module':
@@ -52,6 +68,15 @@ def set_layer(model, layer, val):
 
 
 def adapt_model_from_string(parent_module, model_string):
+    """Adapt a model to pruned structure from string specification.
+
+    Args:
+        parent_module: Original model to adapt.
+        model_string: String containing layer shapes for pruned model.
+
+    Returns:
+        Adapted model with pruned layer dimensions.
+    """
     separator = '***'
     state_dict = {}
     lst_shape = model_string.split(separator)
@@ -138,5 +163,14 @@ def adapt_model_from_string(parent_module, model_string):
 
 
 def adapt_model_from_file(parent_module, model_variant):
+    """Adapt a model to pruned structure from file specification.
+
+    Args:
+        parent_module: Original model to adapt.
+        model_variant: Name of pruned model variant file.
+
+    Returns:
+        Adapted model with pruned layer dimensions.
+    """
     adapt_data = pkgutil.get_data(__name__, os.path.join('_pruned', model_variant + '.txt'))
     return adapt_model_from_string(parent_module, adapt_data.decode('utf-8').strip())
