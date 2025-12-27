@@ -15,10 +15,12 @@ from torch.nn import functional as F
 
 
 def swish_fwd(x):
+    """Forward pass for Swish activation."""
     return x.mul(torch.sigmoid(x))
 
 
 def swish_bwd(x, grad_output):
+    """Backward pass for Swish activation."""
     x_sigmoid = torch.sigmoid(x)
     return grad_output * (x_sigmoid * (1 + x * (1 - x_sigmoid)))
 
@@ -56,10 +58,12 @@ class SwishMe(nn.Module):
 
 
 def mish_fwd(x):
+    """Forward pass for Mish activation."""
     return x.mul(torch.tanh(F.softplus(x)))
 
 
 def mish_bwd(x, grad_output):
+    """Backward pass for Mish activation."""
     x_sigmoid = torch.sigmoid(x)
     x_tanh_sp = F.softplus(x).tanh()
     return grad_output.mul(x_tanh_sp + x * x_sigmoid * (1 - x_tanh_sp * x_tanh_sp))
@@ -93,10 +97,12 @@ class MishMe(nn.Module):
 
 
 def hard_sigmoid_fwd(x, inplace: bool = False):
+    """Forward pass for HardSigmoid activation."""
     return (x + 3).clamp(min=0, max=6).div(6.)
 
 
 def hard_sigmoid_bwd(x, grad_output):
+    """Backward pass for HardSigmoid activation."""
     m = torch.ones_like(x) * ((x >= -3.) & (x <= 3.)) / 6.
     return grad_output * m
 
@@ -126,10 +132,12 @@ class HardSigmoidMe(nn.Module):
 
 
 def hard_swish_fwd(x):
+    """Forward pass for HardSwish activation."""
     return x * (x + 3).clamp(min=0, max=6).div(6.)
 
 
 def hard_swish_bwd(x, grad_output):
+    """Backward pass for HardSwish activation."""
     m = torch.ones_like(x) * (x >= 3.)
     m = torch.where((x >= -3.) & (x <= 3.),  x / 3. + .5, m)
     return grad_output * m
@@ -168,10 +176,12 @@ class HardSwishMe(nn.Module):
 
 
 def hard_mish_fwd(x):
+    """Forward pass for HardMish activation."""
     return 0.5 * x * (x + 2).clamp(min=0, max=2)
 
 
 def hard_mish_bwd(x, grad_output):
+    """Backward pass for HardMish activation."""
     m = torch.ones_like(x) * (x >= -2.)
     m = torch.where((x >= -2.) & (x <= 0.), x + 1., m)
     return grad_output * m
