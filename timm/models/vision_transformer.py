@@ -2791,6 +2791,9 @@ default_cfgs = {
     'vit_little_patch16_reg4_gap_256.sbb_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_dlittle_patch16_reg1_gap_256.sbb_nadamuon_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), crop_pct=0.95),
     'vit_medium_patch16_reg1_gap_256.sbb_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
@@ -4321,6 +4324,17 @@ def vit_little_patch16_reg1_gap_256(pretrained: bool = False, **kwargs) -> Visio
     )
     model = _create_vision_transformer(
         'vit_little_patch16_reg1_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_dlittle_patch16_reg1_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=320, depth=14, num_heads=5, init_values=1e-5, mlp_ratio=5.6,
+        class_token=False, no_embed_class=True, reg_tokens=1, global_pool='avg', attn_layer='diff',
+    )
+    model = _create_vision_transformer(
+        'vit_dlittle_patch16_reg1_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
