@@ -12,6 +12,16 @@
 
 ## What's New
 
+## Dec 30, 2025
+* Add better NAdaMuon trained `dpwee`, `dwee`, `dlittle` (differential) ViTs with a small boost over previous runs
+  * https://huggingface.co/timm/vit_dlittle_patch16_reg1_gap_256.sbb_nadamuon_in1k (83.24% top-1)
+  * https://huggingface.co/timm/vit_dwee_patch16_reg1_gap_256.sbb_nadamuon_in1k  (81.80% top-1)
+  * https://huggingface.co/timm/vit_dpwee_patch16_reg1_gap_256.sbb_nadamuon_in1k (81.67% top-1)
+* Add a ~21M param `timm` variant of the CSATv2 model at 512x512 & 640x640
+  * https://huggingface.co/timm/csatv2_21m.sw_r640_in1k (83.13% top-1)
+  * https://huggingface.co/timm/csatv2_21m.sw_r512_in1k (82.58% top-1)
+* Factor non-persistent param init out of `__init__` into a common method that can be externally called via `init_non_persistent_buffers()` after meta-device init. 
+  
 ## Dec 12, 2025
 * Add CSATV2 model (thanks https://github.com/gusdlf93) -- a lightweight but high res model with DCT stem & spatial attention. https://huggingface.co/Hyunil/CSATv2
 * Add AdaMuon and NAdaMuon optimizer support to existing `timm` Muon impl. Appears more competitive vs AdamW with familiar hparams for image tasks.
