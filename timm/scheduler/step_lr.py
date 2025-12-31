@@ -6,7 +6,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 """
 import math
 import torch
-from typing import List
+from typing import List, Tuple, Union
 
 
 from .scheduler import Scheduler
@@ -21,15 +21,15 @@ class StepLRScheduler(Scheduler):
             optimizer: torch.optim.Optimizer,
             decay_t: float,
             decay_rate: float = 1.,
-            warmup_t=0,
-            warmup_lr_init=0,
-            warmup_prefix=True,
-            t_in_epochs=True,
-            noise_range_t=None,
-            noise_pct=0.67,
-            noise_std=1.0,
-            noise_seed=42,
-            initialize=True,
+            warmup_t: int = 0,
+            warmup_lr_init: float = 0.,
+            warmup_prefix: bool = True,
+            t_in_epochs: bool = True,
+            noise_range_t: Union[List[int], Tuple[int, int], int, None] = None,
+            noise_pct: float = 0.67,
+            noise_std: float = 1.0,
+            noise_seed: int = 42,
+            initialize: bool = True,
     ) -> None:
         super().__init__(
             optimizer,

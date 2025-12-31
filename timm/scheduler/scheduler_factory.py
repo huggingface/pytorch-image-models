@@ -69,7 +69,7 @@ def create_scheduler_v2(
         cooldown_epochs: int = 0,
         patience_epochs: int = 10,
         decay_rate: float = 0.1,
-        min_lr: float = 0,
+        min_lr: float = 0.,
         warmup_lr: float = 1e-5,
         warmup_epochs: int = 0,
         warmup_prefix: bool = False,

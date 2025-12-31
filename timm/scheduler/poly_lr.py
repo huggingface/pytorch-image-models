@@ -6,7 +6,7 @@ Hacked together by / Copyright 2021 Ross Wightman
 """
 import math
 import logging
-from typing import List
+from typing import List, Tuple, Union
 
 import torch
 
@@ -31,16 +31,16 @@ class PolyLRScheduler(Scheduler):
             cycle_mul: float = 1.,
             cycle_decay: float = 1.,
             cycle_limit: int = 1,
-            warmup_t=0,
-            warmup_lr_init=0,
-            warmup_prefix=False,
-            t_in_epochs=True,
-            noise_range_t=None,
-            noise_pct=0.67,
-            noise_std=1.0,
-            noise_seed=42,
-            k_decay=1.0,
-            initialize=True,
+            warmup_t: int = 0,
+            warmup_lr_init: float = 0.,
+            warmup_prefix: bool = False,
+            t_in_epochs: bool = True,
+            noise_range_t: Union[List[int], Tuple[int, int], int, None] = None,
+            noise_pct: float = 0.67,
+            noise_std: float = 1.0,
+            noise_seed: int = 42,
+            k_decay: float = 1.0,
+            initialize: bool = True,
     ) -> None:
         super().__init__(
             optimizer,

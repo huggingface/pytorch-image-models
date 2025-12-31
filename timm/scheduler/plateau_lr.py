@@ -5,7 +5,7 @@ Adapts PyTorch plateau scheduler and allows application of noise, warmup.
 Hacked together by / Copyright 2020 Ross Wightman
 """
 import torch
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from .scheduler import Scheduler
 
@@ -15,23 +15,22 @@ class PlateauLRScheduler(Scheduler):
 
     def __init__(
             self,
-            optimizer,
-            decay_rate=0.1,
-            patience_t=10,
-            verbose=True,
-            threshold=1e-4,
-            cooldown_t=0,
-            warmup_t=0,
-            warmup_lr_init=0,
-            lr_min=0,
-            mode='max',
-            noise_range_t=None,
-            noise_type='normal',
-            noise_pct=0.67,
-            noise_std=1.0,
-            noise_seed=None,
-            initialize=True,
-    ):
+            optimizer: torch.optim.Optimizer,
+            decay_rate: float = 0.1,
+            patience_t: int = 10,
+            threshold: float = 1e-4,
+            cooldown_t: int = 0,
+            warmup_t: int = 0,
+            warmup_lr_init: float = 0.,
+            lr_min: float = 0.,
+            mode: str = 'max',
+            noise_range_t: Union[List[int], Tuple[int, int], int, None] = None,
+            noise_type: str = 'normal',
+            noise_pct: float = 0.67,
+            noise_std: float = 1.0,
+            noise_seed: Optional[int] = None,
+            initialize: bool = True,
+    ) -> None:
         super().__init__(
             optimizer,
             'lr',
@@ -47,11 +46,10 @@ class PlateauLRScheduler(Scheduler):
             self.optimizer,
             patience=patience_t,
             factor=decay_rate,
-            verbose=verbose,
             threshold=threshold,
             cooldown=cooldown_t,
             mode=mode,
-            min_lr=lr_min
+            min_lr=lr_min,
         )
 
         self.warmup_t = warmup_t
@@ -63,19 +61,19 @@ class PlateauLRScheduler(Scheduler):
             self.warmup_steps = [1 for _ in self.base_values]
         self.restore_lr = None
 
-    def state_dict(self):
+    def state_dict(self) -> Dict[str, Any]:
         return {
             'best': self.lr_scheduler.best,
             'last_epoch': self.lr_scheduler.last_epoch,
         }
 
-    def load_state_dict(self, state_dict):
+    def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
         self.lr_scheduler.best = state_dict['best']
         if 'last_epoch' in state_dict:
             self.lr_scheduler.last_epoch = state_dict['last_epoch']
 
     # override the base class step fn completely
-    def step(self, epoch, metric=None):
+    def step(self, epoch: int, metric: Optional[float] = None) -> None:
         if epoch <= self.warmup_t:
             lrs = [self.warmup_lr_init + epoch * s for s in self.warmup_steps]
             super().update_groups(lrs)
@@ -88,7 +86,7 @@ class PlateauLRScheduler(Scheduler):
 
             # step the base scheduler if metric given
             if metric is not None:
-                self.lr_scheduler.step(metric, epoch)
+                self.lr_scheduler.step(metric)
 
             if self._is_apply_noise(epoch):
                 self._apply_noise(epoch)
@@ -96,7 +94,7 @@ class PlateauLRScheduler(Scheduler):
     def step_update(self, num_updates: int, metric: Optional[float] = None):
         return None
 
-    def _apply_noise(self, epoch):
+    def _apply_noise(self, epoch: int) -> None:
         noise = self._calculate_noise(epoch)
 
         # apply the noise on top of previous LR, cache the old value so we can restore for normal
