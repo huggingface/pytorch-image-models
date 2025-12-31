@@ -1,6 +1,6 @@
 import abc
 from abc import ABC
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import torch
 
@@ -29,11 +29,11 @@ class Scheduler(ABC):
             optimizer: torch.optim.Optimizer,
             param_group_field: str,
             t_in_epochs: bool = True,
-            noise_range_t=None,
-            noise_type='normal',
-            noise_pct=0.67,
-            noise_std=1.0,
-            noise_seed=None,
+            noise_range_t: Union[List[int], Tuple[int, int], int, None] = None,
+            noise_type: str = 'normal',
+            noise_pct: float = 0.67,
+            noise_std: float = 1.0,
+            noise_seed: Optional[int] = None,
             initialize: bool = True,
     ) -> None:
         self.optimizer = optimizer
@@ -81,14 +81,14 @@ class Scheduler(ABC):
             values = self._add_noise(values, epoch)
             self.update_groups(values)
 
-    def step_update(self, num_updates: int, metric: Optional[float] = None):
+    def step_update(self, num_updates: int, metric: Optional[float] = None) -> None:
         self.metric = metric
         values = self._get_values(num_updates, on_epoch=False)
         if values is not None:
             values = self._add_noise(values, num_updates)
             self.update_groups(values)
 
-    def update_groups(self, values):
+    def update_groups(self, values: Union[float, List[float]]) -> None:
         if not isinstance(values, (list, tuple)):
             values = [values] * len(self.optimizer.param_groups)
         for param_group, value in zip(self.optimizer.param_groups, values):
@@ -97,13 +97,13 @@ class Scheduler(ABC):
             else:
                 param_group[self.param_group_field] = value
 
-    def _add_noise(self, lrs, t):
+    def _add_noise(self, lrs: List[float], t: int) -> List[float]:
         if self._is_apply_noise(t):
             noise = self._calculate_noise(t)
             lrs = [v + v * noise for v in lrs]
         return lrs
 
-    def _is_apply_noise(self, t) -> bool:
+    def _is_apply_noise(self, t: int) -> bool:
         """Return True if scheduler in noise range."""
         apply_noise = False
         if self.noise_range_t is not None:

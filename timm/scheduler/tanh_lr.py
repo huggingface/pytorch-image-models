@@ -8,7 +8,7 @@ import logging
 import math
 import numpy as np
 import torch
-from typing import List
+from typing import List, Tuple, Union
 
 from .scheduler import Scheduler
 
@@ -32,15 +32,15 @@ class TanhLRScheduler(Scheduler):
             cycle_mul: float = 1.,
             cycle_decay: float = 1.,
             cycle_limit: int = 1,
-            warmup_t=0,
-            warmup_lr_init=0,
-            warmup_prefix=False,
-            t_in_epochs=True,
-            noise_range_t=None,
-            noise_pct=0.67,
-            noise_std=1.0,
-            noise_seed=42,
-            initialize=True,
+            warmup_t: int = 0,
+            warmup_lr_init: float = 0.,
+            warmup_prefix: bool = False,
+            t_in_epochs: bool = True,
+            noise_range_t: Union[List[int], Tuple[int, int], int, None] = None,
+            noise_pct: float = 0.67,
+            noise_std: float = 1.0,
+            noise_seed: int = 42,
+            initialize: bool = True,
     ) -> None:
         super().__init__(
             optimizer,
