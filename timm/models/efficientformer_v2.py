@@ -96,7 +96,14 @@ class ConvNorm(nn.Module):
             bias=bias,
             **dd,
         )
-        self.bn = create_norm_layer(norm_layer, out_channels, **norm_kwargs, **dd)
+        self.bn = create_norm_layer(
+            norm_layer,
+            num_channels=out_channels,
+            num_features=out_channels,
+            num_groups=groups,
+            **norm_kwargs,
+            **dd,
+        )
 
     def forward(self, x):
         x = self.conv(x)

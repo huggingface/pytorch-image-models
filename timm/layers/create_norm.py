@@ -5,6 +5,7 @@ Create norm modules by string (to mirror create_act and creat_norm-act fns)
 Copyright 2022 Ross Wightman
 """
 import functools
+import inspect
 import types
 from typing import Type
 
@@ -48,12 +49,14 @@ _NORM_MAP = dict(
     simplenorm2dfp32=SimpleNorm2dFp32,
     frozenbatchnorm2d=FrozenBatchNorm2d,
 )
-_NORM_TYPES = {m for n, m in _NORM_MAP.items()}
 
 
-def create_norm_layer(layer_name, num_features, **kwargs):
+def create_norm_layer(layer_name, **kwargs):
     layer = get_norm_layer(layer_name)
-    layer_instance = layer(num_features, **kwargs)
+    # filter kwargs before creating layer
+    params = inspect.signature(layer).parameters
+    kwargs = {k: v for k, v in kwargs.items() if k in params}
+    layer_instance = layer(**kwargs)
     return layer_instance
 
 
