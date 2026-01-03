@@ -32,16 +32,16 @@ class GlobalResponseNorm(nn.Module):
         if channels_last:
             self.spatial_dim = (1, 2)
             self.channel_dim = -1
-            self.wb_shape = (1, 1, 1, -1)
+            wb_shape = (1, 1, 1, dim)
         else:
             self.spatial_dim = (2, 3)
             self.channel_dim = 1
-            self.wb_shape = (1, -1, 1, 1)
+            wb_shape = (1, dim, 1, 1)
 
-        self.weight = nn.Parameter(torch.zeros(dim, **dd))
-        self.bias = nn.Parameter(torch.zeros(dim, **dd))
+        self.weight = nn.Parameter(torch.zeros(wb_shape, **dd))
+        self.bias = nn.Parameter(torch.zeros(wb_shape, **dd))
 
     def forward(self, x):
         x_g = x.norm(p=2, dim=self.spatial_dim, keepdim=True)
         x_n = x_g / (x_g.mean(dim=self.channel_dim, keepdim=True) + self.eps)
-        return x + torch.addcmul(self.bias.view(self.wb_shape), self.weight.view(self.wb_shape), x * x_n)
+        return torch.addcmul(self.bias, self.weight * x_n + 1, x)
