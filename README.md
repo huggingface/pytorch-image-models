@@ -12,6 +12,11 @@
 
 ## What's New
 
+## Jan 5 & 6, 2025
+* Release 1.0.24
+* Fix moved module error in deprecated timm.models.layers import path that impacts legacy imports
+* Release 1.0.23
+
 ## Dec 30, 2025
 * Add better NAdaMuon trained `dpwee`, `dwee`, `dlittle` (differential) ViTs with a small boost over previous runs
   * https://huggingface.co/timm/vit_dlittle_patch16_reg1_gap_256.sbb_nadamuon_in1k (83.24% top-1)
