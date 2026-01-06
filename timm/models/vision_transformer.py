@@ -1786,7 +1786,6 @@ default_cfgs = {
     # re-finetuned augreg 21k FT on in1k weights
     'vit_base_patch16_224.augreg2_in21k_ft_in1k': _cfg(
         hf_hub_id='timm/'),
-    'vit_base_patch16_384.augreg2_in21k_ft_in1k': _cfg(),
     'vit_base_patch8_224.augreg2_in21k_ft_in1k': _cfg(
         hf_hub_id='timm/'),
 
