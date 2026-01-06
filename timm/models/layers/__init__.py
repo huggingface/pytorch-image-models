@@ -1,8 +1,9 @@
 # NOTE timm.models.layers is DEPRECATED, please use timm.layers, this is here to reduce breakages in transition
 from timm.layers.activations import *
+from timm.layers import RotaryEmbedding
 from timm.layers.adaptive_avgmax_pool import \
     adaptive_avgmax_pool2d, select_adaptive_pool2d, AdaptiveAvgMaxPool2d, SelectAdaptivePool2d
-from timm.layers.attention_pool2d import AttentionPool2d, RotAttentionPool2d, RotaryEmbedding
+from timm.layers.attention_pool2d import AttentionPool2d, RotAttentionPool2d
 from timm.layers.blur_pool import BlurPool2d
 from timm.layers.classifier import ClassifierHead, create_classifier
 from timm.layers.cond_conv2d import CondConv2d, get_condconv_initializer
