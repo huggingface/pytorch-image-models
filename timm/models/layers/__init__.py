@@ -2,7 +2,7 @@
 from timm.layers.activations import *
 from timm.layers.adaptive_avgmax_pool import \
     adaptive_avgmax_pool2d, select_adaptive_pool2d, AdaptiveAvgMaxPool2d, SelectAdaptivePool2d
-from timm.layers.attention_pool2d import AttentionPool2d, RotAttentionPool2d, RotaryEmbedding
+from timm.layers.attention_pool2d import AttentionPool2d, RotAttentionPool2d
 from timm.layers.blur_pool import BlurPool2d
 from timm.layers.classifier import ClassifierHead, create_classifier
 from timm.layers.cond_conv2d import CondConv2d, get_condconv_initializer
@@ -34,6 +34,7 @@ from timm.layers.norm_act import BatchNormAct2d, GroupNormAct, convert_sync_batc
 from timm.layers.padding import get_padding, get_same_padding, pad_same
 from timm.layers.patch_embed import PatchEmbed
 from timm.layers.pool2d_same import AvgPool2dSame, create_pool2d
+from timm.layers.pos_embed_sincos import RotaryEmbedding
 from timm.layers.squeeze_excite import SEModule, SqueezeExcite, EffectiveSEModule, EffectiveSqueezeExcite
 from timm.layers.selective_kernel import SelectiveKernel
 from timm.layers.separable_conv import SeparableConv2d, SeparableConvNormAct
