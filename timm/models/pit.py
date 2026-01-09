@@ -196,6 +196,7 @@ class PoolingVisionTransformer(nn.Module):
         self.heads = heads
         embed_dim = base_dims[0] * heads[0]
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.global_pool = global_pool
         self.num_tokens = 2 if distilled else 1
         self.feature_info = []

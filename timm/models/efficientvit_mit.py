@@ -776,6 +776,7 @@ class EfficientVit(nn.Module):
         self.grad_checkpointing = False
         self.global_pool = global_pool
         self.num_classes = num_classes
+        self.in_chans = in_chans
 
         # input stem
         self.stem = Stem(in_chans, widths[0], depths[0], norm_layer, act_layer, **dd)
@@ -934,6 +935,7 @@ class EfficientVitLarge(nn.Module):
         self.grad_checkpointing = False
         self.global_pool = global_pool
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.norm_eps = norm_eps
         norm_layer = partial(norm_layer, eps=self.norm_eps)
 

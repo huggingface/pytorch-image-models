@@ -565,6 +565,7 @@ class CSATv2(nn.Module):
                 f'in_chans={in_chans} may not work correctly with the DCT stem.'
             )
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.global_pool = global_pool
         self.grad_checkpointing = False
 

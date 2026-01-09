@@ -569,6 +569,7 @@ class ResNetV2(nn.Module):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.drop_rate = drop_rate
         wf = width_factor
         norm_layer = get_norm_act_layer(norm_layer, act_layer=act_layer)

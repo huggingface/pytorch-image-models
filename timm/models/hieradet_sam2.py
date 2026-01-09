@@ -321,6 +321,7 @@ class HieraDet(nn.Module):
         assert len(stages) == len(window_spec)
         self.grad_checkpointing = False
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.window_spec = window_spec
         self.output_fmt = 'NHWC'
 

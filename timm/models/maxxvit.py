@@ -1383,6 +1383,7 @@ class MaxxVit(nn.Module):
             cfg = _overlay_kwargs(cfg, **kwargs)
         transformer_cfg = cfg_window_size(cfg.transformer_cfg, img_size)
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.global_pool = global_pool
         self.num_features = self.embed_dim = cfg.embed_dim[-1]
         self.drop_rate = drop_rate

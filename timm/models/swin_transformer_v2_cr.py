@@ -769,6 +769,7 @@ class SwinTransformerV2Cr(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         img_size = to_2tuple(img_size)
         self.num_classes: int = num_classes
+        self.in_chans: int = in_chans
         self.patch_size: int = patch_size
         self.img_size: Tuple[int, int] = img_size
         self.num_features = self.head_hidden_size = int(embed_dim * 2 ** (len(depths) - 1))

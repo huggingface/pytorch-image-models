@@ -520,6 +520,7 @@ class NextViT(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         self.grad_checkpointing = False
         self.num_classes = num_classes
+        self.in_chans = in_chans
         norm_layer = get_norm_layer(norm_layer)
         if act_layer is None:
             act_layer = partial(nn.ReLU, inplace=True)

@@ -492,6 +492,7 @@ class EfficientVitMsra(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         self.grad_checkpointing = False
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.drop_rate = drop_rate
 
         # Patch embedding

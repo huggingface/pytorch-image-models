@@ -211,6 +211,7 @@ class Visformer(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         img_size = to_2tuple(img_size)
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.embed_dim = embed_dim
         self.init_channels = init_channels
         self.img_size = img_size

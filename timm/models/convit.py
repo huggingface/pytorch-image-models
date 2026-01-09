@@ -288,6 +288,7 @@ class ConVit(nn.Module):
         assert global_pool in ('', 'avg', 'token')
         embed_dim *= num_heads
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.global_pool = global_pool
         self.local_up_to_layer = local_up_to_layer
         self.num_features = self.head_hidden_size = self.embed_dim = embed_dim  # for consistency with other models

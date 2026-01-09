@@ -146,6 +146,7 @@ class SelecSls(nn.Module):
             dtype=None,
     ):
         self.num_classes = num_classes
+        self.in_chans = in_chans
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
 

@@ -291,6 +291,7 @@ class MetaNeXt(nn.Module):
         if not isinstance(mlp_ratios, (list, tuple)):
             mlp_ratios = [mlp_ratios] * num_stage
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.global_pool = global_pool
         self.drop_rate = drop_rate
         self.feature_info = []

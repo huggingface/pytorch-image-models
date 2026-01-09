@@ -382,6 +382,7 @@ class FocalNet(nn.Module):
         embed_dim = [embed_dim * (2 ** i) for i in range(self.num_layers)]
 
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.embed_dim = embed_dim
         self.num_features = self.head_hidden_size = embed_dim[-1]
         self.feature_info = []

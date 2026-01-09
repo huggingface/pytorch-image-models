@@ -768,6 +768,7 @@ class VOLO(nn.Module):
         img_size = to_2tuple(img_size)
 
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.global_pool = global_pool
         self.mix_token = use_mix_token
         self.pooling_scale = pooling_scale

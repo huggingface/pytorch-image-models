@@ -129,6 +129,7 @@ class VGG(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         assert output_stride == 32
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
         self.use_norm = norm_layer is not None

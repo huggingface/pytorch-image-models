@@ -742,6 +742,7 @@ class MultiScaleVit(nn.Module):
         img_size = to_2tuple(img_size)
         norm_layer = partial(get_norm_layer(cfg.norm_layer), eps=cfg.norm_eps)
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.drop_rate = drop_rate
         if global_pool is None:
             global_pool = 'token' if cfg.use_cls_token else 'avg'

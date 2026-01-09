@@ -411,6 +411,7 @@ class EfficientFormer(nn.Module):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.global_pool = global_pool
 
         self.stem = Stem4(in_chans, embed_dims[0], norm_layer=norm_layer, **dd)

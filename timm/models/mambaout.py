@@ -345,6 +345,7 @@ class MambaOut(nn.Module):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.drop_rate = drop_rate
         self.output_fmt = 'NHWC'
         if not isinstance(depths, (list, tuple)):

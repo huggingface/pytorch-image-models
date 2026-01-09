@@ -691,6 +691,7 @@ class Levit(nn.Module):
         attn_act_layer = get_act_layer(attn_act_layer or act_layer)
         self.use_conv = use_conv
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.global_pool = global_pool
         self.num_features = self.head_hidden_size = embed_dim[-1]
         self.embed_dim = embed_dim

@@ -360,6 +360,7 @@ class DLA(nn.Module):
         super().__init__()
         self.channels = channels
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.cardinality = cardinality
         self.base_width = base_width
         assert output_stride == 32  # FIXME support dilation

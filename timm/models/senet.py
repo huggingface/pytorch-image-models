@@ -300,6 +300,7 @@ class SENet(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         self.inplanes = inplanes
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.drop_rate = drop_rate
         if input_3x3:
             layer0_modules = [

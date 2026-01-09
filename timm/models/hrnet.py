@@ -548,6 +548,7 @@ class HighResolutionNet(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.num_classes = num_classes
+        self.in_chans = in_chans
         assert output_stride == 32  # FIXME support dilation
 
         cfg.update(**kwargs)

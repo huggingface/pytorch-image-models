@@ -381,6 +381,7 @@ class EdgeNeXt(nn.Module):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.global_pool = global_pool
         self.drop_rate = drop_rate
         norm_layer = partial(LayerNorm2d, eps=1e-6)

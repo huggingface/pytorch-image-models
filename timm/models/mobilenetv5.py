@@ -181,6 +181,7 @@ class MobileNetV5(nn.Module):
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
         se_layer = se_layer or SqueezeExcite
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
         self.msfa_indices = msfa_indices
@@ -445,6 +446,7 @@ class MobileNetV5Encoder(nn.Module):
         norm_layer = get_norm_layer(norm_layer) or RmsNorm2d
         se_layer = se_layer or SqueezeExcite
         self.num_classes = 0    # Exists to satisfy ._hub module APIs.
+        self.in_chans = in_chans
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
 

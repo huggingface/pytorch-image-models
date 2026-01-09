@@ -481,6 +481,7 @@ class HighPerfGpuNet(nn.Module):
         stem_chs = cfg["stem_chs"]
         stages_cfg = [cfg["stage1"], cfg["stage2"], cfg["stage3"], cfg["stage4"]]
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.drop_rate = drop_rate
         self.use_lab = use_lab
 
