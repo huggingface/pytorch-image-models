@@ -40,7 +40,12 @@ from timm.models import create_model, safe_model_name, resume_checkpoint, load_c
 from timm.optim import create_optimizer_v2, optimizer_kwargs
 from timm.scheduler import create_scheduler_v2, scheduler_kwargs
 from timm.utils import NativeScaler
-from timm.task import DistillationTeacher, ClassificationTask, LogitDistillationTask, FeatureDistillationTask
+from timm.task import (
+    ClassificationTask,
+    LogitDistillationTask,
+    FeatureDistillationTask,
+    TokenDistillationTask,
+)
 
 
 try:
@@ -410,8 +415,8 @@ group.add_argument('--naflex-loss-scale', default='linear', type=str,
 # Knowledge Distillation parameters
 parser.add_argument('--kd-model-name', default=None, type=str,
                     help='Name of teacher model for knowledge distillation')
-parser.add_argument('--kd-distill-type', default='logit', type=str, choices=['logit', 'feature'],
-                    help='Type of distillation: "logit" for output distillation, "feature" for intermediate features (default: logit)')
+parser.add_argument('--kd-distill-type', default='logit', type=str, choices=['logit', 'feature', 'token'],
+                    help='Type of distillation: "logit" for output distillation, "feature" for intermediate features, "token" for models with distillation heads (default: logit)')
 parser.add_argument('--kd-loss-type', default='kl', type=str,
                     help='Loss function for logit distillation (default: kl). Currently only "kl" supported, reserved for future extensions.')
 parser.add_argument('--distill-loss-weight', default=None, type=float,
@@ -425,6 +430,8 @@ parser.add_argument('--kd-student-feature-dim', default=None, type=int,
                     help='Student model feature dimension (auto-detected from model.head_hidden_size or model.num_features if not specified)')
 parser.add_argument('--kd-teacher-feature-dim', default=None, type=int,
                     help='Teacher model feature dimension (auto-detected from model.head_hidden_size or model.num_features if not specified)')
+parser.add_argument('--kd-token-distill-type', default='soft', type=str, choices=['soft', 'hard'],
+                    help='Token distillation type: "soft" for KL-div with temperature, "hard" for CE with teacher argmax (default: soft)')
 
 
 def _parse_args():
@@ -884,20 +891,11 @@ def main():
 
     # Setup training task (classification or distillation)
     if args.kd_model_name is not None:
-        # Create teacher model
-        teacher = DistillationTeacher(
-            model_name=args.kd_model_name,
-            num_classes=args.num_classes,
-            in_chans=in_chans,
-            device=device,
-            dtype=model_dtype,
-        )
-
-        # Create distillation task
+        # Create distillation task (teacher created internally from model name)
         if args.kd_distill_type == 'logit':
             task = LogitDistillationTask(
                 student_model=model,
-                teacher=teacher,
+                teacher_model=args.kd_model_name,
                 criterion=train_loss_fn,
                 loss_type=args.kd_loss_type,
                 distill_loss_weight=args.distill_loss_weight,
@@ -910,12 +908,25 @@ def main():
         elif args.kd_distill_type == 'feature':
             task = FeatureDistillationTask(
                 student_model=model,
-                teacher=teacher,
+                teacher_model=args.kd_model_name,
                 criterion=train_loss_fn,
                 distill_loss_weight=args.distill_loss_weight,
                 task_loss_weight=args.task_loss_weight,
                 student_feature_dim=args.kd_student_feature_dim,
                 teacher_feature_dim=args.kd_teacher_feature_dim,
+                device=device,
+                dtype=model_dtype,
+                verbose=utils.is_primary(args),
+            )
+        elif args.kd_distill_type == 'token':
+            task = TokenDistillationTask(
+                student_model=model,
+                teacher_model=args.kd_model_name,
+                criterion=train_loss_fn,
+                distill_type=args.kd_token_distill_type,
+                distill_loss_weight=args.distill_loss_weight,
+                task_loss_weight=args.task_loss_weight,
+                temperature=args.kd_temperature,
                 device=device,
                 dtype=model_dtype,
                 verbose=utils.is_primary(args),

@@ -1,6 +1,6 @@
 """Knowledge distillation training tasks and components."""
 import logging
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -19,54 +19,71 @@ class DistillationTeacher(nn.Module):
     """Wrapper for a teacher model used in knowledge distillation.
 
     Creates and manages a pre-trained teacher model for knowledge distillation,
-    handling model compilation and normalization differences between teacher and student.
+    handling model creation and normalization differences between teacher and student.
+
+    Can be created from:
+    - A model name string (creates the model internally with pretrained weights)
+    - An existing nn.Module (wraps it with the necessary interface)
 
     Args:
-        model_name: Name of the teacher model to create
-        num_classes: Number of output classes
-        in_chans: Number of input channels
-        pretrained_path: Optional path to pretrained weights
+        model_name_or_module: Either a model name string or an nn.Module
+        num_classes: Number of output classes (required if model_name_or_module is a string)
+        in_chans: Number of input channels (used if model_name_or_module is a string)
+        pretrained_path: Optional path to pretrained weights (used if model_name_or_module is a string)
         device: Device to place the model on
         dtype: Model dtype (uses float32 if None)
     """
 
     def __init__(
             self,
-            model_name: str,
-            num_classes: int,
+            model_name_or_module: Union[str, nn.Module],
+            num_classes: Optional[int] = None,
             in_chans: int = 3,
             pretrained_path: Optional[str] = None,
-            device: torch.device = torch.device('cuda'),
-            dtype: torch.dtype = None,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
     ):
         super().__init__()
 
-        _logger.info(f"Creating KD teacher model: '{model_name}'")
+        if isinstance(model_name_or_module, str):
+            _logger.info(f"Creating KD teacher model: '{model_name_or_module}'")
 
-        pretrained_kwargs = {'pretrained': True}
-        if pretrained_path:
-            # specify a local checkpoint path to load pretrained weights from
-            pretrained_kwargs['pretrained_cfg_overlay'] = dict(
-                file=pretrained_path,
+            pretrained_kwargs = {'pretrained': True}
+            if pretrained_path:
+                pretrained_kwargs['pretrained_cfg_overlay'] = dict(
+                    file=pretrained_path,
+                    num_classes=num_classes,
+                )
+
+            model = create_model(
+                model_name=model_name_or_module,
                 num_classes=num_classes,
+                in_chans=in_chans,
+                device=device,
+                dtype=dtype,
+                **pretrained_kwargs,
+            )
+        elif isinstance(model_name_or_module, nn.Module):
+            model = model_name_or_module
+        else:
+            raise TypeError(
+                f"model_name_or_module must be a string or nn.Module, got {type(model_name_or_module).__name__}"
             )
 
-        model_kd = create_model(
-            model_name=model_name,
-            num_classes=num_classes,
-            in_chans=in_chans,
-            device=device,
-            dtype=dtype,
-            **pretrained_kwargs,
-        )
+        model.eval()
+        self.model = model
 
-        model_kd.eval()
-        self.model = model_kd
+        # Get normalization values from pretrained_cfg if available
+        model_unwrapped = unwrap_model(model)
+        if hasattr(model_unwrapped, 'pretrained_cfg'):
+            mean = model_unwrapped.pretrained_cfg.get('mean', (0.485, 0.456, 0.406))
+            std = model_unwrapped.pretrained_cfg.get('std', (0.229, 0.224, 0.225))
+        else:
+            mean = (0.485, 0.456, 0.406)
+            std = (0.229, 0.224, 0.225)
 
-        # Register normalization values as non-persistent buffers
-        # Shape: [1, 3, 1, 1] for proper broadcasting over BCHW images
-        mean_kd = torch.tensor(model_kd.pretrained_cfg['mean'], device=device, dtype=dtype).view(1, -1, 1, 1)
-        std_kd = torch.tensor(model_kd.pretrained_cfg['std'], device=device, dtype=dtype).view(1, -1, 1, 1)
+        mean_kd = torch.tensor(mean, device=device, dtype=dtype).view(1, -1, 1, 1)
+        std_kd = torch.tensor(std, device=device, dtype=dtype).view(1, -1, 1, 1)
         self.register_buffer('mean_kd', mean_kd, persistent=False)
         self.register_buffer('std_kd', std_kd, persistent=False)
 
@@ -90,7 +107,6 @@ class DistillationTeacher(nn.Module):
                     f"Model {self.model.__class__.__name__} does not support feature extraction. "
                     "Ensure the model has 'forward_features' and 'forward_head' methods."
                 )
-            # Extract spatial features and pool to pre-logits
             feature_map = self.model.forward_features(input)
             return self.model.forward_head(feature_map, pre_logits=True)
         else:
@@ -104,28 +120,56 @@ class DistillationTeacher(nn.Module):
     ) -> torch.Tensor:
         """Normalize input to match teacher's expected normalization.
 
-        Handles different normalization between teacher and student models by
-        converting the student's normalized input to the teacher's expected format.
-
         Args:
             input: Input tensor (already normalized for student)
-            student_mean: Student normalization mean buffer [1, 3, 1, 1] (None if same as teacher)
-            student_std: Student normalization std buffer [1, 3, 1, 1] (None if same as teacher)
+            student_mean: Student normalization mean buffer [1, 3, 1, 1]
+            student_std: Student normalization std buffer [1, 3, 1, 1]
 
         Returns:
             Input tensor normalized for the teacher model
         """
-        # If no student normalization provided, assume it matches teacher (no conversion needed)
         if student_mean is None or student_std is None:
             return input
-
-        # Check if renormalization is actually needed
         if torch.equal(student_mean, self.mean_kd) and torch.equal(student_std, self.std_kd):
             return input
-
-        # De-normalize (Student) -> Re-normalize (Teacher)
-        # Combined for efficiency: (input * std_s + mean_s - mean_t) / std_t
         return (input * student_std + student_mean - self.mean_kd) / self.std_kd
+
+
+def _resolve_teacher(
+        teacher: Union[str, nn.Module, DistillationTeacher],
+        student_model: nn.Module,
+        pretrained_path: Optional[str],
+        device: Optional[torch.device],
+        dtype: Optional[torch.dtype],
+) -> DistillationTeacher:
+    """Resolve teacher input to a DistillationTeacher instance.
+
+    Args:
+        teacher: Model name string, nn.Module, or DistillationTeacher
+        student_model: Student model to infer num_classes/in_chans from
+        pretrained_path: Optional path to teacher pretrained weights
+        device: Device for teacher
+        dtype: Dtype for teacher
+
+    Returns:
+        DistillationTeacher instance
+    """
+    if isinstance(teacher, DistillationTeacher):
+        return teacher
+
+    # Get num_classes and in_chans from student
+    student_unwrapped = unwrap_model(student_model)
+    num_classes = student_unwrapped.num_classes
+    in_chans = student_unwrapped.in_chans
+
+    return DistillationTeacher(
+        model_name_or_module=teacher,
+        num_classes=num_classes,
+        in_chans=in_chans,
+        pretrained_path=pretrained_path,
+        device=device,
+        dtype=dtype,
+    )
 
 
 class LogitDistillationTask(TrainingTask):
@@ -141,9 +185,10 @@ class LogitDistillationTask(TrainingTask):
 
     Args:
         student_model: Student model to train
-        teacher: Pre-configured teacher model wrapper
-        criterion: Task loss function (e.g., CrossEntropyLoss)
-        loss_type: Type of distillation loss (currently only 'kl' supported, reserved for future extensions)
+        teacher_model: Teacher model - can be a model name string, nn.Module, or DistillationTeacher
+        criterion: Task loss function (default: CrossEntropyLoss)
+        teacher_pretrained_path: Path to teacher pretrained weights (used when teacher_model is a string)
+        loss_type: Type of distillation loss (currently only 'kl' supported)
         distill_loss_weight: Weight for distillation loss
         task_loss_weight: Weight for task loss
         temperature: Softmax temperature for distillation (typical values: 1-4)
@@ -152,25 +197,27 @@ class LogitDistillationTask(TrainingTask):
         verbose: Enable info logging
 
     Example:
-        >>> # Independent weights
+        >>> # With model name string (num_classes/in_chans inferred from student)
         >>> task = LogitDistillationTask(
-        ...     student_model=model, teacher=teacher, criterion=nn.CrossEntropyLoss(),
-        ...     distill_loss_weight=1.0, task_loss_weight=1.0, temperature=4.0,
-        ...     device=torch.device('cuda'),
-        ... )
-        >>> # Complementary mode (task_weight=0.3 means distill gets 0.7)
-        >>> task = LogitDistillationTask(
-        ...     student_model=model, teacher=teacher, criterion=nn.CrossEntropyLoss(),
+        ...     student_model=model, teacher_model='resnet50',
+        ...     criterion=nn.CrossEntropyLoss(),
         ...     task_loss_weight=0.3, temperature=4.0,
         ...     device=torch.device('cuda'),
+        ... )
+        >>> # With raw model
+        >>> task = LogitDistillationTask(
+        ...     student_model=model, teacher_model=my_teacher_model,
+        ...     criterion=nn.CrossEntropyLoss(),
+        ...     task_loss_weight=0.3, temperature=4.0,
         ... )
     """
 
     def __init__(
             self,
             student_model: nn.Module,
-            teacher: DistillationTeacher,
-            criterion: nn.Module,
+            teacher_model: Union[str, nn.Module, DistillationTeacher],
+            criterion: Optional[nn.Module] = None,
+            teacher_pretrained_path: Optional[str] = None,
             loss_type: str = 'kl',
             distill_loss_weight: Optional[float] = None,
             task_loss_weight: Optional[float] = None,
@@ -180,9 +227,19 @@ class LogitDistillationTask(TrainingTask):
             verbose: bool = True,
     ):
         super().__init__(device=device, dtype=dtype, verbose=verbose)
+
+        # Resolve teacher to DistillationTeacher
+        teacher = _resolve_teacher(
+            teacher_model,
+            student_model,
+            teacher_pretrained_path,
+            self.device,
+            self.dtype,
+        )
+
         self.student = student_model
         self.teacher = teacher
-        self.criterion = criterion
+        self.criterion = criterion if criterion is not None else nn.CrossEntropyLoss()
         self.loss_type = loss_type
         self.temperature = temperature
 
@@ -190,7 +247,6 @@ class LogitDistillationTask(TrainingTask):
             raise ValueError(f"Unsupported loss_type '{loss_type}'. Currently only 'kl' is supported.")
 
         # Register student normalization values as non-persistent buffers
-        # Shape: [1, 3, 1, 1] for proper broadcasting over BCHW images
         student_unwrapped = unwrap_model(student_model)
         student_mean = torch.tensor(
             student_unwrapped.pretrained_cfg['mean'],
@@ -216,7 +272,7 @@ class LogitDistillationTask(TrainingTask):
                     f"task_weight={self.task_loss_weight}, distill_weight={distill_loss_weight}"
                 )
         elif task_loss_weight is not None:
-            # Mode 2: Only task_weight specified - complementary mode
+            # Mode 2: only task_weight specified - complementary mode (distill = 1 - task)
             self.task_loss_weight = task_loss_weight
             self.distill_loss_weight = 1.0 - task_loss_weight
             if self.verbose:
@@ -225,7 +281,7 @@ class LogitDistillationTask(TrainingTask):
                     f"task_weight={task_loss_weight}, distill_weight={self.distill_loss_weight}"
                 )
         else:
-            # Neither specified - use defaults (equal weighting)
+            # Mode 3: neither specified - equal weights (both 1.0)
             self.distill_loss_weight = 1.0
             self.task_loss_weight = 1.0
             if self.verbose:
@@ -258,11 +314,9 @@ class LogitDistillationTask(TrainingTask):
         """
         from torch.nn.parallel import DistributedDataParallel as DDP
 
-        # Ensure teacher parameters are frozen
         for param in self.teacher.parameters():
             param.requires_grad = False
 
-        # Wrap only student in DDP
         self.student = DDP(self.student, device_ids=device_ids, **ddp_kwargs)
         return self
 
@@ -280,27 +334,21 @@ class LogitDistillationTask(TrainingTask):
         Returns:
             Dictionary containing:
                 - 'loss': Combined training loss (task + distillation)
-                - 'output': Student logits
+                - 'output': Student logits (for metrics)
                 - 'task_loss': Classification loss component
-                - 'kd_loss': Distillation loss component
+                - 'kd_loss': Logit distillation loss component
         """
-        # Student forward pass
         student_logits = self.student(input)
-
-        # Compute task loss
         task_loss = self.criterion(student_logits, target)
 
-        # Teacher forward pass (no gradient)
         with torch.no_grad():
             input_kd = self.teacher.normalize_input(input, self.student_mean, self.student_std)
             teacher_logits = self.teacher(input_kd.detach(), return_features=False)
 
-        # Compute distillation loss (KL divergence with temperature scaling)
         prob_s = F.log_softmax(student_logits / self.temperature, dim=-1)
         prob_t = F.log_softmax(teacher_logits / self.temperature, dim=-1)
         kd_loss = F.kl_div(prob_s, prob_t, reduction='batchmean', log_target=True) * (self.temperature ** 2)
 
-        # Combine losses with weights
         total_loss = self.task_loss_weight * task_loss + self.distill_loss_weight * kd_loss
 
         return {
@@ -317,13 +365,6 @@ class FeatureDistillationTrainableModule(nn.Module):
     Wraps student model and projection layer into a single module where all
     trainable forward operations happen inside forward(). This ensures proper
     DDP wrapping when the module is used with DistributedDataParallel.
-
-    Args:
-        student_model: Student model to train
-        projection: Optional projection layer (Linear layer or None)
-
-    Returns:
-        Tuple of (logits, projected_features)
     """
 
     def __init__(
@@ -331,6 +372,12 @@ class FeatureDistillationTrainableModule(nn.Module):
             student_model: nn.Module,
             projection: Optional[nn.Module] = None,
     ):
+        """ Create trainable module wrapper for feature distillation.
+
+        Args:
+            student_model: Student model to train
+            projection: Optional projection layer (Linear layer or None)
+        """
         super().__init__()
         self.student = student_model
         self.projection = projection
@@ -342,14 +389,13 @@ class FeatureDistillationTrainableModule(nn.Module):
             input: Input tensor [B, C, H, W]
 
         Returns:
-            Tuple of (student_logits, projected_features)
+            Tuple of (student_logits, student_features) where features are
+            optionally projected to match teacher dimension.
         """
-        # Extract features and compute logits
         feature_map = self.student.forward_features(input)
         student_logits = self.student.forward_head(feature_map)
         student_features = self.student.forward_head(feature_map, pre_logits=True)
 
-        # Apply projection if needed
         if self.projection is not None:
             student_features = self.projection(student_features)
 
@@ -370,8 +416,9 @@ class FeatureDistillationTask(TrainingTask):
 
     Args:
         student_model: Student model to train
-        teacher: Pre-configured teacher model wrapper
-        criterion: Task loss function (e.g., CrossEntropyLoss)
+        teacher_model: Teacher model - can be a model name string, nn.Module, or DistillationTeacher
+        criterion: Task loss function (default: CrossEntropyLoss)
+        teacher_pretrained_path: Path to teacher pretrained weights (used when teacher_model is a string)
         distill_loss_weight: Weight for distillation loss
         task_loss_weight: Weight for task loss
         student_feature_dim: Student pre-logits dimension (auto-detected if None)
@@ -381,16 +428,11 @@ class FeatureDistillationTask(TrainingTask):
         verbose: Enable info logging
 
     Example:
-        >>> # Independent weights
+        >>> # With model name string (num_classes/in_chans inferred from student)
         >>> task = FeatureDistillationTask(
-        ...     student_model=model, teacher=teacher, criterion=nn.CrossEntropyLoss(),
+        ...     student_model=model, teacher_model='resnet50',
+        ...     criterion=nn.CrossEntropyLoss(),
         ...     distill_loss_weight=5.0, task_loss_weight=1.0,
-        ...     device=torch.device('cuda'),
-        ... )
-        >>> # Complementary mode
-        >>> task = FeatureDistillationTask(
-        ...     student_model=model, teacher=teacher, criterion=nn.CrossEntropyLoss(),
-        ...     task_loss_weight=0.3,
         ...     device=torch.device('cuda'),
         ... )
     """
@@ -398,8 +440,9 @@ class FeatureDistillationTask(TrainingTask):
     def __init__(
             self,
             student_model: nn.Module,
-            teacher: DistillationTeacher,
-            criterion: nn.Module,
+            teacher_model: Union[str, nn.Module, DistillationTeacher],
+            criterion: Optional[nn.Module] = None,
+            teacher_pretrained_path: Optional[str] = None,
             distill_loss_weight: Optional[float] = None,
             task_loss_weight: Optional[float] = None,
             student_feature_dim: Optional[int] = None,
@@ -409,8 +452,18 @@ class FeatureDistillationTask(TrainingTask):
             verbose: bool = True,
     ):
         super().__init__(device=device, dtype=dtype, verbose=verbose)
+
+        # Resolve teacher to DistillationTeacher
+        teacher = _resolve_teacher(
+            teacher_model,
+            student_model,
+            teacher_pretrained_path,
+            self.device,
+            self.dtype,
+        )
+
         self.teacher = teacher
-        self.criterion = criterion
+        self.criterion = criterion if criterion is not None else nn.CrossEntropyLoss()
 
         # Determine weighting mode
         if distill_loss_weight is not None:
@@ -423,7 +476,7 @@ class FeatureDistillationTask(TrainingTask):
                     f"task_weight={self.task_loss_weight}, distill_weight={distill_loss_weight}"
                 )
         elif task_loss_weight is not None:
-            # Mode 2: Only task_weight specified - complementary mode
+            # Mode 2: only task_weight specified - complementary mode (distill = 1 - task)
             self.task_loss_weight = task_loss_weight
             self.distill_loss_weight = 1.0 - task_loss_weight
             if self.verbose:
@@ -432,7 +485,7 @@ class FeatureDistillationTask(TrainingTask):
                     f"task_weight={task_loss_weight}, distill_weight={self.distill_loss_weight}"
                 )
         else:
-            # Neither specified - use defaults (equal weighting)
+            # Mode 3: neither specified - equal weights (both 1.0)
             self.distill_loss_weight = 1.0
             self.task_loss_weight = 1.0
             if self.verbose:
@@ -459,11 +512,9 @@ class FeatureDistillationTask(TrainingTask):
             if self.verbose:
                 _logger.info("Feature dimensions match, no projection needed")
 
-        # Create trainable module wrapping student and projection
         self.trainable_module = FeatureDistillationTrainableModule(student_model, projection)
 
-        # Register student normalization values as non-persistent buffers
-        # Shape: [1, 3, 1, 1] for proper broadcasting over BCHW images
+        # Register student normalization values
         student_unwrapped = unwrap_model(student_model)
         student_mean = torch.tensor(
             student_unwrapped.pretrained_cfg['mean'],
@@ -486,11 +537,7 @@ class FeatureDistillationTask(TrainingTask):
 
     @staticmethod
     def _detect_feature_dim(model: nn.Module) -> int:
-        """Auto-detect feature dimension from model.
-
-        Tries head_hidden_size first (pre-logits dimension), then num_features.
-        """
-        # Unwrap DDP/EMA wrapper if present
+        """Auto-detect feature dimension from model."""
         model = unwrap_model(model)
 
         if hasattr(model, 'head_hidden_size'):
@@ -507,12 +554,12 @@ class FeatureDistillationTask(TrainingTask):
     def prepare_distributed(
             self,
             device_ids: Optional[list] = None,
-            **ddp_kwargs
+            **ddp_kwargs,
     ) -> 'FeatureDistillationTask':
         """Prepare task for distributed training.
 
-        Wraps the trainable module (student + projection) in DistributedDataParallel (DDP)
-        while leaving the frozen teacher model unwrapped.
+        Wraps the trainable module (student + projection) in DistributedDataParallel
+        (DDP) while leaving the frozen teacher model unwrapped.
 
         Args:
             device_ids: List of device IDs for DDP (e.g., [local_rank])
@@ -523,11 +570,9 @@ class FeatureDistillationTask(TrainingTask):
         """
         from torch.nn.parallel import DistributedDataParallel as DDP
 
-        # Ensure teacher parameters are frozen
         for param in self.teacher.parameters():
             param.requires_grad = False
 
-        # Wrap trainable module (student + projection) in DDP
         self.trainable_module = DDP(self.trainable_module, device_ids=device_ids, **ddp_kwargs)
         return self
 
@@ -545,25 +590,18 @@ class FeatureDistillationTask(TrainingTask):
         Returns:
             Dictionary containing:
                 - 'loss': Combined training loss (task + distillation)
-                - 'output': Student logits
+                - 'output': Student logits (for metrics)
                 - 'task_loss': Classification loss component
                 - 'kd_loss': Feature distillation loss component
         """
-        # Student forward pass through trainable module (student + projection)
         student_logits, student_features = self.trainable_module(input)
-
-        # Compute task loss
         task_loss = self.criterion(student_logits, target)
 
-        # Teacher forward pass (no gradient)
         with torch.no_grad():
             input_kd = self.teacher.normalize_input(input, self.student_mean, self.student_std)
             teacher_features = self.teacher(input_kd.detach(), return_features=True)
 
-        # Compute feature distillation loss (MSE)
         kd_loss = F.mse_loss(student_features, teacher_features)
-
-        # Combine losses with weights
         total_loss = self.task_loss_weight * task_loss + self.distill_loss_weight * kd_loss
 
         return {
