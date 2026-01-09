@@ -7,6 +7,7 @@ with loss components and outputs for logging.
 from .task import TrainingTask
 from .classification import ClassificationTask
 from .distillation import DistillationTeacher, LogitDistillationTask, FeatureDistillationTask
+from .token_distillation import TokenDistillationTeacher, TokenDistillationTask
 
 __all__ = [
     'TrainingTask',
@@ -14,4 +15,6 @@ __all__ = [
     'DistillationTeacher',
     'LogitDistillationTask',
     'FeatureDistillationTask',
+    'TokenDistillationTeacher',
+    'TokenDistillationTask',
 ]
