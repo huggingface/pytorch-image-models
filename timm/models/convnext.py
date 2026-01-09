@@ -398,6 +398,7 @@ class ConvNeXt(nn.Module):
         act_layer = get_act_layer(act_layer)
 
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.drop_rate = drop_rate
         self.feature_info = []
 

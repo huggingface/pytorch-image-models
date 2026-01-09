@@ -1141,6 +1141,7 @@ class NaFlexVit(nn.Module):
 
         # Store instance variables
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.global_pool = cfg.global_pool
         self.num_features = self.head_hidden_size = self.embed_dim = cfg.embed_dim  # for consistency with other models
         self.num_prefix_tokens = 1 if cfg.class_token else 0

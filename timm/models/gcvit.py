@@ -433,6 +433,7 @@ class GlobalContextVit(nn.Module):
         feat_size = tuple(d // 4 for d in img_size)  # stem reduction by 4
         self.global_pool = global_pool
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.drop_rate = drop_rate
         num_stages = len(depths)
         self.num_features = self.head_hidden_size = int(embed_dim * 2 ** (num_stages - 1))

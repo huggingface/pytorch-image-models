@@ -342,6 +342,7 @@ class CrossVit(nn.Module):
         assert global_pool in ('token', 'avg')
 
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.global_pool = global_pool
         self.img_size = to_2tuple(img_size)
         img_scale = to_2tuple(img_scale)

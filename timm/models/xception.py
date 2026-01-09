@@ -146,6 +146,7 @@ class Xception(nn.Module):
         self.drop_rate = drop_rate
         self.global_pool = global_pool
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.num_features = self.head_hidden_size = 2048
 
         self.conv1 = nn.Conv2d(in_chans, 32, 3, 2, 0, bias=False, **dd)

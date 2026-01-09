@@ -271,6 +271,7 @@ class Cait(nn.Module):
         assert global_pool in ('', 'token', 'avg')
 
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.global_pool = global_pool
         self.num_features = self.head_hidden_size = self.embed_dim = embed_dim
         self.grad_checkpointing = False

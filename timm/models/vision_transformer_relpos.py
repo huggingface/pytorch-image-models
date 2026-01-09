@@ -303,6 +303,7 @@ class VisionTransformerRelPos(nn.Module):
         act_layer = act_layer or nn.GELU
 
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.global_pool = global_pool
         self.num_features = self.head_hidden_size = self.embed_dim = embed_dim  # for consistency with other models
         self.num_prefix_tokens = 1 if class_token else 0

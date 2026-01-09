@@ -221,6 +221,7 @@ class FasterNet(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         assert pconv_fw_type in ('split_cat', 'slicing',)
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.drop_rate = drop_rate
         if not isinstance(depths, (list, tuple)):
             depths = (depths)  # it means the model has only one stage

@@ -259,6 +259,7 @@ class XceptionAligned(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         assert output_stride in (8, 16, 32)
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
 

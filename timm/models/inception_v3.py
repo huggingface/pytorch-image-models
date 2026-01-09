@@ -302,6 +302,7 @@ class InceptionV3(nn.Module):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.aux_logits = aux_logits
         conv_block = partial(
             ConvNormAct,

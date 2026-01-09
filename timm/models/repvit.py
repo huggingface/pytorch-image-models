@@ -292,6 +292,7 @@ class RepVitClassifier(nn.Module):
         self.distillation = distillation
         self.distilled_training = False
         self.num_classes = num_classes
+        self.in_chans = in_chans
         if distillation:
             self.head_dist = NormLinear(dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
@@ -391,6 +392,7 @@ class RepVit(nn.Module):
         self.global_pool = global_pool
         self.embed_dim = embed_dim
         self.num_classes = num_classes
+        self.in_chans = in_chans
 
         in_dim = embed_dim[0]
         self.stem = RepVitStem(in_chans, in_dim, act_layer, **dd)

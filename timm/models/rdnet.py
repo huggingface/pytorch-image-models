@@ -226,6 +226,7 @@ class RDNet(nn.Module):
             norm_layer = partial(norm_layer, eps=norm_eps)
 
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.drop_rate = drop_rate
 
         # stem

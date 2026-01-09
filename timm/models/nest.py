@@ -354,6 +354,7 @@ class Nest(nn.Module):
         num_heads = to_ntuple(num_levels)(num_heads)
         depths = to_ntuple(num_levels)(depths)
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.num_features = self.head_hidden_size = embed_dims[-1]
         self.feature_info = []
         norm_layer = norm_layer or LayerNorm

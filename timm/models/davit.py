@@ -608,6 +608,7 @@ class DaVit(nn.Module):
         norm_layer = partial(get_norm_layer(norm_layer), eps=norm_eps)
         norm_layer_cl = partial(get_norm_layer(norm_layer_cl), eps=norm_eps)
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.num_features = self.head_hidden_size = embed_dims[-1]
         self.drop_rate = drop_rate
         self.grad_checkpointing = False

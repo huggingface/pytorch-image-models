@@ -552,6 +552,7 @@ class MetaFormer(nn.Module):
             mlp_act = partial(mlp_act, **dd)
 
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.num_features = dims[-1]
         self.drop_rate = drop_rate
         self.use_mlp_head = use_mlp_head

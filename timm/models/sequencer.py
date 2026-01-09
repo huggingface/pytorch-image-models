@@ -364,6 +364,7 @@ class Sequencer2d(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         assert global_pool in ('', 'avg')
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.global_pool = global_pool
         self.num_features = self.head_hidden_size = embed_dims[-1]  # for consistency with other models
         self.feature_dim = -1  # channel dim index for feature outputs (rank 4, NHWC)

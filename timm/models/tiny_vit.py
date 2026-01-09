@@ -530,6 +530,7 @@ class TinyVit(nn.Module):
         dd = {'device': device, 'dtype': dtype}
 
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.depths = depths
         self.num_stages = len(depths)
         self.mlp_ratio = mlp_ratio

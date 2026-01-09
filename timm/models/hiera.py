@@ -475,6 +475,7 @@ class Hiera(nn.Module):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.grad_checkpointing = False
         norm_layer = get_norm_layer(norm_layer)
         if isinstance(img_size, int):

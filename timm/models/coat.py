@@ -418,6 +418,7 @@ class CoaT(nn.Module):
         self.embed_dims = embed_dims
         self.num_features = self.head_hidden_size = embed_dims[-1]
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.global_pool = global_pool
 
         # Patch embeddings.

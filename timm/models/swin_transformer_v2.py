@@ -778,6 +778,7 @@ class SwinTransformerV2(nn.Module):
         dd = {'device': device, 'dtype': dtype}
 
         self.num_classes = num_classes
+        self.in_chans = in_chans
         assert global_pool in ('', 'avg')
         self.global_pool = global_pool
         self.output_fmt = 'NHWC'

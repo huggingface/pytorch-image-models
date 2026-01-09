@@ -96,6 +96,7 @@ class MobileNetV3(nn.Module):
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
         se_layer = se_layer or SqueezeExcite
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
 
@@ -398,6 +399,7 @@ class MobileNetV3Features(nn.Module):
         act_layer = act_layer or nn.ReLU
         norm_layer = norm_layer or nn.BatchNorm2d
         se_layer = se_layer or SqueezeExcite
+        self.in_chans = in_chans
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
 

@@ -269,6 +269,7 @@ class DenseNet(nn.Module):
         """
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
+        self.in_chans = in_chans
         super().__init__()
         norm_layer = get_norm_act_layer(norm_layer, act_layer=act_layer)
 

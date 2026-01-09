@@ -284,6 +284,7 @@ class InceptionV4(nn.Module):
         super().__init__()
         assert output_stride == 32
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.num_features = self.head_hidden_size = 1536
         conv_block = partial(
             ConvNormAct,

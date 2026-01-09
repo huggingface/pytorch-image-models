@@ -368,6 +368,7 @@ class SwiftFormer(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         assert output_stride == 32
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.global_pool = global_pool
         self.feature_info = []
 
