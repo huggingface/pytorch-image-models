@@ -12,7 +12,7 @@
 
 ## What's New
 
-## Jan 5 & 6, 2025
+## Jan 5 & 6, 2026
 * Release 1.0.24
 * Add new benchmark result csv files for inference timing on all models w/ RTX Pro 6000, 5090, and 4090 cards w/ PyTorch 2.9.1
 * Fix moved module error in deprecated timm.models.layers import path that impacts legacy imports
