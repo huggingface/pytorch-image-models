@@ -52,12 +52,34 @@ _NORM_TYPES = {m for n, m in _NORM_MAP.items()}
 
 
 def create_norm_layer(layer_name, num_features, **kwargs):
+    """Create a normalization layer instance by name.
+
+    Args:
+        layer_name: Normalization layer name or type.
+        num_features: Number of features/channels for normalization.
+        **kwargs: Additional arguments passed to normalization layer.
+
+    Returns:
+        Instantiated normalization layer.
+    """
     layer = get_norm_layer(layer_name)
     layer_instance = layer(num_features, **kwargs)
     return layer_instance
 
 
 def get_norm_layer(norm_layer):
+    """Resolve normalization layer from various input formats.
+
+    Handles string names, types, partial functions, and preserves kwargs.
+    Unbinds functools.partial to allow argument rebinding.
+
+    Args:
+        norm_layer: Normalization specification - string name (e.g., 'batchnorm',
+            'layernorm'), layer type, or functools.partial with bound kwargs.
+
+    Returns:
+        Normalization layer type or functools.partial with kwargs, or None.
+    """
     if norm_layer is None:
         return None
     assert isinstance(norm_layer, (type, str, types.FunctionType, functools.partial))
