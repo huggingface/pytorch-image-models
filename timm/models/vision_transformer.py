@@ -1037,6 +1037,7 @@ class VisionTransformer(nn.Module):
             x: torch.Tensor,
             indices: Optional[Union[int, List[int]]] = None,
             return_prefix_tokens: bool = False,
+            return_input_embeddings: bool = False,
             norm: bool = False,
             stop_early: bool = False,
             output_fmt: str = 'NCHW',
@@ -1050,6 +1051,8 @@ class VisionTransformer(nn.Module):
             x: Input image tensor
             indices: Take last n blocks if int, all if None, select matching indices if sequence
             return_prefix_tokens: Return both prefix and spatial intermediate tokens
+            return_input_embeddings: Return input embeddings (after pos_embed, before blocks) for
+                self-supervised methods like NEPA that compare input vs output representations
             norm: Apply norm layer to all intermediates
             stop_early: Stop iterating over blocks when last desired intermediate hit
             output_fmt: Shape of intermediate feature outputs
@@ -1058,7 +1061,7 @@ class VisionTransformer(nn.Module):
             attn_mask: Optional attention mask for masked attention (e.g., for NaFlex)
         Returns:
             A tuple with (final_features, intermediates), a list of intermediate features, or a dictionary containing
-            'image_features' and 'image_intermediates' (and optionally 'image_intermediates_prefix')
+            'image_features' and 'image_intermediates' (and optionally 'image_intermediates_prefix', 'input_embeddings')
         """
         assert output_fmt in ('NCHW', 'NLC'), 'Output format must be one of NCHW or NLC.'
         reshape = output_fmt == 'NCHW'
@@ -1071,6 +1074,9 @@ class VisionTransformer(nn.Module):
         x = self._pos_embed(x)
         x = self.patch_drop(x)
         x = self.norm_pre(x)
+
+        # Capture input embeddings before blocks (for NEPA-style self-supervised training)
+        input_embeddings = x if return_input_embeddings else None
 
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             blocks = self.blocks
@@ -1112,6 +1118,10 @@ class VisionTransformer(nn.Module):
             if not intermediates_only:
                 x_final = self.norm(x)
                 result_dict['image_features'] = x_final
+
+            # Include input embeddings if requested (for NEPA-style training)
+            if input_embeddings is not None:
+                result_dict['input_embeddings'] = input_embeddings
 
             return result_dict
 

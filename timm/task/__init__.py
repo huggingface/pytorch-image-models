@@ -8,13 +8,24 @@ from .task import TrainingTask
 from .classification import ClassificationTask
 from .distillation import DistillationTeacher, LogitDistillationTask, FeatureDistillationTask
 from .token_distillation import TokenDistillationTeacher, TokenDistillationTask
+from .lejepa import SIGReg, LeJEPATrainableModule, LeJEPATask
+from .nepa import NEPATrainableModule, NEPATask
 
 __all__ = [
+    # Base
     'TrainingTask',
+    # Classification
     'ClassificationTask',
+    # Distillation
     'DistillationTeacher',
     'LogitDistillationTask',
     'FeatureDistillationTask',
     'TokenDistillationTeacher',
     'TokenDistillationTask',
+    # Self-supervised
+    'SIGReg',
+    'LeJEPATrainableModule',
+    'LeJEPATask',
+    'NEPATrainableModule',
+    'NEPATask',
 ]

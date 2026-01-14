@@ -907,20 +907,25 @@ class Eva(nn.Module):
             x: torch.Tensor,
             indices: Optional[Union[int, List[int]]] = None,
             return_prefix_tokens: bool = False,
+            return_input_embeddings: bool = False,
             norm: bool = False,
             stop_early: bool = False,
             output_fmt: str = 'NCHW',
             intermediates_only: bool = False,
-    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+            output_dict: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]], Dict[str, Any]]:
         """ Forward features that returns intermediates.
         Args:
             x: Input image tensor
             indices: Take last n blocks if an int, if is a sequence, select by matching indices
             return_prefix_tokens: Return both prefix and spatial intermediate tokens
+            return_input_embeddings: Return input embeddings (after pos_embed, before blocks) for
+                self-supervised methods like NEPA that compare input vs output representations
             norm: Apply norm layer to all intermediates
             stop_early: Stop iterating over blocks when last desired intermediate hit
             output_fmt: Shape of intermediate feature outputs
             intermediates_only: Only return intermediate features
+            output_dict: Return outputs as a dictionary with 'image_features' and 'image_intermediates' keys
         """
         assert output_fmt in ('NCHW', 'NLC'), 'Output format for EVA-ViT features must be one of NCHW or NLC.'
         reshape = output_fmt == 'NCHW'
@@ -932,6 +937,10 @@ class Eva(nn.Module):
         x = self.patch_embed(x)
         x, rot_pos_embed = self._pos_embed(x)
         x = self.norm_pre(x)
+
+        # Capture input embeddings before blocks (for NEPA-style self-supervised training)
+        input_embeddings = x if return_input_embeddings else None
+
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             blocks = self.blocks
         else:
@@ -960,11 +969,35 @@ class Eva(nn.Module):
             # split prefix (e.g. class, distill) and spatial feature tokens
             prefix_tokens = [y[:, 0:self.num_prefix_tokens] for y in intermediates]
             intermediates = [y[:, self.num_prefix_tokens:] for y in intermediates]
+        else:
+            prefix_tokens = None
+
         if reshape:
             # reshape to BCHW output format
             H, W = self.patch_embed.dynamic_feat_size((height, width))
             intermediates = [y.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous() for y in intermediates]
-        if not torch.jit.is_scripting() and return_prefix_tokens:
+
+        # For dictionary output, handle prefix tokens separately
+        if output_dict:
+            result_dict = {}
+            # Intermediates are always included
+            result_dict['image_intermediates'] = intermediates
+            if prefix_tokens is not None and return_prefix_tokens:
+                result_dict['image_intermediates_prefix'] = prefix_tokens
+
+            # Only include features if not intermediates_only
+            if not intermediates_only:
+                x_final = self.norm(x)
+                result_dict['image_features'] = x_final
+
+            # Include input embeddings if requested (for NEPA-style training)
+            if input_embeddings is not None:
+                result_dict['input_embeddings'] = input_embeddings
+
+            return result_dict
+
+        # For non-dictionary output, maintain the original behavior
+        if not torch.jit.is_scripting() and return_prefix_tokens and prefix_tokens is not None:
             # return_prefix not support in torchscript due to poor type handling
             intermediates = list(zip(intermediates, prefix_tokens))
 
