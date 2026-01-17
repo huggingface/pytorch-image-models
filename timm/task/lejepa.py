@@ -162,13 +162,30 @@ class LeJEPATrainableModule(nn.Module):
                 - embeddings: Encoder outputs [B*V, num_features] (for optional probe)
                 - projections: Projector outputs [V, B, proj_dim] (for loss computation)
         """
+        if x.dim() != 5:
+            raise ValueError(
+                f"LeJEPA expects multi-view input [B, V, C, H, W] but got shape {x.shape}. "
+                f"Make sure you're using create_multiview_train_loader() or a multi-view dataset."
+            )
+
         B, V = x.shape[:2]
 
         # Flatten views into batch dimension
         x_flat = x.flatten(0, 1)  # [B*V, C, H, W]
 
-        # Encode
-        embeddings = self.encoder(x_flat)  # [B*V, num_features]
+        # Encode (use forward_features to get embeddings, not classifier logits)
+        embeddings = self.encoder.forward_features(x_flat)  # [B*V, ...features]
+
+        # Pool if needed (ViT returns [B, N, D], CNNs return [B, D] or [B, D, H, W])
+        if embeddings.dim() == 3:
+            # ViT-style: use CLS token or mean pool
+            if hasattr(self.encoder, 'global_pool') and self.encoder.global_pool == 'avg':
+                embeddings = embeddings.mean(dim=1)  # [B*V, D]
+            else:
+                embeddings = embeddings[:, 0]  # CLS token [B*V, D]
+        elif embeddings.dim() == 4:
+            # CNN-style: global average pool
+            embeddings = embeddings.mean(dim=(2, 3))  # [B*V, D]
 
         # Project
         projections = self.projector(embeddings)  # [B*V, proj_dim]
@@ -235,6 +252,11 @@ class LeJEPATask(TrainingTask):
         )
         self.sigreg = SIGReg(num_knots=num_knots, num_slices=num_slices)
         self.lamb = lamb
+
+        # Move to device/dtype (encoder already on device, but projector and sigreg need moving)
+        if device is not None or dtype is not None:
+            self.trainable_module.projector.to(device=device, dtype=dtype)
+            self.sigreg.to(device=device)
 
         if self.verbose:
             _logger.info(

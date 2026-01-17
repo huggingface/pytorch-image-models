@@ -142,34 +142,9 @@ def extract_features(
                 images = images.contiguous(memory_format=torch.channels_last)
 
             with amp_autocast():
-                # Get features - try forward_features first, fall back to forward
-                if hasattr(model, 'forward_features'):
-                    features = model.forward_features(images)
-                else:
-                    features = model(images)
-
-                # Handle different output formats
+                features = model(images)
                 if isinstance(features, (tuple, list)):
                     features = features[0]
-
-                # Extract features based on type
-                if features.dim() == 3:
-                    # Sequence output [B, N, D] - typical for ViTs
-                    if feature_type == 'cls':
-                        features = features[:, 0]  # CLS token
-                    elif feature_type == 'avg':
-                        features = features.mean(dim=1)  # Global average
-                    elif feature_type == 'max':
-                        features = features.max(dim=1)[0]  # Global max
-                elif features.dim() == 4:
-                    # Conv output [B, C, H, W] - typical for CNNs
-                    if feature_type == 'avg':
-                        features = features.mean(dim=(2, 3))
-                    elif feature_type == 'max':
-                        features = features.amax(dim=(2, 3))
-                    else:
-                        features = features.mean(dim=(2, 3))  # Default to avg for CNNs
-                # else: assume [B, D] already
 
                 # L2 normalize features
                 features = F.normalize(features.float(), dim=1)
@@ -280,6 +255,7 @@ def main():
         args.model,
         pretrained=args.pretrained and not args.checkpoint,
         num_classes=0,  # Remove classifier head
+        #global_pool='token',
         **args.model_kwargs,
     )
 
@@ -304,6 +280,8 @@ def main():
     model = model.to(device)
     if args.channels_last:
         model = model.to(memory_format=torch.channels_last)
+
+    model = torch.compile(model)
 
     # Resolve data config
     data_config = resolve_data_config(vars(args), model=model)

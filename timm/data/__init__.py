@@ -25,3 +25,4 @@ from .readers import get_img_extensions, is_img_extension, set_img_extensions, a
 from .real_labels import RealLabelsImagenet
 from .transforms import *
 from .transforms_factory import create_transform
+from .transforms_multiview import MultiViewTransform, MultiViewCollator

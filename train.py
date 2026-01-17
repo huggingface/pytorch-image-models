@@ -45,7 +45,6 @@ from timm.task import (
     LogitDistillationTask,
     FeatureDistillationTask,
     TokenDistillationTask,
-    NEPATask,
 )
 
 
@@ -433,12 +432,6 @@ parser.add_argument('--kd-teacher-feature-dim', default=None, type=int,
                     help='Teacher model feature dimension (auto-detected from model.head_hidden_size or model.num_features if not specified)')
 parser.add_argument('--kd-token-distill-type', default='soft', type=str, choices=['soft', 'hard'],
                     help='Token distillation type: "soft" for KL-div with temperature, "hard" for CE with teacher argmax (default: soft)')
-
-# Self-supervised training parameters
-parser.add_argument('--ssl-method', default=None, type=str, choices=['nepa'],
-                    help='Self-supervised learning method. If specified, trains without labels using the specified method.')
-parser.add_argument('--nepa-no-shift', action='store_true', default=False,
-                    help='NEPA: predict same position instead of next position. Default: False (predict next)')
 
 
 def _parse_args():
@@ -940,18 +933,6 @@ def main():
             )
         else:
             raise ValueError(f"Unknown distillation type: {args.kd_distill_type}")
-    elif args.ssl_method is not None:
-        # Self-supervised learning task
-        if args.ssl_method == 'nepa':
-            task = NEPATask(
-                model=model,
-                shift=not args.nepa_no_shift,
-                device=device,
-                dtype=model_dtype,
-                verbose=utils.is_primary(args),
-            )
-        else:
-            raise ValueError(f"Unknown SSL method: {args.ssl_method}")
     else:
         # Standard classification task
         task = ClassificationTask(
@@ -976,11 +957,7 @@ def main():
         task = torch.compile(task, backend=args.torchcompile, mode=args.torchcompile_mode)
 
     # setup checkpoint saver and eval metric tracking
-    # For SSL methods, only 'loss' is available (no accuracy metrics)
-    if args.ssl_method is not None:
-        eval_metric = 'loss'
-    else:
-        eval_metric = args.eval_metric if loader_eval is not None else 'loss'
+    eval_metric = args.eval_metric if loader_eval is not None else 'loss'
     decreasing_metric = eval_metric == 'loss'
     best_metric = None
     best_epoch = None
@@ -1105,7 +1082,6 @@ def main():
                     loader_eval,
                     validate_loss_fn,
                     args,
-                    task=task,
                     device=device,
                     amp_autocast=amp_autocast,
                     model_dtype=model_dtype,
@@ -1115,18 +1091,16 @@ def main():
                     if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
                         utils.distribute_bn(model_ema, args.world_size, args.dist_bn == 'reduce')
 
-                    # Skip EMA validation for SSL (task contains original model, not EMA)
-                    if args.ssl_method is None:
-                        ema_eval_metrics = validate(
-                            model_ema,
-                            loader_eval,
-                            validate_loss_fn,
-                            args,
-                            device=device,
-                            amp_autocast=amp_autocast,
-                            log_suffix=' (EMA)',
-                        )
-                        eval_metrics = ema_eval_metrics
+                    ema_eval_metrics = validate(
+                        model_ema,
+                        loader_eval,
+                        validate_loss_fn,
+                        args,
+                        device=device,
+                        amp_autocast=amp_autocast,
+                        log_suffix=' (EMA)',
+                    )
+                    eval_metrics = ema_eval_metrics
             else:
                 eval_metrics = None
 
@@ -1402,7 +1376,6 @@ def validate(
         loader,
         loss_fn,
         args,
-        task=None,
         device=torch.device('cuda'),
         amp_autocast=suppress,
         model_dtype=None,
@@ -1412,9 +1385,6 @@ def validate(
     losses_m = utils.AverageMeter()
     top1_m = utils.AverageMeter()
     top5_m = utils.AverageMeter()
-
-    # Check if this is a self-supervised task (no accuracy metrics)
-    is_ssl = args.ssl_method is not None
 
     model.eval()
 
@@ -1430,33 +1400,24 @@ def validate(
                 input = input.contiguous(memory_format=torch.channels_last)
 
             with amp_autocast():
-                if is_ssl and task is not None:
-                    # Self-supervised: use task for forward and loss
-                    result = task(input, target)
-                    loss = result['loss']
-                    output = result.get('output', None)
-                else:
-                    # Classification: use model directly
-                    output = model(input)
-                    if isinstance(output, (tuple, list)):
-                        output = output[0]
+                output = model(input)
+                if isinstance(output, (tuple, list)):
+                    output = output[0]
 
-                    # augmentation reduction
-                    reduce_factor = args.tta
-                    if reduce_factor > 1:
-                        output = output.unfold(0, reduce_factor, reduce_factor).mean(dim=2)
-                        target = target[0:target.size(0):reduce_factor]
+                # augmentation reduction
+                reduce_factor = args.tta
+                if reduce_factor > 1:
+                    output = output.unfold(0, reduce_factor, reduce_factor).mean(dim=2)
+                    target = target[0:target.size(0):reduce_factor]
 
-                    loss = loss_fn(output, target)
+                loss = loss_fn(output, target)
 
-            if not is_ssl:
-                acc1, acc5 = utils.accuracy(output, target, topk=(1, 5))
+            acc1, acc5 = utils.accuracy(output, target, topk=(1, 5))
 
             if args.distributed:
                 reduced_loss = utils.reduce_tensor(loss.data, args.world_size)
-                if not is_ssl:
-                    acc1 = utils.reduce_tensor(acc1, args.world_size)
-                    acc5 = utils.reduce_tensor(acc5, args.world_size)
+                acc1 = utils.reduce_tensor(acc1, args.world_size)
+                acc5 = utils.reduce_tensor(acc5, args.world_size)
             else:
                 reduced_loss = loss.data
 
@@ -1467,33 +1428,22 @@ def validate(
 
             batch_size = input.shape[0]
             losses_m.update(reduced_loss.item(), batch_size)
-            if not is_ssl:
-                top1_m.update(acc1.item(), batch_size)
-                top5_m.update(acc5.item(), batch_size)
+            top1_m.update(acc1.item(), batch_size)
+            top5_m.update(acc5.item(), batch_size)
 
             batch_time_m.update(time.time() - end)
             end = time.time()
             if utils.is_primary(args) and (last_batch or batch_idx % args.log_interval == 0):
                 log_name = 'Test' + log_suffix
-                if is_ssl:
-                    _logger.info(
-                        f'{log_name}: [{batch_idx:>4d}/{last_idx}]  '
-                        f'Time: {batch_time_m.val:.3f} ({batch_time_m.avg:.3f})  '
-                        f'Loss: {losses_m.val:>7.4f} ({losses_m.avg:>7.4f})'
-                    )
-                else:
-                    _logger.info(
-                        f'{log_name}: [{batch_idx:>4d}/{last_idx}]  '
-                        f'Time: {batch_time_m.val:.3f} ({batch_time_m.avg:.3f})  '
-                        f'Loss: {losses_m.val:>7.3f} ({losses_m.avg:>6.3f})  '
-                        f'Acc@1: {top1_m.val:>7.3f} ({top1_m.avg:>7.3f})  '
-                        f'Acc@5: {top5_m.val:>7.3f} ({top5_m.avg:>7.3f})'
-                    )
+                _logger.info(
+                    f'{log_name}: [{batch_idx:>4d}/{last_idx}]  '
+                    f'Time: {batch_time_m.val:.3f} ({batch_time_m.avg:.3f})  '
+                    f'Loss: {losses_m.val:>7.3f} ({losses_m.avg:>6.3f})  '
+                    f'Acc@1: {top1_m.val:>7.3f} ({top1_m.avg:>7.3f})  '
+                    f'Acc@5: {top5_m.val:>7.3f} ({top5_m.avg:>7.3f})'
+                )
 
-    if is_ssl:
-        metrics = OrderedDict([('loss', losses_m.avg)])
-    else:
-        metrics = OrderedDict([('loss', losses_m.avg), ('top1', top1_m.avg), ('top5', top5_m.avg)])
+    metrics = OrderedDict([('loss', losses_m.avg), ('top1', top1_m.avg), ('top5', top5_m.avg)])
 
     return metrics
 

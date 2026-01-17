@@ -9,7 +9,7 @@ from .classification import ClassificationTask
 from .distillation import DistillationTeacher, LogitDistillationTask, FeatureDistillationTask
 from .token_distillation import TokenDistillationTeacher, TokenDistillationTask
 from .lejepa import SIGReg, LeJEPATrainableModule, LeJEPATask
-from .nepa import NEPATrainableModule, NEPATask
+from .nepa import ResidualMlpBlock, PixelDecoder, NEPATrainableModule, NEPATask
 
 __all__ = [
     # Base
@@ -26,6 +26,8 @@ __all__ = [
     'SIGReg',
     'LeJEPATrainableModule',
     'LeJEPATask',
+    'ResidualMlpBlock',
+    'PixelDecoder',
     'NEPATrainableModule',
     'NEPATask',
 ]
