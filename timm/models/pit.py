@@ -361,7 +361,7 @@ class PoolingVisionTransformer(nn.Module):
             assert self.global_pool == 'token'
             x, x_dist = x[:, 0], x[:, 1]
             x = self.head_drop(x)
-            x_dist = self.head_drop(x)
+            x_dist = self.head_drop(x_dist)
             if not pre_logits:
                 x = self.head(x)
                 x_dist = self.head_dist(x_dist)
