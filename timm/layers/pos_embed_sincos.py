@@ -87,7 +87,7 @@ def swap_shape_xy(seq: List[int]) -> List[int]:
 
 def build_fourier_pos_embed(
         feat_shape: List[int],
-        bands: torch.Tensor = None,
+        bands: torch.Tensor,
         num_bands: int = 64,
         max_res: int = 224,
         temperature: float = 10000.,
@@ -320,7 +320,7 @@ def apply_keep_indices_nlc(
 
 def build_rotary_pos_embed(
         feat_shape: List[int],
-        bands: torch.Tensor = None,
+        bands: torch.Tensor,
         dim: int = 64,
         max_res: int = 224,
         temperature: float = 10000.,
