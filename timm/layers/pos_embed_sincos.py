@@ -87,7 +87,7 @@ def swap_shape_xy(seq: List[int]) -> List[int]:
 
 def build_fourier_pos_embed(
         feat_shape: List[int],
-        bands: Optional[torch.Tensor] = None,
+        bands: torch.Tensor = None,
         num_bands: int = 64,
         max_res: int = 224,
         temperature: float = 10000.,
@@ -120,26 +120,8 @@ def build_fourier_pos_embed(
     Returns:
 
     """
-    if bands is None:
-        if in_pixels:
-            bands = pixel_freq_bands(
-                num_bands,
-                float(max_res),
-                linear_bands=linear_bands,
-                device=device,
-            )
-        else:
-            bands = freq_bands(
-                num_bands,
-                temperature=temperature,
-                step=1,
-                device=device,
-            )
-    else:
-        if device is None:
-            device = bands.device
-        if dtype is None:
-            dtype = bands.dtype
+    device = device or bands.device
+    dtype = dtype or bands.dtype
 
     if grid_indexing == 'xy':
         feat_shape = swap_shape_xy(feat_shape)
@@ -338,7 +320,7 @@ def apply_keep_indices_nlc(
 
 def build_rotary_pos_embed(
         feat_shape: List[int],
-        bands: Optional[torch.Tensor] = None,
+        bands: torch.Tensor = None,
         dim: int = 64,
         max_res: int = 224,
         temperature: float = 10000.,
@@ -480,8 +462,10 @@ class RotaryEmbedding(nn.Module):
         return bands.to(device=device, dtype=dtype)
 
     def _get_pos_embed_values(self, feat_shape: List[int], device=None, dtype=torch.float32):
+        bands = self._compute_bands(device, dtype)
         emb_sin, emb_cos = build_rotary_pos_embed(
             feat_shape=feat_shape,
+            bands=bands,
             dim=self.dim,
             max_res=self.max_res,
             temperature=self.temperature,
@@ -614,8 +598,10 @@ class RotaryEmbeddingCat(nn.Module):
         return bands.to(device=device, dtype=dtype)
 
     def _get_pos_embed_values(self, feat_shape: List[int], device=None, dtype=torch.float32):
+        bands = self._compute_bands(device, dtype)
         embeds = build_rotary_pos_embed(
             feat_shape=feat_shape,
+            bands=bands,
             dim=self.dim,
             max_res=self.max_res,
             temperature=self.temperature,
