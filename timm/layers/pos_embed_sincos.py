@@ -88,10 +88,6 @@ def swap_shape_xy(seq: List[int]) -> List[int]:
 def build_fourier_pos_embed(
         feat_shape: List[int],
         bands: torch.Tensor,
-        num_bands: int = 64,
-        max_res: int = 224,
-        temperature: float = 10000.,
-        linear_bands: bool = False,
         include_grid: bool = False,
         in_pixels: bool = True,
         ref_feat_shape: Optional[List[int]] = None,
@@ -105,10 +101,6 @@ def build_fourier_pos_embed(
     Args:
         feat_shape: Feature shape for embedding.
         bands: Pre-calculated frequency bands.
-        num_bands: Number of frequency bands (determines output dim).
-        max_res: Maximum resolution for pixel based freq.
-        temperature: Temperature for non-pixel freq.
-        linear_bands: Linear band spacing for pixel based freq.
         include_grid: Include the spatial grid in output.
         in_pixels: Output in pixel freq.
         ref_feat_shape: Reference feature shape for resize / fine-tune.
@@ -321,10 +313,6 @@ def apply_keep_indices_nlc(
 def build_rotary_pos_embed(
         feat_shape: List[int],
         bands: torch.Tensor,
-        dim: int = 64,
-        max_res: int = 224,
-        temperature: float = 10000.,
-        linear_bands: bool = False,
         in_pixels: bool = True,
         ref_feat_shape: Optional[List[int]] = None,
         grid_offset: float = 0.,
@@ -337,10 +325,6 @@ def build_rotary_pos_embed(
     Args:
         feat_shape: Spatial shape of the target tensor for embedding.
         bands: Optional pre-generated frequency bands
-        dim: Output dimension of embedding tensor.
-        max_res: Maximum resolution for pixel mode.
-        temperature: Temperature (inv freq) for non-pixel mode
-        linear_bands: Linearly (instead of log) spaced bands for pixel mode
         in_pixels: Pixel vs language (inv freq) mode.
         ref_feat_shape: Reference feature shape for resize / fine-tune.
         grid_offset: Constant offset to add to grid for non-pixel freq.
@@ -354,10 +338,6 @@ def build_rotary_pos_embed(
     sin_emb, cos_emb = build_fourier_pos_embed(
         feat_shape,
         bands=bands,
-        num_bands=dim // 4,
-        max_res=max_res,
-        temperature=temperature,
-        linear_bands=linear_bands,
         in_pixels=in_pixels,
         ref_feat_shape=ref_feat_shape,
         grid_offset=grid_offset,
@@ -466,10 +446,6 @@ class RotaryEmbedding(nn.Module):
         emb_sin, emb_cos = build_rotary_pos_embed(
             feat_shape=feat_shape,
             bands=bands,
-            dim=self.dim,
-            max_res=self.max_res,
-            temperature=self.temperature,
-            linear_bands=self.linear_bands,
             in_pixels=self.in_pixels,
             ref_feat_shape=self.ref_feat_shape,
             grid_offset=self.grid_offset,
@@ -602,10 +578,6 @@ class RotaryEmbeddingCat(nn.Module):
         embeds = build_rotary_pos_embed(
             feat_shape=feat_shape,
             bands=bands,
-            dim=self.dim,
-            max_res=self.max_res,
-            temperature=self.temperature,
-            linear_bands=self.linear_bands,
             in_pixels=self.in_pixels,
             ref_feat_shape=self.ref_feat_shape,
             grid_offset=self.grid_offset,
