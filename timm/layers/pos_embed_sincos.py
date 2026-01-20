@@ -112,8 +112,10 @@ def build_fourier_pos_embed(
     Returns:
 
     """
-    device = device or bands.device
-    dtype = dtype or bands.dtype
+    if device is None:
+        device = bands.device
+    if dtype is None:
+        dtype = bands.dtype
 
     if grid_indexing == 'xy':
         feat_shape = swap_shape_xy(feat_shape)
