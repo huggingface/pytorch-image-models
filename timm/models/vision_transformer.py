@@ -322,11 +322,9 @@ class ParallelScalingBlock(nn.Module):
         self.in_proj = nn.Linear(dim, in_proj_out_dim, bias=qkv_bias, **dd)
         self.in_split = [mlp_hidden_dim] + [dim] * 3
         if qkv_bias:
-            self.register_buffer('qkv_bias', None)
+            # mlp_bias is combined with qkv_bias in in_proj.bias
             self.register_parameter('mlp_bias', None)
         else:
-            # Register empty buffer with correct shape
-            self.register_buffer('qkv_bias', torch.empty(3 * dim, **dd), persistent=False)
             self.mlp_bias = nn.Parameter(torch.empty(mlp_hidden_dim, **dd))
 
         self.q_norm = norm_layer(self.head_dim, **dd) if qk_norm else nn.Identity()
@@ -357,25 +355,16 @@ class ParallelScalingBlock(nn.Module):
         """Initialize parameters and buffers."""
         if self.mlp_bias is not None:
             nn.init.zeros_(self.mlp_bias)
-        self._init_buffers()
-
-    def _init_buffers(self) -> None:
-        """Compute and fill non-persistent buffer values."""
-        if self.qkv_bias is not None:
-            self.qkv_bias.zero_()
 
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         B, N, C = x.shape
 
         # Combined MLP fc1 & qkv projections
         y = self.in_norm(x)
-        if self.mlp_bias is not None:
-            # Concat constant zero-bias for qkv w/ trainable mlp_bias.
-            # Appears faster than adding to x_mlp separately
-            y = F.linear(y, self.in_proj.weight, torch.cat((self.qkv_bias, self.mlp_bias)))
-        else:
-            y = self.in_proj(y)
+        y = self.in_proj(y)
         x_mlp, q, k, v = torch.split(y, self.in_split, dim=-1)
+        if self.mlp_bias is not None:
+            x_mlp = x_mlp + self.mlp_bias
 
         # Dot product attention w/ qk norm
         q = self.q_norm(q.view(B, N, self.num_heads, self.head_dim)).transpose(1, 2)
@@ -410,10 +399,6 @@ class ParallelScalingBlock(nn.Module):
         # Add residual w/ drop path & layer scale applied
         x = x + self.drop_path(self.ls(y))
         return x
-
-    def init_non_persistent_buffers(self) -> None:
-        """Initialize non-persistent buffers."""
-        self._init_buffers()
 
 
 class DiffParallelScalingBlock(nn.Module):
@@ -463,11 +448,9 @@ class DiffParallelScalingBlock(nn.Module):
         self.in_proj = nn.Linear(dim, in_proj_out_dim, bias=qkv_bias, **dd)
         self.in_split = [mlp_hidden_dim] + [dim] * 3
         if qkv_bias:
-            self.register_buffer('qkv_bias', None)
+            # mlp_bias is combined with qkv_bias in in_proj.bias
             self.register_parameter('mlp_bias', None)
         else:
-            # Register empty buffer with correct shape
-            self.register_buffer('qkv_bias', torch.empty(3 * dim, **dd), persistent=False)
             self.mlp_bias = nn.Parameter(torch.empty(mlp_hidden_dim, **dd))
 
         self.q_norm = norm_layer(self.head_dim, **dd) if qk_norm else nn.Identity()
@@ -519,12 +502,6 @@ class DiffParallelScalingBlock(nn.Module):
             nn.init.normal_(self.lambda_k1, mean=0, std=0.1)
             nn.init.normal_(self.lambda_q2, mean=0, std=0.1)
             nn.init.normal_(self.lambda_k2, mean=0, std=0.1)
-        self._init_buffers()
-
-    def _init_buffers(self) -> None:
-        """Compute and fill non-persistent buffer values."""
-        if self.qkv_bias is not None:
-            self.qkv_bias.zero_()
 
     def _compute_lambda(self) -> torch.Tensor:
         if self.lambda_a is not None:
@@ -540,11 +517,10 @@ class DiffParallelScalingBlock(nn.Module):
 
         # Combined MLP fc1 & qkv projections
         y = self.in_norm(x)
-        if self.mlp_bias is not None:
-            y = F.linear(y, self.in_proj.weight, torch.cat((self.qkv_bias, self.mlp_bias)))
-        else:
-            y = self.in_proj(y)
+        y = self.in_proj(y)
         x_mlp, q, k, v = torch.split(y, self.in_split, dim=-1)
+        if self.mlp_bias is not None:
+            x_mlp = x_mlp + self.mlp_bias
 
         # Reshape for differential attention (2x heads with half head_dim for q/k)
         q = q.reshape(B, N, 2 * self.num_heads, self.head_dim).transpose(1, 2)
@@ -591,10 +567,6 @@ class DiffParallelScalingBlock(nn.Module):
         # Add residual w/ drop path & layer scale applied
         x = x + self.drop_path(self.ls(y))
         return x
-
-    def init_non_persistent_buffers(self) -> None:
-        """Initialize non-persistent buffers."""
-        self._init_buffers()
 
 
 class ParallelThingsBlock(nn.Module):
