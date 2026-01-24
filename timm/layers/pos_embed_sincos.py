@@ -194,7 +194,14 @@ def build_fourier_pos_embed(
 
     """
     bands = _compute_bands(
-        bands, num_bands, max_res, temperature, linear_bands, in_pixels, device, dtype
+        bands=bands,
+        num_bands=num_bands,
+        max_res=max_res,
+        temperature=temperature,
+        linear_bands=linear_bands,
+        in_pixels=in_pixels,
+        device=device,
+        dtype=dtype,
     )
     return _build_fourier_pos_embed(
         feat_shape,
@@ -438,7 +445,14 @@ def build_rotary_pos_embed(
 
     """
     bands = _compute_bands(
-        bands, dim // 4, max_res, temperature, linear_bands, in_pixels, device, dtype
+        bands=bands,
+        num_bands=dim // 4,
+        max_res=max_res,
+        temperature=temperature,
+        linear_bands=linear_bands,
+        in_pixels=in_pixels,
+        device=device,
+        dtype=dtype,
     )
     return _build_rotary_pos_embed(
         feat_shape,
