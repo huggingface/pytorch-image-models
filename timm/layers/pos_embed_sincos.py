@@ -130,6 +130,34 @@ def _build_fourier_pos_embed(
     return out
 
 
+def _compute_bands(
+        bands: Optional[torch.Tensor],
+        num_bands: int,
+        max_res: int,
+        temperature: float,
+        linear_bands: bool,
+        in_pixels: bool,
+        device: Optional[torch.device],
+        dtype: torch.dtype,
+) -> torch.Tensor:
+    if bands is None:
+        if in_pixels:
+            bands = pixel_freq_bands(
+                num_bands,
+                float(max_res),
+                linear_bands=linear_bands,
+                device=device,
+            )
+        else:
+            bands = freq_bands(
+                num_bands,
+                temperature=temperature,
+                step=1,
+                device=device,
+            )
+    return bands
+
+
 def build_fourier_pos_embed(
         feat_shape: List[int],
         bands: Optional[torch.Tensor] = None,
@@ -165,27 +193,9 @@ def build_fourier_pos_embed(
     Returns:
 
     """
-    if bands is None:
-        if in_pixels:
-            bands = pixel_freq_bands(
-                num_bands,
-                float(max_res),
-                linear_bands=linear_bands,
-                device=device,
-            )
-        else:
-            bands = freq_bands(
-                num_bands,
-                temperature=temperature,
-                step=1,
-                device=device,
-            )
-    else:
-        if device is None:
-            device = bands.device
-        if dtype is None:
-            dtype = bands.dtype
-
+    bands = _compute_bands(
+        bands, num_bands, max_res, temperature, linear_bands, in_pixels, device, dtype
+    )
     return _build_fourier_pos_embed(
         feat_shape,
         bands,
@@ -375,7 +385,7 @@ def _build_rotary_pos_embed(
         device: Optional[torch.device] = None,
         dtype: torch.dtype = torch.float32,
 ):
-    sin_emb, cos_emb = build_fourier_pos_embed(
+    sin_emb, cos_emb = _build_fourier_pos_embed(
         feat_shape,
         bands=bands,
         in_pixels=in_pixels,
@@ -427,31 +437,12 @@ def build_rotary_pos_embed(
     Returns:
 
     """
-    if bands is None:
-        if in_pixels:
-            bands = pixel_freq_bands(
-                num_bands,
-                float(max_res),
-                linear_bands=linear_bands,
-                device=device,
-            )
-        else:
-            bands = freq_bands(
-                num_bands,
-                temperature=temperature,
-                step=1,
-                device=device,
-            )
-    else:
-        if device is None:
-            device = bands.device
-        if dtype is None:
-            dtype = bands.dtype
-
+    bands = _compute_bands(
+        bands, dim // 4, max_res, temperature, linear_bands, in_pixels, device, dtype
+    )
     return _build_rotary_pos_embed(
         feat_shape,
         bands,
-        include_grid,
         in_pixels,
         ref_feat_shape,
         grid_offset,
