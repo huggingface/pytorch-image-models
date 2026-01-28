@@ -34,6 +34,7 @@ from timm.layers import (
     create_rope_embed,
     apply_rot_embed_cat,
     use_fused_attn,
+    register_notrace_module
 )
 from ._builder import build_model_with_cfg
 from ._manipulate import named_apply
@@ -48,7 +49,7 @@ def _cfg(url='', **kwargs):
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
         'crop_pct': .9, 'interpolation': 'bicubic',
         'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
-        'first_conv': None, 'classifier': 'head',
+        'first_conv': (), 'classifier': 'head',
         **kwargs
     }
 
@@ -147,6 +148,7 @@ def _prod(xs: Sequence[int]) -> int:
     return p
 
 
+@register_notrace_module
 class InputAdapter(nn.Module):
     """
     Perceiver grid input adapter: Fourier pos enc (+ optional projection) + combine with tokens.
@@ -365,7 +367,7 @@ class InputAdapter(nn.Module):
             enc = torch.cat([pos, enc], dim=-1)
         return enc  # f32
 
-    def forward(self, x: torch.Tensor, *, feat_size: Optional[Sequence[int]] = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, feat_size: Optional[Sequence[int]] = None) -> torch.Tensor:
         x_tokens, inferred_fs = self._maybe_flatten_x(x)
         B, N, C = x_tokens.shape
         if C != self.in_chans:
@@ -864,7 +866,7 @@ class Perceiver(nn.Module):
     ):
         super().__init__()
         self.num_classes = num_classes
-        self.num_features = self.latent_dim = latent_dim
+        self.num_features = self.head_hidden_size = self.latent_dim = latent_dim
         self.rope_type = rope_type
         self.use_rope = rope_type is not None
 
@@ -1009,6 +1011,11 @@ class Perceiver(nn.Module):
         self.num_classes = num_classes
         self.head = nn.Linear(self.latent_dim, num_classes) if num_classes > 0 else nn.Identity()
 
+    def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
+        if pre_logits:
+            return x
+        return self.head(x)
+
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         B, C, H, W = x.shape
 
@@ -1043,7 +1050,7 @@ class Perceiver(nn.Module):
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.head(x)
+        x = self.forward_head(x)
         return x
 
 
