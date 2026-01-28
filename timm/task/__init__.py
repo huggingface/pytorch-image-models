@@ -8,6 +8,7 @@ from .task import TrainingTask
 from .classification import ClassificationTask
 from .distillation import DistillationTeacher, LogitDistillationTask, FeatureDistillationTask
 from .token_distillation import TokenDistillationTeacher, TokenDistillationTask
+from .recursive_supervision import RecursiveSupervisionTask
 
 __all__ = [
     'TrainingTask',
@@ -17,4 +18,5 @@ __all__ = [
     'FeatureDistillationTask',
     'TokenDistillationTeacher',
     'TokenDistillationTask',
+    'RecursiveSupervisionTask',
 ]
