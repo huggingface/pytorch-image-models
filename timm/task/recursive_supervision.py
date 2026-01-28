@@ -132,11 +132,17 @@ class RecursiveSupervisionTask(TrainingTask):
             task_loss = task_loss + weight * step_loss
 
         # Compute halting loss
+        # Handle soft targets (mixup/cutmix): [B, num_classes] -> [B]
+        if target.ndim == 2:
+            target_labels = target.argmax(dim=-1)
+        else:
+            target_labels = target
+
         halt_loss = 0.0
         for logits, halt in zip(step_logits, halt_logits):
             with torch.no_grad():
                 predictions = logits.argmax(dim=-1)
-                is_correct = (predictions == target).float().unsqueeze(-1)  # [B, 1]
+                is_correct = (predictions == target_labels).float().unsqueeze(-1)  # [B, 1]
 
             step_halt_loss = self.halt_criterion(halt, is_correct)
             halt_loss = halt_loss + step_halt_loss

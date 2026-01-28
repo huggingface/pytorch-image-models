@@ -398,7 +398,7 @@ class RSViT(nn.Module):
             f"recursion_mode must be 'block' or 'cycle', got '{recursion_mode}'"
 
         self.num_classes = num_classes
-        self.embed_dim = embed_dim
+        self.num_features = self.head_hidden_size = self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.n_sup = n_sup
         self.t_recursions = t_recursions
@@ -517,6 +517,16 @@ class RSViT(nn.Module):
         """Parameters to exclude from weight decay."""
         return {'y_init', 'z_init'}
 
+    @torch.jit.ignore
+    def get_classifier(self) -> nn.Module:
+        """Get the classifier head."""
+        return self.head
+
+    def reset_classifier(self, num_classes: int) -> None:
+        """Reset the classifier head."""
+        self.num_classes = num_classes
+        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+
     def _run_y_block(
             self,
             y: torch.Tensor,
@@ -626,22 +636,27 @@ class RSViT(nn.Module):
     def forward_head(
             self,
             x: torch.Tensor,
+            pre_logits: bool = False,
             return_halt_logits: bool = False,
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         """Forward through classification head.
 
         Args:
             x: Class token features [B, D].
+            pre_logits: If True, return features before classification head.
             return_halt_logits: If True, also return halting logits.
 
         Returns:
             Classification logits [B, num_classes], optionally with halt logits.
         """
+        if pre_logits:
+            return x
         logits = self.head(x)
+        halt_logits = self.q_head(x)
         if return_halt_logits:
-            halt_logits = self.q_head(x)
             return logits, halt_logits
-        return logits
+        # Add zero-scaled halt_logits to ensure gradient flow through q_head
+        return logits + 0 * halt_logits.sum()
 
     def forward(
             self,
@@ -660,23 +675,20 @@ class RSViT(nn.Module):
                 - 'step_logits': List of logits at each supervision step
                 - 'halt_logits': List of halting logits at each supervision step
         """
+        # Handle FX tracing: return_all_steps becomes a Proxy, use inference path
+        if not isinstance(return_all_steps, bool):
+            return_all_steps = False
         if return_all_steps:
             features = self.forward_features(x, return_all_steps=True)
             step_logits = []
             halt_logits = []
-
             for y_feat in features['y_features']:
                 logits, halt = self.forward_head(y_feat, return_halt_logits=True)
                 step_logits.append(logits)
                 halt_logits.append(halt)
-
-            return {
-                'step_logits': step_logits,
-                'halt_logits': halt_logits,
-            }
-        else:
-            features = self.forward_features(x, return_all_steps=False)
-            return self.forward_head(features)
+            return {'step_logits': step_logits, 'halt_logits': halt_logits}
+        features = self.forward_features(x)
+        return self.forward_head(features)
 
     def forward_with_halting(
             self,
@@ -801,7 +813,7 @@ class RSPViT(nn.Module):
             f"latent_feedback must be 'none', 'joint', or 'asymmetric', got '{latent_feedback}'"
 
         self.num_classes = num_classes
-        self.embed_dim = embed_dim
+        self.num_features = self.head_hidden_size = self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.num_latents = num_latents
         self.z_depth = z_depth
@@ -935,6 +947,16 @@ class RSPViT(nn.Module):
         """Parameters to exclude from weight decay."""
         return {'y_init', 'z_init'}
 
+    @torch.jit.ignore
+    def get_classifier(self) -> nn.Module:
+        """Get the classifier head."""
+        return self.head
+
+    def reset_classifier(self, num_classes: int) -> None:
+        """Reset the classifier head."""
+        self.num_classes = num_classes
+        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+
     def _run_recursion_step(
             self,
             z: torch.Tensor,
@@ -1039,14 +1061,18 @@ class RSPViT(nn.Module):
     def forward_head(
             self,
             x: torch.Tensor,
+            pre_logits: bool = False,
             return_halt_logits: bool = False,
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         """Forward through classification head."""
+        if pre_logits:
+            return x
         logits = self.head(x)
+        halt_logits = self.q_head(x)
         if return_halt_logits:
-            halt_logits = self.q_head(x)
             return logits, halt_logits
-        return logits
+        # Add zero-scaled halt_logits to ensure gradient flow through q_head
+        return logits + 0 * halt_logits.sum()
 
     def forward(
             self,
@@ -1065,23 +1091,20 @@ class RSPViT(nn.Module):
                 - 'step_logits': List of logits at each supervision step
                 - 'halt_logits': List of halting logits at each supervision step
         """
+        # Handle FX tracing: return_all_steps becomes a Proxy, use inference path
+        if not isinstance(return_all_steps, bool):
+            return_all_steps = False
         if return_all_steps:
             features = self.forward_features(x, return_all_steps=True)
             step_logits = []
             halt_logits = []
-
             for y_feat in features['y_features']:
                 logits, halt = self.forward_head(y_feat, return_halt_logits=True)
                 step_logits.append(logits)
                 halt_logits.append(halt)
-
-            return {
-                'step_logits': step_logits,
-                'halt_logits': halt_logits,
-            }
-        else:
-            features = self.forward_features(x, return_all_steps=False)
-            return self.forward_head(features)
+            return {'step_logits': step_logits, 'halt_logits': halt_logits}
+        features = self.forward_features(x)
+        return self.forward_head(features)
 
     def forward_with_halting(
             self,
@@ -1209,7 +1232,7 @@ class RSTViT(nn.Module):
             f"y_core_depth ({y_core_depth}) must be <= z_depth ({z_depth})"
 
         self.num_classes = num_classes
-        self.embed_dim = embed_dim
+        self.num_features = self.head_hidden_size = self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.n_sup = n_sup
         self.t_recursions = t_recursions
@@ -1325,6 +1348,16 @@ class RSTViT(nn.Module):
     def no_weight_decay(self):
         """Parameters to exclude from weight decay."""
         return {'y_init', 'z_init', 'ctx_scale'}
+
+    @torch.jit.ignore
+    def get_classifier(self) -> nn.Module:
+        """Get the classifier head."""
+        return self.head
+
+    def reset_classifier(self, num_classes: int) -> None:
+        """Reset the classifier head."""
+        self.num_classes = num_classes
+        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
     def _inject_context(
             self,
@@ -1492,22 +1525,27 @@ class RSTViT(nn.Module):
     def forward_head(
             self,
             x: torch.Tensor,
+            pre_logits: bool = False,
             return_halt_logits: bool = False,
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         """Forward through classification head.
 
         Args:
             x: Class token features [B, D].
+            pre_logits: If True, return features before classification head.
             return_halt_logits: If True, also return halting logits.
 
         Returns:
             Classification logits [B, num_classes], optionally with halt logits.
         """
+        if pre_logits:
+            return x
         logits = self.head(x)
+        halt_logits = self.q_head(x)
         if return_halt_logits:
-            halt_logits = self.q_head(x)
             return logits, halt_logits
-        return logits
+        # Add zero-scaled halt_logits to ensure gradient flow through q_head
+        return logits + 0 * halt_logits.sum()
 
     def forward(
             self,
@@ -1526,23 +1564,20 @@ class RSTViT(nn.Module):
                 - 'step_logits': List of logits at each supervision step
                 - 'halt_logits': List of halting logits at each supervision step
         """
+        # Handle FX tracing: return_all_steps becomes a Proxy, use inference path
+        if not isinstance(return_all_steps, bool):
+            return_all_steps = False
         if return_all_steps:
             features = self.forward_features(x, return_all_steps=True)
             step_logits = []
             halt_logits = []
-
             for y_feat in features['y_features']:
                 logits, halt = self.forward_head(y_feat, return_halt_logits=True)
                 step_logits.append(logits)
                 halt_logits.append(halt)
-
-            return {
-                'step_logits': step_logits,
-                'halt_logits': halt_logits,
-            }
-        else:
-            features = self.forward_features(x, return_all_steps=False)
-            return self.forward_head(features)
+            return {'step_logits': step_logits, 'halt_logits': halt_logits}
+        features = self.forward_features(x)
+        return self.forward_head(features)
 
     def forward_with_halting(
             self,
