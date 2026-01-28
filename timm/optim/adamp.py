@@ -4,6 +4,10 @@ AdamP Optimizer Implementation copied from https://github.com/clovaai/AdamP/blob
 Paper: `Slowing Down the Weight Norm Increase in Momentum-based Optimizers` - https://arxiv.org/abs/2006.08217
 Code: https://github.com/clovaai/AdamP
 
+
+References for added functionality:
+    Cautious Optimizers: https://arxiv.org/abs/2411.16085
+    Spherical Cautious Optimizer: https://openreview.net/forum?id=4lTJbNpWr3 
 Copyright (c) 2020-present NAVER Corp.
 MIT license
 """
@@ -22,7 +26,7 @@ def _layer_view(x) -> torch.Tensor:
     return x.reshape(1, -1)
 
 
-def projection(p, grad, perturb, delta: float, wd_ratio: float, eps: float):
+def projection(p, grad, perturb, delta: float, wd_ratio: float, eps: float, caution: bool = False):
     wd = 1.
     expand_size = (-1,) + (1,) * (len(p.shape) - 1)
     for view_func in [_channel_view, _layer_view]:
@@ -34,8 +38,24 @@ def projection(p, grad, perturb, delta: float, wd_ratio: float, eps: float):
         if cosine_sim.max() < delta / math.sqrt(param_view.size(1)):
             p_n = p / param_view.norm(p=2, dim=1).add_(eps).reshape(expand_size)
             perturb -= p_n * view_func(p_n * perturb).sum(dim=1).reshape(expand_size)
+            
+            if caution:
+                # Spherical Cautious Optimizer Logic
+                grad_radial = p_n * view_func(p_n * grad).sum(dim=1).reshape(expand_size)
+                grad_perp = grad - grad_radial
+                
+                mask = (perturb * grad_perp > 0).to(grad.dtype)
+                mask.div_(mask.mean().clamp_(min=1e-3))
+                perturb.mul_(mask)
+
             wd = wd_ratio
             return perturb, wd
+
+    if caution:
+        # Standard Cautious Optimizer Logic for non-projected parameters
+        mask = (perturb * grad > 0).to(grad.dtype)
+        mask.div_(mask.mean().clamp_(min=1e-3))
+        perturb.mul_(mask)
 
     return perturb, wd
 
@@ -51,6 +71,7 @@ class AdamP(Optimizer):
             delta=0.1,
             wd_ratio=0.1,
             nesterov=False,
+            caution=False, 
     ):
         defaults = dict(
             lr=lr,
@@ -60,6 +81,7 @@ class AdamP(Optimizer):
             delta=delta,
             wd_ratio=wd_ratio,
             nesterov=nesterov,
+            caution=caution,
         )
         super(AdamP, self).__init__(params, defaults)
 
@@ -78,6 +100,7 @@ class AdamP(Optimizer):
                 grad = p.grad
                 beta1, beta2 = group['betas']
                 nesterov = group['nesterov']
+                caution = group.get('caution', False)
 
                 state = self.state[p]
 
@@ -108,7 +131,14 @@ class AdamP(Optimizer):
                 # Projection
                 wd_ratio = 1.
                 if len(p.shape) > 1:
-                    perturb, wd_ratio = projection(p, grad, perturb, group['delta'], group['wd_ratio'], group['eps'])
+                    perturb, wd_ratio = projection(
+                        p, grad, perturb, group['delta'], group['wd_ratio'], group['eps'], caution
+                    )
+                elif caution:
+                    # Apply standard caution for scalars/1D tensors if needed
+                    mask = (perturb * grad > 0).to(grad.dtype)
+                    mask.div_(mask.mean().clamp_(min=1e-3))
+                    perturb.mul_(mask)
 
                 # Weight decay
                 if group['weight_decay'] > 0:
