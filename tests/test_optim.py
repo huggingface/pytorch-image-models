@@ -638,3 +638,10 @@ def test_param_groups_weight_decay():
         else:
             assert param in decay_params
 
+@pytest.mark.parametrize('optimizer', ['cadamp'])
+def test_cadamp(optimizer):
+    _test_rosenbrock(
+        lambda params: create_optimizer_v2(params, optimizer, lr=5e-2)
+    )
+    _test_model(optimizer, dict(lr=5e-2))
+
