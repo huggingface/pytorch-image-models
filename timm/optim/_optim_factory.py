@@ -780,6 +780,13 @@ def _register_cautious_optimizers(registry: OptimizerRegistry) -> None:
             has_momentum=True,
             defaults={'nesterov': True, 'caution': True}
         ),
+        OptimInfo(
+            name='cadamp',
+            opt_class=AdamP,
+            description='Add the spherical cautious optimizer and the standard cautious optimizer to AdamP',
+            has_betas=True,
+            defaults={'wd_ratio': 0.01, 'nesterov': True, 'caution': True}
+        ),
     ]
     for opt in cautious_optimizers:
         registry.register(opt)
