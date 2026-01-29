@@ -47,7 +47,8 @@ def projection(p, grad, perturb, delta: float, wd_ratio: float, eps: float, caut
                 mask = (perturb * grad_perp > 0).to(grad.dtype)
                 mask.div_(mask.mean().clamp_(min=1e-3))
                 perturb.mul_(mask)
-
+                # Enhance the numerical stability of the Cautious Optimizer
+                perturb -= p_n * view_func(p_n * perturb).sum(dim=1).reshape(expand_size)
             wd = wd_ratio
             return perturb, wd
 
