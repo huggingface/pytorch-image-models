@@ -22,6 +22,7 @@ from timm.layers import (
     AttentionRope,
     create_rope_embed,
     DropPath,
+    LayerScale,
     trunc_normal_,
     use_fused_attn,
     apply_rot_embed_cat,
@@ -158,6 +159,7 @@ class RSViTCrossBlock(nn.Module):
         num_heads: Number of attention heads.
         mlp_ratio: Ratio of mlp hidden dim to embedding dim.
         proj_drop: Projection dropout rate.
+        init_values: Initial values for layer scale.
         drop_path: Stochastic depth rate.
         rotate_half: Use 'half' RoPE layout.
     """
@@ -169,6 +171,7 @@ class RSViTCrossBlock(nn.Module):
             num_heads: int = 8,
             mlp_ratio: float = 4.,
             proj_drop: float = 0.,
+            init_values: Optional[float] = None,
             drop_path: float = 0.,
             rotate_half: bool = False,
             device=None,
@@ -189,6 +192,7 @@ class RSViTCrossBlock(nn.Module):
             rotate_half=rotate_half,
             **dd,
         )
+        self.ls1 = LayerScale(dim, init_values=init_values, **dd) if init_values is not None else nn.Identity()
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         self.norm2 = RmsNorm(dim, **dd)
@@ -199,6 +203,7 @@ class RSViTCrossBlock(nn.Module):
             drop=proj_drop,
             **dd,
         )
+        self.ls2 = LayerScale(dim, init_values=init_values, **dd) if init_values is not None else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(
@@ -220,14 +225,16 @@ class RSViTCrossBlock(nn.Module):
             Output tensor [B, N_q, D].
         """
         x = x + self.drop_path1(
-            self.cross_attn(
-                self.norm1(x),
-                self.norm_context(context),
-                rope_q=rope_q,
-                rope_k=rope_k,
+            self.ls1(
+                self.cross_attn(
+                    self.norm1(x),
+                    self.norm_context(context),
+                    rope_q=rope_q,
+                    rope_k=rope_k,
+                )
             )
         )
-        x = x + self.drop_path2(self.mlp(self.norm2(x)))
+        x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
         return x
 
 
@@ -240,6 +247,7 @@ class RSViTBlock(nn.Module):
         num_prefix_tokens: Number of prefix tokens (e.g., cls token) excluded from RoPE.
         mlp_ratio: Ratio of mlp hidden dim to embedding dim.
         proj_drop: Projection dropout rate.
+        init_values: Initial values for layer scale.
         drop_path: Stochastic depth rate.
         rotate_half: Use 'half' ROPE layout instead of default 'interleaved'.
     """
@@ -251,6 +259,7 @@ class RSViTBlock(nn.Module):
             num_prefix_tokens: int = 0,
             mlp_ratio: float = 4.,
             proj_drop: float = 0.,
+            init_values: Optional[float] = None,
             drop_path: float = 0.,
             rotate_half: bool = False,
             device=None,
@@ -271,6 +280,7 @@ class RSViTBlock(nn.Module):
             rotate_half=rotate_half,
             **dd,
         )
+        self.ls1 = LayerScale(dim, init_values=init_values, **dd) if init_values is not None else nn.Identity()
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         self.norm2 = RmsNorm(dim, **dd)
@@ -281,6 +291,7 @@ class RSViTBlock(nn.Module):
             drop=proj_drop,
             **dd,
         )
+        self.ls2 = LayerScale(dim, init_values=init_values, **dd) if init_values is not None else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(
@@ -298,9 +309,9 @@ class RSViTBlock(nn.Module):
             Output tensor [B, N, D].
         """
         # Pre-norm attention
-        x = x + self.drop_path1(self.attn(self.norm1(x), rope=rope))
+        x = x + self.drop_path1(self.ls1(self.attn(self.norm1(x), rope=rope)))
         # Pre-norm MLP
-        x = x + self.drop_path2(self.mlp(self.norm2(x)))
+        x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
         return x
 
 
@@ -311,6 +322,7 @@ class ResidualMLP(nn.Module):
         dim: Input dimension.
         mlp_ratio: Ratio of mlp hidden dim to input dim.
         drop: Dropout rate.
+        init_values: Initial values for layer scale.
     """
 
     def __init__(
@@ -318,6 +330,7 @@ class ResidualMLP(nn.Module):
             dim: int,
             mlp_ratio: float = 4.,
             drop: float = 0.,
+            init_values: Optional[float] = None,
             device=None,
             dtype=None,
     ):
@@ -331,9 +344,10 @@ class ResidualMLP(nn.Module):
             drop=drop,
             **dd,
         )
+        self.ls = LayerScale(dim, init_values=init_values, **dd) if init_values is not None else nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x + self.mlp(self.norm(x))
+        return x + self.ls(self.mlp(self.norm(x)))
 
 
 class RSViT(nn.Module):
@@ -363,6 +377,7 @@ class RSViT(nn.Module):
         y_block_mode: Mode for y_block ('self' for self-attention over [y,z], 'cross' for cross-attention y→z).
         drop_rate: Dropout rate.
         proj_drop_rate: Projection dropout rate.
+        init_values: Initial values for layer scale.
         drop_path_rate: Stochastic depth rate.
         halt_threshold: Confidence threshold for early halting (inference).
     """
@@ -386,6 +401,7 @@ class RSViT(nn.Module):
             y_block_mode: str = 'self',
             drop_rate: float = 0.,
             proj_drop_rate: float = 0.,
+            init_values: Optional[float] = None,
             drop_path_rate: float = 0.,
             halt_threshold: float = 0.8,
             device=None,
@@ -452,6 +468,7 @@ class RSViT(nn.Module):
                 num_prefix_tokens=0,
                 mlp_ratio=mlp_ratio,
                 proj_drop=proj_drop_rate,
+                init_values=init_values,
                 drop_path=drop_path_rate,
                 rotate_half=rotate_half,
                 **dd,
@@ -469,6 +486,7 @@ class RSViT(nn.Module):
                 num_heads=num_heads,
                 mlp_ratio=mlp_ratio,
                 proj_drop=proj_drop_rate,
+                init_values=init_values,
                 drop_path=drop_path_rate,
                 rotate_half=rotate_half,
                 **dd,
@@ -480,6 +498,7 @@ class RSViT(nn.Module):
                 num_prefix_tokens=1,
                 mlp_ratio=mlp_ratio,
                 proj_drop=proj_drop_rate,
+                init_values=init_values,
                 drop_path=drop_path_rate,
                 rotate_half=rotate_half,
                 **dd,
@@ -778,6 +797,7 @@ class RSPViT(nn.Module):
         rotate_half: Use 'half' RoPE layout instead of default 'interleaved'.
         drop_rate: Dropout rate.
         proj_drop_rate: Projection dropout rate.
+        init_values: Initial values for layer scale.
         drop_path_rate: Stochastic depth rate.
         halt_threshold: Confidence threshold for early halting (inference).
     """
@@ -801,6 +821,7 @@ class RSPViT(nn.Module):
             rotate_half: bool = False,
             drop_rate: float = 0.,
             proj_drop_rate: float = 0.,
+            init_values: Optional[float] = None,
             drop_path_rate: float = 0.,
             halt_threshold: float = 0.8,
             device=None,
@@ -879,6 +900,7 @@ class RSPViT(nn.Module):
             num_heads=num_heads,
             mlp_ratio=mlp_ratio,
             proj_drop=proj_drop_rate,
+            init_values=init_values,
             drop_path=drop_path_rate,
             rotate_half=rotate_half,
             **dd,
@@ -895,6 +917,7 @@ class RSPViT(nn.Module):
                 num_prefix_tokens=z_self_prefix_tokens,
                 mlp_ratio=mlp_ratio,
                 proj_drop=proj_drop_rate,
+                init_values=init_values,
                 drop_path=drop_path_rate,
                 rotate_half=rotate_half,
                 **dd,
@@ -910,6 +933,7 @@ class RSPViT(nn.Module):
             num_heads=num_heads,
             mlp_ratio=mlp_ratio,
             proj_drop=proj_drop_rate,
+            init_values=init_values,
             drop_path=drop_path_rate,
             rotate_half=rotate_half,
             **dd,
@@ -1191,6 +1215,7 @@ class RSTViT(nn.Module):
         ctx_gate_mode: Context gating mode ('uniform' for spatially uniform, 'spatial' for per-patch attention).
         drop_rate: Dropout rate.
         proj_drop_rate: Projection dropout rate.
+        init_values: Initial values for layer scale.
         drop_path_rate: Stochastic depth rate.
         halt_threshold: Confidence threshold for early halting (inference).
     """
@@ -1210,12 +1235,13 @@ class RSTViT(nn.Module):
             y_core_depth: int = 1,
             y_mlp_depth: int = 1,
             recursion_mode: str = 'block',
-            rope_type: str = 'cat',
+            rope_type: str = 'dinov3',
             rotate_half: bool = False,
             z_init_mode: str = 'single',
             ctx_gate_mode: str = 'uniform',
             drop_rate: float = 0.,
             proj_drop_rate: float = 0.,
+            init_values: Optional[float] = None,
             drop_path_rate: float = 0.,
             halt_threshold: float = 0.8,
             device=None,
@@ -1307,6 +1333,7 @@ class RSTViT(nn.Module):
                 num_prefix_tokens=1,
                 mlp_ratio=mlp_ratio,
                 proj_drop=proj_drop_rate,
+                init_values=init_values,
                 drop_path=drop_path_rate,
                 rotate_half=rotate_half,
                 **dd,
@@ -1316,7 +1343,7 @@ class RSTViT(nn.Module):
 
         # Y-specific MLP depth for additional processing after attention
         self.y_mlps = nn.Sequential(*[
-            ResidualMLP(embed_dim, mlp_ratio, proj_drop_rate, **dd)
+            ResidualMLP(embed_dim, mlp_ratio, proj_drop_rate, init_values=init_values, **dd)
             for _ in range(y_mlp_depth)
         ]) if y_mlp_depth > 0 else nn.Identity()
 

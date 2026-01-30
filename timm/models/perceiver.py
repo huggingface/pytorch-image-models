@@ -25,6 +25,7 @@ from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import (
     Mlp,
     DropPath,
+    LayerScale,
     PatchEmbed,
     trunc_normal_,
     lecun_normal_,
@@ -514,7 +515,7 @@ class Affine(nn.Module):
 class CrossBlock(nn.Module):
     """Cross-attention block with MLP.
 
-    Latents cross-attend to data with optional RoPE support.
+    Latents cross-attend to data with optional RoPE and LayerScale support.
     """
 
     def __init__(
@@ -525,6 +526,7 @@ class CrossBlock(nn.Module):
             attn_dim: Optional[int] = None,
             mlp_ratio: float = 4.,
             qkv_bias: bool = True,
+            init_values: Optional[float] = None,
             drop: float = 0.,
             drop_path: float = 0.,
             act_layer: nn.Module = nn.GELU,
@@ -541,7 +543,9 @@ class CrossBlock(nn.Module):
             qkv_bias=qkv_bias,
             proj_drop=drop,
         )
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.ls1 = LayerScale(latent_dim, init_values=init_values) if init_values is not None else nn.Identity()
+        self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
         self.norm2 = norm_layer(latent_dim)
         mlp_hidden_dim = int(latent_dim * mlp_ratio)
         self.mlp = Mlp(
@@ -550,6 +554,8 @@ class CrossBlock(nn.Module):
             act_layer=act_layer,
             drop=drop,
         )
+        self.ls2 = LayerScale(latent_dim, init_values=init_values) if init_values is not None else nn.Identity()
+        self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(
             self,
@@ -558,70 +564,17 @@ class CrossBlock(nn.Module):
             rope_q: Optional[torch.Tensor] = None,
             rope_k: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        latent = latent + self.drop_path(self.attn(
-            self.norm1_latent(latent),
-            self.norm1_data(data),
-            rope_q=rope_q,
-            rope_k=rope_k,
-        ))
-        latent = latent + self.drop_path(self.mlp(self.norm2(latent)))
-        return latent
-
-
-class CrossBlockLayerScale(nn.Module):
-    """Cross-attention block with LayerScale and MLP."""
-
-    def __init__(
-            self,
-            latent_dim: int,
-            data_dim: int,
-            num_heads: int,
-            attn_dim: Optional[int] = None,
-            mlp_ratio: float = 4.,
-            qkv_bias: bool = True,
-            init_values: float = 1e-5,
-            drop: float = 0.,
-            drop_path: float = 0.,
-            act_layer: nn.Module = nn.GELU,
-            norm_layer: nn.Module = nn.LayerNorm,
-    ):
-        super().__init__()
-        self.norm1_latent = norm_layer(latent_dim)
-        self.norm1_data = norm_layer(data_dim)
-        self.attn = CrossAttention(
-            latent_dim,
-            data_dim,
-            num_heads=num_heads,
-            attn_dim=attn_dim,
-            qkv_bias=qkv_bias,
-            proj_drop=drop,
+        latent = latent + self.drop_path1(
+            self.ls1(
+                self.attn(
+                    self.norm1_latent(latent),
+                    self.norm1_data(data),
+                    rope_q=rope_q,
+                    rope_k=rope_k,
+                )
+            )
         )
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.norm2 = norm_layer(latent_dim)
-        mlp_hidden_dim = int(latent_dim * mlp_ratio)
-        self.mlp = Mlp(
-            in_features=latent_dim,
-            hidden_features=mlp_hidden_dim,
-            act_layer=act_layer,
-            drop=drop,
-        )
-        self.ls1 = nn.Parameter(init_values * torch.ones(latent_dim))
-        self.ls2 = nn.Parameter(init_values * torch.ones(latent_dim))
-
-    def forward(
-            self,
-            latent: torch.Tensor,
-            data: torch.Tensor,
-            rope_q: Optional[torch.Tensor] = None,
-            rope_k: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
-        latent = latent + self.drop_path(self.ls1 * self.attn(
-            self.norm1_latent(latent),
-            self.norm1_data(data),
-            rope_q=rope_q,
-            rope_k=rope_k,
-        ))
-        latent = latent + self.drop_path(self.ls2 * self.mlp(self.norm2(latent)))
+        latent = latent + self.drop_path2(self.ls2(self.mlp(self.norm2(latent))))
         return latent
 
 
@@ -629,6 +582,7 @@ class TransformerBlock(nn.Module):
     """Transformer block with self-attention and MLP.
 
     Uses timm's standard Attention (with SDPA) or AttentionRope for RoPE support.
+    Optional LayerScale support via init_values parameter.
     """
 
     def __init__(
@@ -637,6 +591,7 @@ class TransformerBlock(nn.Module):
             num_heads: int,
             mlp_ratio: float = 4.,
             qkv_bias: bool = True,
+            init_values: Optional[float] = None,
             drop: float = 0.,
             drop_path: float = 0.,
             act_layer: nn.Module = nn.GELU,
@@ -661,7 +616,9 @@ class TransformerBlock(nn.Module):
                 qkv_bias=qkv_bias,
                 proj_drop=drop,
             )
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.ls1 = LayerScale(dim, init_values=init_values) if init_values is not None else nn.Identity()
+        self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
         self.norm2 = norm_layer(dim)
         self.mlp = Mlp(
             in_features=dim,
@@ -669,67 +626,15 @@ class TransformerBlock(nn.Module):
             act_layer=act_layer,
             drop=drop,
         )
+        self.ls2 = LayerScale(dim, init_values=init_values) if init_values is not None else nn.Identity()
+        self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x: torch.Tensor, rope: Optional[torch.Tensor] = None) -> torch.Tensor:
         if self.use_rope:
-            x = x + self.drop_path(self.attn(self.norm1(x), rope=rope))
+            x = x + self.drop_path1(self.ls1(self.attn(self.norm1(x), rope=rope)))
         else:
-            x = x + self.drop_path(self.attn(self.norm1(x)))
-        x = x + self.drop_path(self.mlp(self.norm2(x)))
-        return x
-
-
-class TransformerBlockLayerScale(nn.Module):
-    """Transformer block with LayerScale, self-attention and MLP."""
-
-    def __init__(
-            self,
-            dim: int,
-            num_heads: int,
-            mlp_ratio: float = 4.,
-            qkv_bias: bool = True,
-            init_values: float = 1e-5,
-            drop: float = 0.,
-            drop_path: float = 0.,
-            act_layer: nn.Module = nn.GELU,
-            norm_layer: nn.Module = nn.LayerNorm,
-            use_rope: bool = False,
-    ):
-        super().__init__()
-        self.use_rope = use_rope
-        self.norm1 = norm_layer(dim)
-        if use_rope:
-            self.attn = AttentionRope(
-                dim,
-                num_heads=num_heads,
-                qkv_bias=qkv_bias,
-                num_prefix_tokens=0,
-                proj_drop=drop,
-            )
-        else:
-            self.attn = Attention(
-                dim,
-                num_heads=num_heads,
-                qkv_bias=qkv_bias,
-                proj_drop=drop,
-            )
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.norm2 = norm_layer(dim)
-        self.mlp = Mlp(
-            in_features=dim,
-            hidden_features=int(dim * mlp_ratio),
-            act_layer=act_layer,
-            drop=drop,
-        )
-        self.ls1 = nn.Parameter(init_values * torch.ones(dim))
-        self.ls2 = nn.Parameter(init_values * torch.ones(dim))
-
-    def forward(self, x: torch.Tensor, rope: Optional[torch.Tensor] = None) -> torch.Tensor:
-        if self.use_rope:
-            x = x + self.drop_path(self.ls1 * self.attn(self.norm1(x), rope=rope))
-        else:
-            x = x + self.drop_path(self.ls1 * self.attn(self.norm1(x)))
-        x = x + self.drop_path(self.ls2 * self.mlp(self.norm2(x)))
+            x = x + self.drop_path1(self.ls1(self.attn(self.norm1(x))))
+        x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
         return x
 
 
@@ -820,6 +725,7 @@ class Perceiver(nn.Module):
         data_concat_pos: Concatenate raw position coordinates to Fourier features.
         data_max_resolution: Max resolution for Fourier frequency bands. If None, uses feat_size.
         qkv_bias: Enable bias for QKV projections.
+        init_values: Initial values for layer scale. If None, no layer scale is used.
         cross_block: Cross-attention block class.
         transformer_block: Transformer block class.
         norm_layer: Normalization layer.
@@ -856,6 +762,7 @@ class Perceiver(nn.Module):
             data_concat_pos: bool = True,
             data_max_resolution: Optional[Sequence[int]] = None,
             qkv_bias: bool = True,
+            init_values: Optional[float] = None,
             cross_block: Optional[nn.Module] = None,
             transformer_block: Optional[nn.Module] = None,
             norm_layer: Optional[nn.Module] = None,
@@ -964,6 +871,7 @@ class Perceiver(nn.Module):
         for i, k in enumerate(unique_keys):
             stage_args = dict(
                 qkv_bias=qkv_bias,
+                init_values=init_values,
                 drop=drop_rate,
                 drop_path=drop_path_rate,
                 norm_layer=norm_layer,
@@ -1130,7 +1038,7 @@ def perceiver_m_ls(pretrained: bool = False, **kwargs) -> Perceiver:
     """
     model_args = dict(
         cross_depths=(1,) * 2, latent_dim=768, num_latents=384, cross_attn_dim=160, data_bands=40,
-        transformer_block=TransformerBlockLayerScale, cross_block=CrossBlockLayerScale,
+        init_values=1e-5,
         norm_layer=Affine,
     )
     return _create_perceiver('perceiver_m_ls', pretrained=pretrained, **dict(model_args, **kwargs))
