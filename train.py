@@ -45,6 +45,7 @@ from timm.task import (
     LogitDistillationTask,
     FeatureDistillationTask,
     TokenDistillationTask,
+    RecursiveSupervisionTask,
 )
 
 
@@ -433,6 +434,18 @@ parser.add_argument('--kd-teacher-feature-dim', default=None, type=int,
 parser.add_argument('--kd-token-distill-type', default='soft', type=str, choices=['soft', 'hard'],
                     help='Token distillation type: "soft" for KL-div with temperature, "hard" for CE with teacher argmax (default: soft)')
 
+# Recursive Supervision parameters
+parser.add_argument('--rs-enable', action='store_true', default=False,
+                    help='Enable recursive supervision training')
+parser.add_argument('--rs-n-sup', default=4, type=int,
+                    help='Number of supervision steps (default: 4)')
+parser.add_argument('--rs-t-recursions', default=4, type=int,
+                    help='Number of recursions per supervision step (default: 4)')
+parser.add_argument('--rs-halt-weight', default=0.1, type=float,
+                    help='Weight for halting loss (default: 0.1)')
+parser.add_argument('--rs-step-weights', default=None, type=float, nargs='+',
+                    help='Weights for each supervision step (default: linearly increasing)')
+
 
 def _parse_args():
     # Do we have a config file to parse?
@@ -509,6 +522,11 @@ def main():
             file=args.pretrained_path,
             num_classes=-1,  # force head adaptation
         )
+
+    # Add TRM-specific kwargs for deep supervision training
+    if args.rs_enable:
+        factory_kwargs['n_sup'] = args.rs_n_sup
+        factory_kwargs['t_recursions'] = args.rs_t_recursions
 
     model = create_model(
         args.model,
@@ -933,6 +951,20 @@ def main():
             )
         else:
             raise ValueError(f"Unknown distillation type: {args.kd_distill_type}")
+    elif args.rs_enable:
+        # Recursive supervision training task
+        # Get n_sup from model to ensure consistency (model may have different value from --model-kwargs)
+        n_sup = getattr(model, 'n_sup', args.rs_n_sup)
+        task = RecursiveSupervisionTask(
+            model=model,
+            criterion=train_loss_fn,
+            n_sup=n_sup,
+            step_weights=args.rs_step_weights,
+            halt_weight=args.rs_halt_weight,
+            device=device,
+            dtype=model_dtype,
+            verbose=utils.is_primary(args),
+        )
     else:
         # Standard classification task
         task = ClassificationTask(

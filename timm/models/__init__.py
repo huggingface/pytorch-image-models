@@ -50,6 +50,7 @@ from .nest import *
 from .nextvit import *
 from .nfnet import *
 from .pit import *
+from .perceiver import *
 from .pnasnet import *
 from .pvt_v2 import *
 from .rdnet import *
@@ -74,6 +75,7 @@ from .swin_transformer_v2_cr import *
 from .tiny_vit import *
 from .tnt import *
 from .tresnet import *
+from .rsvit import *
 from .twins import *
 from .vgg import *
 from .visformer import *
