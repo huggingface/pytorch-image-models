@@ -9,10 +9,33 @@ from .config import use_fused_attn
 from .pos_embed_sincos import apply_rot_embed_cat
 
 
+__all__ = ['Attention', 'AttentionRope', 'maybe_add_mask', 'resolve_self_attn_mask']
+
+
 @torch.fx.wrap
 @register_notrace_function
 def maybe_add_mask(scores: torch.Tensor, attn_mask: Optional[torch.Tensor] = None):
     return scores if attn_mask is None else scores + attn_mask
+
+
+def resolve_self_attn_mask(
+        seq_len: int,
+        attn: torch.Tensor,
+        attn_mask: Optional[torch.Tensor] = None,
+        is_causal: bool = False,
+) -> Optional[torch.Tensor]:
+    # Build additive bias matching SDPA semantics for self-attention
+    # is_causal and attn_mask are mutually exclusive (is_causal takes precedence)
+    if is_causal:
+        attn_bias = attn.new_full((seq_len, seq_len), float('-inf')).triu_(1)
+    elif attn_mask is None:
+        attn_bias = None
+    elif attn_mask.dtype == torch.bool:
+        attn_bias = torch.zeros_like(attn_mask, dtype=attn.dtype)
+        attn_bias.masked_fill_(~attn_mask, float('-inf'))
+    else:
+        attn_bias = attn_mask
+    return attn_bias
 
 
 class Attention(nn.Module):
@@ -101,19 +124,7 @@ class Attention(nn.Module):
         else:
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)
-
-            # Build additive bias matching SDPA semantics
-            # is_causal and attn_mask are mutually exclusive (is_causal takes precedence)
-            if is_causal:
-                attn_bias = attn.new_full((N, N), float('-inf')).triu_(1)
-            elif attn_mask is None:
-                attn_bias = None
-            elif attn_mask.dtype == torch.bool:
-                attn_bias = torch.zeros_like(attn_mask, dtype=attn.dtype)
-                attn_bias.masked_fill_(~attn_mask, float('-inf'))
-            else:
-                attn_bias = attn_mask
-
+            attn_bias = resolve_self_attn_mask(N, attn, attn_mask, is_causal)
             attn = maybe_add_mask(attn, attn_bias)
             attn = attn.softmax(dim=-1)
             attn = self.attn_drop(attn)
@@ -254,20 +265,8 @@ class AttentionRope(nn.Module):
             )
         else:
             q = q * self.scale
-            attn = (q @ k.transpose(-2, -1))
-
-            # Build additive bias matching SDPA semantics
-            # is_causal and attn_mask are mutually exclusive (is_causal takes precedence)
-            if is_causal:
-                attn_bias = attn.new_full((N, N), float('-inf')).triu_(1)
-            elif attn_mask is None:
-                attn_bias = None
-            elif attn_mask.dtype == torch.bool:
-                attn_bias = torch.zeros_like(attn_mask, dtype=attn.dtype)
-                attn_bias.masked_fill_(~attn_mask, float('-inf'))
-            else:
-                attn_bias = attn_mask
-
+            attn = q @ k.transpose(-2, -1)
+            attn_bias = resolve_self_attn_mask(N, attn, attn_mask, is_causal)
             attn = maybe_add_mask(attn, attn_bias)
             attn = attn.softmax(dim=-1)
 

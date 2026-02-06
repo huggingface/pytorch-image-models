@@ -23,12 +23,58 @@ from timm.data import (
 from .config import (
     AugmentConfig,
     DataConfig,
+    DataSourceConfig,
     LoaderConfig,
     MixupConfig,
     NaFlexConfig,
+    ProbeDataConfig,
     TrainConfig,
+    TrainDataConfig,
 )
 from .device import DeviceEnv, is_primary
+
+
+def resolve_data_source(
+    source: DataSourceConfig,
+    parent_defaults: TrainDataConfig,
+    fallback_defaults: Optional[TrainDataConfig] = None,
+) -> Tuple[str, Optional[str], Optional[str], Optional[int]]:
+    """Resolve dataset source with fallbacks.
+
+    Resolves type, path, split, and num_samples from a DataSourceConfig,
+    falling back to parent defaults and optionally a secondary fallback.
+
+    Args:
+        source: The DataSourceConfig to resolve.
+        parent_defaults: Parent config providing default type/path (e.g., TrainDataConfig).
+        fallback_defaults: Optional secondary fallback (e.g., TrainDataConfig for ProbeDataConfig).
+
+    Returns:
+        Tuple of (type, path, split, num_samples).
+    """
+    # Resolve type: source > parent > fallback > 'folder'
+    type_ = source.type
+    if not type_:
+        type_ = parent_defaults.type if hasattr(parent_defaults, 'type') else ''
+    if not type_ and fallback_defaults:
+        type_ = fallback_defaults.type
+    if not type_:
+        type_ = 'folder'
+
+    # Resolve path: source > parent > fallback
+    path = source.path
+    if path is None:
+        path = parent_defaults.path if hasattr(parent_defaults, 'path') else None
+    if path is None and fallback_defaults:
+        path = fallback_defaults.path
+
+    # Split is required, no fallback
+    split = source.split
+
+    # num_samples is optional, no fallback
+    num_samples = source.num_samples
+
+    return type_, path, split, num_samples
 
 _logger = logging.getLogger(__name__)
 
@@ -53,6 +99,9 @@ def create_train_dataset(
     Returns:
         Training dataset instance.
     """
+    # Resolve data source (type, path, split, num_samples)
+    type_, path, split, num_samples = resolve_data_source(cfg.data.train, cfg.data)
+
     # Resolve input image mode
     if cfg.data.input_img_mode is None:
         input_img_mode = 'RGB' if data_config['input_size'][0] == 3 else 'L'
@@ -60,20 +109,20 @@ def create_train_dataset(
         input_img_mode = cfg.data.input_img_mode
 
     dataset = create_dataset(
-        cfg.data.dataset,
-        root=cfg.data.data_dir,
-        split=cfg.data.train_split,
+        type_,
+        root=path,
+        split=split,
         is_training=True,
         class_map=cfg.data.class_map,
-        download=cfg.data.dataset_download,
+        download=cfg.data.download,
         batch_size=cfg.loader.batch_size,
         seed=cfg.misc.seed,
         repeats=cfg.scheduler.epoch_repeats,
         input_img_mode=input_img_mode,
         input_key=cfg.data.input_key,
         target_key=cfg.data.target_key,
-        num_samples=cfg.data.train_num_samples,
-        trust_remote_code=cfg.data.dataset_trust_remote_code,
+        num_samples=num_samples,
+        trust_remote_code=cfg.data.trust_remote_code,
     )
 
     return dataset
@@ -82,17 +131,41 @@ def create_train_dataset(
 def create_eval_dataset(
     cfg: TrainConfig,
     data_config: Dict[str, Any],
+    source: Optional[DataSourceConfig] = None,
+    fallback_source: Optional[DataSourceConfig] = None,
 ) -> Optional[Any]:
     """Create evaluation dataset.
 
     Args:
         cfg: Training configuration.
         data_config: Data configuration from model (input_size, etc.).
+        source: DataSourceConfig specifying the dataset source. If None, uses cfg.data.val.
+        fallback_source: Optional fallback DataSourceConfig for inheriting type/path.
 
     Returns:
-        Evaluation dataset instance, or None if no val_split specified.
+        Evaluation dataset instance, or None if no split specified.
     """
-    if not cfg.data.val_split:
+    # Default to val source if not provided
+    if source is None:
+        source = cfg.data.val
+
+    # Build a pseudo-parent for resolution if we have a fallback
+    if fallback_source is not None:
+        # Create a temporary parent that merges fallback with cfg.data
+        class _FallbackParent:
+            def __init__(self, fallback: DataSourceConfig, data_cfg: TrainDataConfig):
+                self.type = fallback.type or data_cfg.type
+                self.path = fallback.path if fallback.path is not None else data_cfg.path
+
+        parent = _FallbackParent(fallback_source, cfg.data)
+    else:
+        parent = cfg.data
+
+    # Resolve data source
+    type_, path, split, num_samples = resolve_data_source(source, parent)
+
+    # Check if we have a valid split
+    if not split:
         return None
 
     # Resolve input image mode
@@ -102,18 +175,18 @@ def create_eval_dataset(
         input_img_mode = cfg.data.input_img_mode
 
     dataset = create_dataset(
-        cfg.data.dataset,
-        root=cfg.data.data_dir,
-        split=cfg.data.val_split,
+        type_,
+        root=path,
+        split=split,
         is_training=False,
         class_map=cfg.data.class_map,
-        download=cfg.data.dataset_download,
+        download=cfg.data.download,
         batch_size=cfg.loader.batch_size,
         input_img_mode=input_img_mode,
         input_key=cfg.data.input_key,
         target_key=cfg.data.target_key,
-        num_samples=cfg.data.val_num_samples,
-        trust_remote_code=cfg.data.dataset_trust_remote_code,
+        num_samples=num_samples,
+        trust_remote_code=cfg.data.trust_remote_code,
     )
 
     return dataset
@@ -302,6 +375,8 @@ def create_eval_loader(
     data_config: Dict[str, Any],
     device_env: DeviceEnv,
     model_patch_size: Optional[Tuple[int, int]] = None,
+    source: Optional[DataSourceConfig] = None,
+    fallback_source: Optional[DataSourceConfig] = None,
 ) -> Optional[DataLoader]:
     """Create evaluation data loader.
 
@@ -310,14 +385,21 @@ def create_eval_loader(
         data_config: Data configuration from model.
         device_env: Device environment.
         model_patch_size: Model's patch size for NaFlex loader.
+        source: DataSourceConfig specifying the dataset source. If None, uses cfg.data.val.
+        fallback_source: Optional fallback DataSourceConfig for inheriting type/path.
 
     Returns:
-        DataLoader instance, or None if no val_split specified.
+        DataLoader instance, or None if no split specified.
     """
     # Create dataset
-    dataset_eval = create_eval_dataset(cfg, data_config)
+    dataset_eval = create_eval_dataset(cfg, data_config, source=source, fallback_source=fallback_source)
     if dataset_eval is None:
         return None
+
+    # Resolve the type for worker adjustment
+    if source is None:
+        source = cfg.data.val
+    type_, _, _, _ = resolve_data_source(source, cfg.data)
 
     # Common loader kwargs
     common_loader_kwargs = dict(
@@ -332,7 +414,7 @@ def create_eval_loader(
 
     # Adjust workers for distributed TFDS/WDS
     eval_workers = cfg.loader.workers
-    if device_env.distributed and ('tfds' in cfg.data.dataset or 'wds' in cfg.data.dataset):
+    if device_env.distributed and type_ in ('tfds', 'wds'):
         eval_workers = min(2, cfg.loader.workers)
 
     eval_loader_kwargs = dict(
@@ -467,6 +549,8 @@ def create_multiview_eval_loader(
     data_config: Dict[str, Any],
     device_env: DeviceEnv,
     num_views: int = 2,
+    source: Optional[DataSourceConfig] = None,
+    fallback_source: Optional[DataSourceConfig] = None,
 ) -> Optional[DataLoader]:
     """Create eval data loader for multi-view SSL methods.
 
@@ -479,12 +563,14 @@ def create_multiview_eval_loader(
         data_config: Data configuration from model (input_size, mean, std, etc.).
         device_env: Device environment.
         num_views: Number of views per image (should match training).
+        source: DataSourceConfig specifying the dataset source. If None, uses cfg.data.val.
+        fallback_source: Optional fallback DataSourceConfig for inheriting type/path.
 
     Returns:
         DataLoader that yields (images, targets) where images is [B, V, C, H, W],
         or None if no val_split specified.
     """
-    dataset_eval = create_eval_dataset(cfg, data_config)
+    dataset_eval = create_eval_dataset(cfg, data_config, source=source, fallback_source=fallback_source)
     if dataset_eval is None:
         return None
 

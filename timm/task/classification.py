@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 
 from .task import TrainingTask
+from .eval_task import ClassificationEvalTask
 
 _logger = logging.getLogger(__name__)
 
@@ -15,6 +16,8 @@ class ClassificationTask(TrainingTask):
 
     Simple task that performs a forward pass through the model and computes
     the classification loss.
+
+    For classification, the model IS the trainable_module (no separate wrapper needed).
 
     Args:
         model: The model to train
@@ -38,32 +41,23 @@ class ClassificationTask(TrainingTask):
             verbose: bool = True,
     ):
         super().__init__(device=device, dtype=dtype, verbose=verbose)
-        self.model = model
+        self.trainable_module = model  # Model IS the trainable module
         self.criterion = criterion
 
         if self.verbose:
             loss_name = getattr(criterion, '__name__', None) or type(criterion).__name__
             _logger.info(f"ClassificationTask: criterion={loss_name}")
 
-    def prepare_distributed(
-            self,
-            device_ids: Optional[list] = None,
-            **ddp_kwargs
-    ) -> 'ClassificationTask':
-        """Prepare task for distributed training.
-
-        Wraps the model in DistributedDataParallel (DDP).
+    def get_eval_task(self, use_ema: bool = True) -> ClassificationEvalTask:
+        """Get evaluation task for classification.
 
         Args:
-            device_ids: List of device IDs for DDP (e.g., [local_rank])
-            **ddp_kwargs: Additional arguments passed to DistributedDataParallel
+            use_ema: If True and EMA exists, use EMA weights for evaluation
 
         Returns:
-            self (for method chaining)
+            ClassificationEvalTask configured for this model
         """
-        from torch.nn.parallel import DistributedDataParallel as DDP
-        self.model = DDP(self.model, device_ids=device_ids, **ddp_kwargs)
-        return self
+        return ClassificationEvalTask(self.get_trainable_module(use_ema))
 
     def forward(
             self,
@@ -81,7 +75,7 @@ class ClassificationTask(TrainingTask):
                 - 'loss': Classification loss
                 - 'output': Model logits
         """
-        output = self.model(input)
+        output = self.trainable_module(input)
         loss = self.criterion(output, target)
 
         return {

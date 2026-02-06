@@ -14,28 +14,28 @@ CLI usage::
 
     # As a module
     python -m timm.apps.train_cls --model.model resnet50 --model.pretrained true \\
-        --data.data_dir /path/to/imagenet --scheduler.epochs 100
+        --data.path /path/to/imagenet --scheduler.epochs 100
 
     # As installed script
-    timm-train-cls --model.model resnet50 --data.data_dir /path/to/imagenet
+    timm-train-cls --model.model resnet50 --data.path /path/to/imagenet
 
     # With config file
-    python -m timm.apps.train_cls -c configs/resnet50.yaml --data.data_dir /path/to/data
+    python -m timm.apps.train_cls -c configs/resnet50.yaml --data.path /path/to/data
 
     # Knowledge distillation
     python -m timm.apps.train_cls --model.model resnet18 \\
         --distillation.kd_model_name resnet50 \\
         --distillation.kd_distill_type logit \\
-        --data.data_dir /path/to/imagenet
+        --data.path /path/to/imagenet
 
 Programmatic usage (for testing)::
 
     from timm.apps.train_cls import train_cls
-    from timm.engine import TrainConfig, ModelConfig, DataConfig, SchedulerConfig
+    from timm.engine import TrainConfig, ModelConfig, TrainDataConfig, SchedulerConfig
 
     cfg = TrainConfig(
         model=ModelConfig(model='resnet18', pretrained=True),
-        data=DataConfig(data_dir='/path/to/data'),
+        data=TrainDataConfig(path='/path/to/data'),
         scheduler=SchedulerConfig(epochs=5),
     )
     best_metric = train_cls(cfg)
@@ -59,6 +59,7 @@ from timm.loss import (
 from timm.models import safe_model_name
 from timm.task import (
     ClassificationTask,
+    ClassificationEvalTask,
     FeatureDistillationTask,
     LogitDistillationTask,
     TokenDistillationTask,
@@ -70,13 +71,13 @@ from timm.engine import (
     setup_device,
     is_primary,
     create_train_model,
-    setup_model_ema,
     create_train_loader,
     create_eval_loader,
     create_train_optimizer,
     create_train_scheduler,
     train_one_epoch,
     validate,
+    validate_with_task,
     setup_checkpoint_saver,
     resume_training,
     save_config,
@@ -254,11 +255,11 @@ def train_cls(cfg: TrainConfig) -> Optional[float]:
 
     Example::
 
-        from timm.engine import TrainConfig, ModelConfig, DataConfig
+        from timm.engine import TrainConfig, ModelConfig, TrainDataConfig
 
         cfg = TrainConfig(
             model=ModelConfig(model='resnet18', pretrained=True),
-            data=DataConfig(data_dir='/path/to/data'),
+            data=TrainDataConfig(path='/path/to/data'),
         )
         best_metric = train_cls(cfg)
     """
@@ -309,17 +310,6 @@ def train_cls(cfg: TrainConfig) -> Optional[float]:
             no_resume_opt=cfg.model.no_resume_opt,
         )
 
-    # Setup model EMA
-    model_ema = setup_model_ema(model, cfg.ema, device_env, cfg.model.resume)
-
-    # Compile EMA model if requested
-    if model_ema is not None and cfg.model.torchcompile:
-        model_ema = torch.compile(
-            model_ema,
-            backend=cfg.model.torchcompile,
-            mode=cfg.model.torchcompile_mode,
-        )
-
     # Create data loaders
     loader_train, mixup_fn, naflex_mode = create_train_loader(
         cfg,
@@ -351,6 +341,15 @@ def train_cls(cfg: TrainConfig) -> Optional[float]:
     # Create training task
     task = create_task(model, cfg, train_loss_fn, device_env)
 
+    # Setup task-internal EMA (must be before DDP)
+    if cfg.ema.model_ema:
+        ema_device = 'cpu' if cfg.ema.model_ema_force_cpu else None
+        task.setup_ema(
+            decay=cfg.ema.model_ema_decay,
+            warmup=cfg.ema.model_ema_warmup,
+            device=ema_device,
+        )
+
     # Prepare for distributed training
     if device_env.distributed:
         task.prepare_distributed(device_ids=[device_env.device])
@@ -378,12 +377,11 @@ def train_cls(cfg: TrainConfig) -> Optional[float]:
         output_dir = get_output_dir(cfg.misc.output, exp_name)
 
         saver = setup_checkpoint_saver(
-            model,
+            task,
             optimizer,
             cfg,
             output_dir,
             device_env,
-            model_ema=model_ema,
             decreasing_metric=decreasing_metric,
         )
 
@@ -437,7 +435,6 @@ def train_cls(cfg: TrainConfig) -> Optional[float]:
                 device_env=device_env,
                 cfg=cfg,
                 lr_scheduler=lr_scheduler,
-                model_ema=model_ema,
                 mixup_fn=mixup_fn,
                 saver=saver,
                 output_dir=output_dir,
@@ -462,30 +459,22 @@ def train_cls(cfg: TrainConfig) -> Optional[float]:
 
             eval_metrics = None
             if loader_eval is not None:
-                eval_metrics = validate(
-                    model=model,
-                    loader=loader_eval,
-                    loss_fn=validate_loss_fn,
-                    device_env=device_env,
-                    cfg=cfg,
-                    task=None,
-                )
+                # Use EvalTask-based validation
+                eval_task = task.get_eval_task(use_ema=False)
+                eval_metrics = validate_with_task(eval_task, loader_eval, device_env, cfg)
 
-                # EMA evaluation
-                if model_ema is not None and not cfg.ema.model_ema_force_cpu:
+                # EMA evaluation (if task has EMA enabled)
+                if task.has_ema and not cfg.ema.model_ema_force_cpu:
                     if device_env.distributed and cfg.device.dist_bn in ('broadcast', 'reduce'):
                         utils.distribute_bn(
-                            model_ema,
+                            task.trainable_module_ema,
                             device_env.world_size,
                             cfg.device.dist_bn == 'reduce',
                         )
-                    ema_eval_metrics = validate(
-                        model=model_ema,
-                        loader=loader_eval,
-                        loss_fn=validate_loss_fn,
-                        device_env=device_env,
-                        cfg=cfg,
-                        log_suffix=' (EMA)',
+                    # Get eval task with EMA weights
+                    ema_eval_task = task.get_eval_task(use_ema=True)
+                    ema_eval_metrics = validate_with_task(
+                        ema_eval_task, loader_eval, device_env, cfg, log_suffix=' (EMA)'
                     )
                     eval_metrics = ema_eval_metrics
 

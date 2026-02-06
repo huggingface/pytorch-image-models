@@ -1,52 +1,39 @@
 #!/usr/bin/env python3
-"""Self-supervised learning training script using timm.engine infrastructure.
+"""Self-supervised learning training script using jsonargparse for config management.
 
-A modern, modular training script for self-supervised learning methods including:
-- NEPA (Next Embedding Prediction Architecture)
-- LeJEPA (Lean Joint-Embedding Predictive Architecture)
-- Future: JEPA, AIM, MAE-style methods
+This is an experimental version using jsonargparse instead of simple-parsing.
+Compare with train_ssl.py to evaluate the differences.
+
+Key differences from simple-parsing:
+- Native YAML/JSON config file support with proper merging
+- --print_config to dump full config (useful for creating config files)
+- --config can be used multiple times for layered configs
+- Better handling of Optional types and defaults
+- Subcommand support (not used here but available)
 
 CLI usage::
 
-    # As a module
-    python -m timm.apps.train_ssl --model.model vit_tiny_patch16_224 \\
+    # Basic usage (same as simple-parsing version)
+    python -m timm.apps.train_ssl_jsonargparse --model.model vit_tiny_patch16_224 \\
         --ssl.ssl_method nepa \\
-        --data.path /path/to/imagenet \\
-        --scheduler.epochs 100
-
-    # As installed script
-    timm-train-ssl --model.model vit_tiny_patch16_224 --ssl.ssl_method nepa \\
         --data.path /path/to/imagenet
 
-    # NEPA with pixel decoder
-    python -m timm.apps.train_ssl --model.model vit_tiny_patch16_224 \\
-        --ssl.ssl_method nepa \\
-        --ssl.nepa_pixel_decoder true \\
-        --ssl.nepa_pixel_mlp_layer swiglu \\
-        --data.path /path/to/imagenet
+    # Print full config (great for creating config files)
+    python -m timm.apps.train_ssl_jsonargparse --model.model vit_tiny_patch16_224 \\
+        --ssl.ssl_method nepa --print_config > my_config.yaml
 
-    # LeJEPA training
-    python -m timm.apps.train_ssl --model.model vit_small_patch16_224 \\
-        --ssl.ssl_method lejepa \\
-        --ssl.lejepa_lamb 0.02 \\
-        --data.path /path/to/imagenet \\
-        --scheduler.epochs 100
+    # Use config file
+    python -m timm.apps.train_ssl_jsonargparse --config my_config.yaml
 
-    # With config file
-    python -m timm.apps.train_ssl -c configs/nepa_vit.yaml --data.path /path/to/data
+    # Override config file values
+    python -m timm.apps.train_ssl_jsonargparse --config my_config.yaml \\
+        --scheduler.epochs 200
 
-Programmatic usage (for testing)::
-
-    from timm.apps.train_ssl import train_ssl
-    from timm.engine import TrainConfig, ModelConfig, TrainDataConfig, SSLConfig, SchedulerConfig
-
-    cfg = TrainConfig(
-        model=ModelConfig(model='vit_tiny_patch16_224'),
-        data=TrainDataConfig(path='/path/to/data'),
-        ssl=SSLConfig(ssl_method='nepa'),
-        scheduler=SchedulerConfig(epochs=5),
-    )
-    best_loss = train_ssl(cfg)
+    # Layer multiple configs (later ones override earlier)
+    python -m timm.apps.train_ssl_jsonargparse \\
+        --config base.yaml \\
+        --config nepa_specific.yaml \\
+        --data.path /my/data
 """
 import logging
 import os
@@ -55,7 +42,6 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
-import yaml
 
 from timm import utils
 from timm.models import safe_model_name
@@ -86,36 +72,45 @@ _logger = logging.getLogger('train_ssl')
 
 
 def parse_args() -> TrainConfig:
-    """Parse command line arguments into TrainConfig dataclass."""
+    """Parse command line arguments using jsonargparse.
+
+    jsonargparse key features:
+    - Automatic --config support for YAML/JSON files
+    - --print_config dumps the full resolved config
+    - Multiple --config flags layer configs (later overrides earlier)
+    - Clean handling of nested dataclasses
+    - Type coercion and validation
+    """
     try:
-        from simple_parsing import ArgumentParser
+        from jsonargparse import ArgumentParser
     except ImportError:
         raise ImportError(
-            "simple-parsing is required for train_ssl. "
-            "Install with: pip install simple-parsing"
+            "jsonargparse is required for this script. "
+            "Install with: pip install jsonargparse[signatures]"
         )
 
     parser = ArgumentParser(
-        description='Self-Supervised Learning Training with timm.engine',
-        add_help=True,
+        description='Self-Supervised Learning Training (jsonargparse version)',
+        default_config_files=['~/.config/timm/train_ssl.yaml'],  # Optional default config locations
+        print_config='--dump_config',  # Use dump_config to avoid conflicts
     )
+
+    # Add config file support
     parser.add_argument(
-        '-c', '--config',
-        type=str,
-        default='',
-        help='YAML config file with default values',
+        '--config',
+        action='config',
+        help='Path to YAML/JSON config file(s). Can be specified multiple times.',
     )
-    parser.add_arguments(TrainConfig, dest='cfg')
 
-    args = parser.parse_args()
+    # Add the dataclass as arguments - jsonargparse automatically handles nested dataclasses
+    # Using nested_key=None makes all fields top-level (like simple-parsing)
+    parser.add_class_arguments(TrainConfig, nested_key=None, fail_untyped=False)
 
-    # Load YAML config if specified
-    if args.config:
-        with open(args.config, 'r') as f:
-            yaml_cfg = yaml.safe_load(f)
-        _logger.info(f'Loaded config from: {args.config}')
+    # Parse arguments
+    cfg = parser.parse_args()
 
-    return args.cfg
+    # Instantiate the dataclass from the parsed namespace
+    return parser.instantiate_classes(cfg)
 
 
 def create_ssl_task(
@@ -123,19 +118,7 @@ def create_ssl_task(
     cfg: TrainConfig,
     device_env: DeviceEnv,
 ) -> nn.Module:
-    """Create SSL training task based on configuration.
-
-    Args:
-        model: Base model for SSL training.
-        cfg: Training configuration.
-        device_env: Device environment.
-
-    Returns:
-        SSL training task instance.
-
-    Raises:
-        ValueError: If ssl_method is not specified or unknown.
-    """
+    """Create SSL training task based on configuration."""
     ssl_method = cfg.ssl.ssl_method
 
     if ssl_method is None:
@@ -145,7 +128,6 @@ def create_ssl_task(
         )
 
     if ssl_method == 'nepa':
-        # Build pixel decoder config if enabled
         pixel_decoder_cfg = None
         if cfg.ssl.nepa_pixel_decoder:
             pixel_decoder_cfg = dict(
@@ -196,11 +178,6 @@ def create_ssl_task(
                 f'lambda={cfg.ssl.lejepa_lamb}'
             )
 
-    # Future SSL methods can be added here:
-    # elif ssl_method == 'jepa':
-    #     task = JEPATask(...)
-    # elif ssl_method == 'aim':
-    #     task = AIMTask(...)
     else:
         raise ValueError(
             f"Unknown SSL method: {ssl_method}. "
@@ -236,37 +213,14 @@ def setup_wandb(cfg: TrainConfig, exp_name: str, device_env: DeviceEnv) -> None:
 def train_ssl(cfg: TrainConfig) -> Optional[float]:
     """Run self-supervised learning training with the given configuration.
 
-    This is the main training entrypoint that can be called directly with a
-    TrainConfig for testing or programmatic use, bypassing CLI argument parsing.
-
-    Args:
-        cfg: Complete training configuration. Must have cfg.ssl.ssl_method set.
-
-    Returns:
-        Best loss value achieved during training, or None if no validation.
-
-    Raises:
-        ValueError: If cfg.ssl.ssl_method is not specified.
-
-    Example::
-
-        from timm.engine import TrainConfig, ModelConfig, TrainDataConfig, SSLConfig
-
-        cfg = TrainConfig(
-            model=ModelConfig(model='vit_small_patch16_224'),
-            data=TrainDataConfig(path='/path/to/data'),
-            ssl=SSLConfig(ssl_method='nepa'),
-        )
-        best_loss = train_ssl(cfg)
+    This is identical to the simple-parsing version - only parse_args() differs.
     """
-    # Validate SSL method is specified
     if cfg.ssl.ssl_method is None:
         raise ValueError(
             "SSL method must be specified in cfg.ssl.ssl_method. "
             "Available methods: nepa, lejepa"
         )
 
-    # Setup device and distributed training
     device_env = setup_device(cfg.device, seed=cfg.misc.seed)
 
     if device_env.distributed:
@@ -280,21 +234,16 @@ def train_ssl(cfg: TrainConfig) -> Optional[float]:
 
     _logger.info(f'SSL method: {cfg.ssl.ssl_method}')
 
-    # Create model
     model, data_config = create_train_model(
         cfg.model,
         cfg.device,
         device_env,
     )
 
-    # For SSL, we don't need num_classes from model but we need it for loader
-    # (targets are still loaded but ignored by SSL tasks)
-    num_classes = cfg.model.num_classes or 1000  # Default for ImageNet
+    num_classes = cfg.model.num_classes or 1000
 
-    # Get patch size for NaFlex
     model_patch_size = get_naflex_patch_size(model) if cfg.naflex.naflex_loader else None
 
-    # Create optimizer
     optimizer = create_train_optimizer(
         model,
         cfg.optimizer,
@@ -303,7 +252,6 @@ def train_ssl(cfg: TrainConfig) -> Optional[float]:
         grad_accum_steps=cfg.model.grad_accum_steps,
     )
 
-    # Resume from checkpoint
     resume_epoch = None
     if cfg.model.resume:
         resume_epoch = resume_training(
@@ -314,18 +262,12 @@ def train_ssl(cfg: TrainConfig) -> Optional[float]:
             no_resume_opt=cfg.model.no_resume_opt,
         )
 
-    # Create data loaders
-    # Note: SSL doesn't use mixup/cutmix, set to disabled
     ssl_cfg = cfg
-    # We could modify cfg here to disable mixup for SSL, but the task ignores targets anyway
-
     ssl_method = cfg.ssl.ssl_method
     mixup_fn = None
     naflex_mode = False
 
     if ssl_method == 'lejepa':
-        # Multi-view methods need special loader that returns [B, V, C, H, W]
-        # Disable prefetcher for multi-view (not compatible)
         _logger.info(f'Creating multi-view loader for {ssl_method} with {cfg.ssl.num_views} views')
         cfg.loader.prefetcher = False
         loader_train = create_multiview_train_loader(
@@ -335,7 +277,6 @@ def train_ssl(cfg: TrainConfig) -> Optional[float]:
             num_views=cfg.ssl.num_views,
         )
     else:
-        # Single-view methods (NEPA, etc.) use standard loader
         _logger.info(f'Creating standard loader for {ssl_method}')
         loader_train, mixup_fn, naflex_mode = create_train_loader(
             ssl_cfg,
@@ -345,9 +286,6 @@ def train_ssl(cfg: TrainConfig) -> Optional[float]:
             model_patch_size=model_patch_size,
         )
 
-    # Create evaluation loaders for feature-based metrics (knn, retrieval, etc.)
-    # Both use eval transforms (no augmentation) - single view only
-    # ref = reference set (typically train), probe = query set (typically val)
     loader_eval_ref = None
     loader_eval_probe = None
     if cfg.ssl.ssl_eval_metric != 'loss':
@@ -372,7 +310,6 @@ def train_ssl(cfg: TrainConfig) -> Optional[float]:
             source=cfg.ssl.eval_data.probe,
         )
 
-    # Create SSL training task
     task = create_ssl_task(model, cfg, device_env)
 
     # Setup task-internal EMA (must be before DDP)
@@ -384,11 +321,9 @@ def train_ssl(cfg: TrainConfig) -> Optional[float]:
             device=ema_device,
         )
 
-    # Prepare for distributed training
     if device_env.distributed:
         task.prepare_distributed(device_ids=[device_env.device])
 
-    # Compile task if requested
     if cfg.model.torchcompile:
         task = torch.compile(
             task,
@@ -396,10 +331,8 @@ def train_ssl(cfg: TrainConfig) -> Optional[float]:
             mode=cfg.model.torchcompile_mode,
         )
 
-    # Setup output directory and checkpoint saver
     output_dir = None
     saver = None
-    # For SSL, we track loss (lower is better for most SSL objectives)
     eval_metric = 'loss'
     decreasing_metric = True
 
@@ -421,13 +354,9 @@ def train_ssl(cfg: TrainConfig) -> Optional[float]:
             decreasing_metric=decreasing_metric,
         )
 
-        # Save config
         save_config(cfg, output_dir)
-
-        # Setup wandb
         setup_wandb(cfg, exp_name, device_env)
 
-    # Create scheduler
     updates_per_epoch = (
         (len(loader_train) + cfg.model.grad_accum_steps - 1) //
         cfg.model.grad_accum_steps
@@ -439,7 +368,6 @@ def train_ssl(cfg: TrainConfig) -> Optional[float]:
         device_env,
     )
 
-    # Determine start epoch
     start_epoch = cfg.scheduler.start_epoch
     if start_epoch is None:
         start_epoch = resume_epoch if resume_epoch is not None else 0
@@ -450,20 +378,16 @@ def train_ssl(cfg: TrainConfig) -> Optional[float]:
         else:
             lr_scheduler.step(start_epoch)
 
-    # Training loop
     best_metric = None
     best_epoch = None
 
     try:
         for epoch in range(start_epoch, num_epochs):
-            # Set epoch for distributed sampler
             if hasattr(loader_train.dataset, 'set_epoch'):
                 loader_train.dataset.set_epoch(epoch)
             elif device_env.distributed and hasattr(loader_train.sampler, 'set_epoch'):
                 loader_train.sampler.set_epoch(epoch)
 
-            # Train one epoch
-            # Note: SSL tasks ignore targets
             train_metrics = train_one_epoch(
                 epoch=epoch,
                 task=task,
@@ -472,14 +396,13 @@ def train_ssl(cfg: TrainConfig) -> Optional[float]:
                 device_env=device_env,
                 cfg=cfg,
                 lr_scheduler=lr_scheduler,
-                mixup_fn=None,  # SSL doesn't use mixup
+                mixup_fn=None,
                 saver=saver,
                 output_dir=output_dir,
                 num_updates_total=num_epochs * updates_per_epoch,
                 naflex_mode=naflex_mode,
             )
 
-            # Distribute batch norm stats
             if device_env.distributed and cfg.device.dist_bn in ('broadcast', 'reduce'):
                 utils.distribute_bn(
                     task.trainable_module,
@@ -487,19 +410,15 @@ def train_ssl(cfg: TrainConfig) -> Optional[float]:
                     cfg.device.dist_bn == 'reduce',
                 )
 
-            # Validation / Checkpointing
             epoch_p_1 = epoch + 1
             if epoch_p_1 % cfg.misc.val_interval != 0 and epoch_p_1 != num_epochs:
                 if lr_scheduler is not None:
                     lr_scheduler.step(epoch_p_1, metric=None)
                 continue
 
-            # For SSL, use training loss as the epoch metric (eval loss isn't useful)
-            # Only run feature-based eval (knn, retrieval, etc.) if configured
             eval_metrics = None
             latest_metric = train_metrics['loss']
 
-            # Check if this is a feature-based eval epoch
             run_feature_eval = (
                 cfg.ssl.ssl_eval_metric != 'loss' and
                 loader_eval_ref is not None and
@@ -519,31 +438,26 @@ def train_ssl(cfg: TrainConfig) -> Optional[float]:
 
                 eval_task = task.get_eval_task(use_ema=True)
 
-                # Apply KNN config params if the eval_task supports them
                 if hasattr(eval_task, 'knn_k'):
                     eval_task.knn_k = cfg.ssl.knn_k
                     eval_task.knn_temperature = cfg.ssl.knn_temperature
 
                 if cfg.ssl.ssl_eval_metric == 'knn':
-                    # KNN evaluation
                     eval_metrics = validate_knn(
                         eval_task, loader_eval_ref, loader_eval_probe, device_env, cfg
                     )
                     latest_metric = eval_metrics.get('knn_acc', 0.0)
                     if saver is not None:
-                        saver.decreasing = False  # Higher KNN accuracy is better
+                        saver.decreasing = False
 
                     if is_primary(device_env):
                         _logger.info(f'KNN accuracy: {latest_metric:.2f}%')
                 else:
-                    # Future: retrieval, prototype, etc.
                     _logger.warning(f'Eval metric {cfg.ssl.ssl_eval_metric} not yet implemented')
             else:
-                # Use training loss for checkpointing
                 if saver is not None:
-                    saver.decreasing = True  # Lower loss is better
+                    saver.decreasing = True
 
-            # Update summary
             if output_dir is not None:
                 lrs = [pg['lr'] for pg in optimizer.param_groups]
                 utils.update_summary(
@@ -556,25 +470,21 @@ def train_ssl(cfg: TrainConfig) -> Optional[float]:
                     log_wandb=cfg.misc.log_wandb,
                 )
 
-            # Save checkpoint
             if saver is not None:
                 best_metric, best_epoch = saver.save_checkpoint(epoch, metric=latest_metric)
 
-            # Step scheduler
             if lr_scheduler is not None:
                 lr_scheduler.step(epoch_p_1, latest_metric)
 
     except KeyboardInterrupt:
         _logger.info('Training interrupted by user')
 
-    # Cleanup
     if device_env.distributed:
         torch.distributed.destroy_process_group()
 
     if best_metric is not None:
         _logger.info(f'*** Best loss: {best_metric} (epoch {best_epoch})')
 
-    # Reminder about evaluation
     if is_primary(device_env):
         _logger.info(
             '\nSSL training complete. To evaluate representations, use:\n'
@@ -586,14 +496,10 @@ def train_ssl(cfg: TrainConfig) -> Optional[float]:
 
 
 def main():
-    """CLI entrypoint for SSL training.
-
-    Parses command line arguments and calls train_ssl().
-    """
+    """CLI entrypoint for SSL training using jsonargparse."""
     utils.setup_default_logging()
     cfg = parse_args()
 
-    # Handle the error case gracefully for CLI
     if cfg.ssl.ssl_method is None:
         _logger.error(
             "SSL method must be specified. Use --ssl.ssl_method nepa or --ssl.ssl_method lejepa"

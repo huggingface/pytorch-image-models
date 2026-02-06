@@ -14,11 +14,9 @@ from typing import Dict, Optional
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.nn.parallel import DistributedDataParallel as DDP
 
-from timm.utils import unwrap_model
 from .task import TrainingTask
+from .eval_task import SSLEvalTask
 
 _logger = logging.getLogger(__name__)
 
@@ -107,13 +105,13 @@ class SIGReg(nn.Module):
 
 
 class LeJEPATrainableModule(nn.Module):
-    """Trainable module for LeJEPA containing encoder and projector.
+    """Trainable module for LeJEPA containing model and projector.
 
     Wraps the encoder model and adds a projector MLP. All trainable forward
     operations happen inside forward() for proper DDP/FSDP wrapping.
 
     Args:
-        encoder: Backbone encoder model (any timm model)
+        model: Backbone encoder model (any timm model)
         proj_dim: Output dimension of projector (default: 128)
         proj_hidden: Hidden dimension of projector MLP (default: 2048)
         proj_layers: Number of hidden layers in projector (default: 2)
@@ -121,19 +119,19 @@ class LeJEPATrainableModule(nn.Module):
 
     def __init__(
             self,
-            encoder: nn.Module,
+            model: nn.Module,
             proj_dim: int = 128,
             proj_hidden: int = 2048,
             proj_layers: int = 2,
     ):
         super().__init__()
-        self.encoder = encoder
+        self.model = model  # Core encoder model
 
         # Get encoder output dimension
-        num_features = getattr(encoder, 'num_features', None)
+        num_features = getattr(model, 'num_features', None)
         if num_features is None:
             raise ValueError(
-                f"Encoder {encoder.__class__.__name__} must have 'num_features' attribute. "
+                f"Model {model.__class__.__name__} must have 'num_features' attribute. "
                 "Most timm models have this attribute."
             )
 
@@ -174,12 +172,12 @@ class LeJEPATrainableModule(nn.Module):
         x_flat = x.flatten(0, 1)  # [B*V, C, H, W]
 
         # Encode (use forward_features to get embeddings, not classifier logits)
-        embeddings = self.encoder.forward_features(x_flat)  # [B*V, ...features]
+        embeddings = self.model.forward_features(x_flat)  # [B*V, ...features]
 
         # Pool if needed (ViT returns [B, N, D], CNNs return [B, D] or [B, D, H, W])
         if embeddings.dim() == 3:
             # ViT-style: use CLS token or mean pool
-            if hasattr(self.encoder, 'global_pool') and self.encoder.global_pool == 'avg':
+            if hasattr(self.model, 'global_pool') and self.model.global_pool == 'avg':
                 embeddings = embeddings.mean(dim=1)  # [B*V, D]
             else:
                 embeddings = embeddings[:, 0]  # CLS token [B*V, D]
@@ -245,7 +243,7 @@ class LeJEPATask(TrainingTask):
         super().__init__(device=device, dtype=dtype, verbose=verbose)
 
         self.trainable_module = LeJEPATrainableModule(
-            encoder=model,
+            model=model,
             proj_dim=proj_dim,
             proj_hidden=proj_hidden,
             proj_layers=proj_layers,
@@ -264,37 +262,16 @@ class LeJEPATask(TrainingTask):
                 f"proj_layers={proj_layers}, lambda={lamb}, num_slices={num_slices}"
             )
 
-    @property
-    def encoder(self) -> nn.Module:
-        """Access the encoder model."""
-        return unwrap_model(self.trainable_module).encoder
-
-    def state_dict_for_save(self) -> Dict[str, torch.Tensor]:
-        """Get state dict for checkpointing (encoder only, excludes projector)."""
-        return self.encoder.state_dict()
-
-    def prepare_distributed(
-            self,
-            device_ids: Optional[list] = None,
-            **ddp_kwargs,
-    ) -> 'LeJEPATask':
-        """Prepare task for distributed training.
-
-        Wraps the trainable module in DistributedDataParallel (DDP).
+    def get_eval_task(self, use_ema: bool = True) -> SSLEvalTask:
+        """Get evaluation task for feature extraction.
 
         Args:
-            device_ids: List of device IDs for DDP (e.g., [local_rank])
-            **ddp_kwargs: Additional arguments passed to DistributedDataParallel
+            use_ema: If True and EMA exists, use EMA weights for evaluation
 
         Returns:
-            self (for method chaining)
+            SSLEvalTask configured for LeJEPA (avg pooling)
         """
-        self.trainable_module = DDP(
-            self.trainable_module,
-            device_ids=device_ids,
-            **ddp_kwargs
-        )
-        return self
+        return SSLEvalTask(self.get_trainable_module(use_ema), pool='avg')
 
     def forward(
             self,

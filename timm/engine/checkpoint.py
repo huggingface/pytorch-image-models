@@ -34,13 +34,19 @@ def setup_checkpoint_saver(
     Creates a CheckpointSaver instance configured for saving model checkpoints
     during training. Only creates a saver on the primary process.
 
+    Supports both patterns:
+    - Old: pass model + model_ema separately
+    - New: pass task (extracts trainable_module and trainable_module_ema)
+
     Args:
-        model: Model to save.
+        model: Model or training task to save. If a TrainingTask with
+            trainable_module attribute, extracts that for checkpointing.
         optimizer: Optimizer state to save.
         cfg: Training configuration.
         output_dir: Directory to save checkpoints.
         device_env: Device environment.
-        model_ema: Model EMA instance (optional).
+        model_ema: Model EMA instance (optional). If None and model is a
+            TrainingTask with trainable_module_ema, uses that instead.
         decreasing_metric: If True, lower metric values are better.
 
     Returns:
@@ -48,21 +54,36 @@ def setup_checkpoint_saver(
 
     Example::
 
+        # Old pattern (external EMA)
         saver = setup_checkpoint_saver(
             model, optimizer, cfg, output_dir, device_env,
             model_ema=model_ema, decreasing_metric=False
         )
-        if saver is not None:
-            best_metric, best_epoch = saver.save_checkpoint(epoch, metric=acc)
+
+        # New pattern (task-based EMA)
+        saver = setup_checkpoint_saver(
+            task, optimizer, cfg, output_dir, device_env,
+            decreasing_metric=False
+        )
     """
     if not is_primary(device_env):
         return None
 
+    # Extract model and EMA from task if it follows TrainingTask pattern
+    if model_ema is None and hasattr(model, 'trainable_module'):
+        # Task-based pattern: extract components from task
+        actual_model = model.trainable_module
+        actual_ema = getattr(model, 'trainable_module_ema', None)
+    else:
+        # Old pattern: use model and model_ema as provided
+        actual_model = model
+        actual_ema = model_ema
+
     saver_kwargs = dict(
-        model=model,
+        model=actual_model,
         optimizer=optimizer,
         args=None,  # We pass config differently
-        model_ema=model_ema,
+        model_ema=actual_ema,
         amp_scaler=device_env.loss_scaler,
         checkpoint_dir=output_dir,
         recovery_dir=output_dir,

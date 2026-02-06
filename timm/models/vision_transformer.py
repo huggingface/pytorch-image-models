@@ -66,6 +66,7 @@ from timm.layers import (
     get_act_layer,
     get_norm_layer,
     maybe_add_mask,
+    resolve_self_attn_mask,
     LayerType,
     LayerScale,
 )
@@ -395,13 +396,8 @@ class ParallelScalingBlock(nn.Module):
         else:
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)
-            if is_causal:
-                causal_mask = torch.triu(
-                    torch.ones(N, N, dtype=torch.bool, device=x.device),
-                    diagonal=1,
-                )
-                attn = attn.masked_fill(causal_mask, float('-inf'))
-            attn = maybe_add_mask(attn, attn_mask)
+            attn_bias = resolve_self_attn_mask(N, attn, attn_mask, is_causal=is_causal)
+            attn = maybe_add_mask(attn, attn_bias)
             attn = attn.softmax(dim=-1)
             attn = self.attn_drop(attn)
             x_attn = attn @ v
@@ -572,13 +568,8 @@ class DiffParallelScalingBlock(nn.Module):
         else:
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)
-            if is_causal:
-                causal_mask = torch.triu(
-                    torch.ones(N, N, dtype=torch.bool, device=x.device),
-                    diagonal=1,
-                )
-                attn = attn.masked_fill(causal_mask, float('-inf'))
-            attn = maybe_add_mask(attn, attn_mask)
+            attn_bias = resolve_self_attn_mask(N, attn, attn_mask, is_causal=is_causal)
+            attn = maybe_add_mask(attn, attn_bias)
             attn = attn.softmax(dim=-1)
             attn = self.attn_drop(attn)
 
@@ -1090,8 +1081,7 @@ class VisionTransformer(nn.Module):
             x: Input image tensor
             indices: Take last n blocks if int, all if None, select matching indices if sequence
             return_prefix_tokens: Return both prefix and spatial intermediate tokens
-            return_input_embeddings: Return input embeddings (after pos_embed, before blocks) for
-                self-supervised methods like NEPA that compare input vs output representations
+            return_input_embeddings: Return input embeddings (after pos_embed, before blocks)
             norm: Apply norm layer to all intermediates
             stop_early: Stop iterating over blocks when last desired intermediate hit
             output_fmt: Shape of intermediate feature outputs
@@ -1104,6 +1094,8 @@ class VisionTransformer(nn.Module):
             'image_features' and 'image_intermediates' (and optionally 'image_intermediates_prefix', 'input_embeddings')
         """
         assert output_fmt in ('NCHW', 'NLC'), 'Output format must be one of NCHW or NLC.'
+        if return_input_embeddings:
+            assert output_dict, 'Output dictionary must be enabled when return_input_embeddings is True.'
         reshape = output_fmt == 'NCHW'
         intermediates = []
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
@@ -1115,7 +1107,7 @@ class VisionTransformer(nn.Module):
         x = self.patch_drop(x)
         x = self.norm_pre(x)
 
-        # Capture input embeddings before blocks (for NEPA-style self-supervised training)
+        # Capture input embeddings before blocks
         input_embeddings = x if return_input_embeddings else None
 
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
@@ -1159,7 +1151,6 @@ class VisionTransformer(nn.Module):
                 x_final = self.norm(x)
                 result_dict['image_features'] = x_final
 
-            # Include input embeddings if requested (for NEPA-style training)
             if input_embeddings is not None:
                 result_dict['input_embeddings'] = input_embeddings
 

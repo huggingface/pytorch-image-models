@@ -61,20 +61,59 @@ class ModelConfig:
 
 
 @dataclass
-class DataConfig:
-    """Dataset configuration."""
-    data_dir: Optional[str] = None
-    dataset: str = ''
-    train_split: str = 'train'
-    val_split: str = 'validation'
-    train_num_samples: Optional[int] = None
-    val_num_samples: Optional[int] = None
-    dataset_download: bool = False
+class DataSourceConfig:
+    """Specifies a single dataset source.
+
+    Used for individual splits (train, val) and eval sets (ref, probe).
+    Fields set to None inherit from parent config defaults.
+    """
+    type: Optional[str] = None        # None = inherit; folder, hfds, wds, tfds
+    path: Optional[str] = None        # None = inherit; meaning varies by type
+    split: Optional[str] = None       # Split name, shard spec, or slice
+    num_samples: Optional[int] = None # Limit samples (useful for wds/tfds subsets)
+
+
+@dataclass
+class TrainDataConfig:
+    """Training data configuration with train + val splits.
+
+    Shared defaults (type, path) are used when train/val don't specify their own.
+    """
+    # Shared defaults
+    type: str = 'folder'              # Dataset format: folder, hfds, wds, tfds
+    path: Optional[str] = None        # Data path (meaning varies by type)
+
+    # Per-split configs (inherit type/path from above if not set)
+    train: DataSourceConfig = field(default_factory=lambda: DataSourceConfig(split='train'))
+    val: DataSourceConfig = field(default_factory=lambda: DataSourceConfig(split='validation'))
+
+    # Common settings (apply to all sources)
+    download: bool = False
     class_map: str = ''
     input_img_mode: Optional[str] = None
     input_key: Optional[str] = None
     target_key: Optional[str] = None
-    dataset_trust_remote_code: bool = False
+    trust_remote_code: bool = False
+
+
+@dataclass
+class ProbeDataConfig:
+    """Feature-based evaluation data: reference + probe sets.
+
+    Used for KNN, retrieval, prototype-based evaluation.
+    Inherits from TrainDataConfig if type/path not specified.
+    """
+    # Shared defaults (empty = inherit from TrainDataConfig)
+    type: str = ''
+    path: Optional[str] = None
+
+    # Per-set configs
+    ref: DataSourceConfig = field(default_factory=lambda: DataSourceConfig(split='train'))
+    probe: DataSourceConfig = field(default_factory=lambda: DataSourceConfig(split='validation'))
+
+
+# Backward compatibility alias
+DataConfig = TrainDataConfig
 
 
 @dataclass
@@ -229,6 +268,14 @@ class SSLConfig:
     lejepa_lamb: float = 0.02
     lejepa_num_slices: int = 256
     lejepa_num_knots: int = 17
+    # SSL evaluation (feature-based: knn, retrieval, prototype, etc.)
+    ssl_eval_metric: str = 'loss'  # 'loss', 'knn', 'retrieval', 'prototype'
+    ssl_eval_interval: int = 5  # Run feature-based eval every N epochs
+    # Evaluation data (ref/probe sets for knn, retrieval, etc.)
+    eval_data: ProbeDataConfig = field(default_factory=ProbeDataConfig)
+    # KNN-specific params
+    knn_k: int = 20  # Number of neighbors
+    knn_temperature: float = 0.07  # Temperature for weighted KNN
 
 
 @dataclass

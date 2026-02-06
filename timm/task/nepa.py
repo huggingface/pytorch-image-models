@@ -15,7 +15,6 @@ from typing import Dict, Optional, Tuple, Type, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.parallel import DistributedDataParallel as DDP
 
 from timm.layers import Mlp, GluMlp, SwiGLU, LayerScale, DropPath
 from timm.data import patchify_image
@@ -23,6 +22,7 @@ from timm.models.vision_transformer import VisionTransformer
 from timm.models.eva import Eva
 from timm.utils import unwrap_model
 from .task import TrainingTask
+from .eval_task import SSLEvalTask
 
 _logger = logging.getLogger(__name__)
 
@@ -575,52 +575,20 @@ class NEPATask(TrainingTask):
             )
 
     @property
-    def model(self) -> nn.Module:
-        """Access the wrapped ViT model."""
-        return unwrap_model(self.trainable_module).model
-
-    @property
     def pixel_decoder(self) -> Optional[PixelDecoder]:
         """Access the pixel decoder (if present)."""
         return unwrap_model(self.trainable_module).pixel_decoder
 
-    def state_dict_for_save(self) -> Dict[str, torch.Tensor]:
-        """Get state dict for checkpointing.
-
-        Returns model weights and pixel decoder weights (if present).
-        """
-        trainable = unwrap_model(self.trainable_module)
-        state = trainable.model.state_dict()
-
-        # Include pixel decoder weights with prefix
-        if trainable.pixel_decoder is not None:
-            for k, v in trainable.pixel_decoder.state_dict().items():
-                state[f'pixel_decoder.{k}'] = v
-
-        return state
-
-    def prepare_distributed(
-            self,
-            device_ids: Optional[list] = None,
-            **ddp_kwargs,
-    ) -> 'NEPATask':
-        """Prepare task for distributed training.
-
-        Wraps the trainable module in DistributedDataParallel (DDP).
+    def get_eval_task(self, use_ema: bool = True) -> SSLEvalTask:
+        """Get evaluation task for feature extraction.
 
         Args:
-            device_ids: List of device IDs for DDP (e.g., [local_rank])
-            **ddp_kwargs: Additional arguments passed to DistributedDataParallel
+            use_ema: If True and EMA exists, use EMA weights for evaluation
 
         Returns:
-            self (for method chaining)
+            SSLEvalTask configured for NEPA (last token pooling for causal models)
         """
-        self.trainable_module = DDP(
-            self.trainable_module,
-            device_ids=device_ids,
-            **ddp_kwargs
-        )
-        return self
+        return SSLEvalTask(self.get_trainable_module(use_ema), pool='last')
 
     def forward(
             self,

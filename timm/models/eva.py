@@ -90,6 +90,7 @@ from timm.layers import (
     to_2tuple,
     use_fused_attn,
     maybe_add_mask,
+    resolve_self_attn_mask,
     AttentionRope,
     AttentionPoolLatent,
 )
@@ -247,23 +248,10 @@ class EvaAttention(nn.Module):
             )
         else:
             q = q * self.scale
-            attn = (q @ k.transpose(-2, -1))
-
-            # Build additive bias matching SDPA semantics
-            # is_causal and attn_mask are mutually exclusive (is_causal takes precedence)
-            if is_causal:
-                attn_bias = attn.new_full((N, N), float('-inf')).triu_(1)
-            elif attn_mask is None:
-                attn_bias = None
-            elif attn_mask.dtype == torch.bool:
-                attn_bias = torch.zeros_like(attn_mask, dtype=attn.dtype)
-                attn_bias.masked_fill_(~attn_mask, float('-inf'))
-            else:
-                attn_bias = attn_mask
-
+            attn = q @ k.transpose(-2, -1)
+            attn_bias = resolve_self_attn_mask(N, attn, attn_mask, is_causal=is_causal)
             attn = maybe_add_mask(attn, attn_bias)
             attn = attn.softmax(dim=-1)
-
             attn = self.attn_drop(attn)
             x = attn @ v
 
@@ -939,17 +927,18 @@ class Eva(nn.Module):
             x: Input image tensor
             indices: Take last n blocks if an int, if is a sequence, select by matching indices
             return_prefix_tokens: Return both prefix and spatial intermediate tokens
-            return_input_embeddings: Return input embeddings (after pos_embed, before blocks) for
-                self-supervised methods like NEPA that compare input vs output representations
+            return_input_embeddings: Return input embeddings (after pos_embed, before blocks)
             norm: Apply norm layer to all intermediates
             stop_early: Stop iterating over blocks when last desired intermediate hit
             output_fmt: Shape of intermediate feature outputs
             intermediates_only: Only return intermediate features
             output_dict: Return outputs as a dictionary with 'image_features' and 'image_intermediates' keys
-            attn_mask: Optional attention mask for masked attention (e.g., causal mask for NEPA)
+            attn_mask: Optional attention mask for masked attention
             is_causal: If True, use causal (autoregressive) masking in attention
         """
         assert output_fmt in ('NCHW', 'NLC'), 'Output format for EVA-ViT features must be one of NCHW or NLC.'
+        if return_input_embeddings:
+            assert output_dict, 'Output dictionary must be enabled when return_input_embeddings is True'
         reshape = output_fmt == 'NCHW'
         intermediates = []
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
@@ -960,7 +949,7 @@ class Eva(nn.Module):
         x, rot_pos_embed = self._pos_embed(x)
         x = self.norm_pre(x)
 
-        # Capture input embeddings before blocks (for NEPA-style self-supervised training)
+        # Capture input embeddings before blocks
         input_embeddings = x if return_input_embeddings else None
 
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
@@ -1012,7 +1001,6 @@ class Eva(nn.Module):
                 x_final = self.norm(x)
                 result_dict['image_features'] = x_final
 
-            # Include input embeddings if requested (for NEPA-style training)
             if input_embeddings is not None:
                 result_dict['input_embeddings'] = input_embeddings
 
@@ -1066,7 +1054,7 @@ class Eva(nn.Module):
 
         Args:
             x: Input tensor.
-            attn_mask: Optional attention mask for masked attention (e.g., causal mask for NEPA).
+            attn_mask: Optional attention mask for masked attention
             is_causal: If True, use causal (autoregressive) masking in attention.
 
         Returns:
@@ -1120,7 +1108,7 @@ class Eva(nn.Module):
 
         Args:
             x: Input tensor.
-            attn_mask: Optional attention mask for masked attention (e.g., causal mask for NEPA).
+            attn_mask: Optional attention mask for masked attention
             is_causal: If True, use causal (autoregressive) masking in attention.
 
         Returns:

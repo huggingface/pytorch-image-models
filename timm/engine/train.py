@@ -38,7 +38,6 @@ def train_one_epoch(
         device_env: DeviceEnv,
         cfg: TrainConfig,
         lr_scheduler: Optional[Any] = None,
-        model_ema: Optional[Any] = None,
         mixup_fn: Optional[Callable] = None,
         saver: Optional[Any] = None,
         output_dir: Optional[str] = None,
@@ -52,19 +51,19 @@ def train_one_epoch(
     - AMP forward/backward passes
     - Loss scaling for float16
     - Gradient clipping
-    - EMA model updates
+    - EMA model updates (via task.update_ema())
     - Progress logging
     - Recovery checkpoints
 
     Args:
         epoch: Current epoch number.
-        task: Training task (handles forward + loss).
+        task: Training task (handles forward + loss). If task.has_ema is True,
+            task.update_ema() is called after each optimizer step.
         loader: Training data loader.
         optimizer: Optimizer instance.
         device_env: Device environment.
         cfg: Training configuration.
         lr_scheduler: Learning rate scheduler (optional).
-        model_ema: Model EMA instance (optional).
         mixup_fn: Mixup/CutMix function (optional).
         saver: Checkpoint saver (optional).
         output_dir: Output directory for saving images/checkpoints.
@@ -84,7 +83,6 @@ def train_one_epoch(
             device_env=device_env,
             cfg=cfg,
             lr_scheduler=scheduler,
-            model_ema=model_ema,
         )
     """
     # Handle mixup off epoch
@@ -230,8 +228,9 @@ def train_one_epoch(
         num_updates += 1
         optimizer.zero_grad()
 
-        if model_ema is not None:
-            model_ema.update(model, step=num_updates)
+        # Update EMA if task supports it
+        if hasattr(task, 'has_ema') and task.has_ema:
+            task.update_ema(step=num_updates)
 
         if cfg.device.synchronize_step:
             if device.type == 'cuda':

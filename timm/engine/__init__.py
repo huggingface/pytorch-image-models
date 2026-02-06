@@ -38,6 +38,7 @@ Example usage::
 from .config import (
     AugmentConfig,
     DataConfig,
+    DataSourceConfig,
     DeviceConfig,
     DistillationConfig,
     EMAConfig,
@@ -48,9 +49,11 @@ from .config import (
     ModelConfig,
     NaFlexConfig,
     OptimizerConfig,
+    ProbeDataConfig,
     SchedulerConfig,
     SSLConfig,
     TrainConfig,
+    TrainDataConfig,
 )
 
 # Device and distributed setup
@@ -92,7 +95,7 @@ from .optim import (
 from .train import train_one_epoch
 
 # Validation loop
-from .validate import validate
+from .validate import validate, validate_with_task, validate_knn
 
 # Checkpoint management
 from .checkpoint import (
@@ -107,6 +110,7 @@ __all__ = [
     # Configs
     'AugmentConfig',
     'DataConfig',
+    'DataSourceConfig',
     'DeviceConfig',
     'DistillationConfig',
     'EMAConfig',
@@ -117,9 +121,11 @@ __all__ = [
     'ModelConfig',
     'NaFlexConfig',
     'OptimizerConfig',
+    'ProbeDataConfig',
     'SchedulerConfig',
     'SSLConfig',
     'TrainConfig',
+    'TrainDataConfig',
     # Device
     'DeviceEnv',
     'setup_device',
@@ -147,6 +153,8 @@ __all__ = [
     'train_one_epoch',
     # Validation
     'validate',
+    'validate_with_task',
+    'validate_knn',
     # Checkpoint
     'setup_checkpoint_saver',
     'resume_training',
