@@ -502,26 +502,10 @@ class SequentialList(nn.Sequential):
     def __init__(self, *args):
         super().__init__(*args)
 
-    @torch.jit._overload_method  # noqa: F811
-    def forward(self, x):
-        # type: (List[torch.Tensor]) -> (List[torch.Tensor])
-        pass
-
-    @torch.jit._overload_method  # noqa: F811
-    def forward(self, x):
-        # type: (torch.Tensor) -> (List[torch.Tensor])
-        pass
-
     def forward(self, x) -> List[torch.Tensor]:
         for module in self:
             x = module(x)
         return x
-
-
-@torch.jit.interface
-class ModuleInterface(torch.nn.Module):
-    def forward(self, input: torch.Tensor) -> torch.Tensor: # `input` has a same name in Sequential forward
-        pass
 
 
 block_types_dict = {
@@ -816,7 +800,7 @@ class HighResolutionNet(nn.Module):
             if y is None:
                 y = incre(yl[i])
             else:
-                down: ModuleInterface = self.downsamp_modules[i - 1]  # needed for torchscript module indexing
+                down = self.downsamp_modules[i - 1]
                 y = incre(yl[i]) + down.forward(y)
 
         y = self.final_layer(y)
