@@ -10,6 +10,7 @@ from timm.models import create_model
 from timm.utils import unwrap_model
 
 from .task import TrainingTask
+from .eval_task import ClassificationEvalTask
 
 
 _logger = logging.getLogger(__name__)
@@ -237,7 +238,7 @@ class LogitDistillationTask(TrainingTask):
             self.dtype,
         )
 
-        self.student = student_model
+        self.trainable_module = student_model  # Student IS the trainable module
         self.teacher = teacher
         self.criterion = criterion if criterion is not None else nn.CrossEntropyLoss()
         self.loss_type = loss_type
@@ -312,13 +313,23 @@ class LogitDistillationTask(TrainingTask):
         Returns:
             self (for method chaining)
         """
-        from torch.nn.parallel import DistributedDataParallel as DDP
-
+        # Freeze teacher parameters
         for param in self.teacher.parameters():
             param.requires_grad = False
 
-        self.student = DDP(self.student, device_ids=device_ids, **ddp_kwargs)
-        return self
+        # Use base class for DDP wrapping of trainable_module
+        return super().prepare_distributed(device_ids=device_ids, **ddp_kwargs)
+
+    def get_eval_task(self, use_ema: bool = True) -> ClassificationEvalTask:
+        """Get evaluation task for classification.
+
+        Args:
+            use_ema: If True and EMA exists, use EMA weights for evaluation
+
+        Returns:
+            ClassificationEvalTask configured for the student model
+        """
+        return ClassificationEvalTask(self.get_trainable_module(use_ema))
 
     def forward(
             self,
@@ -338,7 +349,7 @@ class LogitDistillationTask(TrainingTask):
                 - 'task_loss': Classification loss component
                 - 'kd_loss': Logit distillation loss component
         """
-        student_logits = self.student(input)
+        student_logits = self.trainable_module(input)
         task_loss = self.criterion(student_logits, target)
 
         with torch.no_grad():
@@ -369,17 +380,17 @@ class FeatureDistillationTrainableModule(nn.Module):
 
     def __init__(
             self,
-            student_model: nn.Module,
+            model: nn.Module,
             projection: Optional[nn.Module] = None,
     ):
         """ Create trainable module wrapper for feature distillation.
 
         Args:
-            student_model: Student model to train
+            model: Student model to train (core model)
             projection: Optional projection layer (Linear layer or None)
         """
         super().__init__()
-        self.student = student_model
+        self.model = model  # Core student model
         self.projection = projection
 
     def forward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -392,9 +403,9 @@ class FeatureDistillationTrainableModule(nn.Module):
             Tuple of (student_logits, student_features) where features are
             optionally projected to match teacher dimension.
         """
-        feature_map = self.student.forward_features(input)
-        student_logits = self.student.forward_head(feature_map)
-        student_features = self.student.forward_head(feature_map, pre_logits=True)
+        feature_map = self.model.forward_features(input)
+        student_logits = self.model.forward_head(feature_map)
+        student_features = self.model.forward_head(feature_map, pre_logits=True)
 
         if self.projection is not None:
             student_features = self.projection(student_features)
@@ -512,7 +523,7 @@ class FeatureDistillationTask(TrainingTask):
             if self.verbose:
                 _logger.info("Feature dimensions match, no projection needed")
 
-        self.trainable_module = FeatureDistillationTrainableModule(student_model, projection)
+        self.trainable_module = FeatureDistillationTrainableModule(model=student_model, projection=projection)
 
         # Register student normalization values
         student_unwrapped = unwrap_model(student_model)
@@ -568,13 +579,23 @@ class FeatureDistillationTask(TrainingTask):
         Returns:
             self (for method chaining)
         """
-        from torch.nn.parallel import DistributedDataParallel as DDP
-
+        # Freeze teacher parameters
         for param in self.teacher.parameters():
             param.requires_grad = False
 
-        self.trainable_module = DDP(self.trainable_module, device_ids=device_ids, **ddp_kwargs)
-        return self
+        # Use base class for DDP wrapping of trainable_module
+        return super().prepare_distributed(device_ids=device_ids, **ddp_kwargs)
+
+    def get_eval_task(self, use_ema: bool = True) -> ClassificationEvalTask:
+        """Get evaluation task for classification.
+
+        Args:
+            use_ema: If True and EMA exists, use EMA weights for evaluation
+
+        Returns:
+            ClassificationEvalTask configured for the student model
+        """
+        return ClassificationEvalTask(self.get_trainable_module(use_ema))
 
     def forward(
             self,

@@ -10,6 +10,7 @@ from timm.models import create_model
 from timm.utils import unwrap_model
 
 from .task import TrainingTask
+from .eval_task import ClassificationEvalTask
 
 _logger = logging.getLogger(__name__)
 
@@ -214,7 +215,7 @@ class TokenDistillationTask(TrainingTask):
                 f"got {type(teacher_model).__name__}"
             )
 
-        self.student = student_model
+        self.trainable_module = student_model
         self.teacher = teacher
         self.criterion = criterion if criterion is not None else nn.CrossEntropyLoss()
         self.distill_type = distill_type
@@ -271,6 +272,17 @@ class TokenDistillationTask(TrainingTask):
                 f"TokenDistillationTask: distill_type={distill_type}, temperature={temperature}"
             )
 
+    def get_eval_task(self, use_ema: bool = True) -> ClassificationEvalTask:
+        """Get evaluation task for token distillation student.
+
+        Args:
+            use_ema: If True and EMA exists, use EMA weights for evaluation
+
+        Returns:
+            ClassificationEvalTask configured for the student model
+        """
+        return ClassificationEvalTask(self.get_trainable_module(use_ema))
+
     def prepare_distributed(
             self,
             device_ids: Optional[list] = None,
@@ -278,8 +290,7 @@ class TokenDistillationTask(TrainingTask):
     ) -> 'TokenDistillationTask':
         """Prepare task for distributed training.
 
-        Wraps the student model in DistributedDataParallel (DDP) while leaving
-        the frozen teacher model unwrapped.
+        Freezes teacher model and wraps student in DistributedDataParallel (DDP).
 
         Args:
             device_ids: List of device IDs for DDP (e.g., [local_rank])
@@ -288,13 +299,10 @@ class TokenDistillationTask(TrainingTask):
         Returns:
             self (for method chaining)
         """
-        from torch.nn.parallel import DistributedDataParallel as DDP
-
         for param in self.teacher.parameters():
             param.requires_grad = False
 
-        self.student = DDP(self.student, device_ids=device_ids, **ddp_kwargs)
-        return self
+        return super().prepare_distributed(device_ids=device_ids, **ddp_kwargs)
 
     def forward(
             self,
@@ -315,7 +323,7 @@ class TokenDistillationTask(TrainingTask):
                 - 'distill_loss': Distillation loss component
         """
         # Student forward pass - returns tuple (main_logits, dist_logits)
-        student_output = self.student(input)
+        student_output = self.trainable_module(input)
         main_logits, dist_logits = student_output
 
         # Compute task loss on main head
