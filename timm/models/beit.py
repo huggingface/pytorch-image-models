@@ -179,8 +179,8 @@ class Attention(nn.Module):
         self.proj = nn.Linear(all_head_dim, dim, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
 
-        if not self.proj.weight.is_meta:
-            self.reset_parameters()
+        # TODO: skip init when on meta device when safe to do so
+        self.reset_parameters()
 
     def _get_rel_pos_bias(self) -> torch.Tensor:
         """Get relative position bias for the attention window.
@@ -362,8 +362,8 @@ class Block(nn.Module):
         else:
             self.gamma_1, self.gamma_2 = None, None
 
-        if not self.norm1.weight.is_meta:
-            self.reset_parameters()
+        # TODO: skip init when on meta device when safe to do so
+        self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """Initialize parameters."""
@@ -416,8 +416,8 @@ class RelativePositionBias(nn.Module):
             persistent=False,
         )
 
-        if not self.relative_position_bias_table.is_meta:
-            self.reset_parameters()
+        # TODO: skip init when on meta device when safe to do so
+        self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """Initialize parameters and buffers."""
@@ -569,8 +569,8 @@ class Beit(nn.Module):
         self.head = nn.Linear(embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head_init_scale = head_init_scale
 
-        if not self.patch_embed.proj.weight.is_meta:
-            self.init_weights(needs_reset=False)
+        # TODO: skip init when on meta device when safe to do so
+        self.init_weights(needs_reset=False)
 
     def init_weights(self, needs_reset: bool = True) -> None:
         """Initialize model weights.

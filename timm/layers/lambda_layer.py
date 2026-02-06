@@ -125,8 +125,8 @@ class LambdaLayer(nn.Module):
 
         self.pool = nn.AvgPool2d(2, 2) if stride == 2 else nn.Identity()
 
-        if not self.qkv.weight.is_meta:
-            self.reset_parameters()
+        # TODO: skip init when on meta device when safe to do so
+        self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """Initialize parameters and buffers."""

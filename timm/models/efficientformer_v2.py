@@ -159,8 +159,8 @@ class Attention2d(torch.nn.Module):
         )
         self.attention_bias_cache = {}
 
-        if not self.attention_biases.is_meta:
-            self.reset_parameters()
+        # TODO: skip init when on meta device when safe to do so
+        self.reset_parameters()
 
     @torch.no_grad()
     def train(self, mode=True):
@@ -300,8 +300,8 @@ class Attention2dDownsample(torch.nn.Module):
         )
         self.attention_bias_cache = {}
 
-        if not self.attention_biases.is_meta:
-            self.reset_parameters()
+        # TODO: skip init when on meta device when safe to do so
+        self.reset_parameters()
 
     @torch.no_grad()
     def train(self, mode=True):
@@ -719,8 +719,8 @@ class EfficientFormerV2(nn.Module):
         else:
             self.head_dist = None
 
-        if not self.norm.weight.is_meta:
-            self.init_weights(needs_reset=False)
+        # TODO: skip init when on meta device when safe to do so
+        self.init_weights(needs_reset=False)
 
         self.distilled_training = False
 

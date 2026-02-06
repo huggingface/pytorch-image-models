@@ -207,8 +207,8 @@ class CascadedGroupAttention(torch.nn.Module):
         )
         self.attention_bias_cache = {}
 
-        if not self.attention_bias_idxs.is_meta:
-            self.reset_parameters()
+        # TODO: skip init when on meta device when safe to do so
+        self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """Initialize parameters and buffers."""
@@ -537,8 +537,8 @@ class EfficientVitMsra(nn.Module):
         self.head = NormLinear(
             self.num_features, num_classes, drop=self.drop_rate, **dd) if num_classes > 0 else torch.nn.Identity()
 
-        if not self.patch_embed.conv1.conv.weight.is_meta:
-            self.init_weights(needs_reset=False)
+        # TODO: skip init when on meta device when safe to do so
+        self.init_weights(needs_reset=False)
 
     def init_weights(self, needs_reset: bool = True):
         self.apply(partial(self._init_weights, needs_reset=needs_reset))

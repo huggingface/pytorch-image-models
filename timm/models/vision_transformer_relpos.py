@@ -365,7 +365,8 @@ class VisionTransformerRelPos(nn.Module):
 
         self.weight_init_mode = 'reset' if weight_init == 'skip' else weight_init
         self.fix_init = fix_init
-        if weight_init != 'skip' and not self.patch_embed.proj.weight.is_meta:
+        # TODO: skip init when on meta device when safe to do so
+        if weight_init != 'skip':
             self.init_weights(needs_reset=False)
 
     def fix_init_weight(self) -> None:

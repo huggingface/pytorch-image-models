@@ -46,7 +46,8 @@ class VisionTransformerDistilled(VisionTransformer):
         self.distilled_training = False  # must set this True to train w/ distillation token
 
         self.weight_init_mode = 'reset' if weight_init == 'skip' else weight_init
-        if weight_init != 'skip' and not next(self.parameters()).is_meta:
+        # TODO: skip init when on meta device when safe to do so
+        if weight_init != 'skip':
             self.init_weights(needs_reset=False)
 
     def init_weights(self, mode='', needs_reset=True):

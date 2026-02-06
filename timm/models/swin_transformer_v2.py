@@ -152,8 +152,8 @@ class WindowAttention(nn.Module):
             persistent=False,
         )
 
-        if not self.proj.weight.is_meta:
-            self.reset_parameters()
+        # TODO: skip init when on meta device when safe to do so
+        self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """Initialize parameters and buffers."""
@@ -845,8 +845,8 @@ class SwinTransformerV2(nn.Module):
             **dd,
         )
 
-        if not self.patch_embed.proj.weight.is_meta:
-            self.init_weights(needs_reset=False)
+        # TODO: skip init when on meta device when safe to do so
+        self.init_weights(needs_reset=False)
 
     def init_weights(self, needs_reset: bool = True) -> None:
         """Initialize model weights.

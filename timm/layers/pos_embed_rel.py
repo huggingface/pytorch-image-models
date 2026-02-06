@@ -299,8 +299,8 @@ class RelPosBias(nn.Module):
             persistent=False,
         )
 
-        if not self.relative_position_bias_table.is_meta:
-            self.reset_parameters()
+        # TODO: skip init when on meta device when safe to do so
+        self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """Initialize parameters and buffers."""
@@ -420,8 +420,8 @@ class RelPosMlp(nn.Module):
             persistent=False,
         )
 
-        if not self.mlp.fc1.weight.is_meta:
-            self.reset_parameters()
+        # TODO: skip init when on meta device when safe to do so
+        self.reset_parameters()
 
     def get_bias(self) -> torch.Tensor:
         relative_position_bias = self.mlp(self.rel_coords_log)
@@ -554,8 +554,8 @@ class RelPosBiasTf(nn.Module):
         self.register_buffer('height_lookup', torch.empty(height_lookup_shape, **dd), persistent=False)
         self.register_buffer('width_lookup', torch.empty(width_lookup_shape, **dd), persistent=False)
 
-        if not self.relative_position_bias_table.is_meta:
-            self.reset_parameters()
+        # TODO: skip init when on meta device when safe to do so
+        self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """Initialize parameters and buffers."""

@@ -226,8 +226,8 @@ class LearnableDct2d(nn.Module):
         self.register_buffer('imagenet_mean', torch.empty(3, 1, 1, device=device, dtype=dtype), persistent=False)
         self.register_buffer('imagenet_std', torch.empty(3, 1, 1, device=device, dtype=dtype), persistent=False)
 
-        if not self.mean.is_meta:
-            self.reset_parameters()
+        # TODO: skip init when on meta device when safe to do so
+        self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """Initialize buffers."""
@@ -609,8 +609,8 @@ class CSATv2(nn.Module):
 
         self.head = NormMlpClassifierHead(dims[-1], num_classes, pool_type=global_pool, **dd)
 
-        if not self.stem_dct.conv_y.weight.is_meta:
-            self.init_weights(needs_reset=False)
+        # TODO: skip init when on meta device when safe to do so
+        self.init_weights(needs_reset=False)
 
     def init_weights(self, needs_reset: bool = True):
         self.apply(partial(self._init_weights, needs_reset=needs_reset))

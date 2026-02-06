@@ -51,8 +51,8 @@ class BlurPool2d(nn.Module):
         filt_shape = (channels or 1, 1, filt_size, filt_size)
         self.register_buffer('filt', torch.empty(filt_shape, device=device, dtype=dtype), persistent=False)
 
-        if not self.filt.is_meta:
-            self.reset_parameters()
+        # TODO: skip init when on meta device when safe to do so
+        self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """Initialize buffers."""

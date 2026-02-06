@@ -348,8 +348,8 @@ class ParallelScalingBlock(nn.Module):
         self.ls = LayerScale(dim, init_values=init_values, **dd) if init_values is not None else nn.Identity()
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-        if not self.in_proj.weight.is_meta:
-            self.reset_parameters()
+        # TODO: skip init when on meta device when safe to do so
+        self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """Initialize parameters and buffers."""
@@ -484,8 +484,8 @@ class DiffParallelScalingBlock(nn.Module):
         self.lambda_init = 0.8
         self.set_lambda_init(depth)
 
-        if not self.in_proj.weight.is_meta:
-            self.reset_parameters()
+        # TODO: skip init when on meta device when safe to do so
+        self.reset_parameters()
 
     def set_lambda_init(self, depth: int):
         self.lambda_init = 0.8 - 0.6 * math.exp(-0.3 * depth)
@@ -866,7 +866,8 @@ class VisionTransformer(nn.Module):
 
         self.weight_init_mode = 'reset' if weight_init == 'skip' else weight_init
         self.fix_init = fix_init
-        if weight_init != 'skip' and not next(self.parameters()).is_meta:
+        # TODO: skip init when on meta device when safe to do so
+        if weight_init != 'skip':
             self.init_weights(needs_reset=False)
 
     def fix_init_weight(self) -> None:
