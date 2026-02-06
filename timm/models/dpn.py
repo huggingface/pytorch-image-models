@@ -34,16 +34,6 @@ class CatBnAct(nn.Module):
         super().__init__()
         self.bn = norm_layer(in_chs, eps=0.001, **dd)
 
-    @torch.jit._overload_method  # noqa: F811
-    def forward(self, x):
-        # type: (Tuple[torch.Tensor, torch.Tensor]) -> (torch.Tensor)
-        pass
-
-    @torch.jit._overload_method  # noqa: F811
-    def forward(self, x):
-        # type: (torch.Tensor) -> (torch.Tensor)
-        pass
-
     def forward(self, x):
         if isinstance(x, tuple):
             x = torch.cat(x, dim=1)
@@ -123,16 +113,6 @@ class DualPathBlock(nn.Module):
             self.c1x1_c = BnActConv2d(in_chs=num_3x3_b, out_chs=num_1x1_c + inc, kernel_size=1, stride=1, **dd)
             self.c1x1_c1 = None
             self.c1x1_c2 = None
-
-    @torch.jit._overload_method  # noqa: F811
-    def forward(self, x):
-        # type: (Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]
-        pass
-
-    @torch.jit._overload_method  # noqa: F811
-    def forward(self, x):
-        # type: (torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]
-        pass
 
     def forward(self, x) -> Tuple[torch.Tensor, torch.Tensor]:
         if isinstance(x, tuple):

@@ -27,16 +27,6 @@ class SequentialList(nn.Sequential):
     def __init__(self, *args):
         super().__init__(*args)
 
-    @torch.jit._overload_method  # noqa: F811
-    def forward(self, x):
-        # type: (List[torch.Tensor]) -> (List[torch.Tensor])
-        pass
-
-    @torch.jit._overload_method  # noqa: F811
-    def forward(self, x):
-        # type: (torch.Tensor) -> (List[torch.Tensor])
-        pass
-
     def forward(self, x) -> List[torch.Tensor]:
         for module in self:
             x = module(x)
@@ -48,16 +38,6 @@ class SelectSeq(nn.Module):
         super().__init__()
         self.mode = mode
         self.index = index
-
-    @torch.jit._overload_method  # noqa: F811
-    def forward(self, x):
-        # type: (List[torch.Tensor]) -> (torch.Tensor)
-        pass
-
-    @torch.jit._overload_method  # noqa: F811
-    def forward(self, x):
-        # type: (Tuple[torch.Tensor]) -> (torch.Tensor)
-        pass
 
     def forward(self, x) -> torch.Tensor:
         if self.mode == 'index':
