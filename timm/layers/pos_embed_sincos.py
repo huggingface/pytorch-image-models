@@ -11,8 +11,6 @@ from torch import nn as nn
 from ._fx import register_notrace_function
 from .grid import ndgrid
 from .trace_utils import _assert
-from .weight_init import is_meta_device
-
 
 def pixel_freq_bands(
         num_bands: int,
@@ -188,8 +186,8 @@ class FourierEmbed(nn.Module):
         self.keep_spatial = keep_spatial
         self.register_buffer('bands', torch.empty(num_bands, device=device, dtype=dtype), persistent=False)
 
-        if not is_meta_device(device):
-            self.reset_parameters()
+        # TODO: skip init when on meta device when safe to do so
+        self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """Initialize parameters and buffers."""
@@ -447,8 +445,8 @@ class RotaryEmbedding(nn.Module):
             self.register_buffer('pos_embed_sin', torch.empty(emb_shape, device=device, dtype=dtype), persistent=False)
             self.register_buffer('pos_embed_cos', torch.empty(emb_shape, device=device, dtype=dtype), persistent=False)
 
-        if not is_meta_device(device):
-            self.reset_parameters()
+        # TODO: skip init when on meta device when safe to do so
+        self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """Initialize parameters and buffers."""
@@ -583,8 +581,8 @@ class RotaryEmbeddingCat(nn.Module):
             emb_shape = (num_pos, dim * 2)  # concatenated sin & cos
             self.register_buffer('pos_embed', torch.empty(emb_shape, device=device, dtype=dtype), persistent=False)
 
-        if not is_meta_device(device):
-            self.reset_parameters()
+        # TODO: skip init when on meta device when safe to do so
+        self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """Initialize parameters and buffers."""
@@ -851,8 +849,8 @@ class RotaryEmbeddingMixed(nn.Module):
                 num_pos *= s
             self.register_buffer('t_x', torch.empty(num_pos, device=device, dtype=dtype), persistent=False)
             self.register_buffer('t_y', torch.empty(num_pos, device=device, dtype=dtype), persistent=False)
-            if not is_meta_device(device):
-                self._init_buffers()
+            # TODO: skip init when on meta device when safe to do so
+            self._init_buffers()
         else:
             self.t_x = self.t_y = None
 
@@ -1087,8 +1085,8 @@ class RotaryEmbeddingDinoV3(nn.Module):
         else:
             self.pos_embed_cached = None
 
-        if not is_meta_device(device):
-            self.reset_parameters()
+        # TODO: skip init when on meta device when safe to do so
+        self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """Initialize parameters and buffers."""

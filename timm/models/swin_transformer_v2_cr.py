@@ -152,8 +152,8 @@ class WindowMultiHeadAttention(nn.Module):
             persistent=False,
         )
 
-        if not self.proj.weight.is_meta:
-            self.reset_parameters()
+        # TODO: skip init when on meta device when safe to do so
+        self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """Initialize parameters and buffers."""
@@ -322,8 +322,8 @@ class SwinTransformerV2CrBlock(nn.Module):
         # Register buffer as None initially, will be computed in reset_parameters if needed
         self.register_buffer("attn_mask", None, persistent=False)
 
-        if not self.norm1.weight.is_meta:
-            self.reset_parameters()
+        # TODO: skip init when on meta device when safe to do so
+        self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """Initialize parameters and buffers."""
@@ -830,7 +830,8 @@ class SwinTransformerV2Cr(nn.Module):
         )
 
         self.weight_init_mode = 'reset' if weight_init == 'skip' else weight_init
-        if weight_init != 'skip' and not self.patch_embed.proj.weight.is_meta:
+        # TODO: skip init when on meta device when safe to do so
+        if weight_init != 'skip':
             self.init_weights(needs_reset=False)
 
     def init_weights(self, needs_reset: bool = True) -> None:
