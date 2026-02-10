@@ -26,13 +26,120 @@ from timm.layers import (
     trunc_normal_,
     use_fused_attn,
     apply_rot_embed_cat,
+    freq_bands,
 )
 from ._builder import build_model_with_cfg
+from ._manipulate import checkpoint
 from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['RSViT', 'RSPViT', 'RSTViT', 'ResidualMLP']
 
 _logger = logging.getLogger(__name__)
+
+
+def _sample_step_count(max_val: int, min_val: int, training: bool) -> int:
+    """Sample a random step count in [min_val, max_val] during training."""
+    if not training or min_val >= max_val:
+        return max_val
+    return torch.randint(min_val, max_val + 1, (1,)).item()
+
+
+class StepEmbedding(nn.Module):
+    """Maps scalar recursion progress p in [0,1] to a dense embedding.
+
+    Uses fixed sinusoidal frequencies (registered buffer) followed by a
+    learned linear projection.
+
+    Args:
+        embed_dim: Output embedding dimension.
+        num_bands: Number of frequency bands for sinusoidal encoding.
+        temperature: Temperature for frequency bands.
+        drop: Dropout rate on the embedding (training only).
+    """
+
+    def __init__(
+            self,
+            embed_dim: int = 64,
+            num_bands: int = 32,
+            temperature: float = 10000.,
+            drop: float = 0.,
+            device=None,
+            dtype=None,
+    ):
+        super().__init__()
+        dd = {'device': device, 'dtype': dtype}
+        self.num_bands = num_bands
+        bands = freq_bands(num_bands, temperature=temperature, step=1, device=device)
+        self.register_buffer('bands', bands)  # [num_bands]
+        # sin + cos for each band
+        self.proj = nn.Linear(num_bands * 2, embed_dim, **dd)
+        self.drop = nn.Dropout(drop) if drop > 0. else nn.Identity()
+
+    def forward(self, p: torch.Tensor) -> torch.Tensor:
+        """Encode scalar progress values to dense embeddings.
+
+        Args:
+            p: Progress values in [0,1], shape [B].
+
+        Returns:
+            Step embeddings [B, embed_dim].
+        """
+        # p: [B] -> [B, 1] * [num_bands] -> [B, num_bands]
+        angles = p.unsqueeze(-1) * self.bands  # [B, num_bands]
+        emb = torch.cat([angles.sin(), angles.cos()], dim=-1)  # [B, num_bands*2]
+        return self.drop(self.proj(emb))
+
+
+class StepGate(nn.Module):
+    """Maps step embedding to per-branch gate values in (0,1).
+
+    Small MLP with sigmoid output. Bias initialized to ~2.0 so that
+    sigmoid(2.0) ~ 0.88, preserving near-baseline behavior at init.
+
+    Args:
+        embed_dim: Input step embedding dimension.
+        hidden_dim: Hidden layer dimension.
+        num_branches: Number of gate outputs (one per residual branch).
+    """
+
+    def __init__(
+            self,
+            embed_dim: int = 64,
+            hidden_dim: int = 32,
+            num_branches: int = 2,
+            device=None,
+            dtype=None,
+    ):
+        super().__init__()
+        dd = {'device': device, 'dtype': dtype}
+        self.num_branches = num_branches
+        self.mlp = nn.Sequential(
+            nn.Linear(embed_dim, hidden_dim, **dd),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, num_branches, **dd),
+        )
+        self.init_gate_bias()
+
+    def init_gate_bias(self):
+        """Zero-init final layer weights and set bias to 2.0.
+
+        Ensures all gates start at exactly sigmoid(2.0) ≈ 0.88 regardless of
+        step input, then gradually differentiate during training.
+        """
+        nn.init.zeros_(self.mlp[-1].weight)
+        nn.init.constant_(self.mlp[-1].bias, 2.0)
+
+    def forward(self, step_emb: torch.Tensor) -> Tuple[torch.Tensor, ...]:
+        """Compute per-branch gates from step embedding.
+
+        Args:
+            step_emb: Step embedding [B, embed_dim].
+
+        Returns:
+            Tuple of num_branches tensors, each [B, 1].
+        """
+        gates = torch.sigmoid(self.mlp(step_emb))  # [B, num_branches]
+        return tuple(gates[:, i:i + 1] for i in range(self.num_branches))
 
 
 class CrossAttentionRope(nn.Module):
@@ -174,6 +281,8 @@ class RSViTCrossBlock(nn.Module):
             init_values: Optional[float] = None,
             drop_path: float = 0.,
             rotate_half: bool = False,
+            step_cond: bool = False,
+            step_embed_dim: int = 64,
             device=None,
             dtype=None,
     ):
@@ -206,12 +315,15 @@ class RSViTCrossBlock(nn.Module):
         self.ls2 = LayerScale(dim, init_values=init_values, **dd) if init_values is not None else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
+        self.step_gate = StepGate(step_embed_dim, num_branches=2, **dd) if step_cond else None
+
     def forward(
             self,
             x: torch.Tensor,
             context: torch.Tensor,
             rope_q: Optional[torch.Tensor] = None,
             rope_k: Optional[torch.Tensor] = None,
+            step_emb: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """Forward pass.
 
@@ -220,21 +332,36 @@ class RSViTCrossBlock(nn.Module):
             context: Key/value context [B, N_kv, D_context].
             rope_q: RoPE embeddings for queries.
             rope_k: RoPE embeddings for keys/context.
+            step_emb: Step embedding [B, step_embed_dim] or None.
 
         Returns:
             Output tensor [B, N_q, D].
         """
-        x = x + self.drop_path1(
-            self.ls1(
-                self.cross_attn(
-                    self.norm1(x),
-                    self.norm_context(context),
-                    rope_q=rope_q,
-                    rope_k=rope_k,
+        if self.step_gate is not None and step_emb is not None:
+            gate_attn, gate_mlp = self.step_gate(step_emb)
+            x = x + self.drop_path1(
+                gate_attn.unsqueeze(1) * self.ls1(
+                    self.cross_attn(
+                        self.norm1(x),
+                        self.norm_context(context),
+                        rope_q=rope_q,
+                        rope_k=rope_k,
+                    )
                 )
             )
-        )
-        x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
+            x = x + self.drop_path2(gate_mlp.unsqueeze(1) * self.ls2(self.mlp(self.norm2(x))))
+        else:
+            x = x + self.drop_path1(
+                self.ls1(
+                    self.cross_attn(
+                        self.norm1(x),
+                        self.norm_context(context),
+                        rope_q=rope_q,
+                        rope_k=rope_k,
+                    )
+                )
+            )
+            x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
         return x
 
 
@@ -262,6 +389,8 @@ class RSViTBlock(nn.Module):
             init_values: Optional[float] = None,
             drop_path: float = 0.,
             rotate_half: bool = False,
+            step_cond: bool = False,
+            step_embed_dim: int = 64,
             device=None,
             dtype=None,
     ):
@@ -294,24 +423,31 @@ class RSViTBlock(nn.Module):
         self.ls2 = LayerScale(dim, init_values=init_values, **dd) if init_values is not None else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
+        self.step_gate = StepGate(step_embed_dim, num_branches=2, **dd) if step_cond else None
+
     def forward(
             self,
             x: torch.Tensor,
             rope: Optional[torch.Tensor] = None,
+            step_emb: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """Forward pass.
 
         Args:
             x: Input tensor [B, N, D].
             rope: Rotary position embeddings (concatenated sin/cos).
+            step_emb: Step embedding [B, step_embed_dim] or None.
 
         Returns:
             Output tensor [B, N, D].
         """
-        # Pre-norm attention
-        x = x + self.drop_path1(self.ls1(self.attn(self.norm1(x), rope=rope)))
-        # Pre-norm MLP
-        x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
+        if self.step_gate is not None and step_emb is not None:
+            gate_attn, gate_mlp = self.step_gate(step_emb)
+            x = x + self.drop_path1(gate_attn.unsqueeze(1) * self.ls1(self.attn(self.norm1(x), rope=rope)))
+            x = x + self.drop_path2(gate_mlp.unsqueeze(1) * self.ls2(self.mlp(self.norm2(x))))
+        else:
+            x = x + self.drop_path1(self.ls1(self.attn(self.norm1(x), rope=rope)))
+            x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
         return x
 
 
@@ -331,6 +467,8 @@ class ResidualMLP(nn.Module):
             mlp_ratio: float = 4.,
             drop: float = 0.,
             init_values: Optional[float] = None,
+            step_cond: bool = False,
+            step_embed_dim: int = 64,
             device=None,
             dtype=None,
     ):
@@ -346,7 +484,16 @@ class ResidualMLP(nn.Module):
         )
         self.ls = LayerScale(dim, init_values=init_values, **dd) if init_values is not None else nn.Identity()
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        self.step_gate = StepGate(step_embed_dim, num_branches=1, **dd) if step_cond else None
+
+    def forward(
+            self,
+            x: torch.Tensor,
+            step_emb: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        if self.step_gate is not None and step_emb is not None:
+            gate_mlp, = self.step_gate(step_emb)
+            return x + gate_mlp.unsqueeze(1) * self.ls(self.mlp(self.norm(x)))
         return x + self.ls(self.mlp(self.norm(x)))
 
 
@@ -395,10 +542,17 @@ class RSViT(nn.Module):
             t_recursions: int = 4,
             z_depth: int = 1,
             recursion_mode: str = 'block',
-            rope_type: str = 'cat',
+            rope_type: str = 'dinov3',
             rotate_half: bool = False,
             z_init_mode: str = 'single',
             y_block_mode: str = 'self',
+            step_cond: bool = False,
+            step_embed_dim: int = 64,
+            step_emb_drop: float = 0.,
+            rand_n_sup: bool = False,
+            min_n_sup: int = 1,
+            rand_t_rec: bool = False,
+            min_t_rec: int = 1,
             drop_rate: float = 0.,
             proj_drop_rate: float = 0.,
             init_values: Optional[float] = None,
@@ -412,6 +566,10 @@ class RSViT(nn.Module):
 
         assert recursion_mode in ('block', 'cycle'), \
             f"recursion_mode must be 'block' or 'cycle', got '{recursion_mode}'"
+        assert 1 <= min_n_sup <= n_sup, \
+            f"min_n_sup ({min_n_sup}) must be in [1, n_sup={n_sup}]"
+        assert 1 <= min_t_rec <= t_recursions, \
+            f"min_t_rec ({min_t_rec}) must be in [1, t_recursions={t_recursions}]"
 
         self.num_classes = num_classes
         self.num_features = self.head_hidden_size = self.embed_dim = embed_dim
@@ -421,6 +579,10 @@ class RSViT(nn.Module):
         self.z_depth = z_depth
         self.recursion_mode = recursion_mode
         self.halt_threshold = halt_threshold
+        self.rand_n_sup = rand_n_sup
+        self.min_n_sup = min_n_sup
+        self.rand_t_rec = rand_t_rec
+        self.min_t_rec = min_t_rec
 
         # Patch embedding
         self.patch_embed = PatchEmbed(
@@ -459,6 +621,11 @@ class RSViT(nn.Module):
             **dd,
         )
 
+        # Step conditioning
+        self.step_embedding = StepEmbedding(
+            embed_dim=step_embed_dim, drop=step_emb_drop, **dd,
+        ) if step_cond else None
+
         # Shared transformer blocks
         # z_blocks: process patch tokens only (no prefix tokens)
         self.z_blocks = nn.ModuleList([
@@ -471,6 +638,8 @@ class RSViT(nn.Module):
                 init_values=init_values,
                 drop_path=drop_path_rate,
                 rotate_half=rotate_half,
+                step_cond=step_cond,
+                step_embed_dim=step_embed_dim,
                 **dd,
             )
             for _ in range(z_depth)
@@ -489,6 +658,8 @@ class RSViT(nn.Module):
                 init_values=init_values,
                 drop_path=drop_path_rate,
                 rotate_half=rotate_half,
+                step_cond=step_cond,
+                step_embed_dim=step_embed_dim,
                 **dd,
             )
         else:
@@ -501,6 +672,8 @@ class RSViT(nn.Module):
                 init_values=init_values,
                 drop_path=drop_path_rate,
                 rotate_half=rotate_half,
+                step_cond=step_cond,
+                step_embed_dim=step_embed_dim,
                 **dd,
             )
 
@@ -513,6 +686,8 @@ class RSViT(nn.Module):
         # Halting head (predicts if answer is correct)
         self.q_head = nn.Linear(embed_dim, 1, **dd)
 
+        self.grad_checkpointing = False
+
         # Initialize weights
         self._init_weights()
 
@@ -520,9 +695,11 @@ class RSViT(nn.Module):
         """Initialize weights."""
         trunc_normal_(self.y_init, std=0.02)
         trunc_normal_(self.z_init, std=0.02)
-
-        # Initialize linear layers
         self.apply(self._init_linear_weights)
+        # Re-init StepGate biases (blanket linear init zeros them)
+        for m in self.modules():
+            if isinstance(m, StepGate):
+                m.init_gate_bias()
 
     def _init_linear_weights(self, m: nn.Module):
         """Initialize linear layer weights."""
@@ -537,6 +714,11 @@ class RSViT(nn.Module):
         return {'y_init', 'z_init'}
 
     @torch.jit.ignore
+    def set_grad_checkpointing(self, enable: bool = True) -> None:
+        """Enable or disable gradient checkpointing."""
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
         """Get the classifier head."""
         return self.head
@@ -546,11 +728,35 @@ class RSViT(nn.Module):
         self.num_classes = num_classes
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
+    def _get_step_emb(
+            self,
+            p: float,
+            B: int,
+            device: torch.device,
+            dtype: torch.dtype,
+    ) -> Optional[torch.Tensor]:
+        """Compute step embedding for progress value p.
+
+        Args:
+            p: Progress in [0,1].
+            B: Batch size.
+            device: Device for tensors.
+            dtype: Dtype for tensors.
+
+        Returns:
+            Step embedding [B, step_embed_dim] or None.
+        """
+        if self.step_embedding is None:
+            return None
+        p_tensor = torch.full((B,), p, device=device, dtype=dtype)
+        return self.step_embedding(p_tensor)
+
     def _run_y_block(
             self,
             y: torch.Tensor,
             z: torch.Tensor,
             rot_pos_embed: torch.Tensor,
+            step_emb: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """Run y_block (class token attends to patches).
 
@@ -558,17 +764,22 @@ class RSViT(nn.Module):
             y: Class token [B, 1, D].
             z: Patch features [B, num_patches, D].
             rot_pos_embed: RoPE embeddings.
+            step_emb: Step embedding [B, step_embed_dim] or None.
 
         Returns:
             Updated y tensor.
         """
         if self.y_block_mode == 'cross':
-            return self.y_block(y, z, rope_k=rot_pos_embed)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                return checkpoint(self.y_block, y, z, rope_k=rot_pos_embed, step_emb=step_emb)
+            return self.y_block(y, z, rope_k=rot_pos_embed, step_emb=step_emb)
         else:
             all_tokens = torch.cat([y, z], dim=1)
-            all_tokens = self.y_block(all_tokens, rope=rot_pos_embed)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                all_tokens = checkpoint(self.y_block, all_tokens, rope=rot_pos_embed, step_emb=step_emb)
+            else:
+                all_tokens = self.y_block(all_tokens, rope=rot_pos_embed, step_emb=step_emb)
             y = all_tokens[:, :1, :]
-            # Note: z unchanged in self-attention mode (we only extract y)
             return y
 
     def _run_supervision_step(
@@ -576,31 +787,68 @@ class RSViT(nn.Module):
             z: torch.Tensor,
             y: torch.Tensor,
             rot_pos_embed: torch.Tensor,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+            step_idx: int = 0,
+            total_steps: int = 1,
+            t_rec: Optional[int] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, int]:
         """Run one supervision step (all z_block and y_block iterations).
 
         Args:
             z: Patch features [B, num_patches, D].
             y: Class token [B, 1, D].
             rot_pos_embed: RoPE embeddings.
+            step_idx: Current atomic step index (for step conditioning).
+            total_steps: Total number of atomic block calls across all sup steps.
+            t_rec: Number of recursions for this step (defaults to self.t_recursions).
 
         Returns:
-            Updated (z, y) tuple.
+            Tuple of (updated z, updated y, next step_idx).
         """
-        if self.recursion_mode == 'cycle':
-            # Cycle: y_block after each pass through all z_blocks
-            for _ in range(self.t_recursions):
-                for block in self.z_blocks:
-                    z = block(z, rope=rot_pos_embed)
-                y = self._run_y_block(y, z, rot_pos_embed)
-        else:
-            # Block: each z_block repeated, then y_block once
-            for block in self.z_blocks:
-                for _ in range(self.t_recursions):
-                    z = block(z, rope=rot_pos_embed)
-            y = self._run_y_block(y, z, rot_pos_embed)
+        B = z.shape[0]
+        t_rec = t_rec if t_rec is not None else self.t_recursions
 
-        return z, y
+        if self.recursion_mode == 'cycle':
+            for _ in range(t_rec):
+                for block in self.z_blocks:
+                    step_emb = self._get_step_emb(
+                        step_idx / total_steps, B, z.device, z.dtype,
+                    )
+                    if self.grad_checkpointing and not torch.jit.is_scripting():
+                        z = checkpoint(block, z, rope=rot_pos_embed, step_emb=step_emb)
+                    else:
+                        z = block(z, rope=rot_pos_embed, step_emb=step_emb)
+                    step_idx += 1
+                step_emb = self._get_step_emb(
+                    step_idx / total_steps, B, z.device, z.dtype,
+                )
+                y = self._run_y_block(y, z, rot_pos_embed, step_emb=step_emb)
+                step_idx += 1
+        else:
+            for block in self.z_blocks:
+                for _ in range(t_rec):
+                    step_emb = self._get_step_emb(
+                        step_idx / total_steps, B, z.device, z.dtype,
+                    )
+                    if self.grad_checkpointing and not torch.jit.is_scripting():
+                        z = checkpoint(block, z, rope=rot_pos_embed, step_emb=step_emb)
+                    else:
+                        z = block(z, rope=rot_pos_embed, step_emb=step_emb)
+                    step_idx += 1
+            step_emb = self._get_step_emb(
+                step_idx / total_steps, B, z.device, z.dtype,
+            )
+            y = self._run_y_block(y, z, rot_pos_embed, step_emb=step_emb)
+            step_idx += 1
+
+        return z, y, step_idx
+
+    def _total_steps(self) -> int:
+        """Compute total number of atomic block calls per forward pass."""
+        if self.recursion_mode == 'cycle':
+            steps_per_sup = self.t_recursions * (self.z_depth + 1)
+        else:
+            steps_per_sup = self.z_depth * self.t_recursions + 1
+        return self.n_sup * steps_per_sup
 
     def forward_features(
             self,
@@ -633,12 +881,25 @@ class RSViT(nn.Module):
         # Get rotary embeddings (concatenated sin/cos)
         rot_pos_embed = self.rope.get_embed()
 
+        # Sample counts (randomize during training only)
+        cur_n_sup = _sample_step_count(self.n_sup, self.min_n_sup, self.training) if self.rand_n_sup else self.n_sup
+        cur_t_rec = _sample_step_count(
+            self.t_recursions, self.min_t_rec, self.training,
+        ) if self.rand_t_rec else self.t_recursions
+
+        # total_steps unchanged — always uses max counts for absolute step progress
+        total_steps = max(self._total_steps() - 1, 1)
+
         if return_all_steps:
             y_features = []
             z_features = []
+            step_idx = 0
 
-            for step in range(self.n_sup):
-                z, y = self._run_supervision_step(z, y, rot_pos_embed)
+            for step in range(cur_n_sup):
+                z, y, step_idx = self._run_supervision_step(
+                    z, y, rot_pos_embed,
+                    step_idx=step_idx, total_steps=total_steps, t_rec=cur_t_rec,
+                )
 
                 # Store features at each supervision step
                 y_features.append(self.norm(y.squeeze(1)))
@@ -647,10 +908,15 @@ class RSViT(nn.Module):
             return {'y_features': y_features, 'z_features': z_features}
 
         # Standard forward: run all supervision steps
-        for _ in range(self.n_sup):
-            z, y = self._run_supervision_step(z, y, rot_pos_embed)
+        step_idx = 0
+        for step in range(cur_n_sup):
+            z, y, step_idx = self._run_supervision_step(
+                z, y, rot_pos_embed,
+                step_idx=step_idx, total_steps=total_steps, t_rec=cur_t_rec,
+            )
 
         return self.norm(y.squeeze(1))
+
 
     def forward_head(
             self,
@@ -737,14 +1003,19 @@ class RSViT(nn.Module):
         y = self.y_init.expand(B, -1, -1)
 
         rot_pos_embed = self.rope.get_embed()
+        total_steps = max(self._total_steps() - 1, 1)
 
         # Track per-sample halting
         final_logits = torch.zeros(B, self.num_classes, device=device)
         steps_taken = torch.zeros(B, dtype=torch.long, device=device)
         halted = torch.zeros(B, dtype=torch.bool, device=device)
 
+        step_idx = 0
         for step in range(self.n_sup):
-            z, y = self._run_supervision_step(z, y, rot_pos_embed)
+            z, y, step_idx = self._run_supervision_step(
+                z, y, rot_pos_embed,
+                step_idx=step_idx, total_steps=total_steps,
+            )
 
             # Check halting condition at each supervision step
             y_feat = self.norm(y.squeeze(1))
@@ -819,6 +1090,13 @@ class RSPViT(nn.Module):
             t_recursions: int = 4,
             rope_type: str = 'dinov3',
             rotate_half: bool = False,
+            step_cond: bool = False,
+            step_embed_dim: int = 64,
+            step_emb_drop: float = 0.,
+            rand_n_sup: bool = False,
+            min_n_sup: int = 1,
+            rand_t_rec: bool = False,
+            min_t_rec: int = 1,
             drop_rate: float = 0.,
             proj_drop_rate: float = 0.,
             init_values: Optional[float] = None,
@@ -832,6 +1110,10 @@ class RSPViT(nn.Module):
 
         assert latent_feedback in ('none', 'joint', 'asymmetric'), \
             f"latent_feedback must be 'none', 'joint', or 'asymmetric', got '{latent_feedback}'"
+        assert 1 <= min_n_sup <= n_sup, \
+            f"min_n_sup ({min_n_sup}) must be in [1, n_sup={n_sup}]"
+        assert 1 <= min_t_rec <= t_recursions, \
+            f"min_t_rec ({min_t_rec}) must be in [1, t_recursions={t_recursions}]"
 
         self.num_classes = num_classes
         self.num_features = self.head_hidden_size = self.embed_dim = embed_dim
@@ -842,6 +1124,10 @@ class RSPViT(nn.Module):
         self.n_sup = n_sup
         self.t_recursions = t_recursions
         self.halt_threshold = halt_threshold
+        self.rand_n_sup = rand_n_sup
+        self.min_n_sup = min_n_sup
+        self.rand_t_rec = rand_t_rec
+        self.min_t_rec = min_t_rec
 
         # Patch embedding
         self.patch_embed = PatchEmbed(
@@ -894,6 +1180,11 @@ class RSPViT(nn.Module):
         else:
             self.latent_rope = None
 
+        # Step conditioning
+        self.step_embedding = StepEmbedding(
+            embed_dim=step_embed_dim, drop=step_emb_drop, **dd,
+        ) if step_cond else None
+
         # z_cross_block: latents cross-attend to patches (Perceiver-style)
         self.z_cross_block = RSViTCrossBlock(
             dim=embed_dim,
@@ -903,6 +1194,8 @@ class RSPViT(nn.Module):
             init_values=init_values,
             drop_path=drop_path_rate,
             rotate_half=rotate_half,
+            step_cond=step_cond,
+            step_embed_dim=step_embed_dim,
             **dd,
         )
 
@@ -920,6 +1213,8 @@ class RSPViT(nn.Module):
                 init_values=init_values,
                 drop_path=drop_path_rate,
                 rotate_half=rotate_half,
+                step_cond=step_cond,
+                step_embed_dim=step_embed_dim,
                 **dd,
             )
             for _ in range(z_depth)
@@ -936,6 +1231,8 @@ class RSPViT(nn.Module):
             init_values=init_values,
             drop_path=drop_path_rate,
             rotate_half=rotate_half,
+            step_cond=step_cond,
+            step_embed_dim=step_embed_dim,
             **dd,
         )
 
@@ -948,6 +1245,8 @@ class RSPViT(nn.Module):
         # Halting head (predicts if answer is correct)
         self.q_head = nn.Linear(embed_dim, 1, **dd)
 
+        self.grad_checkpointing = False
+
         # Initialize weights
         self._init_weights()
 
@@ -955,9 +1254,10 @@ class RSPViT(nn.Module):
         """Initialize weights."""
         trunc_normal_(self.y_init, std=0.02)
         trunc_normal_(self.z_init, std=0.02)
-
-        # Initialize linear layers
         self.apply(self._init_linear_weights)
+        for m in self.modules():
+            if isinstance(m, StepGate):
+                m.init_gate_bias()
 
     def _init_linear_weights(self, m: nn.Module):
         """Initialize linear layer weights."""
@@ -972,6 +1272,11 @@ class RSPViT(nn.Module):
         return {'y_init', 'z_init'}
 
     @torch.jit.ignore
+    def set_grad_checkpointing(self, enable: bool = True) -> None:
+        """Enable or disable gradient checkpointing."""
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
         """Get the classifier head."""
         return self.head
@@ -981,6 +1286,32 @@ class RSPViT(nn.Module):
         self.num_classes = num_classes
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
+    def _get_step_emb(
+            self,
+            p: float,
+            B: int,
+            device: torch.device,
+            dtype: torch.dtype,
+    ) -> Optional[torch.Tensor]:
+        """Compute step embedding for progress value p."""
+        if self.step_embedding is None:
+            return None
+        p_tensor = torch.full((B,), p, device=device, dtype=dtype)
+        return self.step_embedding(p_tensor)
+
+    def _total_steps(self) -> int:
+        """Compute total number of atomic block calls per forward pass.
+
+        Each recursion step has: 1 cross_block + z_depth self_blocks + 1 y_block.
+        For 'none'/'asymmetric' feedback: 1 + z_depth + 1 per recursion.
+        For 'joint' feedback: 1 + z_depth per recursion (no separate y_block).
+        """
+        if self.latent_feedback == 'joint':
+            steps_per_recursion = 1 + self.z_depth
+        else:
+            steps_per_recursion = 1 + self.z_depth + 1
+        return self.n_sup * self.t_recursions * steps_per_recursion
+
     def _run_recursion_step(
             self,
             z: torch.Tensor,
@@ -988,7 +1319,9 @@ class RSPViT(nn.Module):
             patches: torch.Tensor,
             rot_pos_embed: torch.Tensor,
             latent_rope_embed: Optional[torch.Tensor],
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+            step_idx: int = 0,
+            total_steps: int = 1,
+    ) -> Tuple[torch.Tensor, torch.Tensor, int]:
         """Run one recursion step (cross-attention + self-attention).
 
         Args:
@@ -997,34 +1330,71 @@ class RSPViT(nn.Module):
             patches: Embedded patches [B, num_patches, D].
             rot_pos_embed: RoPE embeddings for patches.
             latent_rope_embed: RoPE embeddings for latents (or None).
+            step_idx: Current atomic step index (for step conditioning).
+            total_steps: Total number of atomic steps.
 
         Returns:
-            Updated (z, y) tuple.
+            Tuple of (updated z, updated y, next step_idx).
         """
+        B = z.shape[0]
+
         # Cross-attention: latents gather from patches
-        z = self.z_cross_block(z, patches, rope_q=latent_rope_embed, rope_k=rot_pos_embed)
+        step_emb = self._get_step_emb(step_idx / total_steps, B, z.device, z.dtype)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            z = checkpoint(
+                self.z_cross_block, z, patches,
+                rope_q=latent_rope_embed, rope_k=rot_pos_embed, step_emb=step_emb,
+            )
+        else:
+            z = self.z_cross_block(z, patches, rope_q=latent_rope_embed, rope_k=rot_pos_embed, step_emb=step_emb)
+        step_idx += 1
 
         # Self-attention with latent_feedback mode
         if self.latent_feedback == 'none':
             for self_block in self.z_self_blocks:
-                z = self_block(z, rope=latent_rope_embed)
-            y = self.y_block(y, z, rope_k=latent_rope_embed)
+                step_emb = self._get_step_emb(step_idx / total_steps, B, z.device, z.dtype)
+                if self.grad_checkpointing and not torch.jit.is_scripting():
+                    z = checkpoint(self_block, z, rope=latent_rope_embed, step_emb=step_emb)
+                else:
+                    z = self_block(z, rope=latent_rope_embed, step_emb=step_emb)
+                step_idx += 1
+            step_emb = self._get_step_emb(step_idx / total_steps, B, z.device, z.dtype)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                y = checkpoint(self.y_block, y, z, rope_k=latent_rope_embed, step_emb=step_emb)
+            else:
+                y = self.y_block(y, z, rope_k=latent_rope_embed, step_emb=step_emb)
+            step_idx += 1
 
         elif self.latent_feedback == 'joint':
             combined = torch.cat([y, z], dim=1)
             for self_block in self.z_self_blocks:
-                combined = self_block(combined, rope=latent_rope_embed)
+                step_emb = self._get_step_emb(step_idx / total_steps, B, z.device, z.dtype)
+                if self.grad_checkpointing and not torch.jit.is_scripting():
+                    combined = checkpoint(self_block, combined, rope=latent_rope_embed, step_emb=step_emb)
+                else:
+                    combined = self_block(combined, rope=latent_rope_embed, step_emb=step_emb)
+                step_idx += 1
             y = combined[:, :1, :]
             z = combined[:, 1:, :]
 
         else:  # 'asymmetric'
             combined = torch.cat([y, z], dim=1)
             for self_block in self.z_self_blocks:
-                combined = self_block(combined, rope=latent_rope_embed)
+                step_emb = self._get_step_emb(step_idx / total_steps, B, z.device, z.dtype)
+                if self.grad_checkpointing and not torch.jit.is_scripting():
+                    combined = checkpoint(self_block, combined, rope=latent_rope_embed, step_emb=step_emb)
+                else:
+                    combined = self_block(combined, rope=latent_rope_embed, step_emb=step_emb)
+                step_idx += 1
             z = combined[:, 1:, :]
-            y = self.y_block(y, z, rope_k=latent_rope_embed)
+            step_emb = self._get_step_emb(step_idx / total_steps, B, z.device, z.dtype)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                y = checkpoint(self.y_block, y, z, rope_k=latent_rope_embed, step_emb=step_emb)
+            else:
+                y = self.y_block(y, z, rope_k=latent_rope_embed, step_emb=step_emb)
+            step_idx += 1
 
-        return z, y
+        return z, y, step_idx
 
     def forward_features(
             self,
@@ -1056,14 +1426,25 @@ class RSPViT(nn.Module):
         rot_pos_embed = self.rope.get_embed()
         latent_rope_embed = self.latent_rope.get_embed() if self.latent_rope_enabled else None
 
+        # Sample counts (randomize during training only)
+        cur_n_sup = _sample_step_count(self.n_sup, self.min_n_sup, self.training) if self.rand_n_sup else self.n_sup
+        cur_t_rec = _sample_step_count(
+            self.t_recursions, self.min_t_rec, self.training,
+        ) if self.rand_t_rec else self.t_recursions
+
+        # total_steps unchanged — always uses max counts for absolute step progress
+        total_steps = max(self._total_steps() - 1, 1)
+
         if return_all_steps:
             y_features = []
             z_features = []
+            step_idx = 0
 
-            for step in range(self.n_sup):
-                for t in range(self.t_recursions):
-                    z, y = self._run_recursion_step(
-                        z, y, patches, rot_pos_embed, latent_rope_embed
+            for step in range(cur_n_sup):
+                for t in range(cur_t_rec):
+                    z, y, step_idx = self._run_recursion_step(
+                        z, y, patches, rot_pos_embed, latent_rope_embed,
+                        step_idx=step_idx, total_steps=total_steps,
                     )
 
                 # Store features at each supervision step
@@ -1073,12 +1454,13 @@ class RSPViT(nn.Module):
             return {'y_features': y_features, 'z_features': z_features}
         else:
             # Standard forward: run all recursions
-            total_recursions = self.n_sup * self.t_recursions
-
-            for _ in range(total_recursions):
-                z, y = self._run_recursion_step(
-                    z, y, patches, rot_pos_embed, latent_rope_embed
-                )
+            step_idx = 0
+            for step in range(cur_n_sup):
+                for t in range(cur_t_rec):
+                    z, y, step_idx = self._run_recursion_step(
+                        z, y, patches, rot_pos_embed, latent_rope_embed,
+                        step_idx=step_idx, total_steps=total_steps,
+                    )
 
             return self.norm(y.squeeze(1))
 
@@ -1147,30 +1529,15 @@ class RSPViT(nn.Module):
         rot_pos_embed = self.rope.get_embed()
         latent_rope_embed = self.latent_rope.get_embed() if self.latent_rope_enabled else None
 
+        total_steps = max(self._total_steps() - 1, 1)
+        step_idx = 0
+
         for step in range(self.n_sup):
             for t in range(self.t_recursions):
-                # Cross-attention: latents gather from patches
-                z = self.z_cross_block(z, patches, rope_q=latent_rope_embed, rope_k=rot_pos_embed)
-
-                # Self-attention with latent_feedback mode
-                if self.latent_feedback == 'none':
-                    for self_block in self.z_self_blocks:
-                        z = self_block(z, rope=latent_rope_embed)
-                    y = self.y_block(y, z, rope_k=latent_rope_embed)
-
-                elif self.latent_feedback == 'joint':
-                    combined = torch.cat([y, z], dim=1)
-                    for self_block in self.z_self_blocks:
-                        combined = self_block(combined, rope=latent_rope_embed)
-                    y = combined[:, :1, :]
-                    z = combined[:, 1:, :]
-
-                else:  # 'asymmetric'
-                    combined = torch.cat([y, z], dim=1)
-                    for self_block in self.z_self_blocks:
-                        combined = self_block(combined, rope=latent_rope_embed)
-                    z = combined[:, 1:, :]
-                    y = self.y_block(y, z, rope_k=latent_rope_embed)
+                z, y, step_idx = self._run_recursion_step(
+                    z, y, patches, rot_pos_embed, latent_rope_embed,
+                    step_idx=step_idx, total_steps=total_steps,
+                )
 
             y_feat = self.norm(y.squeeze(1))
             logits, halt = self.forward_head(y_feat, return_halt_logits=True)
@@ -1239,6 +1606,13 @@ class RSTViT(nn.Module):
             rotate_half: bool = False,
             z_init_mode: str = 'single',
             ctx_gate_mode: str = 'uniform',
+            step_cond: bool = False,
+            step_embed_dim: int = 64,
+            step_emb_drop: float = 0.,
+            rand_n_sup: bool = False,
+            min_n_sup: int = 1,
+            rand_t_rec: bool = False,
+            min_t_rec: int = 1,
             drop_rate: float = 0.,
             proj_drop_rate: float = 0.,
             init_values: Optional[float] = None,
@@ -1256,6 +1630,10 @@ class RSTViT(nn.Module):
             f"recursion_mode must be 'block' or 'cycle', got '{recursion_mode}'"
         assert y_core_depth <= z_depth, \
             f"y_core_depth ({y_core_depth}) must be <= z_depth ({z_depth})"
+        assert 1 <= min_n_sup <= n_sup, \
+            f"min_n_sup ({min_n_sup}) must be in [1, n_sup={n_sup}]"
+        assert 1 <= min_t_rec <= t_recursions, \
+            f"min_t_rec ({min_t_rec}) must be in [1, t_recursions={t_recursions}]"
 
         self.num_classes = num_classes
         self.num_features = self.head_hidden_size = self.embed_dim = embed_dim
@@ -1264,9 +1642,14 @@ class RSTViT(nn.Module):
         self.t_recursions = t_recursions
         self.z_depth = z_depth
         self.y_core_depth = y_core_depth
+        self.y_mlp_depth = y_mlp_depth
         self.recursion_mode = recursion_mode
         self.halt_threshold = halt_threshold
         self.ctx_gate_mode = ctx_gate_mode
+        self.rand_n_sup = rand_n_sup
+        self.min_n_sup = min_n_sup
+        self.rand_t_rec = rand_t_rec
+        self.min_t_rec = min_t_rec
 
         # Patch embedding
         self.patch_embed = PatchEmbed(
@@ -1306,6 +1689,11 @@ class RSTViT(nn.Module):
             **dd,
         )
 
+        # Step conditioning
+        self.step_embedding = StepEmbedding(
+            embed_dim=step_embed_dim, drop=step_emb_drop, **dd,
+        ) if step_cond else None
+
         # Y-gated context injection into z
         # z <- z + ctx_scale * gate(y) * proj(x_ctx)
         self.ctx_proj = nn.Linear(embed_dim, embed_dim, bias=False, **dd)
@@ -1336,16 +1724,24 @@ class RSTViT(nn.Module):
                 init_values=init_values,
                 drop_path=drop_path_rate,
                 rotate_half=rotate_half,
+                step_cond=step_cond,
+                step_embed_dim=step_embed_dim,
                 **dd,
             )
             for _ in range(z_depth)
         ])
 
         # Y-specific MLP depth for additional processing after attention
-        self.y_mlps = nn.Sequential(*[
-            ResidualMLP(embed_dim, mlp_ratio, proj_drop_rate, init_values=init_values, **dd)
+        self.y_mlps = nn.ModuleList([
+            ResidualMLP(
+                embed_dim, mlp_ratio, proj_drop_rate,
+                init_values=init_values,
+                step_cond=step_cond,
+                step_embed_dim=step_embed_dim,
+                **dd,
+            )
             for _ in range(y_mlp_depth)
-        ]) if y_mlp_depth > 0 else nn.Identity()
+        ]) if y_mlp_depth > 0 else None
 
         # Final norm before heads
         self.norm = RmsNorm(embed_dim, **dd)
@@ -1356,6 +1752,8 @@ class RSTViT(nn.Module):
         # Halting head
         self.q_head = nn.Linear(embed_dim, 1, **dd)
 
+        self.grad_checkpointing = False
+
         self._init_weights()
 
     def _init_weights(self):
@@ -1363,6 +1761,9 @@ class RSTViT(nn.Module):
         trunc_normal_(self.y_init, std=0.02)
         trunc_normal_(self.z_init, std=0.02)
         self.apply(self._init_linear_weights)
+        for m in self.modules():
+            if isinstance(m, StepGate):
+                m.init_gate_bias()
 
     def _init_linear_weights(self, m: nn.Module):
         """Initialize linear layer weights."""
@@ -1377,6 +1778,11 @@ class RSTViT(nn.Module):
         return {'y_init', 'z_init', 'ctx_scale'}
 
     @torch.jit.ignore
+    def set_grad_checkpointing(self, enable: bool = True) -> None:
+        """Enable or disable gradient checkpointing."""
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
         """Get the classifier head."""
         return self.head
@@ -1385,6 +1791,32 @@ class RSTViT(nn.Module):
         """Reset the classifier head."""
         self.num_classes = num_classes
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+
+    def _get_step_emb(
+            self,
+            p: float,
+            B: int,
+            device: torch.device,
+            dtype: torch.dtype,
+    ) -> Optional[torch.Tensor]:
+        """Compute step embedding for progress value p."""
+        if self.step_embedding is None:
+            return None
+        p_tensor = torch.full((B,), p, device=device, dtype=dtype)
+        return self.step_embedding(p_tensor)
+
+    def _total_steps(self) -> int:
+        """Compute total number of atomic block calls per forward pass.
+
+        Per supervision step:
+          - ctx_inject (not a block call, not counted)
+          - z_depth * t_recursions core_block calls (z update)
+          - y_core_depth * t_recursions core_block calls (y update)
+          - y_mlp_depth y_mlp calls
+        """
+        z_steps = self.z_depth * self.t_recursions
+        y_steps = self.y_core_depth * self.t_recursions + self.y_mlp_depth
+        return self.n_sup * (z_steps + y_steps)
 
     def _inject_context(
             self,
@@ -1403,20 +1835,14 @@ class RSTViT(nn.Module):
             Updated z with gated context injection.
         """
         if self.ctx_gate_mode == 'uniform':
-            # Uniform gating: gate(y) broadcast to all patches
-            # z <- z + ctx_scale * gate(y) * proj(x_ctx)
             gate = self.ctx_gate(y)  # [B, 1, D]
             z = z + self.ctx_scale * gate * self.ctx_proj(x_ctx)
         else:
-            # Spatial gating: per-patch attention weights
-            # y queries x_ctx for per-patch relevance
             q = self.ctx_gate_q(y)  # [B, 1, D]
             k = self.ctx_gate_k(x_ctx)  # [B, N, D]
             N = x_ctx.shape[1]
-            # Compute attention scores
             attn = (q @ k.transpose(-1, -2)) * (self.embed_dim ** -0.5)  # [B, 1, N]
             attn = torch.softmax(attn, dim=-1)  # [B, 1, N]
-            # Scale by N so total injection magnitude matches uniform mode
             gate = N * attn.transpose(-1, -2)  # [B, N, 1]
             z = z + self.ctx_scale * gate * self.ctx_proj(x_ctx)
         return z
@@ -1426,67 +1852,101 @@ class RSTViT(nn.Module):
             y: torch.Tensor,
             z: torch.Tensor,
             rot_pos_embed: torch.Tensor,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+            step_idx: int = 0,
+            total_steps: int = 1,
+            t_rec: Optional[int] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, int]:
         """Update only z via joint self-attention (y unchanged).
-
-        Applies recursion_mode logic for block iteration.
 
         Args:
             y: Class token [B, 1, D] (unchanged).
             z: Latent state [B, num_patches, D].
             rot_pos_embed: RoPE embeddings.
+            step_idx: Current atomic step index.
+            total_steps: Total number of atomic steps.
+            t_rec: Number of recursions (defaults to self.t_recursions).
 
         Returns:
-            Tuple of (unchanged y, updated z).
+            Tuple of (unchanged y, updated z, next step_idx).
         """
+        B = z.shape[0]
+        t_rec = t_rec if t_rec is not None else self.t_recursions
         if self.recursion_mode == 'cycle':
-            # Cycle through all blocks, repeat t_recursions times
-            for _ in range(self.t_recursions):
+            for _ in range(t_rec):
                 for block in self.core_blocks:
+                    step_emb = self._get_step_emb(step_idx / total_steps, B, z.device, z.dtype)
                     tokens = torch.cat([y, z], dim=1)
-                    tokens = block(tokens, rope=rot_pos_embed)
+                    if self.grad_checkpointing and not torch.jit.is_scripting():
+                        tokens = checkpoint(block, tokens, rope=rot_pos_embed, step_emb=step_emb)
+                    else:
+                        tokens = block(tokens, rope=rot_pos_embed, step_emb=step_emb)
                     z = tokens[:, 1:, :]
+                    step_idx += 1
         else:
-            # Each block repeated t_recursions times before next
             for block in self.core_blocks:
-                for _ in range(self.t_recursions):
+                for _ in range(t_rec):
+                    step_emb = self._get_step_emb(step_idx / total_steps, B, z.device, z.dtype)
                     tokens = torch.cat([y, z], dim=1)
-                    tokens = block(tokens, rope=rot_pos_embed)
+                    if self.grad_checkpointing and not torch.jit.is_scripting():
+                        tokens = checkpoint(block, tokens, rope=rot_pos_embed, step_emb=step_emb)
+                    else:
+                        tokens = block(tokens, rope=rot_pos_embed, step_emb=step_emb)
                     z = tokens[:, 1:, :]
-        return y, z
+                    step_idx += 1
+        return y, z, step_idx
 
     def _update_y_only(
             self,
             y: torch.Tensor,
             z: torch.Tensor,
             rot_pos_embed: torch.Tensor,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+            step_idx: int = 0,
+            total_steps: int = 1,
+            t_rec: Optional[int] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, int]:
         """Update only y via attention + y_mlps (z unchanged).
-
-        Uses first y_core_depth blocks with recursion_mode, then applies y_mlps.
 
         Args:
             y: Class token [B, 1, D].
             z: Latent state [B, num_patches, D] (unchanged).
             rot_pos_embed: RoPE embeddings.
+            step_idx: Current atomic step index.
+            total_steps: Total number of atomic steps.
+            t_rec: Number of recursions (defaults to self.t_recursions).
 
         Returns:
-            Tuple of (updated y, unchanged z).
+            Tuple of (updated y, unchanged z, next step_idx).
         """
+        B = z.shape[0]
+        t_rec = t_rec if t_rec is not None else self.t_recursions
         if self.recursion_mode == 'cycle':
-            for _ in range(self.t_recursions):
+            for _ in range(t_rec):
                 for block in self.core_blocks[:self.y_core_depth]:
+                    step_emb = self._get_step_emb(step_idx / total_steps, B, z.device, z.dtype)
                     tokens = torch.cat([y, z], dim=1)
-                    tokens = block(tokens, rope=rot_pos_embed)
+                    if self.grad_checkpointing and not torch.jit.is_scripting():
+                        tokens = checkpoint(block, tokens, rope=rot_pos_embed, step_emb=step_emb)
+                    else:
+                        tokens = block(tokens, rope=rot_pos_embed, step_emb=step_emb)
                     y = tokens[:, :1, :]
+                    step_idx += 1
         else:
             for block in self.core_blocks[:self.y_core_depth]:
-                for _ in range(self.t_recursions):
+                for _ in range(t_rec):
+                    step_emb = self._get_step_emb(step_idx / total_steps, B, z.device, z.dtype)
                     tokens = torch.cat([y, z], dim=1)
-                    tokens = block(tokens, rope=rot_pos_embed)
+                    if self.grad_checkpointing and not torch.jit.is_scripting():
+                        tokens = checkpoint(block, tokens, rope=rot_pos_embed, step_emb=step_emb)
+                    else:
+                        tokens = block(tokens, rope=rot_pos_embed, step_emb=step_emb)
                     y = tokens[:, :1, :]
-        y = self.y_mlps(y)
-        return y, z
+                    step_idx += 1
+        if self.y_mlps is not None:
+            for mlp_block in self.y_mlps:
+                step_emb = self._get_step_emb(step_idx / total_steps, B, z.device, z.dtype)
+                y = mlp_block(y, step_emb=step_emb)
+                step_idx += 1
+        return y, z, step_idx
 
     def forward_features(
             self,
@@ -1518,19 +1978,33 @@ class RSTViT(nn.Module):
 
         rot_pos_embed = self.rope.get_embed()
 
+        # Sample counts (randomize during training only)
+        cur_n_sup = _sample_step_count(self.n_sup, self.min_n_sup, self.training) if self.rand_n_sup else self.n_sup
+        cur_t_rec = _sample_step_count(
+            self.t_recursions, self.min_t_rec, self.training,
+        ) if self.rand_t_rec else self.t_recursions
+
+        # total_steps unchanged — always uses max counts for absolute step progress
+        total_steps = max(self._total_steps() - 1, 1)
+
         if return_all_steps:
             y_features = []
             z_features = []
+            step_idx = 0
 
-            for step in range(self.n_sup):
+            for step in range(cur_n_sup):
                 # Context injection once per supervision step
                 z = self._inject_context(z, x_ctx, y)
 
                 # Update z (handles t_recursions internally)
-                y, z = self._update_z_only(y, z, rot_pos_embed)
+                y, z, step_idx = self._update_z_only(
+                    y, z, rot_pos_embed, step_idx, total_steps, t_rec=cur_t_rec,
+                )
 
                 # Update y once per supervision step
-                y, z = self._update_y_only(y, z, rot_pos_embed)
+                y, z, step_idx = self._update_y_only(
+                    y, z, rot_pos_embed, step_idx, total_steps, t_rec=cur_t_rec,
+                )
 
                 # Store features at each supervision step
                 y_features.append(self.norm(y.squeeze(1)))
@@ -1539,13 +2013,18 @@ class RSTViT(nn.Module):
             return {'y_features': y_features, 'z_features': z_features}
 
         # Standard forward: run all supervision steps
-        for _ in range(self.n_sup):
+        step_idx = 0
+        for step in range(cur_n_sup):
             # Context injection once per supervision step
             z = self._inject_context(z, x_ctx, y)
             # Update z (handles t_recursions internally)
-            y, z = self._update_z_only(y, z, rot_pos_embed)
+            y, z, step_idx = self._update_z_only(
+                y, z, rot_pos_embed, step_idx, total_steps, t_rec=cur_t_rec,
+            )
             # Update y once
-            y, z = self._update_y_only(y, z, rot_pos_embed)
+            y, z, step_idx = self._update_y_only(
+                y, z, rot_pos_embed, step_idx, total_steps, t_rec=cur_t_rec,
+            )
 
         return self.norm(y.squeeze(1))
 
@@ -1634,21 +2113,23 @@ class RSTViT(nn.Module):
         y = self.y_init.expand(B, -1, -1)
 
         rot_pos_embed = self.rope.get_embed()
+        total_steps = max(self._total_steps() - 1, 1)
 
         # Track per-sample halting
         final_logits = torch.zeros(B, self.num_classes, device=device)
         steps_taken = torch.zeros(B, dtype=torch.long, device=device)
         halted = torch.zeros(B, dtype=torch.bool, device=device)
 
+        step_idx = 0
         for step in range(self.n_sup):
             # Context injection once per supervision step
             z = self._inject_context(z, x_ctx, y)
 
             # Update z (handles t_recursions internally)
-            y, z = self._update_z_only(y, z, rot_pos_embed)
+            y, z, step_idx = self._update_z_only(y, z, rot_pos_embed, step_idx, total_steps)
 
             # Update y once
-            y, z = self._update_y_only(y, z, rot_pos_embed)
+            y, z, step_idx = self._update_y_only(y, z, rot_pos_embed, step_idx, total_steps)
 
             # Check halting condition
             y_feat = self.norm(y.squeeze(1))
@@ -1695,12 +2176,21 @@ default_cfgs = generate_default_cfgs({
     'rsvit_tiny_patch16_224.untrained': _cfg(),
     'rsvit_small_patch16_224.untrained': _cfg(),
     'rsvit_base_patch16_224.untrained': _cfg(),
+    'rsvit_tiny_sc_patch16_224.untrained': _cfg(),
+    'rsvit_small_sc_patch16_224.untrained': _cfg(),
+    'rsvit_base_sc_patch16_224.untrained': _cfg(),
     'rspvit_tiny_patch16_224.untrained': _cfg(),
     'rspvit_small_patch16_224.untrained': _cfg(),
     'rspvit_base_patch16_224.untrained': _cfg(),
+    'rspvit_tiny_sc_patch16_224.untrained': _cfg(),
+    'rspvit_small_sc_patch16_224.untrained': _cfg(),
+    'rspvit_base_sc_patch16_224.untrained': _cfg(),
     'rstvit_tiny_patch16_224.untrained': _cfg(),
     'rstvit_small_patch16_224.untrained': _cfg(),
     'rstvit_base_patch16_224.untrained': _cfg(),
+    'rstvit_tiny_sc_patch16_224.untrained': _cfg(),
+    'rstvit_small_sc_patch16_224.untrained': _cfg(),
+    'rstvit_base_sc_patch16_224.untrained': _cfg(),
 })
 
 
@@ -1735,6 +2225,27 @@ def rsvit_base_patch16_224(pretrained: bool = False, **kwargs) -> RSViT:
     return _create_rsvit('rsvit_base_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
+@register_model
+def rsvit_tiny_sc_patch16_224(pretrained: bool = False, **kwargs) -> RSViT:
+    """RSViT-Tiny with step conditioning, patch size 16 and image size 224."""
+    model_args = dict(patch_size=16, embed_dim=192, num_heads=3, step_cond=True)
+    return _create_rsvit('rsvit_tiny_sc_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def rsvit_small_sc_patch16_224(pretrained: bool = False, **kwargs) -> RSViT:
+    """RSViT-Small with step conditioning, patch size 16 and image size 224."""
+    model_args = dict(patch_size=16, embed_dim=384, num_heads=6, step_cond=True)
+    return _create_rsvit('rsvit_small_sc_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def rsvit_base_sc_patch16_224(pretrained: bool = False, **kwargs) -> RSViT:
+    """RSViT-Base with step conditioning, patch size 16 and image size 224."""
+    model_args = dict(patch_size=16, embed_dim=768, num_heads=12, step_cond=True)
+    return _create_rsvit('rsvit_base_sc_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
 def _create_rspvit(variant: str, pretrained: bool = False, **kwargs) -> RSPViT:
     """Create RSPViT model."""
     return build_model_with_cfg(
@@ -1766,6 +2277,27 @@ def rspvit_base_patch16_224(pretrained: bool = False, **kwargs) -> RSPViT:
     return _create_rspvit('rspvit_base_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
+@register_model
+def rspvit_tiny_sc_patch16_224(pretrained: bool = False, **kwargs) -> RSPViT:
+    """RSPViT-Tiny with step conditioning, patch size 16 and image size 224."""
+    model_args = dict(patch_size=16, embed_dim=192, num_heads=3, num_latents=64, step_cond=True)
+    return _create_rspvit('rspvit_tiny_sc_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def rspvit_small_sc_patch16_224(pretrained: bool = False, **kwargs) -> RSPViT:
+    """RSPViT-Small with step conditioning, patch size 16 and image size 224."""
+    model_args = dict(patch_size=16, embed_dim=384, num_heads=6, num_latents=64, step_cond=True)
+    return _create_rspvit('rspvit_small_sc_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def rspvit_base_sc_patch16_224(pretrained: bool = False, **kwargs) -> RSPViT:
+    """RSPViT-Base with step conditioning, patch size 16 and image size 224."""
+    model_args = dict(patch_size=16, embed_dim=768, num_heads=12, num_latents=64, step_cond=True)
+    return _create_rspvit('rspvit_base_sc_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
 def _create_rstvit(variant: str, pretrained: bool = False, **kwargs) -> RSTViT:
     """Create RSTViT model."""
     return build_model_with_cfg(
@@ -1795,3 +2327,24 @@ def rstvit_base_patch16_224(pretrained: bool = False, **kwargs) -> RSTViT:
     """RSTViT-Base with patch size 16 and image size 224."""
     model_args = dict(patch_size=16, embed_dim=768, num_heads=12)
     return _create_rstvit('rstvit_base_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def rstvit_tiny_sc_patch16_224(pretrained: bool = False, **kwargs) -> RSTViT:
+    """RSTViT-Tiny with step conditioning, patch size 16 and image size 224."""
+    model_args = dict(patch_size=16, embed_dim=192, num_heads=3, step_cond=True)
+    return _create_rstvit('rstvit_tiny_sc_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def rstvit_small_sc_patch16_224(pretrained: bool = False, **kwargs) -> RSTViT:
+    """RSTViT-Small with step conditioning, patch size 16 and image size 224."""
+    model_args = dict(patch_size=16, embed_dim=384, num_heads=6, step_cond=True)
+    return _create_rstvit('rstvit_small_sc_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def rstvit_base_sc_patch16_224(pretrained: bool = False, **kwargs) -> RSTViT:
+    """RSTViT-Base with step conditioning, patch size 16 and image size 224."""
+    model_args = dict(patch_size=16, embed_dim=768, num_heads=12, step_cond=True)
+    return _create_rstvit('rstvit_base_sc_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))

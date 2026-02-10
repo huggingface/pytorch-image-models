@@ -123,10 +123,19 @@ class RecursiveSupervisionTask(TrainingTask):
         halt_logits = result['halt_logits']
 
         # Compute weighted task loss
+        # Handle variable-length step_logits (from randomized n_sup)
+        actual_n_sup = len(step_logits)
+        if actual_n_sup < self.n_sup:
+            active_weights = self.step_weights[:actual_n_sup]
+            total_w = sum(active_weights)
+            active_weights = [w / total_w for w in active_weights]
+        else:
+            active_weights = self.step_weights
+
         step_losses = []
         task_loss = 0.0
 
-        for logits, weight in zip(step_logits, self.step_weights):
+        for logits, weight in zip(step_logits, active_weights):
             step_loss = self.criterion(logits, target)
             step_losses.append(step_loss.detach())
             task_loss = task_loss + weight * step_loss

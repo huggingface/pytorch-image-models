@@ -445,6 +445,14 @@ parser.add_argument('--rs-halt-weight', default=0.1, type=float,
                     help='Weight for halting loss (default: 0.1)')
 parser.add_argument('--rs-step-weights', default=None, type=float, nargs='+',
                     help='Weights for each supervision step (default: linearly increasing)')
+parser.add_argument('--rs-rand-n-sup', action='store_true', default=False,
+                    help='Randomize number of supervision steps per batch during training')
+parser.add_argument('--rs-min-n-sup', default=1, type=int,
+                    help='Minimum supervision steps when randomizing (default: 1)')
+parser.add_argument('--rs-rand-t-rec', action='store_true', default=False,
+                    help='Randomize number of recursions per supervision step during training')
+parser.add_argument('--rs-min-t-rec', default=1, type=int,
+                    help='Minimum recursions when randomizing (default: 1)')
 
 
 def _parse_args():
@@ -527,6 +535,12 @@ def main():
     if args.rs_enable:
         factory_kwargs['n_sup'] = args.rs_n_sup
         factory_kwargs['t_recursions'] = args.rs_t_recursions
+        if args.rs_rand_n_sup:
+            factory_kwargs['rand_n_sup'] = True
+            factory_kwargs['min_n_sup'] = args.rs_min_n_sup
+        if args.rs_rand_t_rec:
+            factory_kwargs['rand_t_rec'] = True
+            factory_kwargs['min_t_rec'] = args.rs_min_t_rec
 
     model = create_model(
         args.model,
