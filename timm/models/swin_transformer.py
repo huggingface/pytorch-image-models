@@ -146,10 +146,10 @@ class WindowAttention(nn.Module):
         self.relative_position_bias_table = nn.Parameter(
             torch.empty((2 * win_h - 1) * (2 * win_w - 1), num_heads, **dd))
 
-        # register empty buffer for relative position index
+        # get pair-wise relative position index for each token inside the window
         self.register_buffer(
             "relative_position_index",
-            torch.empty(win_h * win_w, win_h * win_w, device=device, dtype=torch.long),
+            get_relative_position_index(win_h, win_w, device=device),
             persistent=False,
         )
 
