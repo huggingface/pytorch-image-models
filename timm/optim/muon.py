@@ -157,7 +157,7 @@ def zeropower_via_newtonschulz(
         # more of a damping factor in this case, use add instead of clamp
         X.div_(X.norm(2, dim=(-2, -1), keepdim=True).mul(safety_factor).add_(eps))
     else:
-        X.div_(X.norm(2, dim=(-2, -1), keepdim=True).mul(safety_factor).clamp_min_(eps))
+        X.div_(X.norm(2, dim=(-2, -1), keepdim=True).mul(safety_factor).clamp_(min=eps))
 
     # Batched vs unbatched fused MM
     mm_fn = torch.baddbmm if X.ndim > 2 else torch.addmm
