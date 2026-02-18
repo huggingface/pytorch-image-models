@@ -846,6 +846,7 @@ def _register_other_optimizers(registry: OptimizerRegistry) -> None:
             name='kron',
             opt_class=Kron,
             description='PSGD optimizer with Kronecker-factored preconditioner',
+            has_eps=False,
             has_momentum=True,
         ),
         OptimInfo(
@@ -853,6 +854,7 @@ def _register_other_optimizers(registry: OptimizerRegistry) -> None:
             opt_class=Kron,
             description='PSGD optimizer with Kronecker-factored preconditioner and decoupled weight decay',
             has_momentum=True,
+            has_eps=False,
             defaults={'decoupled_decay': True}
         ),
         OptimInfo(
