@@ -25,6 +25,11 @@ import numbers
 from typing import List, Mapping, Optional, Sequence, Tuple, Union
 
 import torch
+try:
+    from torch.distributed.tensor import DTensor
+    has_dtensor = True
+except ImportError:
+    has_dtensor = False
 
 from ._types import ParamsT
 from .adamw import adamw
@@ -159,21 +164,31 @@ def zeropower_via_newtonschulz(
     else:
         X.div_(X.norm(2, dim=(-2, -1), keepdim=True).mul(safety_factor).clamp_(min=eps))
 
-    # Batched vs unbatched fused MM
-    mm_fn = torch.baddbmm if X.ndim > 2 else torch.addmm
+    is_dtensor = has_dtensor and isinstance(G, DTensor)
+    if is_dtensor:
+        # Basic, DTensor-friendly Newton-Schulz
+        for a, b, c in coeff_sequence:
+            A = X @ X.mT
+            B = b * A + c * (A @ A)
+            X = a * X + (B @ X)
+    else:
+        # Fast prealloc/out= path
 
-    # Pre-allocate
-    X = X.contiguous()
-    A = torch.empty((*X.shape[:-1], X.size(-2)), device=X.device, dtype=X.dtype)
-    B = torch.empty_like(A)
-    C = torch.empty_like(X)
+        # Batched vs unbatched fused MM
+        mm_fn = torch.baddbmm if X.ndim > 2 else torch.addmm
 
-    # Perform Newton-Schulz iterations
-    for a, b, c in coeff_sequence:
-        mm_fn(A, X, X.mT, beta=0.0, alpha=1.0, out=A)  # A = X @ X.mT
-        mm_fn(A, A, A, beta=b, alpha=c, out=B)  # B = b * A + c * A @ A
-        mm_fn(X, B, X, beta=a, alpha=1.0, out=C)  # C = a * X + B @ X
-        X, C = C, X  # swap refs to avoid copy
+        # Pre-allocate
+        X = X.contiguous()
+        A = torch.empty((*X.shape[:-1], X.size(-2)), device=X.device, dtype=X.dtype)
+        B = torch.empty_like(A)
+        C = torch.empty_like(X)
+
+        # Perform Newton-Schulz iterations
+        for a, b, c in coeff_sequence:
+            mm_fn(A, X, X.mT, beta=0.0, alpha=1.0, out=A)  # A = X @ X.mT
+            mm_fn(A, A, A, beta=b, alpha=c, out=B)  # B = b * A + c * A @ A
+            mm_fn(X, B, X, beta=a, alpha=1.0, out=C)  # C = a * X + B @ X
+            X, C = C, X  # swap refs to avoid copy
 
     if transposed:
         X = X.mT
