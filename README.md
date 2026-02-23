@@ -12,6 +12,14 @@
 
 ## What's New
 
+## Feb 23, 2026
+* Add token distillation training support to distillation task wrappers
+* Remove some torch.jit usage in prep for official deprecation
+* Caution added to AdamP optimizer
+* Call reset_parameters() even if meta-device init so that buffers get init w/ hacks like init_empty_weights
+* Tweak Muon optimizer to work with DTensor/FSDP2 (clamp_ instead of clamp_min_, alternate NS branch for DTensor)
+* Release 1.0.25
+
 ## Jan 21, 2026
 * **Compat Break**: Fix oversight w/ QKV vs MLP bias in `ParallelScalingBlock` (& `DiffParallelScalingBlock`)
   * Does not impact any trained `timm` models but could impact downstream use.
