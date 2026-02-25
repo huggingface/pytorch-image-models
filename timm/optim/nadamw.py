@@ -182,7 +182,7 @@ def nadamw(
         try:
             # cannot do foreach if this overload doesn't exist when caution enabled
             foreach = not caution or 'Scalar' in torch.ops.aten._foreach_maximum_.overloads()
-        except:
+        except Exception:
             foreach = False
 
     if foreach and not torch.jit.is_scripting():

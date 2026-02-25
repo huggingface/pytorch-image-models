@@ -190,7 +190,7 @@ def test_model_forward(model_name, batch_size):
     # Test that grad-checkpointing, if supported, doesn't cause model failures or change in output
     try:
         model.set_grad_checkpointing()
-    except:
+    except Exception:
         # throws if not supported, that's fine
         pass
     else:
@@ -551,7 +551,7 @@ def test_model_forward_intermediates(model_name, batch_size):
     # Test that grad-checkpointing, if supported
     try:
         model.set_grad_checkpointing()
-    except:
+    except Exception:
         # throws if not supported, that's fine
         pass
     else:
