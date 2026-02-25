@@ -124,7 +124,7 @@ class Adan(Optimizer):
 
         try:
             has_scalar_maximum = 'Scalar' in torch.ops.aten._foreach_maximum_.overloads()
-        except:
+        except Exception:
             has_scalar_maximum = False
 
         for group in self.param_groups:
