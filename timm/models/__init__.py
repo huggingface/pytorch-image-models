@@ -9,6 +9,7 @@ from .convnext import *
 from .crossvit import *
 from .csatv2 import *
 from .cspnet import *
+from .cvt import *
 from .davit import *
 from .deit import *
 from .densenet import *
