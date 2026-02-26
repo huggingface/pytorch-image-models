@@ -497,6 +497,9 @@ One of the greatest assets of PyTorch is the community and their contributions. 
 * fastai - https://github.com/fastai/fastai
 * lightly_train - https://github.com/lightly-ai/lightly-train
 
+### Deployment
+* timmx (Export timm models to ONNX, CoreML, LiteRT, TensorRT, and more) - https://github.com/Boulaouaney/timmx
+
 ## Licenses
 
 ### Code
