@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .attention import maybe_add_mask
+from .attention import maybe_add_mask, resolve_self_attn_mask
 from .config import use_fused_attn
 from .norm import RmsNorm
 
@@ -130,6 +130,7 @@ class DiffAttention(nn.Module):
             self,
             x: torch.Tensor,
             attn_mask: Optional[torch.Tensor] = None,
+            is_causal: bool = False,
     ) -> torch.Tensor:
         B, N, C = x.shape
 
@@ -149,14 +150,17 @@ class DiffAttention(nn.Module):
             k1, k2 = k.unbind(2)
 
             dropout_p = self.attn_drop_p if self.training else 0.0
-            attn1 = F.scaled_dot_product_attention(q1, k1, v, attn_mask=attn_mask, dropout_p=dropout_p)
-            attn2 = F.scaled_dot_product_attention(q2, k2, v, attn_mask=attn_mask, dropout_p=dropout_p)
+            attn1 = F.scaled_dot_product_attention(
+                q1, k1, v, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal)
+            attn2 = F.scaled_dot_product_attention(
+                q2, k2, v, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal)
 
             x = attn1 - lambda_full * attn2
         else:
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)
-            attn = maybe_add_mask(attn, attn_mask)
+            attn_bias = resolve_self_attn_mask(N, attn, attn_mask, is_causal=is_causal)
+            attn = maybe_add_mask(attn, attn_bias)
             attn = attn.softmax(dim=-1)
             attn = self.attn_drop(attn)
 

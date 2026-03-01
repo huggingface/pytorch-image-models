@@ -889,7 +889,7 @@ def main():
     train_loss_fn = train_loss_fn.to(device=device)
     validate_loss_fn = nn.CrossEntropyLoss().to(device=device)
 
-    # Setup training task (classification or distillation)
+    # Setup training task (classification, distillation, or self-supervised)
     if args.kd_model_name is not None:
         # Create distillation task (teacher created internally from model name)
         if args.kd_distill_type == 'logit':
@@ -1411,6 +1411,7 @@ def validate(
                     target = target[0:target.size(0):reduce_factor]
 
                 loss = loss_fn(output, target)
+
             acc1, acc5 = utils.accuracy(output, target, topk=(1, 5))
 
             if args.distributed:
@@ -1425,7 +1426,7 @@ def validate(
             elif device.type == "npu":
                 torch.npu.synchronize()
 
-            batch_size = output.shape[0]
+            batch_size = input.shape[0]
             losses_m.update(reduced_loss.item(), batch_size)
             top1_m.update(acc1.item(), batch_size)
             top5_m.update(acc5.item(), batch_size)
