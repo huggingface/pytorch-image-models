@@ -12,7 +12,18 @@ from .pos_embed_sincos import apply_rot_embed_cat
 @torch.fx.wrap
 @register_notrace_function
 def maybe_add_mask(scores: torch.Tensor, attn_mask: Optional[torch.Tensor] = None):
-    return scores if attn_mask is None else scores + attn_mask
+    """Adds an attention mask to scores.  
+    If `attn_mask` is bool, positions with `False` are set to -inf;  
+    if numeric, the mask is added directly.  
+    Mask should match `scores` shape."""
+    if attn_mask is not None:
+        if attn_mask.dtype == torch.bool:
+            float_mask = torch.zeros_like(scores)
+            float_mask.masked_fill_(attn_mask.logical_not(), float("-inf"))
+            scores = scores + float_mask
+        else:
+            scores = attn_mask + scores
+    return scores
 
 
 class Attention(nn.Module):
