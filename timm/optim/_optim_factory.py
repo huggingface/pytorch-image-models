@@ -787,6 +787,13 @@ def _register_cautious_optimizers(registry: OptimizerRegistry) -> None:
             has_betas=True,
             defaults={'wd_ratio': 0.01, 'nesterov': True, 'caution': True}
         ),
+        OptimInfo(
+            name='csgdp',
+            opt_class=SGDP,
+            description='Add the spherical cautious optimizer and the standard cautious optimizer to SGDP',
+            has_momentum=True,
+            defaults={'nesterov': True, 'caution': True}
+        ),
     ]
     for opt in cautious_optimizers:
         registry.register(opt)
