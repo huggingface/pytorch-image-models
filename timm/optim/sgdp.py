@@ -76,7 +76,7 @@ class SGDP(Optimizer):
                 if nesterov:
                     d_p = grad + momentum * buf
                 else:
-                    d_p = buf
+                    d_p = buf.clone()
 
                 # Projection
                 wd_ratio = 1.
