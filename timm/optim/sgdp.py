@@ -4,6 +4,9 @@ SGDP Optimizer Implementation copied from https://github.com/clovaai/AdamP/blob/
 Paper: `Slowing Down the Weight Norm Increase in Momentum-based Optimizers` - https://arxiv.org/abs/2006.08217
 Code: https://github.com/clovaai/AdamP
 
+References for added functionality:
+    Cautious Optimizers: https://arxiv.org/abs/2411.16085
+    Spherical Cautious Optimizers: https://openreview.net/forum?id=OyT2CJ4fh7 
 Copyright (c) 2020-present NAVER Corp.
 MIT license
 """
@@ -27,7 +30,8 @@ class SGDP(Optimizer):
             nesterov=False,
             eps=1e-8,
             delta=0.1,
-            wd_ratio=0.1
+            wd_ratio=0.1,
+            caution=False  
     ):
         defaults = dict(
             lr=lr,
@@ -38,6 +42,7 @@ class SGDP(Optimizer):
             eps=eps,
             delta=delta,
             wd_ratio=wd_ratio,
+            caution=caution,
         )
         super(SGDP, self).__init__(params, defaults)
 
@@ -53,6 +58,7 @@ class SGDP(Optimizer):
             momentum = group['momentum']
             dampening = group['dampening']
             nesterov = group['nesterov']
+            caution = group.get('caution', False)  
 
             for p in group['params']:
                 if p.grad is None:
@@ -75,7 +81,11 @@ class SGDP(Optimizer):
                 # Projection
                 wd_ratio = 1.
                 if len(p.shape) > 1:
-                    d_p, wd_ratio = projection(p, grad, d_p, group['delta'], group['wd_ratio'], group['eps'])
+                    d_p, wd_ratio = projection(p, grad, d_p, group['delta'], group['wd_ratio'], group['eps'], caution)
+                elif caution:
+                    mask = (d_p * grad > 0).to(grad.dtype)
+                    mask.div_(mask.mean().clamp_(min=1e-3))
+                    d_p.mul_(mask)
 
                 # Weight decay
                 if weight_decay != 0:
