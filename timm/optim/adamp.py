@@ -7,7 +7,7 @@ Code: https://github.com/clovaai/AdamP
 
 References for added functionality:
     Cautious Optimizers: https://arxiv.org/abs/2411.16085
-    Spherical Cautious Optimizer: https://openreview.net/forum?id=4lTJbNpWr3 
+    Spherical Cautious Optimizers: https://openreview.net/forum?id=OyT2CJ4fh7 
 Copyright (c) 2020-present NAVER Corp.
 MIT license
 """

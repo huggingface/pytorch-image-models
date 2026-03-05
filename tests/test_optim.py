@@ -645,3 +645,17 @@ def test_cadamp(optimizer):
     )
     _test_model(optimizer, dict(lr=5e-2))
 
+@pytest.mark.parametrize('optimizer', ['csgdp'])
+def test_csgdp(optimizer):
+    _test_rosenbrock(
+        lambda params: create_optimizer_v2(params, optimizer, lr=5e-4)
+    )
+    _test_model(optimizer, dict(lr=5e-4))
+
+@pytest.mark.parametrize('optimizer', ['csgdw'])
+def test_csgdw(optimizer):
+    _test_rosenbrock(
+        lambda params: create_optimizer_v2(params, optimizer, lr=5e-4)
+    )
+    _test_model(optimizer, dict(lr=5e-4))
+
