@@ -996,8 +996,14 @@ class VisionTransformer(nn.Module):
 
     def _pos_embed(self, x: torch.Tensor) -> torch.Tensor:
         """Apply positional embedding to input."""
+        to_cat = []
+        if self.cls_token is not None:
+            to_cat.append(self.cls_token.expand(x.shape[0], -1, -1))
+        if self.reg_token is not None:
+            to_cat.append(self.reg_token.expand(x.shape[0], -1, -1))
+
         if self.pos_embed is None:
-            return x.view(x.shape[0], -1, x.shape[-1])
+            return torch.cat(to_cat + [x.view(x.shape[0], -1, x.shape[-1])], dim=1)
 
         if self.dynamic_img_size:
             B, H, W, C = x.shape
@@ -1011,12 +1017,6 @@ class VisionTransformer(nn.Module):
             x = x.view(B, -1, C)
         else:
             pos_embed = self.pos_embed
-
-        to_cat = []
-        if self.cls_token is not None:
-            to_cat.append(self.cls_token.expand(x.shape[0], -1, -1))
-        if self.reg_token is not None:
-            to_cat.append(self.reg_token.expand(x.shape[0], -1, -1))
 
         if self.no_embed_class:
             # deit-3, updated JAX (big vision)
