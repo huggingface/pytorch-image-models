@@ -139,6 +139,7 @@ from .pos_embed_sincos import (
     get_mixed_freqs,
     create_rope_embed,
 )
+from .prr import PRR
 from .squeeze_excite import SEModule, SqueezeExcite, EffectiveSEModule, EffectiveSqueezeExcite
 from .selective_kernel import SelectiveKernel
 from .separable_conv import SeparableConv2d, SeparableConvNormAct
