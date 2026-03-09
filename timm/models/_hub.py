@@ -27,7 +27,8 @@ except ImportError:
     from typing_extensions import Literal
 
 from timm import __version__
-from timm.models._pretrained import filter_pretrained_cfg
+from ._helpers import _torch_load, load_state_dict
+from ._pretrained import filter_pretrained_cfg
 
 try:
     from huggingface_hub import HfApi, hf_hub_download, model_info
@@ -244,10 +245,8 @@ def load_state_dict_from_hf(
         cache_dir=cache_dir,
     )
     _logger.debug(f"[{model_id}] Safe alternative not found for '{filename}'. Loading weights using default pytorch.")
-    try:
-        state_dict = torch.load(cached_file, map_location='cpu', weights_only=weights_only)
-    except TypeError:
-        state_dict = torch.load(cached_file, map_location='cpu')
+    state_dict = _torch_load(cached_file, map_location='cpu', weights_only=weights_only)
+
     return state_dict
 
 
@@ -289,10 +288,8 @@ def load_state_dict_from_path(
     if not found_file:
         raise RuntimeError(f"No suitable checkpoints found in {path}.")
 
-    try:
-        state_dict = torch.load(found_file, map_location='cpu', weights_only=weights_only)
-    except TypeError:
-        state_dict = torch.load(found_file, map_location='cpu')
+    state_dict = load_state_dict(found_file, weights_only=weights_only)
+
     return state_dict
 
 

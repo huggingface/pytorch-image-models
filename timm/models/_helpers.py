@@ -2,8 +2,10 @@
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
+import argparse
 import logging
 import os
+import pickle
 from typing import Any, Callable, Dict, Optional, Union
 
 import torch
@@ -17,7 +19,54 @@ except ImportError:
 
 _logger = logging.getLogger(__name__)
 
-__all__ = ['clean_state_dict', 'load_state_dict', 'load_checkpoint', 'remap_state_dict', 'resume_checkpoint']
+__all__ = [
+    'clean_state_dict',
+    'load_checkpoint',
+    'load_state_dict',
+    'remap_state_dict',
+    'resume_checkpoint',
+]
+
+
+def _checkpoint_unsafe_globals(checkpoint_path: str) -> str:
+    if not hasattr(torch.serialization, 'get_unsafe_globals_in_checkpoint'):
+        return ''
+    try:
+        unsafe_globals = torch.serialization.get_unsafe_globals_in_checkpoint(str(checkpoint_path))
+    except Exception:
+        unsafe_globals = []
+    return f" Unsupported globals: {', '.join(unsafe_globals)}." if unsafe_globals else ''
+
+
+def _torch_load(
+        checkpoint_path: str,
+        map_location: Union[str, torch.device] = 'cpu',
+        weights_only: bool = True,
+):
+    use_safe_globals = weights_only and hasattr(torch.serialization, 'safe_globals')
+    try:
+        if use_safe_globals:
+            # Compatibility: timm training checkpoints often include argparse.Namespace in `args`.
+            with torch.serialization.safe_globals([argparse.Namespace]):
+                return torch.load(checkpoint_path, map_location=map_location, weights_only=weights_only)
+        return torch.load(checkpoint_path, map_location=map_location, weights_only=weights_only)
+    except TypeError as e:
+        if not weights_only:
+            return torch.load(checkpoint_path, map_location=map_location)
+        raise RuntimeError(
+            f"weights_only=True is not supported by this PyTorch build (torch=={torch.__version__}). "
+            "No automatic unsafe pickle fallback is performed. "
+            "Upgrade PyTorch, or explicitly set weights_only=False only for trusted local checkpoints."
+        ) from e
+    except pickle.UnpicklingError as e:
+        if not weights_only:
+            raise
+        raise RuntimeError(
+            "weights_only=True blocked loading this checkpoint because it requires non-allowlisted pickle globals."
+            f"{_checkpoint_unsafe_globals(checkpoint_path)} "
+            "No automatic unsafe pickle fallback is performed. "
+            "If this checkpoint is trusted, retry with weights_only=False."
+        ) from e
 
 
 def _remove_prefix(text: str, prefix: str) -> str:
@@ -64,10 +113,7 @@ def load_state_dict(
             assert _has_safetensors, "`pip install safetensors` to use .safetensors"
             checkpoint = safetensors.torch.load_file(checkpoint_path, device=device)
         else:
-            try:
-                checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=weights_only)
-            except TypeError:
-                checkpoint = torch.load(checkpoint_path, map_location=device)
+            checkpoint = _torch_load(checkpoint_path, map_location=device, weights_only=weights_only)
 
         state_dict_key = ''
         if isinstance(checkpoint, dict):
@@ -164,6 +210,7 @@ def resume_checkpoint(
         optimizer: Optional[torch.optim.Optimizer] = None,
         loss_scaler: Optional[Any] = None,
         log_info: bool = True,
+        weights_only: bool = True,
 ) -> Optional[int]:
     """Resume training from checkpoint.
 
@@ -173,13 +220,14 @@ def resume_checkpoint(
         optimizer: Optional optimizer to restore state.
         loss_scaler: Optional AMP loss scaler to restore state.
         log_info: Whether to log loading info.
+        weights_only: Whether to load only weights via torch.load.
 
     Returns:
         Resume epoch number if available, else None.
     """
     resume_epoch = None
     if os.path.isfile(checkpoint_path):
-        checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+        checkpoint = _torch_load(checkpoint_path, map_location='cpu', weights_only=weights_only)
         if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
             if log_info:
                 _logger.info('Restoring model state from checkpoint...')
