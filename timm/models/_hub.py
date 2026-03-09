@@ -213,7 +213,7 @@ def load_model_config_from_path(
 def load_state_dict_from_hf(
         model_id: str,
         filename: str = HF_WEIGHTS_NAME,
-        weights_only: bool = False,
+        weights_only: bool = True,
         cache_dir: Optional[Union[str, Path]] = None,
 ):
     assert has_hf_hub(True)
@@ -265,7 +265,7 @@ _EXT_PRIORITY = ('.safetensors', '.pth', '.pth.tar', '.bin')
 
 def load_state_dict_from_path(
         path: str,
-        weights_only: bool = False,
+        weights_only: bool = True,
 ):
     found_file = None
     for fname in _PREFERRED_FILES:
