@@ -45,7 +45,7 @@ def load_state_dict(
         checkpoint_path: str,
         use_ema: bool = True,
         device: Union[str, torch.device] = 'cpu',
-        weights_only: bool = False,
+        weights_only: bool = True,
 ) -> Dict[str, Any]:
     """Load state dictionary from checkpoint file.
 
@@ -95,7 +95,7 @@ def load_checkpoint(
         strict: bool = True,
         remap: bool = False,
         filter_fn: Optional[Callable] = None,
-        weights_only: bool = False,
+        weights_only: bool = True,
 ) -> Any:
     """Load checkpoint into model.
 
