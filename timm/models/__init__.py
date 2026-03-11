@@ -26,6 +26,7 @@ from .fastvit import *
 from .focalnet import *
 from .gcvit import *
 from .ghostnet import *
+from .gmnet import *
 from .hardcorenas import *
 from .hgnet import *
 from .hiera import *
