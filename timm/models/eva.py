@@ -90,6 +90,7 @@ from timm.layers import (
     to_2tuple,
     use_fused_attn,
     maybe_add_mask,
+    resolve_self_attn_mask,
     AttentionRope,
     AttentionPoolLatent,
 )
@@ -198,6 +199,7 @@ class EvaAttention(nn.Module):
             x,
             rope: Optional[torch.Tensor] = None,
             attn_mask: Optional[torch.Tensor] = None,
+            is_causal: bool = False,
     ):
         """Forward pass for the attention module.
 
@@ -205,6 +207,7 @@ class EvaAttention(nn.Module):
             x: Input tensor of shape (batch_size, sequence_length, embedding_dim)
             rope: Rotary position embeddings tensor for position-aware attention
             attn_mask: Optional attention mask to apply during attention computation
+            is_causal: If True, use causal (autoregressive) masking
 
         Returns:
             Tensor of shape (batch_size, sequence_length, embedding_dim)
@@ -241,13 +244,14 @@ class EvaAttention(nn.Module):
                 q, k, v,
                 attn_mask=attn_mask,
                 dropout_p=self.attn_drop.p if self.training else 0.,
+                is_causal=is_causal,
             )
         else:
             q = q * self.scale
-            attn = (q @ k.transpose(-2, -1))
-            attn = maybe_add_mask(attn, attn_mask)
+            attn = q @ k.transpose(-2, -1)
+            attn_bias = resolve_self_attn_mask(N, attn, attn_mask, is_causal=is_causal)
+            attn = maybe_add_mask(attn, attn_bias)
             attn = attn.softmax(dim=-1)
-
             attn = self.attn_drop(attn)
             x = attn @ v
 
@@ -383,12 +387,13 @@ class EvaBlock(nn.Module):
             x: torch.Tensor,
             rope: Optional[torch.Tensor] = None,
             attn_mask: Optional[torch.Tensor] = None,
+            is_causal: bool = False,
     ) -> torch.Tensor:
         if self.gamma_1 is None:
-            x = x + self.drop_path1(self.attn(self.norm1(x), rope=rope, attn_mask=attn_mask))
+            x = x + self.drop_path1(self.attn(self.norm1(x), rope=rope, attn_mask=attn_mask, is_causal=is_causal))
             x = x + self.drop_path2(self.mlp(self.norm2(x)))
         else:
-            x = x + self.drop_path1(self.gamma_1 * self.attn(self.norm1(x), rope=rope, attn_mask=attn_mask))
+            x = x + self.drop_path1(self.gamma_1 * self.attn(self.norm1(x), rope=rope, attn_mask=attn_mask, is_causal=is_causal))
             x = x + self.drop_path2(self.gamma_2 * self.mlp(self.norm2(x)))
         return x
 
@@ -502,8 +507,9 @@ class EvaBlockPostNorm(nn.Module):
             x: torch.Tensor,
             rope: Optional[torch.Tensor] = None,
             attn_mask: Optional[torch.Tensor] = None,
+            is_causal: bool = False,
     ) -> torch.Tensor:
-        x = x + self.drop_path1(self.norm1(self.attn(x, rope=rope, attn_mask=attn_mask)))
+        x = x + self.drop_path1(self.norm1(self.attn(x, rope=rope, attn_mask=attn_mask, is_causal=is_causal)))
         x = x + self.drop_path2(self.norm2(self.mlp(x)))
         return x
 
@@ -907,22 +913,32 @@ class Eva(nn.Module):
             x: torch.Tensor,
             indices: Optional[Union[int, List[int]]] = None,
             return_prefix_tokens: bool = False,
+            return_input_embeddings: bool = False,
             norm: bool = False,
             stop_early: bool = False,
             output_fmt: str = 'NCHW',
             intermediates_only: bool = False,
-    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+            output_dict: bool = False,
+            attn_mask: Optional[torch.Tensor] = None,
+            is_causal: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]], Dict[str, Any]]:
         """ Forward features that returns intermediates.
         Args:
             x: Input image tensor
             indices: Take last n blocks if an int, if is a sequence, select by matching indices
             return_prefix_tokens: Return both prefix and spatial intermediate tokens
+            return_input_embeddings: Return input embeddings (after pos_embed, before blocks)
             norm: Apply norm layer to all intermediates
             stop_early: Stop iterating over blocks when last desired intermediate hit
             output_fmt: Shape of intermediate feature outputs
             intermediates_only: Only return intermediate features
+            output_dict: Return outputs as a dictionary with 'image_features' and 'image_intermediates' keys
+            attn_mask: Optional attention mask for masked attention
+            is_causal: If True, use causal (autoregressive) masking in attention
         """
         assert output_fmt in ('NCHW', 'NLC'), 'Output format for EVA-ViT features must be one of NCHW or NLC.'
+        if return_input_embeddings:
+            assert output_dict, 'Output dictionary must be enabled when return_input_embeddings is True'
         reshape = output_fmt == 'NCHW'
         intermediates = []
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
@@ -932,6 +948,10 @@ class Eva(nn.Module):
         x = self.patch_embed(x)
         x, rot_pos_embed = self._pos_embed(x)
         x = self.norm_pre(x)
+
+        # Capture input embeddings before blocks
+        input_embeddings = x if return_input_embeddings else None
+
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             blocks = self.blocks
         else:
@@ -941,17 +961,17 @@ class Eva(nn.Module):
         if getattr(self, 'rope_mixed', False) and rot_pos_embed is not None:
             for i, blk in enumerate(blocks):
                 if self.grad_checkpointing and not torch.jit.is_scripting():
-                    x = checkpoint(blk, x, rope=rot_pos_embed[i])
+                    x = checkpoint(blk, x, rope=rot_pos_embed[i], attn_mask=attn_mask, is_causal=is_causal)
                 else:
-                    x = blk(x, rope=rot_pos_embed[i])
+                    x = blk(x, rope=rot_pos_embed[i], attn_mask=attn_mask, is_causal=is_causal)
                 if i in take_indices:
                     intermediates.append(self.norm(x) if norm else x)
         else:
             for i, blk in enumerate(blocks):
                 if self.grad_checkpointing and not torch.jit.is_scripting():
-                    x = checkpoint(blk, x, rope=rot_pos_embed)
+                    x = checkpoint(blk, x, rope=rot_pos_embed, attn_mask=attn_mask, is_causal=is_causal)
                 else:
-                    x = blk(x, rope=rot_pos_embed)
+                    x = blk(x, rope=rot_pos_embed, attn_mask=attn_mask, is_causal=is_causal)
                 if i in take_indices:
                     intermediates.append(self.norm(x) if norm else x)
 
@@ -960,11 +980,34 @@ class Eva(nn.Module):
             # split prefix (e.g. class, distill) and spatial feature tokens
             prefix_tokens = [y[:, 0:self.num_prefix_tokens] for y in intermediates]
             intermediates = [y[:, self.num_prefix_tokens:] for y in intermediates]
+        else:
+            prefix_tokens = None
+
         if reshape:
             # reshape to BCHW output format
             H, W = self.patch_embed.dynamic_feat_size((height, width))
             intermediates = [y.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous() for y in intermediates]
-        if not torch.jit.is_scripting() and return_prefix_tokens:
+
+        # For dictionary output, handle prefix tokens separately
+        if output_dict:
+            result_dict = {}
+            # Intermediates are always included
+            result_dict['image_intermediates'] = intermediates
+            if prefix_tokens is not None and return_prefix_tokens:
+                result_dict['image_intermediates_prefix'] = prefix_tokens
+
+            # Only include features if not intermediates_only
+            if not intermediates_only:
+                x_final = self.norm(x)
+                result_dict['image_features'] = x_final
+
+            if input_embeddings is not None:
+                result_dict['input_embeddings'] = input_embeddings
+
+            return result_dict
+
+        # For non-dictionary output, maintain the original behavior
+        if not torch.jit.is_scripting() and return_prefix_tokens and prefix_tokens is not None:
             # return_prefix not support in torchscript due to poor type handling
             intermediates = list(zip(intermediates, prefix_tokens))
 
@@ -1001,11 +1044,18 @@ class Eva(nn.Module):
         x = global_pool_nlc(x, pool_type=pool_type, num_prefix_tokens=self.num_prefix_tokens)
         return x
 
-    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+    def forward_features(
+            self,
+            x: torch.Tensor,
+            attn_mask: Optional[torch.Tensor] = None,
+            is_causal: bool = False,
+    ) -> torch.Tensor:
         """Forward pass through feature extraction layers.
 
         Args:
             x: Input tensor.
+            attn_mask: Optional attention mask for masked attention
+            is_causal: If True, use causal (autoregressive) masking in attention.
 
         Returns:
             Feature tensor.
@@ -1019,16 +1069,16 @@ class Eva(nn.Module):
             # pos embed has shape (depth, num_heads, H*W, dim) or (depth, batch_size, num_heads, H*W, dim)
             for i, blk in enumerate(self.blocks):
                 if self.grad_checkpointing and not torch.jit.is_scripting():
-                    x = checkpoint(blk, x, rope=rot_pos_embed[i])
+                    x = checkpoint(blk, x, rope=rot_pos_embed[i], attn_mask=attn_mask, is_causal=is_causal)
                 else:
-                    x = blk(x, rope=rot_pos_embed[i])
+                    x = blk(x, rope=rot_pos_embed[i], attn_mask=attn_mask, is_causal=is_causal)
         else:
             # Standard path for non-mixed mode
             for blk in self.blocks:
                 if self.grad_checkpointing and not torch.jit.is_scripting():
-                    x = checkpoint(blk, x, rope=rot_pos_embed)
+                    x = checkpoint(blk, x, rope=rot_pos_embed, attn_mask=attn_mask, is_causal=is_causal)
                 else:
-                    x = blk(x, rope=rot_pos_embed)
+                    x = blk(x, rope=rot_pos_embed, attn_mask=attn_mask, is_causal=is_causal)
 
         x = self.norm(x)
         return x
@@ -1048,16 +1098,23 @@ class Eva(nn.Module):
         x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(
+            self,
+            x: torch.Tensor,
+            attn_mask: Optional[torch.Tensor] = None,
+            is_causal: bool = False,
+    ) -> torch.Tensor:
         """Forward pass.
 
         Args:
             x: Input tensor.
+            attn_mask: Optional attention mask for masked attention
+            is_causal: If True, use causal (autoregressive) masking in attention.
 
         Returns:
             Output tensor.
         """
-        x = self.forward_features(x)
+        x = self.forward_features(x, attn_mask=attn_mask, is_causal=is_causal)
         x = self.forward_head(x)
         return x
 
