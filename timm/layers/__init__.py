@@ -17,7 +17,7 @@ from .adaptive_avgmax_pool import (
 )
 from .attention import Attention, AttentionRope, maybe_add_mask
 from .attention2d import MultiQueryAttention2d, Attention2d, MultiQueryAttentionV2
-from .attention_pool import AttentionPoolLatent
+from .attention_pool import AttentionPoolLatent, AttentionPoolPrr
 from .attention_pool2d import AttentionPool2d, RotAttentionPool2d
 from .blur_pool import BlurPool2d, create_aa
 from .classifier import create_classifier, ClassifierHead, NormMlpClassifierHead, ClNormMlpClassifierHead

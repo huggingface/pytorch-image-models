@@ -228,6 +228,41 @@ class TestAttentionPool:
         out = pool(x)
         assert out.shape == (2, 64)
 
+    def test_attention_pool_prr_basic(self):
+        from timm.layers import AttentionPoolPrr
+        x = torch.randn(2, 50, 64, device=torch_device)  # 1 CLS + 49 patches
+        pool = AttentionPoolPrr(dim=64, num_heads=4).to(torch_device)
+        out = pool(x)
+        assert out.shape == (2, 64)
+
+    def test_attention_pool_prr_avg_pool(self):
+        from timm.layers import AttentionPoolPrr
+        x = torch.randn(2, 49, 64, device=torch_device)
+        pool = AttentionPoolPrr(dim=64, num_heads=4, pool_type='avg').to(torch_device)
+        out = pool(x)
+        assert out.shape == (2, 64)
+
+    def test_attention_pool_prr_parameter_free(self):
+        from timm.layers import AttentionPoolPrr
+        pool = AttentionPoolPrr(dim=64, num_heads=4)
+        num_params = sum(p.numel() for p in pool.parameters())
+        assert num_params == 0, f"Expected 0 parameters, got {num_params}"
+
+    def test_attention_pool_prr_with_norms(self):
+        from timm.layers import AttentionPoolPrr
+        pool = AttentionPoolPrr(
+            dim=64,
+            num_heads=4,
+            pre_norm=True,
+            post_norm=True,
+        ).to(torch_device)
+        # Should have parameters from the two LayerNorms
+        num_params = sum(p.numel() for p in pool.parameters())
+        assert num_params > 0
+        x = torch.randn(2, 49, 64, device=torch_device)
+        out = pool(x)
+        assert out.shape == (2, 64)
+
     @pytest.mark.parametrize('out_features,embed_dim,expected_out', [
         (None, None, 64),      # default: out_features = in_features
         (None, 128, 64),       # default with different embed_dim
@@ -365,6 +400,7 @@ class TestPoolingCommon:
         ('SimPool1d', {'dim': 64}, (2, 49, 64)),
         ('SelectAdaptivePool2d', {'pool_type': 'avg', 'flatten': True}, (2, 64, 7, 7)),
         ('AttentionPoolLatent', {'in_features': 64, 'num_heads': 4}, (2, 49, 64)),
+        ('AttentionPoolPrr', {'dim': 64, 'num_heads': 4}, (2, 49, 64)),
         ('AttentionPool2d', {'in_features': 64, 'feat_size': 7}, (2, 64, 7, 7)),
         ('RotAttentionPool2d', {'in_features': 64, 'ref_feat_size': 7}, (2, 64, 7, 7)),
     ])
@@ -383,6 +419,7 @@ class TestPoolingCommon:
         ('LsePlus1d', {}, (2, 49, 64)),
         ('SimPool2d', {'dim': 64}, (2, 64, 7, 7)),
         ('SimPool1d', {'dim': 64}, (2, 49, 64)),
+        ('AttentionPoolPrr', {'dim': 64, 'num_heads': 4}, (2, 49, 64)),
         ('AttentionPool2d', {'in_features': 64, 'feat_size': 7}, (2, 64, 7, 7)),
         ('RotAttentionPool2d', {'in_features': 64, 'ref_feat_size': 7}, (2, 64, 7, 7)),
     ])
@@ -401,6 +438,7 @@ class TestPoolingCommon:
         ('LsePlus1d', {}, (2, 49, 64)),
         ('SimPool2d', {'dim': 64}, (2, 64, 7, 7)),
         ('SimPool1d', {'dim': 64}, (2, 49, 64)),
+        ('AttentionPoolPrr', {'dim': 64, 'num_heads': 4}, (2, 49, 64)),
         ('AttentionPool2d', {'in_features': 64, 'feat_size': 7}, (2, 64, 7, 7)),
         ('RotAttentionPool2d', {'in_features': 64, 'ref_feat_size': 7}, (2, 64, 7, 7)),
     ])
