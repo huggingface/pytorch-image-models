@@ -12,6 +12,8 @@ from .weight_init import trunc_normal_tf_
 
 class AttentionPoolLatent(nn.Module):
     """ Attention pooling w/ latent query
+
+    Setting out_features=0 disables the output projection, norm, and MLP layers (pre_logits mode).
     """
     fused_attn: torch.jit.Final[bool]
 
@@ -38,7 +40,8 @@ class AttentionPoolLatent(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         super().__init__()
         embed_dim = embed_dim or in_features
-        out_features = out_features or in_features
+        if out_features is None:
+            out_features = in_features
         assert embed_dim % num_heads == 0
         self.num_heads = num_heads
         self.head_dim = embed_dim // num_heads
@@ -66,11 +69,20 @@ class AttentionPoolLatent(nn.Module):
         else:
             self.q_norm = nn.Identity()
             self.k_norm = nn.Identity()
-        self.proj = nn.Linear(embed_dim, embed_dim, **dd)
-        self.proj_drop = nn.Dropout(drop)
 
-        self.norm = norm_layer(out_features, **dd) if norm_layer is not None else nn.Identity()
-        self.mlp = Mlp(embed_dim, int(embed_dim * mlp_ratio), act_layer=act_layer, **dd)
+        if out_features > 0:
+            self.proj = nn.Linear(embed_dim, out_features, **dd)
+            self.proj_drop = nn.Dropout(drop)
+            self.norm = norm_layer(out_features, **dd) if norm_layer is not None else nn.Identity()
+            self.mlp = Mlp(out_features, int(out_features * mlp_ratio), out_features=out_features, act_layer=act_layer, **dd)
+        else:
+            self.proj = nn.Identity()
+            self.proj_drop = nn.Dropout(drop)
+            self.norm = nn.Identity()
+            self.mlp = None
+            out_features = embed_dim
+
+        self.out_features = out_features
 
         self.init_weights()
 
@@ -106,7 +118,8 @@ class AttentionPoolLatent(nn.Module):
         x = self.proj(x)
         x = self.proj_drop(x)
 
-        x = x + self.mlp(self.norm(x))
+        if self.mlp is not None:
+            x = x + self.mlp(self.norm(x))
 
         # optional pool if latent seq_len > 1 and pooled output is desired
         if self.pool == 'token':

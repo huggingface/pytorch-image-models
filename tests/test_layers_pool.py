@@ -137,6 +137,125 @@ class TestAttentionPool:
             out = pool(x)
             assert out.shape == (2, 64)
 
+    @pytest.mark.parametrize('pool_cls,base_kwargs,input_shape', [
+        ('RotAttentionPool2d', {'in_features': 64, 'ref_feat_size': 7}, (2, 64, 7, 7)),
+        ('AttentionPool2d', {'in_features': 64, 'feat_size': 7}, (2, 64, 7, 7)),
+    ])
+    @pytest.mark.parametrize('out_features,embed_dim,expected_out', [
+        (None, None, 64),      # default: out_features = in_features
+        (None, 128, 64),       # default with different embed_dim
+        (32, None, 32),        # explicit out_features
+        (32, 128, 32),         # explicit out_features with different embed_dim
+        (0, None, 64),         # disabled projection, out = embed_dim = in_features
+        (0, 128, 128),         # disabled projection, out = embed_dim
+    ])
+    def test_attention_pool2d_out_features(
+            self, pool_cls, base_kwargs, input_shape, out_features, embed_dim, expected_out,
+    ):
+        import timm.layers as layers
+        kwargs = {**base_kwargs, 'out_features': out_features}
+        if embed_dim is not None:
+            kwargs['embed_dim'] = embed_dim
+        pool = getattr(layers, pool_cls)(**kwargs).to(torch_device)
+        assert pool.out_features == expected_out
+        if out_features == 0:
+            assert isinstance(pool.proj, nn.Identity)
+        else:
+            assert isinstance(pool.proj, nn.Linear)
+        x = torch.randn(*input_shape, device=torch_device)
+        out = pool(x)
+        assert out.shape == (2, expected_out)
+
+    @pytest.mark.parametrize('pool_cls,base_kwargs,input_shape', [
+        ('RotAttentionPool2d', {'in_features': 64, 'ref_feat_size': 7, 'embed_dim': 128}, (2, 64, 7, 7)),
+        ('AttentionPool2d', {'in_features': 64, 'feat_size': 7, 'embed_dim': 128}, (2, 64, 7, 7)),
+    ])
+    @pytest.mark.parametrize('num_classes,expected_out', [
+        (10, 10),
+        (0, 128),    # reset to 0 => Identity, out_features = embed_dim
+        (100, 100),
+    ])
+    def test_attention_pool2d_reset(
+            self, pool_cls, base_kwargs, input_shape, num_classes, expected_out,
+    ):
+        import timm.layers as layers
+        pool = getattr(layers, pool_cls)(**base_kwargs).to(torch_device)
+        pool.reset(num_classes=num_classes)
+        assert pool.out_features == expected_out
+        if num_classes > 0:
+            assert isinstance(pool.proj, nn.Linear)
+            assert pool.proj.in_features == 128  # embed_dim, not in_features
+            assert pool.proj.out_features == num_classes
+        else:
+            assert isinstance(pool.proj, nn.Identity)
+        x = torch.randn(*input_shape, device=torch_device)
+        out = pool(x)
+        assert out.shape == (2, expected_out)
+
+    @pytest.mark.parametrize('pool_cls,base_kwargs,input_shape', [
+        ('RotAttentionPool2d', {'in_features': 64, 'ref_feat_size': 7}, (2, 64, 7, 7)),
+        ('AttentionPool2d', {'in_features': 64, 'feat_size': 7}, (2, 64, 7, 7)),
+    ])
+    def test_attention_pool2d_pre_logits(self, pool_cls, base_kwargs, input_shape):
+        import timm.layers as layers
+        pool = getattr(layers, pool_cls)(**base_kwargs, out_features=32).to(torch_device)
+        x = torch.randn(*input_shape, device=torch_device)
+        out = pool(x, pre_logits=True)
+        # pre_logits skips proj, so output dim = embed_dim (= in_features by default)
+        assert out.shape == (2, 64)
+
+    @pytest.mark.parametrize('pool_cls,base_kwargs,input_shape', [
+        ('RotAttentionPool2d', {'in_features': 64, 'ref_feat_size': 7}, (2, 64, 7, 7)),
+        ('AttentionPool2d', {'in_features': 64, 'feat_size': 7}, (2, 64, 7, 7)),
+    ])
+    def test_attention_pool2d_qkv_separate(self, pool_cls, base_kwargs, input_shape):
+        import timm.layers as layers
+        pool = getattr(layers, pool_cls)(**base_kwargs, qkv_separate=True).to(torch_device)
+        assert pool.qkv is None
+        x = torch.randn(*input_shape, device=torch_device)
+        out = pool(x)
+        assert out.shape == (2, 64)
+
+    @pytest.mark.parametrize('pool_cls,base_kwargs,input_shape', [
+        ('RotAttentionPool2d', {'in_features': 64, 'ref_feat_size': 7}, (2, 64, 7, 7)),
+        ('AttentionPool2d', {'in_features': 64, 'feat_size': 7}, (2, 64, 7, 7)),
+    ])
+    def test_attention_pool2d_class_token(self, pool_cls, base_kwargs, input_shape):
+        import timm.layers as layers
+        pool = getattr(layers, pool_cls)(**base_kwargs, class_token=True).to(torch_device)
+        assert pool.cls_token is not None
+        x = torch.randn(*input_shape, device=torch_device)
+        out = pool(x)
+        assert out.shape == (2, 64)
+
+    @pytest.mark.parametrize('out_features,embed_dim,expected_out', [
+        (None, None, 64),      # default: out_features = in_features
+        (None, 128, 64),       # default with different embed_dim
+        (32, None, 32),        # explicit out_features
+        (32, 128, 32),         # explicit out_features with different embed_dim
+        (0, None, 64),         # disabled projection, out = embed_dim = in_features
+        (0, 128, 128),         # disabled projection, out = embed_dim
+    ])
+    def test_attention_pool_latent_out_features(self, out_features, embed_dim, expected_out):
+        from timm.layers import AttentionPoolLatent
+        kwargs = {'in_features': 64, 'num_heads': 4}
+        if out_features is not None:
+            kwargs['out_features'] = out_features
+        if embed_dim is not None:
+            kwargs['embed_dim'] = embed_dim
+        pool = AttentionPoolLatent(**kwargs).to(torch_device)
+        assert pool.out_features == expected_out
+        if out_features == 0:
+            assert isinstance(pool.proj, nn.Identity)
+            assert pool.mlp is None
+        else:
+            assert isinstance(pool.proj, nn.Linear)
+            assert pool.mlp is not None
+        in_dim = embed_dim or 64
+        x = torch.randn(2, 49, in_dim, device=torch_device)
+        out = pool(x)
+        assert out.shape == (2, expected_out)
+
 
 # LSE Pool Tests
 
