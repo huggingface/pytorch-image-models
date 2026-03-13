@@ -49,6 +49,7 @@ from timm.layers import (
     Attention,
     DiffAttention,
     AttentionPoolLatent,
+    AttentionPoolPrr,
     PatchEmbed,
     Mlp,
     SwiGLUPacked,
@@ -721,7 +722,7 @@ class VisionTransformer(nn.Module):
             patch_size: Union[int, Tuple[int, int]] = 16,
             in_chans: int = 3,
             num_classes: int = 1000,
-            global_pool: Literal['', 'avg', 'avgmax', 'max', 'token', 'map'] = 'token',
+            global_pool: Literal['', 'avg', 'avgmax', 'max', 'token', 'map', 'prr'] = 'token',
             embed_dim: int = 768,
             depth: int = 12,
             num_heads: int = 12,
@@ -793,7 +794,7 @@ class VisionTransformer(nn.Module):
         """
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
-        assert global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map')
+        assert global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map', 'prr')
         assert class_token or global_pool != 'token'
         assert pos_embed in ('', 'none', 'learn')
         use_fc_norm = global_pool in ('avg', 'avgmax', 'max') if fc_norm is None else fc_norm
@@ -887,6 +888,15 @@ class VisionTransformer(nn.Module):
                 act_layer=act_layer,
                 **dd,
             )
+        elif global_pool == 'prr':
+            self.attn_pool = AttentionPoolPrr(
+                self.embed_dim,
+                num_heads=num_heads,
+                pool_type='token' if class_token else 'avg',
+                norm_layer=norm_layer,
+                **dd,
+            )
+            self.pool_include_prefix = True
         else:
             self.attn_pool = None
         self.fc_norm = norm_layer(embed_dim, **dd) if final_norm and use_fc_norm else nn.Identity()
@@ -990,11 +1000,13 @@ class VisionTransformer(nn.Module):
         """
         self.num_classes = num_classes
         if global_pool is not None:
-            assert global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map')
-            if global_pool == 'map' and self.attn_pool is None:
+            assert global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map', 'prr')
+            if global_pool in ('map', 'prr') and self.attn_pool is None:
                 assert False, "Cannot currently add attention pooling in reset_classifier()."
-            elif global_pool != 'map' and self.attn_pool is not None:
+            elif global_pool not in ('map', 'prr') and self.attn_pool is not None:
                 self.attn_pool = None  # remove attention pooling
+            elif global_pool in ('map', 'prr') and self.global_pool != global_pool:
+                assert False, "Cannot currently change attention pooling type in reset_classifier()."
             self.global_pool = global_pool
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
@@ -1517,7 +1529,7 @@ def _load_weights(model: VisionTransformer, checkpoint_path: str, prefix: str = 
     # if isinstance(getattr(model.pre_logits, 'fc', None), nn.Linear) and f'{prefix}pre_logits/bias' in w:
     #     model.pre_logits.fc.weight.copy_(_n2p(w[f'{prefix}pre_logits/kernel']))
     #     model.pre_logits.fc.bias.copy_(_n2p(w[f'{prefix}pre_logits/bias']))
-    if model.attn_pool is not None:
+    if isinstance(model.attn_pool, AttentionPoolLatent):
         block_prefix = f'{prefix}MAPHead_0/'
         mha_prefix = block_prefix + f'MultiHeadDotProductAttention_0/'
         model.attn_pool.latent.copy_(_n2p(w[f'{block_prefix}probe'], t=False))
