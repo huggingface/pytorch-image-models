@@ -28,6 +28,8 @@ class RotAttentionPool2d(nn.Module):
 
     NOTE: While this impl does not require a fixed feature size, performance at differeing resolutions from
     train varies widely and falls off dramatically. I'm not sure if there is a way around this... -RW
+
+    Setting out_features=0 disables the output projection (pre_logits mode).
     """
     fused_attn: torch.jit.Final[bool]
 
@@ -53,7 +55,12 @@ class RotAttentionPool2d(nn.Module):
         assert pool_type in ('', 'token')
         self.embed_dim = embed_dim = embed_dim or in_features
         self.in_features = in_features
-        self.out_features = out_features or in_features
+        if out_features is None:
+            self.out_features = in_features
+        elif out_features > 0:
+            self.out_features = out_features
+        else:
+            self.out_features = embed_dim  # out_features=0 disables projection
         ref_feat_size = to_2tuple(ref_feat_size)
         if num_heads is not None:
             assert embed_dim % num_heads == 0
@@ -81,7 +88,7 @@ class RotAttentionPool2d(nn.Module):
         else:
             self.qkv = nn.Linear(in_features, embed_dim * 3, bias=qkv_bias, **dd)
         self.drop = nn.Dropout(drop_rate)
-        self.proj = nn.Linear(embed_dim, self.out_features, **dd)
+        self.proj = nn.Linear(embed_dim, self.out_features, **dd) if out_features != 0 else nn.Identity()
 
         self.pos_embed = create_rope_embed(
             rope_type=rope_type,
@@ -113,7 +120,7 @@ class RotAttentionPool2d(nn.Module):
             assert pool_type in ('', 'token')
             self.pool_type = pool_type
         if num_classes is not None:
-            self.proj = nn.Linear(self.in_features, num_classes) if num_classes > 0 else nn.Identity()
+            self.proj = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
             self.out_features = num_classes if num_classes > 0 else self.embed_dim
 
     def _pool(self, x: torch.Tensor, H: int, W: int) -> torch.Tensor:
@@ -172,6 +179,8 @@ class AttentionPool2d(nn.Module):
     https://github.com/openai/CLIP/blob/3b473b0e682c091a9e53623eebc1ca1657385717/clip/model.py
 
     NOTE: This requires feature size upon construction and well prevent adaptive sizing of the network.
+
+    Setting out_features=0 disables the output projection (pre_logits mode).
     """
     fused_attn: torch.jit.Final[bool]
 
@@ -196,7 +205,12 @@ class AttentionPool2d(nn.Module):
         assert pool_type in ('', 'token')
         self.embed_dim = embed_dim = embed_dim or in_features
         self.in_features = in_features
-        self.out_features = out_features or in_features
+        if out_features is None:
+            self.out_features = in_features
+        elif out_features > 0:
+            self.out_features = out_features
+        else:
+            self.out_features = embed_dim  # out_features=0 disables projection
         if num_heads is not None:
             assert embed_dim % num_heads == 0
             head_dim = embed_dim // num_heads
@@ -225,7 +239,7 @@ class AttentionPool2d(nn.Module):
             self.q = self.k = self.v = None
             self.qkv = nn.Linear(in_features, embed_dim * 3, bias=qkv_bias, **dd)
         self.drop = nn.Dropout(drop_rate)
-        self.proj = nn.Linear(embed_dim, self.out_features, **dd)
+        self.proj = nn.Linear(embed_dim, self.out_features, **dd) if out_features != 0 else nn.Identity()
         self.pos_embed = nn.Parameter(torch.zeros(self.seq_len + 1, in_features, **dd))
 
         self.init_weights()
@@ -251,7 +265,7 @@ class AttentionPool2d(nn.Module):
             assert pool_type in ('', 'token')
             self.pool_type = pool_type
         if num_classes is not None:
-            self.proj = nn.Linear(self.in_features, num_classes) if num_classes > 0 else nn.Identity()
+            self.proj = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
             self.out_features = num_classes if num_classes > 0 else self.embed_dim
 
     def _pool(self, x: torch.Tensor, H: int, W: int) -> torch.Tensor:
