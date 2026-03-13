@@ -53,7 +53,12 @@ class RotAttentionPool2d(nn.Module):
         assert pool_type in ('', 'token')
         self.embed_dim = embed_dim = embed_dim or in_features
         self.in_features = in_features
-        self.out_features = out_features or in_features
+        if out_features is None:
+            self.out_features = in_features
+        elif out_features > 0:
+            self.out_features = out_features
+        else:
+            self.out_features = embed_dim
         ref_feat_size = to_2tuple(ref_feat_size)
         if num_heads is not None:
             assert embed_dim % num_heads == 0
@@ -81,7 +86,10 @@ class RotAttentionPool2d(nn.Module):
         else:
             self.qkv = nn.Linear(in_features, embed_dim * 3, bias=qkv_bias, **dd)
         self.drop = nn.Dropout(drop_rate)
-        self.proj = nn.Linear(embed_dim, self.out_features, **dd)
+        if out_features is None or out_features > 0:
+            self.proj = nn.Linear(embed_dim, self.out_features, **dd)
+        else:
+            self.proj = nn.Identity()
 
         self.pos_embed = create_rope_embed(
             rope_type=rope_type,
@@ -196,7 +204,12 @@ class AttentionPool2d(nn.Module):
         assert pool_type in ('', 'token')
         self.embed_dim = embed_dim = embed_dim or in_features
         self.in_features = in_features
-        self.out_features = out_features or in_features
+        if out_features is None:
+            self.out_features = in_features
+        elif out_features > 0:
+            self.out_features = out_features
+        else:
+            self.out_features = embed_dim
         if num_heads is not None:
             assert embed_dim % num_heads == 0
             head_dim = embed_dim // num_heads
@@ -225,7 +238,10 @@ class AttentionPool2d(nn.Module):
             self.q = self.k = self.v = None
             self.qkv = nn.Linear(in_features, embed_dim * 3, bias=qkv_bias, **dd)
         self.drop = nn.Dropout(drop_rate)
-        self.proj = nn.Linear(embed_dim, self.out_features, **dd)
+        if out_features is None or out_features > 0:
+            self.proj = nn.Linear(embed_dim, self.out_features, **dd)
+        else:
+            self.proj = nn.Identity()
         self.pos_embed = nn.Parameter(torch.zeros(self.seq_len + 1, in_features, **dd))
 
         self.init_weights()
