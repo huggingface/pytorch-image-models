@@ -68,6 +68,7 @@ from timm.layers import (
     maybe_add_mask,
     LayerType,
     LayerScale,
+    PRR,
 )
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
@@ -711,6 +712,7 @@ class VisionTransformer(nn.Module):
             final_norm: bool = True,
             fc_norm: Optional[bool] = None,
             pool_include_prefix: bool = False,
+            prr: bool = False,
             dynamic_img_size: bool = False,
             dynamic_img_pad: bool = False,
             drop_rate: float = 0.,
@@ -750,6 +752,7 @@ class VisionTransformer(nn.Module):
             pre_norm: Enable norm after embeddings, before transformer blocks (standard in CLIP ViT).
             final_norm: Enable norm after transformer blocks, before head (standard in most ViT).
             fc_norm: Move final norm after pool (instead of before), if None, enabled when global_pool == 'avg'.
+            prr: Whether to use Patch Representation Refinement before classification head.
             drop_rate: Head dropout rate.
             pos_drop_rate: Position embedding dropout rate.
             attn_drop_rate: Attention dropout rate.
@@ -849,6 +852,7 @@ class VisionTransformer(nn.Module):
         self.norm = norm_layer(embed_dim, **dd) if final_norm and not use_fc_norm else nn.Identity()
 
         # Classifier Head
+        self.prr = PRR(embed_dim, num_heads) if prr else nn.Identity()
         if global_pool == 'map':
             self.attn_pool = AttentionPoolLatent(
                 self.embed_dim,
@@ -1238,6 +1242,7 @@ class VisionTransformer(nn.Module):
         Returns:
             Output tensor.
         """
+        x = self.prr(x)
         x = self.pool(x)
         x = self.fc_norm(x)
         x = self.head_drop(x)
