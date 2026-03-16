@@ -18,6 +18,8 @@ def maybe_add_mask(scores: torch.Tensor, attn_mask: Optional[torch.Tensor] = Non
     return scores if attn_mask is None else scores + attn_mask
 
 
+@torch.fx.wrap
+@register_notrace_function
 def resolve_self_attn_mask(
         seq_len: int,
         attn: torch.Tensor,
