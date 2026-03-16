@@ -42,6 +42,11 @@ homepage = "https://github.com/huggingface/pytorch-image-models"
 documentation = "https://huggingface.co/docs/timm/en/index"
 repository = "https://github.com/huggingface/pytorch-image-models"
 
+[project.scripts]
+timm-train-cls = "timm.apps.train_cls:main"
+timm-train-ssl = "timm.apps.train_ssl:main"
+timm-sweep = "timm.apps.sweep:main"
+
 [tool.pdm.dev-dependencies]
 test = [
         'pytest',

@@ -9,10 +9,33 @@ from .config import use_fused_attn
 from .pos_embed_sincos import apply_rot_embed_cat
 
 
+__all__ = ['Attention', 'AttentionRope', 'maybe_add_mask', 'resolve_self_attn_mask']
+
+
 @torch.fx.wrap
 @register_notrace_function
 def maybe_add_mask(scores: torch.Tensor, attn_mask: Optional[torch.Tensor] = None):
     return scores if attn_mask is None else scores + attn_mask
+
+
+def resolve_self_attn_mask(
+        seq_len: int,
+        attn: torch.Tensor,
+        attn_mask: Optional[torch.Tensor] = None,
+        is_causal: bool = False,
+) -> Optional[torch.Tensor]:
+    # Build additive bias matching SDPA semantics for self-attention
+    # is_causal and attn_mask are mutually exclusive (is_causal takes precedence)
+    if is_causal:
+        attn_bias = attn.new_full((seq_len, seq_len), float('-inf')).triu_(1)
+    elif attn_mask is None:
+        attn_bias = None
+    elif attn_mask.dtype == torch.bool:
+        attn_bias = torch.zeros_like(attn_mask, dtype=attn.dtype)
+        attn_bias.masked_fill_(~attn_mask, float('-inf'))
+    else:
+        attn_bias = attn_mask
+    return attn_bias
 
 
 class Attention(nn.Module):
@@ -84,6 +107,7 @@ class Attention(nn.Module):
             self,
             x: torch.Tensor,
             attn_mask: Optional[torch.Tensor] = None,
+            is_causal: bool = False,
     ) -> torch.Tensor:
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
@@ -95,11 +119,13 @@ class Attention(nn.Module):
                 q, k, v,
                 attn_mask=attn_mask,
                 dropout_p=self.attn_drop.p if self.training else 0.,
+                is_causal=is_causal,
             )
         else:
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)
-            attn = maybe_add_mask(attn, attn_mask)
+            attn_bias = resolve_self_attn_mask(N, attn, attn_mask, is_causal)
+            attn = maybe_add_mask(attn, attn_bias)
             attn = attn.softmax(dim=-1)
             attn = self.attn_drop(attn)
             x = attn @ v
@@ -198,6 +224,7 @@ class AttentionRope(nn.Module):
             x,
             rope: Optional[torch.Tensor] = None,
             attn_mask: Optional[torch.Tensor] = None,
+            is_causal: bool = False,
     ):
         """Forward pass for the attention module.
 
@@ -205,6 +232,7 @@ class AttentionRope(nn.Module):
             x: Input tensor of shape (batch_size, sequence_length, embedding_dim)
             rope: Rotary position embeddings tensor for position-aware attention
             attn_mask: Optional attention mask to apply during attention computation
+            is_causal: If True, use causal (autoregressive) masking
 
         Returns:
             Tensor of shape (batch_size, sequence_length, dim_out)
@@ -233,11 +261,13 @@ class AttentionRope(nn.Module):
                 q, k, v,
                 attn_mask=attn_mask,
                 dropout_p=self.attn_drop.p if self.training else 0.,
+                is_causal=is_causal,
             )
         else:
             q = q * self.scale
-            attn = (q @ k.transpose(-2, -1))
-            attn = maybe_add_mask(attn, attn_mask)
+            attn = q @ k.transpose(-2, -1)
+            attn_bias = resolve_self_attn_mask(N, attn, attn_mask, is_causal)
+            attn = maybe_add_mask(attn, attn_bias)
             attn = attn.softmax(dim=-1)
 
             attn = self.attn_drop(attn)
