@@ -17,6 +17,7 @@ import os
 import glob
 import hashlib
 from timm.models import load_state_dict
+from timm.models._helpers import _torch_load
 try:
     import safetensors.torch
     _has_safetensors = True
@@ -47,7 +48,7 @@ def checkpoint_metric(checkpoint_path):
     if not checkpoint_path or not os.path.isfile(checkpoint_path):
         return {}
     print("=> Extracting metric from checkpoint '{}'".format(checkpoint_path))
-    checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+    checkpoint = _torch_load(checkpoint_path, map_location='cpu', weights_only=True)
     metric = None
     if 'metric' in checkpoint:
         metric = checkpoint['metric']
