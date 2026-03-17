@@ -1354,6 +1354,10 @@ def _pe_cfg(url: str = '', **kwargs) -> Dict[str, Any]:
 def _dinov3_cfg(url: str = '', **kwargs) -> Dict[str, Any]:
     """Generate default configuration for DINOv3 models.
 
+    Note: Original DINOv3 uses CLS-token pooling for representations. timm defaults to avg
+    pooling for the Eva architecture. Pass global_pool='token' at model creation to match
+    upstream behavior, which may be preferred for tasks like retrieval and few-shot classification.
+
     Args:
         url: Model weights URL.
         **kwargs: Additional configuration parameters.
@@ -1724,6 +1728,8 @@ default_cfgs = generate_default_cfgs({
 
     # DINOv3 weights are under a specific license with redistribution terms, please see
     # https://github.com/facebookresearch/dinov3/blob/main/LICENSE.md
+    # NOTE: Original DINOv3 uses CLS-token pooling (global_pool='token') which may be better
+    # for some tasks. Default here is avg pooling inherited from the Eva base class.
     'vit_small_patch16_dinov3.lvd1689m': _dinov3_cfg(
         hf_hub_id='timm/',
     ),
@@ -2712,7 +2718,9 @@ def vit_large_patch16_rope_mixed_ape_224(pretrained: bool = False, **kwargs) -> 
 
 @register_model
 def vit_small_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
-    """DINOv3 S/16 https://arxiv.org/abs/2508.10104"""
+    """DINOv3 S/16 https://arxiv.org/abs/2508.10104
+    NOTE: Pass global_pool='token' to use CLS-token pooling (matches upstream DINOv3).
+    """
     model_args = dict(
         patch_size=16,
         dynamic_img_size=True,
@@ -2737,7 +2745,9 @@ def vit_small_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def vit_small_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
-    """DINOv3 S/16 w/ QKV bias enabled (but zero) https://arxiv.org/abs/2508.10104"""
+    """DINOv3 S/16 w/ QKV bias enabled (but zero) https://arxiv.org/abs/2508.10104
+    NOTE: Pass global_pool='token' to use CLS-token pooling (matches upstream DINOv3).
+    """
     model_args = dict(
         patch_size=16,
         dynamic_img_size=True,
@@ -2762,7 +2772,9 @@ def vit_small_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def vit_small_plus_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
-    """DINOv3 S/16 Plus https://arxiv.org/abs/2508.10104"""
+    """DINOv3 S/16 Plus https://arxiv.org/abs/2508.10104
+    NOTE: Pass global_pool='token' to use CLS-token pooling (matches upstream DINOv3).
+    """
     model_args = dict(
         patch_size=16,
         dynamic_img_size=True,
@@ -2789,7 +2801,9 @@ def vit_small_plus_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def vit_small_plus_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
-    """DINOv3 S/16 Plus w/ QKV bias enabled (but 0) https://arxiv.org/abs/2508.10104"""
+    """DINOv3 S/16 Plus w/ QKV bias enabled (but 0) https://arxiv.org/abs/2508.10104
+    NOTE: Pass global_pool='token' to use CLS-token pooling (matches upstream DINOv3).
+    """
     model_args = dict(
         patch_size=16,
         dynamic_img_size=True,
@@ -2816,7 +2830,9 @@ def vit_small_plus_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Ev
 
 @register_model
 def vit_base_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
-    """DINOv3 B/16 https://arxiv.org/abs/2508.10104"""
+    """DINOv3 B/16 https://arxiv.org/abs/2508.10104
+    NOTE: Pass global_pool='token' to use CLS-token pooling (matches upstream DINOv3).
+    """
     model_args = dict(
         patch_size=16,
         dynamic_img_size=True,
@@ -2841,7 +2857,9 @@ def vit_base_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def vit_base_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
-    """DINOv3 B/16 w/ QKV bias enabled (but zero) https://arxiv.org/abs/2508.10104"""
+    """DINOv3 B/16 w/ QKV bias enabled (but zero) https://arxiv.org/abs/2508.10104
+    NOTE: Pass global_pool='token' to use CLS-token pooling (matches upstream DINOv3).
+    """
     model_args = dict(
         patch_size=16,
         dynamic_img_size=True,
@@ -2866,7 +2884,9 @@ def vit_base_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def vit_large_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
-    """DINOv3 L/16 https://arxiv.org/abs/2508.10104"""
+    """DINOv3 L/16 https://arxiv.org/abs/2508.10104
+    NOTE: Pass global_pool='token' to use CLS-token pooling (matches upstream DINOv3).
+    """
     model_args = dict(
         patch_size=16,
         dynamic_img_size=True,
@@ -2891,7 +2911,9 @@ def vit_large_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def vit_large_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
-    """DINOv3 w/ QKV bias enabled (but zero) https://arxiv.org/abs/2508.10104"""
+    """DINOv3 w/ QKV bias enabled (but zero) https://arxiv.org/abs/2508.10104
+    NOTE: Pass global_pool='token' to use CLS-token pooling (matches upstream DINOv3).
+    """
     model_args = dict(
         patch_size=16,
         dynamic_img_size=True,
@@ -2916,7 +2938,9 @@ def vit_large_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def vit_huge_plus_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
-    """DINOv3 H/16 Plus https://arxiv.org/abs/2508.10104"""
+    """DINOv3 H/16 Plus https://arxiv.org/abs/2508.10104
+    NOTE: Pass global_pool='token' to use CLS-token pooling (matches upstream DINOv3).
+    """
     model_args = dict(
         patch_size=16,
         dynamic_img_size=True,
@@ -2944,7 +2968,9 @@ def vit_huge_plus_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def vit_huge_plus_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
-    """DINOv3 H/16 Plus w/ QKV bias enabled (but zero) https://arxiv.org/abs/2508.10104"""
+    """DINOv3 H/16 Plus w/ QKV bias enabled (but zero) https://arxiv.org/abs/2508.10104
+    NOTE: Pass global_pool='token' to use CLS-token pooling (matches upstream DINOv3).
+    """
     model_args = dict(
         patch_size=16,
         dynamic_img_size=True,
@@ -2971,7 +2997,9 @@ def vit_huge_plus_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva
 
 @register_model
 def vit_7b_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
-    """DINOv3 7B/16 https://arxiv.org/abs/2508.10104"""
+    """DINOv3 7B/16 https://arxiv.org/abs/2508.10104
+    NOTE: Pass global_pool='token' to use CLS-token pooling (matches upstream DINOv3).
+    """
     model_args = dict(
         patch_size=16,
         dynamic_img_size=True,
