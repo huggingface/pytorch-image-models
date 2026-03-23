@@ -12,6 +12,16 @@
 
 ## What's New
 
+## March 23, 2026
+* Improve pickle checkpoint handling security. Default all loading to `weights_only=True`, add safe_global for ArgParse.
+* Improve attention mask handling for core ViT/EVA models & layers. Resolve bool masks, pass `is_causal` through for SSL tasks.
+* Fix class & register token uses with ViT and no pos embed enabled.
+* Add Patch Representation Refinement (PRR) as a pooling option in ViT. Thanks Sina (https://github.com/sinahmr).
+* Improve consistency of output projection / MLP dimensions for attention pooling layers.
+* Hiera model F.SDPA optimization to allow Flash Attention kernel use.
+* Caution added to SGDP optimizer.
+* Release 1.0.26. First maintenance release since my departure from Hugging Face.
+
 ## Feb 23, 2026
 * Add token distillation training support to distillation task wrappers
 * Remove some torch.jit usage in prep for official deprecation
