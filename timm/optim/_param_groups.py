@@ -18,7 +18,8 @@ def _matches_pattern(name: str, patterns: Collection[str]) -> bool:
 
 def param_groups_weight_decay(
         model: nn.Module,
-        weight_decay: float = 1e-5,
+        weight_decay: Optional[float] = 1e-5,
+        weight_decay_exclude_1d: bool = True,
         no_weight_decay_list: Collection[str] = (),
         fallback_list: Collection[str] = (),
         fallback_no_weight_decay: bool = False,
@@ -26,6 +27,8 @@ def param_groups_weight_decay(
     # Merge no_weight_decay into fallback_list if requested
     if fallback_no_weight_decay:
         fallback_list = set(fallback_list) | set(no_weight_decay_list)
+
+    no_wd = not weight_decay
 
     decay = []
     decay_fallback = []
@@ -38,20 +41,28 @@ def param_groups_weight_decay(
         # Determine if this is a "fallback" parameter for fallback optimizer (if available)
         is_fallback = _matches_pattern(name, fallback_list)
 
-        # Determine weight decay
-        matches_pattern = _matches_pattern(name, no_weight_decay_list)
-        if param.ndim <= 1 or name.endswith(".bias") or matches_pattern:
-            # No weight decay
+        if no_wd:
+            # No weight decay at all — everything goes to no_decay groups
             if is_fallback:
                 no_decay_fallback.append(param)
             else:
                 no_decay.append(param)
         else:
-            # With weight decay
-            if is_fallback:
-                decay_fallback.append(param)
+            # Determine weight decay
+            matches_pattern = _matches_pattern(name, no_weight_decay_list)
+            is_excluded_1d = weight_decay_exclude_1d and (param.ndim <= 1 or name.endswith(".bias"))
+            if is_excluded_1d or matches_pattern:
+                # No weight decay
+                if is_fallback:
+                    no_decay_fallback.append(param)
+                else:
+                    no_decay.append(param)
             else:
-                decay.append(param)
+                # With weight decay
+                if is_fallback:
+                    decay_fallback.append(param)
+                else:
+                    decay.append(param)
 
     groups = []
     if no_decay:
