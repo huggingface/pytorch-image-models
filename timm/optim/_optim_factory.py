@@ -288,17 +288,16 @@ class OptimizerRegistry:
                     no_opt_scale=layer_decay_no_opt_scale,
                 )
                 weight_decay = 0.
-            elif weight_decay and weight_decay_exclude_1d:
+            else:
                 params = param_groups_weight_decay(
                     model_or_params,
                     weight_decay=weight_decay,
+                    weight_decay_exclude_1d=weight_decay_exclude_1d,
                     no_weight_decay_list=no_weight_decay,
                     fallback_list=fallback_list,
                     fallback_no_weight_decay=fallback_no_weight_decay,
                 )
                 weight_decay = 0.
-            else:
-                params = model_or_params.parameters()
         else:
             # pass parameters / parameter groups through to optimizer
             params = model_or_params
