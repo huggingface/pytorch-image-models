@@ -22,6 +22,7 @@ Hacked together by Ross Wightman
 """
 import logging
 import numbers
+import warnings
 from typing import List, Mapping, Optional, Sequence, Tuple, Union
 
 import torch
@@ -660,6 +661,7 @@ class Muon(torch.optim.Optimizer):
             conv_mode: str = "flatten",
             normalize_spatial: bool = True,
             adamw_lr: Optional[float] = None,
+            fallback_lr_scale: float = 0.1,
             betas: Tuple[float, float] = (0.9, 0.95),
             algo: str = "muon",
             scale_eps: bool = False,
@@ -680,7 +682,10 @@ class Muon(torch.optim.Optimizer):
                 For adamuon mode, can set to None to disable (RMS rescaling handles scaling).
             conv_mode: How to handle convolutions - "flatten" or "batched"
             normalize_spatial: Whether to normalize by sqrt(spatial_size) in batched mode
-            adamw_lr: Learning rate for AdamW (1D params), defaults to lr if not specified
+            fallback_lr_scale: Scale factor applied to lr for AdamW fallback parameters (default: 0.1).
+                The effective fallback LR is lr * fallback_lr_scale. This ensures the LR scheduler
+                properly schedules fallback parameters.
+            adamw_lr: Deprecated. Use fallback_lr_scale instead.
             betas: Beta coefficients - (beta1, beta2) where beta1 is used for AdamW fallback
                 and beta2 is used for both AdamW fallback and AdaMuon second moment
             algo: Algorithm - "muon" for standard Muon, "adamuon" for AdaMuon with
@@ -717,6 +722,17 @@ class Muon(torch.optim.Optimizer):
         if algo not in ["muon", "adamuon"]:
             raise ValueError(f"Invalid algo: {algo}. Must be 'muon' or 'adamuon'")
 
+        if adamw_lr is not None:
+            warnings.warn(
+                "adamw_lr is deprecated, use fallback_lr_scale=adamw_lr/lr instead. "
+                "adamw_lr will be removed in a future release.",
+                FutureWarning,
+                stacklevel=2,
+            )
+            if lr == 0:
+                raise ValueError("Cannot compute fallback_lr_scale from adamw_lr when lr=0")
+            fallback_lr_scale = adamw_lr / lr
+
         defaults = dict(
             lr=lr,
             weight_decay=weight_decay,
@@ -729,7 +745,7 @@ class Muon(torch.optim.Optimizer):
             adjust_lr_fn=adjust_lr_fn,
             conv_mode=conv_mode,
             normalize_spatial=normalize_spatial,
-            adamw_lr=adamw_lr if adamw_lr is not None else lr,
+            fallback_lr_scale=fallback_lr_scale,
             betas=betas,
             algo=algo,
             scale_eps=scale_eps,
@@ -742,6 +758,10 @@ class Muon(torch.optim.Optimizer):
         for group in self.param_groups:
             group.setdefault('algo', 'muon')
             group.setdefault('scale_eps', False)
+            # Migrate old adamw_lr to fallback_lr_scale for checkpoint compat
+            if 'fallback_lr_scale' not in group:
+                adamw_lr = group.pop('adamw_lr', group['lr'])
+                group['fallback_lr_scale'] = adamw_lr / group['lr'] if group['lr'] != 0 else 1.0
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -895,6 +915,7 @@ class Muon(torch.optim.Optimizer):
             # Apply AdamW updates
             if adamw_params:
                 beta1, beta2 = group["betas"]
+                fallback_lr = group["lr"] * group["fallback_lr_scale"]
                 if group["nesterov"]:
                     # use nadamw for fallback optimizer if nesterov is enabled
                     nadamw(
@@ -906,7 +927,7 @@ class Muon(torch.optim.Optimizer):
                         foreach=None,
                         beta1=beta1,
                         beta2=beta2,
-                        lr=group["adamw_lr"],
+                        lr=fallback_lr,
                         weight_decay=group["weight_decay"],
                         eps=group["eps"],
                         caution=False,
@@ -926,7 +947,7 @@ class Muon(torch.optim.Optimizer):
                         amsgrad=False,
                         beta1=beta1,
                         beta2=beta2,
-                        lr=group["adamw_lr"],
+                        lr=fallback_lr,
                         weight_decay=group["weight_decay"],
                         eps=group["eps"],
                         caution=False,
