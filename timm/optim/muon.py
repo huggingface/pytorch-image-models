@@ -661,7 +661,7 @@ class Muon(torch.optim.Optimizer):
             conv_mode: str = "flatten",
             normalize_spatial: bool = True,
             adamw_lr: Optional[float] = None,
-            fallback_lr_scale: float = 0.1,
+            fallback_lr_scale: float = 0.2,
             betas: Tuple[float, float] = (0.9, 0.95),
             algo: str = "muon",
             scale_eps: bool = False,
@@ -682,7 +682,7 @@ class Muon(torch.optim.Optimizer):
                 For adamuon mode, can set to None to disable (RMS rescaling handles scaling).
             conv_mode: How to handle convolutions - "flatten" or "batched"
             normalize_spatial: Whether to normalize by sqrt(spatial_size) in batched mode
-            fallback_lr_scale: Scale factor applied to lr for AdamW fallback parameters (default: 0.1).
+            fallback_lr_scale: Scale factor applied to lr for AdamW fallback parameters.
                 The effective fallback LR is lr * fallback_lr_scale. This ensures the LR scheduler
                 properly schedules fallback parameters.
             adamw_lr: Deprecated. Use fallback_lr_scale instead.
