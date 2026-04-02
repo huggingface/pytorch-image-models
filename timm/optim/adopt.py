@@ -193,7 +193,10 @@ class Adopt(Optimizer):
             closure (Callable, optional): A closure that reevaluates the model
                 and returns the loss.
         """
-        self._cuda_graph_capture_health_check()
+        if hasattr(self, '_accelerator_graph_capture_health_check'):
+            self._accelerator_graph_capture_health_check()
+        elif hasattr(self, '_cuda_graph_capture_health_check'):
+            self._cuda_graph_capture_health_check()
 
         loss = None
         if closure is not None:
