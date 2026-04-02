@@ -661,7 +661,7 @@ class Muon(torch.optim.Optimizer):
             conv_mode: str = "flatten",
             normalize_spatial: bool = True,
             adamw_lr: Optional[float] = None,
-            fallback_lr_scale: float = 0.2,
+            fallback_lr_scale: float = 1.0,
             betas: Tuple[float, float] = (0.9, 0.95),
             algo: str = "muon",
             scale_eps: bool = False,
