@@ -103,6 +103,7 @@ class NaFlexVitCfg:
     rope_ref_feat_shape: Optional[Tuple[int, int]] = None
     rope_grid_offset: float = 0.  # Grid offset for non-pixel ROPE mode
     rope_grid_indexing: str = 'ij'  # Grid indexing mode for ROPE ('ij' or 'xy')
+    rope_rotate_half: bool = False  # Use rotate_half layout for ROPE (DINOv3 uses True)
 
     # Image processing
     dynamic_img_pad: bool = False  # Whether to enable dynamic padding for variable resolution
@@ -286,6 +287,7 @@ def get_block_fn(cfg: NaFlexVitCfg) -> Callable:
             scale_attn_inner=cfg.scale_attn_inner_norm,
             qkv_fused=cfg.qkv_fused,
             num_prefix_tokens=num_prefix_tokens,
+            rotate_half=cfg.rope_rotate_half,
         )
     else:
         # Standard ViT block
@@ -1179,7 +1181,7 @@ class NaFlexVit(nn.Module):
         self.rope: Optional[nn.Module] = None
         self.rope_is_mixed = False
         if cfg.rope_type and cfg.rope_type != 'none':
-            from timm.layers.pos_embed_sincos import RotaryEmbeddingCat, RotaryEmbeddingMixed
+            from timm.layers.pos_embed_sincos import RotaryEmbeddingCat, RotaryEmbeddingDinoV3, RotaryEmbeddingMixed
             if cfg.rope_type == 'mixed':
                 self.rope = RotaryEmbeddingMixed(
                     cfg.embed_dim,
@@ -1200,6 +1202,16 @@ class NaFlexVit(nn.Module):
                     ref_feat_shape=cfg.rope_ref_feat_shape,
                     grid_offset=cfg.rope_grid_offset,
                     grid_indexing=cfg.rope_grid_indexing,
+                    **dd,
+                )
+                self.rope_is_mixed = False
+            elif cfg.rope_type == 'dinov3':
+                self.rope = RotaryEmbeddingDinoV3(
+                    cfg.embed_dim // cfg.num_heads,
+                    temperature=cfg.rope_temperature,
+                    feat_shape=None,  # Dynamic shapes for NaFlex
+                    grid_indexing=cfg.rope_grid_indexing,
+                    rotate_half=cfg.rope_rotate_half,
                     **dd,
                 )
                 self.rope_is_mixed = False
@@ -2072,7 +2084,11 @@ def _create_naflexvit_from_eva(
     rope_temperature = kwargs.pop('rope_temperature', 10000.)
     rope_grid_offset = kwargs.pop('rope_grid_offset', 0.)
     rope_grid_indexing = kwargs.pop('rope_grid_indexing', 'ij')
-    if use_rot_pos_emb:
+    # Preserve explicit rope_type from model config (e.g. 'dinov3') if present
+    explicit_rope_type = kwargs.pop('rope_type', None)
+    if explicit_rope_type and explicit_rope_type != 'none':
+        rope_type = explicit_rope_type
+    elif use_rot_pos_emb:
         rope_type = 'mixed' if rope_mixed_mode else 'axial'
     else:
         rope_type = 'none'
@@ -2099,6 +2115,7 @@ def _create_naflexvit_from_eva(
         'rope_temperature': rope_temperature,
         'rope_grid_offset': rope_grid_offset,
         'rope_grid_indexing': rope_grid_indexing,
+        'rope_rotate_half': kwargs.pop('rope_rotate_half', False),
         'rope_ref_feat_shape': kwargs.get('ref_feat_shape', None),
         'attn_type': kwargs.pop('attn_type', 'eva'),
         'swiglu_mlp': kwargs.pop('swiglu_mlp', False),
