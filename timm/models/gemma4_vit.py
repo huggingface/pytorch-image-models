@@ -1,0 +1,940 @@
+"""Gemma4 Vision Transformer
+
+Vision encoder from Google's Gemma 4 multimodal model.
+Custom ViT with 2D RoPE, Gated MLP, QKV normalization, and 4-norm sandwich blocks.
+
+Paper: https://ai.google.dev/gemma/docs/core/model_card_4
+Reference impl: https://github.com/huggingface/transformers (Gemma4VisionModel)
+
+Copyright 2025 Yonghye Kwon
+"""
+
+import math
+from functools import partial
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from timm.layers import DropPath, to_2tuple, use_fused_attn
+
+from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
+from ._manipulate import checkpoint
+from ._registry import generate_default_cfgs, register_model
+
+__all__ = ['Gemma4Vit']
+
+
+class Gemma4ClippableLinear(nn.Module):
+    """Linear layer with optional input/output clamping.
+
+    Used in Gemma4 E4B variant where clamp values are finite and affect output.
+    When use_clipped=False, behaves as a standard nn.Linear (no buffers registered).
+    """
+
+    def __init__(self, in_features: int, out_features: int, use_clipped: bool = False):
+        super().__init__()
+        self.use_clipped = use_clipped
+        self.linear = nn.Linear(in_features, out_features, bias=False)
+        if use_clipped:
+            self.register_buffer('input_min', torch.tensor(-float('inf')))
+            self.register_buffer('input_max', torch.tensor(float('inf')))
+            self.register_buffer('output_min', torch.tensor(-float('inf')))
+            self.register_buffer('output_max', torch.tensor(float('inf')))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self.use_clipped:
+            x = torch.clamp(x, self.input_min, self.input_max)
+        x = self.linear(x)
+        if self.use_clipped:
+            x = torch.clamp(x, self.output_min, self.output_max)
+        return x
+
+
+class Gemma4RMSNorm(nn.Module):
+    """RMSNorm matching HuggingFace Gemma4 implementation exactly.
+
+    Key differences from timm's RmsNorm:
+    - Upcasts to float32 for norm computation (critical for numerical equivalence)
+    - Supports with_scale=False mode (for V normalization)
+    - Uses pow(-0.5) instead of rsqrt (matching HF's JAX-compatible impl)
+    """
+
+    def __init__(self, dim: int, eps: float = 1e-6, with_scale: bool = True):
+        super().__init__()
+        self.eps = eps
+        self.with_scale = with_scale
+        if self.with_scale:
+            self.weight = nn.Parameter(torch.ones(dim))
+
+    def _norm(self, x: torch.Tensor) -> torch.Tensor:
+        return x * torch.pow(x.pow(2).mean(-1, keepdim=True) + self.eps, -0.5)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        output = self._norm(x.float())
+        if self.with_scale:
+            output = output * self.weight.float()
+        return output.type_as(x)
+
+
+def rotate_half(x: torch.Tensor) -> torch.Tensor:
+    """Rotates half the hidden dims of the input."""
+    x1 = x[..., : x.shape[-1] // 2]
+    x2 = x[..., x.shape[-1] // 2 :]
+    return torch.cat((-x2, x1), dim=-1)
+
+
+def apply_rotary_pos_emb(
+    x: torch.Tensor,
+    cos: torch.Tensor,
+    sin: torch.Tensor,
+    unsqueeze_dim: int = 2,
+) -> torch.Tensor:
+    """Apply rotary position embedding to input tensor."""
+    cos = cos.unsqueeze(unsqueeze_dim)
+    sin = sin.unsqueeze(unsqueeze_dim)
+    return (x * cos) + (rotate_half(x) * sin)
+
+
+def apply_multidimensional_rope(
+    x: torch.Tensor,
+    cos: torch.Tensor,
+    sin: torch.Tensor,
+    ndim: int = 2,
+    unsqueeze_dim: int = 2,
+) -> torch.Tensor:
+    """Apply multidimensional RoPE to input tensor.
+
+    Splits input along head_dim into ndim parts, applies RoPE to each,
+    then concatenates back.
+    """
+    num_input_channels = x.shape[-1]
+    num_rotated_channels_per_dim = 2 * (num_input_channels // (2 * ndim))
+    split_sizes = [num_rotated_channels_per_dim] * ndim
+
+    x_parts = torch.split(x, split_sizes, dim=-1)
+    cos_parts = torch.split(cos, split_sizes, dim=-1)
+    sin_parts = torch.split(sin, split_sizes, dim=-1)
+
+    y_parts = [
+        apply_rotary_pos_emb(x_parts[k], cos_parts[k], sin_parts[k], unsqueeze_dim=unsqueeze_dim) for k in range(ndim)
+    ]
+    return torch.cat(y_parts, dim=-1)
+
+
+class Gemma4RotaryEmbedding2D(nn.Module):
+    """2D Rotary Position Embedding for Gemma4 vision encoder.
+
+    Computes RoPE independently for each spatial dimension (x, y),
+    using theta=100.0 and the partitioned head_dim.
+    """
+
+    def __init__(self, head_dim: int, rope_theta: float = 100.0):
+        super().__init__()
+        self.head_dim = head_dim
+        self.rope_theta = rope_theta
+
+        # Each spatial dimension uses head_dim//2 channels,
+        # so we need head_dim//4 frequencies per dimension
+        spatial_dim = head_dim // 2
+        inv_freq = 1.0 / (rope_theta ** (torch.arange(0, spatial_dim, 2, dtype=torch.float) / spatial_dim))
+        self.register_buffer('inv_freq', inv_freq, persistent=False)
+
+    @torch.no_grad()
+    def forward(
+        self,
+        x: torch.Tensor,
+        position_ids: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Args:
+            x: Hidden states tensor, used only for dtype/device.
+            position_ids: (B, N, 2) tensor of (x, y) patch coordinates.
+
+        Returns:
+            cos, sin: (B, N, head_dim) tensors for RoPE application.
+        """
+        inv_freq_expanded = self.inv_freq[None, :, None].float().expand(position_ids.shape[0], -1, 1).to(x.device)
+
+        all_cos, all_sin = [], []
+        for i in range(2):  # x and y dimensions
+            dim_pos = position_ids[:, :, i]  # (B, N)
+            dim_pos_expanded = dim_pos[:, None, :].float()  # (B, 1, N)
+
+            freqs = (inv_freq_expanded.float() @ dim_pos_expanded.float()).transpose(1, 2)  # (B, N, spatial_dim//2)
+            emb = torch.cat((freqs, freqs), dim=-1)  # (B, N, spatial_dim)
+            all_cos.append(emb.cos())
+            all_sin.append(emb.sin())
+
+        cos = torch.cat(all_cos, dim=-1).to(dtype=x.dtype)  # (B, N, head_dim)
+        sin = torch.cat(all_sin, dim=-1).to(dtype=x.dtype)
+        return cos, sin
+
+
+class Gemma4PatchEmbed(nn.Module):
+    """Linear patch embedding with learned 2D position embedding table.
+
+    Unlike standard ViT PatchEmbed (conv2d), Gemma4 uses:
+    - Linear projection on flattened patches
+    - Separate 2D position embedding table with one-hot lookup
+    """
+
+    def __init__(
+        self,
+        patch_size: int = 16,
+        in_chans: int = 3,
+        embed_dim: int = 768,
+        position_embedding_size: int = 10240,
+    ):
+        super().__init__()
+        self.patch_size = patch_size
+        self.embed_dim = embed_dim
+        self.position_embedding_size = position_embedding_size
+
+        self.input_proj = nn.Linear(in_chans * patch_size**2, embed_dim, bias=False)
+        self.position_embedding_table = nn.Parameter(torch.ones(2, position_embedding_size, embed_dim))
+
+    def _extract_patches(self, pixel_values: torch.Tensor) -> torch.Tensor:
+        """Extract and flatten patches from (B, C, H, W) image tensor."""
+        B, C, H, W = pixel_values.shape
+        pH = H // self.patch_size
+        pW = W // self.patch_size
+        x = pixel_values.reshape(B, C, pH, self.patch_size, pW, self.patch_size)
+        x = x.permute(0, 2, 4, 1, 3, 5)  # (B, pH, pW, C, P, P)
+        x = x.reshape(B, pH * pW, C * self.patch_size * self.patch_size)
+        return x
+
+    def _position_embeddings(
+        self,
+        pixel_position_ids: torch.Tensor,
+        padding_positions: torch.Tensor,
+    ) -> torch.Tensor:
+        """Compute position embeddings from 2D position table using one-hot matmul."""
+        clamped_positions = pixel_position_ids.clamp(min=0)
+        one_hot = F.one_hot(clamped_positions, num_classes=self.position_embedding_size)
+        one_hot = one_hot.permute(0, 2, 1, 3).to(self.position_embedding_table)
+        # (B, 2, N, pos_size) @ (2, pos_size, embed_dim) -> (B, 2, N, embed_dim)
+        position_embeddings = one_hot @ self.position_embedding_table
+        # Sum across x and y dimensions
+        position_embeddings = position_embeddings.sum(dim=1)  # (B, N, embed_dim)
+        # Zero out padding positions
+        position_embeddings = torch.where(padding_positions.unsqueeze(-1), 0.0, position_embeddings)
+        return position_embeddings
+
+    def forward(
+        self,
+        pixel_values: torch.Tensor,
+        pixel_position_ids: torch.Tensor,
+        padding_positions: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Args:
+            pixel_values: (B, C, H, W) image tensor, normalized to [0, 1].
+            pixel_position_ids: (B, N, 2) patch position coordinates.
+            padding_positions: (B, N) boolean mask, True for padding.
+
+        Returns:
+            (B, N, embed_dim) patch embeddings with position information.
+        """
+        # Extract patches from image
+        patches = self._extract_patches(pixel_values)
+        # Scale to [-1, 1] (matching HF's `2 * (pixel_values - 0.5)`)
+        patches = 2 * (patches - 0.5)
+        # Project to embedding dim
+        hidden_states = self.input_proj(patches.to(self.input_proj.weight.dtype))
+        # Add position embeddings
+        position_embeddings = self._position_embeddings(pixel_position_ids, padding_positions)
+        return hidden_states + position_embeddings
+
+
+class Gemma4Attention(nn.Module):
+    """Gemma4 Vision Attention with QKV normalization and 2D RoPE.
+
+    Key features:
+    - Separate Q, K, V projections (not fused)
+    - RMSNorm on Q, K (with scale) and V (without scale)
+    - 2D RoPE applied after normalization
+    - Attention scale = 1.0 (since QK are normalized)
+    """
+
+    fused_attn: torch.jit.Final[bool]
+
+    def __init__(
+        self,
+        dim: int,
+        num_heads: int = 12,
+        head_dim: int = 64,
+        num_kv_heads: Optional[int] = None,
+        attn_drop: float = 0.0,
+        proj_drop: float = 0.0,
+        norm_eps: float = 1e-6,
+        use_clipped_linears: bool = False,
+    ):
+        super().__init__()
+        self.num_heads = num_heads
+        self.head_dim = head_dim
+        self.num_kv_heads = num_kv_heads or num_heads
+        self.num_kv_groups = num_heads // self.num_kv_heads
+        self.fused_attn = use_fused_attn()
+
+        self.q_proj = Gemma4ClippableLinear(dim, num_heads * head_dim, use_clipped=use_clipped_linears)
+        self.k_proj = Gemma4ClippableLinear(dim, self.num_kv_heads * head_dim, use_clipped=use_clipped_linears)
+        self.v_proj = Gemma4ClippableLinear(dim, self.num_kv_heads * head_dim, use_clipped=use_clipped_linears)
+        self.o_proj = Gemma4ClippableLinear(num_heads * head_dim, dim, use_clipped=use_clipped_linears)
+
+        self.q_norm = Gemma4RMSNorm(head_dim, eps=norm_eps, with_scale=True)
+        self.k_norm = Gemma4RMSNorm(head_dim, eps=norm_eps, with_scale=True)
+        self.v_norm = Gemma4RMSNorm(head_dim, eps=norm_eps, with_scale=False)
+
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        rope_cos: torch.Tensor,
+        rope_sin: torch.Tensor,
+        position_ids: torch.Tensor,
+        attn_mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        B, N, C = x.shape
+
+        q = self.q_proj(x).view(B, N, self.num_heads, self.head_dim)
+        k = self.k_proj(x).view(B, N, self.num_kv_heads, self.head_dim)
+        v = self.v_proj(x).view(B, N, self.num_kv_heads, self.head_dim)
+
+        # Normalize Q, K, V
+        q = self.q_norm(q)
+        k = self.k_norm(k)
+        v = self.v_norm(v)
+
+        # Apply 2D RoPE to Q and K
+        q = apply_multidimensional_rope(q, rope_cos, rope_sin, ndim=2, unsqueeze_dim=2)
+        k = apply_multidimensional_rope(k, rope_cos, rope_sin, ndim=2, unsqueeze_dim=2)
+
+        # Transpose to (B, heads, N, head_dim)
+        q = q.transpose(1, 2)
+        k = k.transpose(1, 2)
+        v = v.transpose(1, 2)
+
+        # Repeat KV for GQA
+        if self.num_kv_groups > 1:
+            k = k.repeat_interleave(self.num_kv_groups, dim=1)
+            v = v.repeat_interleave(self.num_kv_groups, dim=1)
+
+        if self.fused_attn:
+            x = F.scaled_dot_product_attention(
+                q,
+                k,
+                v,
+                attn_mask=attn_mask,
+                dropout_p=self.attn_drop.p if self.training else 0.0,
+                scale=1.0,
+            )
+        else:
+            # Manual attention with scale=1.0
+            attn = q @ k.transpose(-2, -1)
+            if attn_mask is not None:
+                attn = attn + attn_mask
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = attn @ v
+
+        x = x.transpose(1, 2).reshape(B, N, -1)
+        x = self.o_proj(x)
+        x = self.proj_drop(x)
+        return x
+
+
+class Gemma4GatedMlp(nn.Module):
+    """Gated MLP for Gemma4 Vision Encoder.
+
+    Uses GELUTanh activation: output = down_proj(gelu_tanh(gate_proj(x)) * up_proj(x))
+    """
+
+    def __init__(
+        self,
+        in_features: int,
+        hidden_features: int,
+        act_layer: Callable = None,
+        drop: float = 0.0,
+        use_clipped_linears: bool = False,
+    ):
+        super().__init__()
+        self.gate_proj = Gemma4ClippableLinear(in_features, hidden_features, use_clipped=use_clipped_linears)
+        self.up_proj = Gemma4ClippableLinear(in_features, hidden_features, use_clipped=use_clipped_linears)
+        self.down_proj = Gemma4ClippableLinear(hidden_features, in_features, use_clipped=use_clipped_linears)
+        self.act = act_layer() if act_layer is not None else nn.GELU(approximate='tanh')
+        self.drop = nn.Dropout(drop)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.drop(self.down_proj(self.act(self.gate_proj(x)) * self.up_proj(x)))
+
+
+class Gemma4Block(nn.Module):
+    """Gemma4 Vision Encoder Block with 4-norm sandwich pattern.
+
+    Unlike standard ViT (pre-norm with 2 norms), Gemma4 uses:
+    - input_layernorm (norm1) + post_attention_layernorm (norm2)
+    - pre_feedforward_layernorm (norm3) + post_feedforward_layernorm (norm4)
+    """
+
+    def __init__(
+        self,
+        dim: int,
+        num_heads: int,
+        head_dim: int,
+        intermediate_size: int,
+        num_kv_heads: Optional[int] = None,
+        norm_eps: float = 1e-6,
+        attn_drop: float = 0.0,
+        proj_drop: float = 0.0,
+        drop_path: float = 0.0,
+        act_layer: Callable = None,
+        use_clipped_linears: bool = False,
+    ):
+        super().__init__()
+        self.norm1 = Gemma4RMSNorm(dim, eps=norm_eps)
+        self.attn = Gemma4Attention(
+            dim=dim,
+            num_heads=num_heads,
+            head_dim=head_dim,
+            num_kv_heads=num_kv_heads,
+            attn_drop=attn_drop,
+            proj_drop=proj_drop,
+            norm_eps=norm_eps,
+            use_clipped_linears=use_clipped_linears,
+        )
+        self.norm2 = Gemma4RMSNorm(dim, eps=norm_eps)
+        self.norm3 = Gemma4RMSNorm(dim, eps=norm_eps)
+        self.mlp = Gemma4GatedMlp(
+            in_features=dim,
+            hidden_features=intermediate_size,
+            act_layer=act_layer,
+            use_clipped_linears=use_clipped_linears,
+        )
+        self.norm4 = Gemma4RMSNorm(dim, eps=norm_eps)
+        self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        rope_cos: torch.Tensor,
+        rope_sin: torch.Tensor,
+        position_ids: torch.Tensor,
+        attn_mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        # Attention with sandwich norm
+        residual = x
+        x = self.norm1(x)
+        x = self.attn(x, rope_cos, rope_sin, position_ids, attn_mask=attn_mask)
+        x = self.norm2(x)
+        x = residual + self.drop_path(x)
+
+        # MLP with sandwich norm
+        residual = x
+        x = self.norm3(x)
+        x = self.mlp(x)
+        x = self.norm4(x)
+        x = residual + self.drop_path(x)
+        return x
+
+
+class Gemma4VisionPooler(nn.Module):
+    """Spatial pooling for Gemma4 vision encoder output.
+
+    Pools patches by averaging within k×k grid cells based on position coordinates.
+    Output is scaled by sqrt(hidden_size).
+    """
+
+    def __init__(self, hidden_size: int, pooling_kernel_size: int = 3):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.root_hidden_size = hidden_size**0.5
+        self.pooling_kernel_size = pooling_kernel_size
+
+    def _avg_pool_by_positions(
+        self,
+        hidden_states: torch.Tensor,
+        pixel_position_ids: torch.Tensor,
+        length: int,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """2D spatial pooling by position grid."""
+        input_seq_len = hidden_states.shape[1]
+        k = int((input_seq_len // length) ** 0.5)
+        k_squared = k * k
+
+        clamped_positions = pixel_position_ids.clamp(min=0)
+        max_x = clamped_positions[..., 0].max(dim=-1, keepdim=True)[0] + 1
+        kernel_idxs = torch.div(clamped_positions, k, rounding_mode='floor')
+        kernel_idxs = kernel_idxs[..., 0] + (max_x // k) * kernel_idxs[..., 1]
+
+        weights = F.one_hot(kernel_idxs.long(), length).float() / k_squared
+        output = weights.transpose(1, 2) @ hidden_states.float()
+        mask = torch.logical_not((weights == 0).all(dim=1))
+        return output.to(hidden_states.dtype), mask
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        pixel_position_ids: torch.Tensor,
+        padding_positions: torch.Tensor,
+        output_length: int,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Args:
+            hidden_states: (B, N, D) encoder output.
+            pixel_position_ids: (B, N, 2) patch position coordinates.
+            padding_positions: (B, N) boolean mask, True for padding.
+            output_length: Number of output tokens after pooling.
+
+        Returns:
+            Tuple of:
+            - pooled hidden states (B, output_length, D)
+            - pooler mask (B, output_length) True for valid tokens
+        """
+        hidden_states = hidden_states.masked_fill(padding_positions.unsqueeze(-1), 0.0)
+
+        if hidden_states.shape[1] != output_length:
+            hidden_states, pooler_mask = self._avg_pool_by_positions(
+                hidden_states,
+                pixel_position_ids,
+                output_length,
+            )
+        else:
+            pooler_mask = ~padding_positions
+
+        hidden_states = hidden_states * self.root_hidden_size
+        return hidden_states, pooler_mask
+
+
+class Gemma4Vit(nn.Module):
+    """Gemma4 Vision Transformer.
+
+    A custom ViT used as the image encoder in Google's Gemma 4 multimodal model.
+    Features 2D RoPE, gated MLP, QKV normalization, and 4-norm sandwich blocks.
+    """
+
+    def __init__(
+        self,
+        img_size: Union[int, Tuple[int, int]] = 896,
+        patch_size: int = 16,
+        in_chans: int = 3,
+        num_classes: int = 0,
+        global_pool: str = 'gemma4',
+        embed_dim: int = 768,
+        depth: int = 16,
+        num_heads: int = 12,
+        head_dim: int = 64,
+        num_kv_heads: Optional[int] = None,
+        intermediate_size: int = 3072,
+        norm_eps: float = 1e-6,
+        rope_theta: float = 100.0,
+        position_embedding_size: int = 10240,
+        pooling_kernel_size: int = 3,
+        standardize: bool = False,
+        use_clipped_linears: bool = False,
+        drop_rate: float = 0.0,
+        proj_drop_rate: float = 0.0,
+        attn_drop_rate: float = 0.0,
+        drop_path_rate: float = 0.0,
+        act_layer: Optional[Callable] = None,
+    ):
+        super().__init__()
+        self.num_classes = num_classes
+        self.global_pool = global_pool
+        self.num_features = self.head_hidden_size = self.embed_dim = embed_dim
+        self.num_prefix_tokens = 0
+        self.grad_checkpointing = False
+        self.patch_size = patch_size
+        self.pooling_kernel_size = pooling_kernel_size
+        self.standardize = standardize
+        self.use_clipped_linears = use_clipped_linears
+
+        act_layer = act_layer or partial(nn.GELU, approximate='tanh')
+
+        # Patch embedding
+        self.patch_embed = Gemma4PatchEmbed(
+            patch_size=patch_size,
+            in_chans=in_chans,
+            embed_dim=embed_dim,
+            position_embedding_size=position_embedding_size,
+        )
+
+        # 2D RoPE
+        self.rotary_emb = Gemma4RotaryEmbedding2D(
+            head_dim=head_dim,
+            rope_theta=rope_theta,
+        )
+
+        # Transformer blocks
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]
+        self.blocks = nn.ModuleList(
+            [
+                Gemma4Block(
+                    dim=embed_dim,
+                    num_heads=num_heads,
+                    head_dim=head_dim,
+                    num_kv_heads=num_kv_heads,
+                    intermediate_size=intermediate_size,
+                    norm_eps=norm_eps,
+                    attn_drop=attn_drop_rate,
+                    proj_drop=proj_drop_rate,
+                    drop_path=dpr[i],
+                    act_layer=act_layer,
+                    use_clipped_linears=use_clipped_linears,
+                )
+                for i in range(depth)
+            ]
+        )
+
+        # Pooler
+        self.pooler = Gemma4VisionPooler(
+            hidden_size=embed_dim,
+            pooling_kernel_size=pooling_kernel_size,
+        )
+
+        # Optional standardization buffers (used in 31B variant)
+        if standardize:
+            self.register_buffer('std_bias', torch.zeros(embed_dim))
+            self.register_buffer('std_scale', torch.ones(embed_dim))
+        else:
+            self.std_bias = None
+            self.std_scale = None
+
+        # Classification head
+        self.head_drop = nn.Dropout(drop_rate)
+        self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+
+        # Feature info for intermediate extraction
+        self.feature_info = [dict(num_chs=embed_dim, reduction=patch_size, module=f'blocks.{i}') for i in range(depth)]
+
+    @torch.jit.ignore
+    def no_weight_decay(self) -> Set[str]:
+        return {'patch_embed.position_embedding_table'}
+
+    @torch.jit.ignore
+    def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
+        return dict(
+            stem=r'^patch_embed|^rotary_emb',
+            blocks=[(r'^blocks\.(\d+)', None), (r'^pooler|^std_', (99999,))],
+        )
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable: bool = True) -> None:
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
+    def get_classifier(self) -> nn.Module:
+        return self.head
+
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
+        self.num_classes = num_classes
+        if global_pool is not None:
+            self.global_pool = global_pool
+        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+
+    def _create_position_ids(
+        self,
+        batch_size: int,
+        height: int,
+        width: int,
+        device: torch.device,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Create default grid position IDs and padding mask when not provided."""
+        pH = height // self.patch_size
+        pW = width // self.patch_size
+        # Create grid position IDs: (pH*pW, 2) with (x, y) coordinates
+        ys = torch.arange(pH, device=device)
+        xs = torch.arange(pW, device=device)
+        grid_y, grid_x = torch.meshgrid(ys, xs, indexing='ij')
+        position_ids = torch.stack([grid_x.flatten(), grid_y.flatten()], dim=-1)  # (N, 2)
+        position_ids = position_ids.unsqueeze(0).expand(batch_size, -1, -1)  # (B, N, 2)
+        padding_positions = torch.zeros(batch_size, pH * pW, dtype=torch.bool, device=device)
+        return position_ids, padding_positions
+
+    def forward_features(
+        self,
+        x: torch.Tensor,
+        pixel_position_ids: Optional[torch.Tensor] = None,
+        padding_positions: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        B, C, H, W = x.shape
+
+        # Create position IDs if not provided
+        if pixel_position_ids is None:
+            pixel_position_ids, padding_positions = self._create_position_ids(B, H, W, x.device)
+        if padding_positions is None:
+            padding_positions = (pixel_position_ids == -1).all(dim=-1)
+
+        # Patch embedding
+        x = self.patch_embed(x, pixel_position_ids, padding_positions)
+
+        # Compute RoPE
+        rope_cos, rope_sin = self.rotary_emb(x, pixel_position_ids)
+
+        # Create bidirectional attention mask from padding
+        attn_mask = None
+        if padding_positions.any():
+            # (B, N) -> (B, 1, 1, N) for broadcast with (B, H, N, N)
+            attn_mask = torch.zeros(B, 1, 1, x.shape[1], device=x.device, dtype=x.dtype)
+            attn_mask.masked_fill_(padding_positions[:, None, None, :], float('-inf'))
+
+        # Encoder blocks
+        for blk in self.blocks:
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(blk, x, rope_cos, rope_sin, pixel_position_ids, attn_mask)
+            else:
+                x = blk(x, rope_cos, rope_sin, pixel_position_ids, attn_mask=attn_mask)
+
+        return x
+
+    def forward_head(
+        self,
+        x: torch.Tensor,
+        pixel_position_ids: Optional[torch.Tensor] = None,
+        padding_positions: Optional[torch.Tensor] = None,
+        pre_logits: bool = False,
+    ) -> torch.Tensor:
+        if self.global_pool == 'gemma4' and pixel_position_ids is not None:
+            output_length = x.shape[1] // (self.pooling_kernel_size**2)
+            x, pooler_mask = self.pooler(x, pixel_position_ids, padding_positions, output_length)
+            if self.standardize and self.std_bias is not None:
+                x = (x - self.std_bias) * self.std_scale
+        elif self.global_pool == 'avg':
+            if padding_positions is not None:
+                x = x.masked_fill(padding_positions.unsqueeze(-1), 0.0)
+                x = x.sum(dim=1) / (~padding_positions).sum(dim=1, keepdim=True).clamp(min=1)
+            else:
+                x = x.mean(dim=1)
+
+        x = self.head_drop(x)
+        return x if pre_logits else self.head(x)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        pixel_position_ids: Optional[torch.Tensor] = None,
+        padding_positions: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        B, C, H, W = x.shape
+
+        if pixel_position_ids is None:
+            pixel_position_ids, padding_positions = self._create_position_ids(B, H, W, x.device)
+        if padding_positions is None:
+            padding_positions = (pixel_position_ids == -1).all(dim=-1)
+
+        x = self.forward_features(x, pixel_position_ids, padding_positions)
+        x = self.forward_head(x, pixel_position_ids, padding_positions)
+        return x
+
+    def forward_intermediates(
+        self,
+        x: torch.Tensor,
+        pixel_position_ids: Optional[torch.Tensor] = None,
+        padding_positions: Optional[torch.Tensor] = None,
+        indices: Optional[Union[int, List[int]]] = None,
+        norm: bool = False,
+        stop_early: bool = False,
+        output_fmt: str = 'NCHW',
+        intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features returning intermediates.
+
+        Args:
+            x: Input image tensor (B, C, H, W).
+            pixel_position_ids: (B, N, 2) patch positions.
+            padding_positions: (B, N) padding mask.
+            indices: Block indices to return intermediates for.
+            norm: Not used (no final norm in Gemma4 encoder).
+            stop_early: Stop iterating after last needed intermediate.
+            output_fmt: Output format ('NCHW' or 'NLC').
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            List of intermediate tensors, optionally with final output.
+        """
+        assert output_fmt in ('NCHW', 'NLC')
+        reshape = output_fmt == 'NCHW'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.blocks), indices)
+
+        B, _, height, width = x.shape
+
+        if pixel_position_ids is None:
+            pixel_position_ids, padding_positions = self._create_position_ids(B, height, width, x.device)
+        if padding_positions is None:
+            padding_positions = (pixel_position_ids == -1).all(dim=-1)
+
+        x = self.patch_embed(x, pixel_position_ids, padding_positions)
+        rope_cos, rope_sin = self.rotary_emb(x, pixel_position_ids)
+
+        attn_mask = None
+        if padding_positions.any():
+            attn_mask = torch.zeros(B, 1, 1, x.shape[1], device=x.device, dtype=x.dtype)
+            attn_mask.masked_fill_(padding_positions[:, None, None, :], float('-inf'))
+
+        if torch.jit.is_scripting() or not stop_early:
+            blocks = self.blocks
+        else:
+            blocks = self.blocks[: max_index + 1]
+
+        for i, blk in enumerate(blocks):
+            x = blk(x, rope_cos, rope_sin, pixel_position_ids, attn_mask=attn_mask)
+            if i in take_indices:
+                intermediates.append(x)
+
+        if reshape:
+            pH = height // self.patch_size
+            pW = width // self.patch_size
+            intermediates = [y.reshape(B, pH, pW, -1).permute(0, 3, 1, 2).contiguous() for y in intermediates]
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+        self,
+        indices: Union[int, List[int]] = 1,
+        prune_norm: bool = False,
+        prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates."""
+        take_indices, max_index = feature_take_indices(len(self.blocks), indices)
+        self.blocks = self.blocks[: max_index + 1]
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
+
+
+def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: Gemma4Vit) -> Dict[str, torch.Tensor]:
+    """Convert HuggingFace Transformers Gemma4 vision encoder weights to timm format.
+
+    Handles key remapping from HF naming conventions to timm naming conventions.
+    Supports both `model.vision_tower.` (actual) and `model.vision_model.` (docs) prefixes.
+    Preserves ClippableLinear structure (.linear.weight and clamp buffers) for E4B variant.
+    """
+    out_dict = {}
+
+    # Detect prefix from keys
+    hf_prefixes = ('model.vision_tower.', 'model.vision_model.', 'vision_model.', 'vision_tower.')
+
+    for k, v in state_dict.items():
+        # Check if this is a vision key
+        matched_prefix = None
+        for prefix in hf_prefixes:
+            if k.startswith(prefix):
+                matched_prefix = prefix
+                break
+
+        if matched_prefix is None:
+            # Already in timm format — pass through
+            if k.startswith(('patch_embed.', 'blocks.', 'std_', 'head.', 'pooler.', 'rotary_emb.')):
+                out_dict[k] = v
+            continue
+
+        # Strip HF prefix
+        new_k = k[len(matched_prefix) :]
+
+        # Skip rotary embedding buffers (recomputed in model)
+        if 'rotary_emb' in new_k:
+            continue
+
+        # Remap patch embedder
+        new_k = new_k.replace('patch_embedder.', 'patch_embed.')
+
+        # Remap encoder layers
+        new_k = new_k.replace('encoder.layers.', 'blocks.')
+
+        # Remap norm layers
+        new_k = new_k.replace('.input_layernorm.', '.norm1.')
+        new_k = new_k.replace('.post_attention_layernorm.', '.norm2.')
+        new_k = new_k.replace('.pre_feedforward_layernorm.', '.norm3.')
+        new_k = new_k.replace('.post_feedforward_layernorm.', '.norm4.')
+
+        # Remap attention
+        new_k = new_k.replace('.self_attn.', '.attn.')
+
+        # Note: .linear.weight and clamp buffers (input_min etc.) are preserved as-is
+        # since our model uses Gemma4ClippableLinear which has the same structure.
+
+        out_dict[new_k] = v
+
+    return out_dict
+
+
+def _create_gemma4_vit(variant: str, pretrained: bool = False, **kwargs) -> Gemma4Vit:
+    out_indices = kwargs.pop('out_indices', 3)
+    model = build_model_with_cfg(
+        Gemma4Vit,
+        variant,
+        pretrained,
+        pretrained_filter_fn=checkpoint_filter_fn,
+        feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
+        **kwargs,
+    )
+    return model
+
+
+def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
+    return {
+        'url': url,
+        'num_classes': 0,
+        'input_size': (3, 896, 896),
+        'pool_size': None,
+        'crop_pct': 1.0,
+        'interpolation': 'bicubic',
+        'fixed_input_size': False,
+        'mean': (0.5, 0.5, 0.5),
+        'std': (0.5, 0.5, 0.5),
+        'first_conv': 'patch_embed.input_proj',
+        'classifier': 'head',
+        **kwargs,
+    }
+
+
+default_cfgs = generate_default_cfgs(
+    {
+        'gemma4_vit_e4b.gemma4_e4b': _cfg(
+            hf_hub_id='developer0hye/gemma4_vit_e4b',
+            license='apache-2.0',
+        ),
+        'gemma4_vit_31b.gemma4_31b': _cfg(
+            hf_hub_id='developer0hye/gemma4_vit_31b',
+            license='apache-2.0',
+        ),
+    }
+)
+
+
+@register_model
+def gemma4_vit_e4b(pretrained: bool = False, **kwargs) -> Gemma4Vit:
+    """Gemma4 Vision Encoder from the E4B (4B) model variant (~150M params)."""
+    model_args = dict(
+        embed_dim=768,
+        depth=16,
+        num_heads=12,
+        head_dim=64,
+        intermediate_size=3072,
+        standardize=False,
+        use_clipped_linears=True,
+    )
+    return _create_gemma4_vit('gemma4_vit_e4b', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def gemma4_vit_31b(pretrained: bool = False, **kwargs) -> Gemma4Vit:
+    """Gemma4 Vision Encoder from the 31B model variant (~550M params)."""
+    model_args = dict(
+        embed_dim=1152,
+        depth=27,
+        num_heads=16,
+        head_dim=72,
+        intermediate_size=4304,
+        standardize=True,
+    )
+    return _create_gemma4_vit('gemma4_vit_31b', pretrained=pretrained, **dict(model_args, **kwargs))
