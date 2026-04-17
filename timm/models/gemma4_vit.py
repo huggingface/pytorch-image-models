@@ -209,11 +209,14 @@ class Gemma4PatchEmbed(nn.Module):
 
     def _position_embeddings(
         self,
-        pixel_position_ids: torch.Tensor,
+        position_ids: torch.Tensor,
         padding_positions: torch.Tensor,
     ) -> torch.Tensor:
-        """Compute position embeddings from 2D position table using one-hot matmul."""
-        clamped_positions = pixel_position_ids.clamp(min=0)
+        """Compute position embeddings from 2D position table using one-hot matmul.
+
+        ``position_ids`` follows the Gemma4-internal ``(x, y)`` convention.
+        """
+        clamped_positions = position_ids.clamp(min=0)
         one_hot = F.one_hot(clamped_positions, num_classes=self.position_embedding_size)
         one_hot = one_hot.permute(0, 2, 1, 3).to(self.position_embedding_table)
         # (B, 2, N, pos_size) @ (2, pos_size, embed_dim) -> (B, 2, N, embed_dim)
@@ -224,30 +227,43 @@ class Gemma4PatchEmbed(nn.Module):
         position_embeddings = torch.where(padding_positions.unsqueeze(-1), 0.0, position_embeddings)
         return position_embeddings
 
+    def _project_patches(
+        self,
+        patches: torch.Tensor,
+        position_ids: torch.Tensor,
+        padding_positions: torch.Tensor,
+    ) -> torch.Tensor:
+        """Project pre-extracted patches and add 2D position embeddings.
+
+        Args:
+            patches: (B, N, C*P*P) patches in Gemma4-internal ``C-P-P`` flatten order.
+            position_ids: (B, N, 2) patch coordinates in Gemma4-internal ``(x, y)`` convention.
+            padding_positions: (B, N) boolean mask, True for padding tokens.
+        """
+        # Scale to [-1, 1] (matching HF's `2 * (pixel_values - 0.5)`)
+        patches = 2 * (patches - 0.5)
+        hidden_states = self.input_proj(patches.to(self.input_proj.weight.dtype))
+        position_embeddings = self._position_embeddings(position_ids, padding_positions)
+        return hidden_states + position_embeddings
+
     def forward(
         self,
         pixel_values: torch.Tensor,
-        pixel_position_ids: torch.Tensor,
+        position_ids: torch.Tensor,
         padding_positions: torch.Tensor,
     ) -> torch.Tensor:
-        """
+        """Raw-image patch-embedding entry point (kept for the ``(B, C, H, W)`` path).
+
         Args:
             pixel_values: (B, C, H, W) image tensor, normalized to [0, 1].
-            pixel_position_ids: (B, N, 2) patch position coordinates.
+            position_ids: (B, N, 2) patch position coordinates (Gemma4-internal ``(x, y)``).
             padding_positions: (B, N) boolean mask, True for padding.
 
         Returns:
             (B, N, embed_dim) patch embeddings with position information.
         """
-        # Extract patches from image
         patches = self._extract_patches(pixel_values)
-        # Scale to [-1, 1] (matching HF's `2 * (pixel_values - 0.5)`)
-        patches = 2 * (patches - 0.5)
-        # Project to embedding dim
-        hidden_states = self.input_proj(patches.to(self.input_proj.weight.dtype))
-        # Add position embeddings
-        position_embeddings = self._position_embeddings(pixel_position_ids, padding_positions)
-        return hidden_states + position_embeddings
+        return self._project_patches(patches, position_ids, padding_positions)
 
 
 class Gemma4Attention(nn.Module):
@@ -459,15 +475,18 @@ class Gemma4VisionPooler(nn.Module):
     def _avg_pool_by_positions(
         self,
         hidden_states: torch.Tensor,
-        pixel_position_ids: torch.Tensor,
+        position_ids: torch.Tensor,
         length: int,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """2D spatial pooling by position grid."""
+        """2D spatial pooling by position grid.
+
+        ``position_ids`` follows the Gemma4-internal ``(x, y)`` convention.
+        """
         input_seq_len = hidden_states.shape[1]
         k = int((input_seq_len // length) ** 0.5)
         k_squared = k * k
 
-        clamped_positions = pixel_position_ids.clamp(min=0)
+        clamped_positions = position_ids.clamp(min=0)
         max_x = clamped_positions[..., 0].max(dim=-1, keepdim=True)[0] + 1
         kernel_idxs = torch.div(clamped_positions, k, rounding_mode='floor')
         kernel_idxs = kernel_idxs[..., 0] + (max_x // k) * kernel_idxs[..., 1]
@@ -480,14 +499,14 @@ class Gemma4VisionPooler(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        pixel_position_ids: torch.Tensor,
+        position_ids: torch.Tensor,
         padding_positions: torch.Tensor,
         output_length: int,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Args:
             hidden_states: (B, N, D) encoder output.
-            pixel_position_ids: (B, N, 2) patch position coordinates.
+            position_ids: (B, N, 2) patch coordinates in Gemma4-internal ``(x, y)`` convention.
             padding_positions: (B, N) boolean mask, True for padding.
             output_length: Number of output tokens after pooling.
 
@@ -501,7 +520,7 @@ class Gemma4VisionPooler(nn.Module):
         if hidden_states.shape[1] != output_length:
             hidden_states, pooler_mask = self._avg_pool_by_positions(
                 hidden_states,
-                pixel_position_ids,
+                position_ids,
                 output_length,
             )
         else:
@@ -637,71 +656,147 @@ class Gemma4Vit(nn.Module):
             self.global_pool = global_pool
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
-    def _create_position_ids(
+    def _default_patch_coord(
         self,
         batch_size: int,
-        height: int,
-        width: int,
+        pH: int,
+        pW: int,
         device: torch.device,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Create default grid position IDs and padding mask when not provided."""
-        pH = height // self.patch_size
-        pW = width // self.patch_size
-        # Create grid position IDs: (pH*pW, 2) with (x, y) coordinates
+        """Create default grid patch coords + valid mask in NaFlex external (y, x) convention."""
         ys = torch.arange(pH, device=device)
         xs = torch.arange(pW, device=device)
         grid_y, grid_x = torch.meshgrid(ys, xs, indexing='ij')
-        position_ids = torch.stack([grid_x.flatten(), grid_y.flatten()], dim=-1)  # (N, 2)
-        position_ids = position_ids.unsqueeze(0).expand(batch_size, -1, -1)  # (B, N, 2)
-        padding_positions = torch.zeros(batch_size, pH * pW, dtype=torch.bool, device=device)
-        return position_ids, padding_positions
+        patch_coord = torch.stack([grid_y.flatten(), grid_x.flatten()], dim=-1)  # (N, 2) (y, x)
+        patch_coord = patch_coord.unsqueeze(0).expand(batch_size, -1, -1)
+        patch_valid = torch.ones(batch_size, pH * pW, dtype=torch.bool, device=device)
+        return patch_coord, patch_valid
+
+    def _naflex_to_internal_patches(self, x: torch.Tensor) -> torch.Tensor:
+        """Convert NaFlex pre-patched layout to Gemma4 internal C-P-P flat order.
+
+        Accepts ``(B, N, P*P*C)`` (NaFlex P-P-C flat) or ``(B, N, Ph, Pw, C)`` and
+        returns ``(B, N, C*P*P)`` in Gemma4's C-P-P flat order, ready for ``input_proj``.
+        """
+        P = self.patch_size
+        if x.ndim == 5:
+            B, N, Ph, Pw, C = x.shape
+            return x.permute(0, 1, 4, 2, 3).reshape(B, N, C * Ph * Pw)
+        if x.ndim == 3:
+            B, N, PPC = x.shape
+            C = PPC // (P * P)
+            return x.reshape(B, N, P, P, C).permute(0, 1, 4, 2, 3).reshape(B, N, C * P * P)
+        raise ValueError(f"Pre-patchified input must have ndim in (3, 5); got {x.ndim}")
+
+    def _resolve_inputs(
+        self,
+        x: Union[torch.Tensor, Dict[str, torch.Tensor]],
+        patch_coord: Optional[torch.Tensor],
+        patch_valid: Optional[torch.Tensor],
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Normalize inputs from NaFlex (dict or tensor + coords) to internal form.
+
+        Returns:
+            x: tensor (raw image or pre-patched), with ``dict`` unwrapped.
+            position_ids: (B, N, 2) Gemma4-internal (x, y) coords.
+            padding_positions: (B, N) True for padding tokens.
+            patch_coord: (B, N, 2) external NaFlex (y, x) coords (preserved for downstream).
+            patch_valid: (B, N) True for valid tokens.
+        """
+        if isinstance(x, dict):
+            patch_coord = x.get('patch_coord', patch_coord)
+            patch_valid = x.get('patch_valid', patch_valid)
+            x = x['patches']
+
+        if x.ndim == 4 and patch_coord is None:
+            B, _, H, W = x.shape
+            pH = H // self.patch_size
+            pW = W // self.patch_size
+            patch_coord, patch_valid = self._default_patch_coord(B, pH, pW, x.device)
+
+        if patch_coord is None:
+            raise ValueError("patch_coord is required for pre-patchified input.")
+
+        if patch_valid is None:
+            sentinel = (patch_coord == -1).all(dim=-1)
+            if sentinel.any():
+                patch_valid = ~sentinel
+            else:
+                patch_valid = torch.ones(patch_coord.shape[:2], dtype=torch.bool, device=patch_coord.device)
+
+        # External NaFlex (y, x) → Gemma4 internal (x, y)
+        position_ids = patch_coord.flip(dims=(-1,))
+        padding_positions = ~patch_valid
+        return x, position_ids, padding_positions, patch_coord, patch_valid
+
+    def _embed_and_encode(
+        self,
+        x: torch.Tensor,
+        position_ids: torch.Tensor,
+        padding_positions: torch.Tensor,
+        block_callback: Optional[Callable[[int, torch.Tensor], None]] = None,
+        max_block_index: Optional[int] = None,
+    ) -> torch.Tensor:
+        """Shared patch-embed + RoPE + encoder-block pipeline.
+
+        ``x`` may be either a raw image ``(B, C, H, W)`` or a pre-patched tensor
+        (``(B, N, P*P*C)`` / ``(B, N, Ph, Pw, C)``).
+        """
+        if x.ndim == 4:
+            x = self.patch_embed(x, position_ids, padding_positions)
+        else:
+            patches = self._naflex_to_internal_patches(x)
+            x = self.patch_embed._project_patches(patches, position_ids, padding_positions)
+
+        B, N = x.shape[:2]
+        rope_cos, rope_sin = self.rotary_emb(x, position_ids)
+
+        attn_mask: Optional[torch.Tensor] = None
+        if padding_positions.any():
+            # Column-only additive mask broadcast over heads (B, 1, 1, N) -> (B, heads, q, N).
+            # Matches HF Gemma4 implementation and preserves bit-perfect equivalence.
+            attn_mask = torch.zeros(B, 1, 1, N, device=x.device, dtype=x.dtype)
+            attn_mask.masked_fill_(padding_positions[:, None, None, :], float('-inf'))
+
+        if max_block_index is None:
+            blocks = self.blocks
+        else:
+            blocks = self.blocks[: max_block_index + 1]
+
+        for i, blk in enumerate(blocks):
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(blk, x, rope_cos, rope_sin, position_ids, attn_mask)
+            else:
+                x = blk(x, rope_cos, rope_sin, position_ids, attn_mask=attn_mask)
+            if block_callback is not None:
+                block_callback(i, x)
+
+        return x
 
     def forward_features(
         self,
-        x: torch.Tensor,
-        pixel_position_ids: Optional[torch.Tensor] = None,
-        padding_positions: Optional[torch.Tensor] = None,
+        x: Union[torch.Tensor, Dict[str, torch.Tensor]],
+        patch_coord: Optional[torch.Tensor] = None,
+        patch_valid: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        B, C, H, W = x.shape
-
-        # Create position IDs if not provided
-        if pixel_position_ids is None:
-            pixel_position_ids, padding_positions = self._create_position_ids(B, H, W, x.device)
-        if padding_positions is None:
-            padding_positions = (pixel_position_ids == -1).all(dim=-1)
-
-        # Patch embedding
-        x = self.patch_embed(x, pixel_position_ids, padding_positions)
-
-        # Compute RoPE
-        rope_cos, rope_sin = self.rotary_emb(x, pixel_position_ids)
-
-        # Create bidirectional attention mask from padding
-        attn_mask = None
-        if padding_positions.any():
-            # (B, N) -> (B, 1, 1, N) for broadcast with (B, H, N, N)
-            attn_mask = torch.zeros(B, 1, 1, x.shape[1], device=x.device, dtype=x.dtype)
-            attn_mask.masked_fill_(padding_positions[:, None, None, :], float('-inf'))
-
-        # Encoder blocks
-        for blk in self.blocks:
-            if self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint(blk, x, rope_cos, rope_sin, pixel_position_ids, attn_mask)
-            else:
-                x = blk(x, rope_cos, rope_sin, pixel_position_ids, attn_mask=attn_mask)
-
-        return x
+        x, position_ids, padding_positions, _, _ = self._resolve_inputs(x, patch_coord, patch_valid)
+        return self._embed_and_encode(x, position_ids, padding_positions)
 
     def forward_head(
         self,
         x: torch.Tensor,
-        pixel_position_ids: Optional[torch.Tensor] = None,
-        padding_positions: Optional[torch.Tensor] = None,
+        patch_coord: Optional[torch.Tensor] = None,
+        patch_valid: Optional[torch.Tensor] = None,
         pre_logits: bool = False,
     ) -> torch.Tensor:
-        if self.global_pool == 'gemma4' and pixel_position_ids is not None:
-            output_length = x.shape[1] // (self.pooling_kernel_size**2)
-            x, pooler_mask = self.pooler(x, pixel_position_ids, padding_positions, output_length)
+        position_ids = patch_coord.flip(dims=(-1,)) if patch_coord is not None else None
+        padding_positions = ~patch_valid if patch_valid is not None else None
+
+        if self.global_pool == 'gemma4' and position_ids is not None:
+            if padding_positions is None:
+                padding_positions = torch.zeros(x.shape[:2], dtype=torch.bool, device=x.device)
+            output_length = x.shape[1] // (self.pooling_kernel_size ** 2)
+            x, _ = self.pooler(x, position_ids, padding_positions, output_length)
             if self.standardize and self.std_bias is not None:
                 x = (x - self.std_bias) * self.std_scale
         elif self.global_pool == 'avg':
@@ -716,26 +811,21 @@ class Gemma4Vit(nn.Module):
 
     def forward(
         self,
-        x: torch.Tensor,
-        pixel_position_ids: Optional[torch.Tensor] = None,
-        padding_positions: Optional[torch.Tensor] = None,
+        x: Union[torch.Tensor, Dict[str, torch.Tensor]],
+        patch_coord: Optional[torch.Tensor] = None,
+        patch_valid: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        B, C, H, W = x.shape
-
-        if pixel_position_ids is None:
-            pixel_position_ids, padding_positions = self._create_position_ids(B, H, W, x.device)
-        if padding_positions is None:
-            padding_positions = (pixel_position_ids == -1).all(dim=-1)
-
-        x = self.forward_features(x, pixel_position_ids, padding_positions)
-        x = self.forward_head(x, pixel_position_ids, padding_positions)
-        return x
+        x, position_ids, padding_positions, patch_coord, patch_valid = self._resolve_inputs(
+            x, patch_coord, patch_valid,
+        )
+        features = self._embed_and_encode(x, position_ids, padding_positions)
+        return self.forward_head(features, patch_coord=patch_coord, patch_valid=patch_valid)
 
     def forward_intermediates(
         self,
-        x: torch.Tensor,
-        pixel_position_ids: Optional[torch.Tensor] = None,
-        padding_positions: Optional[torch.Tensor] = None,
+        x: Union[torch.Tensor, Dict[str, torch.Tensor]],
+        patch_coord: Optional[torch.Tensor] = None,
+        patch_valid: Optional[torch.Tensor] = None,
         indices: Optional[Union[int, List[int]]] = None,
         norm: bool = False,
         stop_early: bool = False,
@@ -745,51 +835,47 @@ class Gemma4Vit(nn.Module):
         """Forward features returning intermediates.
 
         Args:
-            x: Input image tensor (B, C, H, W).
-            pixel_position_ids: (B, N, 2) patch positions.
-            padding_positions: (B, N) padding mask.
+            x: Input tensor ``(B, C, H, W)`` or NaFlex pre-patchified tensor/dict.
+            patch_coord: ``(B, N, 2)`` patch coords in NaFlex external (y, x) convention.
+            patch_valid: ``(B, N)`` boolean mask, True for valid tokens.
             indices: Block indices to return intermediates for.
             norm: Not used (no final norm in Gemma4 encoder).
             stop_early: Stop iterating after last needed intermediate.
-            output_fmt: Output format ('NCHW' or 'NLC').
+            output_fmt: Output format ('NCHW' or 'NLC'). NCHW requires a fixed full grid.
             intermediates_only: Only return intermediate features.
-
-        Returns:
-            List of intermediate tensors, optionally with final output.
         """
         assert output_fmt in ('NCHW', 'NLC')
         reshape = output_fmt == 'NCHW'
-        intermediates = []
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
 
-        B, _, height, width = x.shape
+        x, position_ids, padding_positions, _, _ = self._resolve_inputs(x, patch_coord, patch_valid)
 
-        if pixel_position_ids is None:
-            pixel_position_ids, padding_positions = self._create_position_ids(B, height, width, x.device)
-        if padding_positions is None:
-            padding_positions = (pixel_position_ids == -1).all(dim=-1)
+        intermediates: List[torch.Tensor] = []
+        raw_input_ndim = x.ndim
 
-        x = self.patch_embed(x, pixel_position_ids, padding_positions)
-        rope_cos, rope_sin = self.rotary_emb(x, pixel_position_ids)
-
-        attn_mask = None
-        if padding_positions.any():
-            attn_mask = torch.zeros(B, 1, 1, x.shape[1], device=x.device, dtype=x.dtype)
-            attn_mask.masked_fill_(padding_positions[:, None, None, :], float('-inf'))
-
-        if torch.jit.is_scripting() or not stop_early:
-            blocks = self.blocks
-        else:
-            blocks = self.blocks[: max_index + 1]
-
-        for i, blk in enumerate(blocks):
-            x = blk(x, rope_cos, rope_sin, pixel_position_ids, attn_mask=attn_mask)
+        def _cb(i: int, y: torch.Tensor) -> None:
             if i in take_indices:
-                intermediates.append(x)
+                intermediates.append(y)
+
+        max_block_index = None
+        if stop_early and not torch.jit.is_scripting():
+            max_block_index = max_index
+
+        x = self._embed_and_encode(
+            x,
+            position_ids,
+            padding_positions,
+            block_callback=_cb,
+            max_block_index=max_block_index,
+        )
 
         if reshape:
-            pH = height // self.patch_size
-            pW = width // self.patch_size
+            if raw_input_ndim != 4:
+                raise ValueError("output_fmt='NCHW' requires a raw image (B, C, H, W) input.")
+            # Recover grid from internal position_ids (x, y) max.
+            B = position_ids.shape[0]
+            pW = int(position_ids[..., 0].max().item()) + 1
+            pH = int(position_ids[..., 1].max().item()) + 1
             intermediates = [y.reshape(B, pH, pW, -1).permute(0, 3, 1, 2).contiguous() for y in intermediates]
 
         if intermediates_only:
