@@ -707,14 +707,8 @@ class Gemma4Vit(nn.Module):
         x: Union[torch.Tensor, Dict[str, torch.Tensor]],
         patch_coord: Optional[torch.Tensor],
         patch_valid: Optional[torch.Tensor],
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, bool]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Normalize inputs from NaFlex (dict or tensor + coords) to internal form.
-
-        The raw-image-vs-pre-patched decision is made purely from Python-level state
-        (``isinstance(x, dict)`` and ``patch_coord is None``) so ``torch.fx`` can
-        trace the ``(B, C, H, W)`` path without evaluating ``x.ndim`` under control
-        flow. Callers forward the returned ``is_raw_image`` flag to
-        ``_embed_and_encode`` instead of re-inspecting ``x.ndim``.
 
         Returns:
             x: tensor (raw image or pre-patched), with ``dict`` unwrapped.
@@ -722,60 +716,47 @@ class Gemma4Vit(nn.Module):
             padding_positions: (B, N) True for padding tokens.
             patch_coord: (B, N, 2) external NaFlex (y, x) coords (preserved for downstream).
             patch_valid: (B, N) True for valid tokens.
-            is_raw_image: True when ``x`` is ``(B, C, H, W)``, False for pre-patched paths.
         """
-        is_raw_image = True
         if isinstance(x, dict):
             patch_coord = x.get('patch_coord', patch_coord)
             patch_valid = x.get('patch_valid', patch_valid)
             x = x['patches']
-            is_raw_image = False
-        elif patch_coord is not None:
-            # Explicit coords on a plain tensor → pre-patchified NaFlex input.
-            is_raw_image = False
 
-        if is_raw_image:
-            # Raw (B, C, H, W) image with no coords given → generate a default grid.
-            B = x.shape[0]
-            H = x.shape[-2]
-            W = x.shape[-1]
+        if x.ndim == 4 and patch_coord is None:
+            B, _, H, W = x.shape
             pH = H // self.patch_size
             pW = W // self.patch_size
             patch_coord, patch_valid = self._default_patch_coord(B, pH, pW, x.device)
-        else:
-            if patch_coord is None:
-                raise ValueError("patch_coord is required for pre-patchified input.")
-            if patch_valid is None:
-                # ``~sentinel`` also produces all-True when no sentinels exist,
-                # subsuming the previous ``if sentinel.any(): ... else: ones``
-                # branch while staying fx-traceable.
-                patch_valid = ~(patch_coord == -1).all(dim=-1)
+
+        if patch_coord is None:
+            raise ValueError("patch_coord is required for pre-patchified input.")
+
+        if patch_valid is None:
+            sentinel = (patch_coord == -1).all(dim=-1)
+            if sentinel.any():
+                patch_valid = ~sentinel
+            else:
+                patch_valid = torch.ones(patch_coord.shape[:2], dtype=torch.bool, device=patch_coord.device)
 
         # External NaFlex (y, x) → Gemma4 internal (x, y)
         position_ids = patch_coord.flip(dims=(-1,))
         padding_positions = ~patch_valid
-        return x, position_ids, padding_positions, patch_coord, patch_valid, is_raw_image
+        return x, position_ids, padding_positions, patch_coord, patch_valid
 
     def _embed_and_encode(
         self,
         x: torch.Tensor,
         position_ids: torch.Tensor,
         padding_positions: torch.Tensor,
-        is_raw_image: bool = True,
         block_callback: Optional[Callable[[int, torch.Tensor], None]] = None,
         max_block_index: Optional[int] = None,
     ) -> torch.Tensor:
         """Shared patch-embed + RoPE + encoder-block pipeline.
 
-        ``x`` may be either a raw image ``(B, C, H, W)`` (when
-        ``is_raw_image=True``) or a pre-patched tensor
+        ``x`` may be either a raw image ``(B, C, H, W)`` or a pre-patched tensor
         (``(B, N, P*P*C)`` / ``(B, N, Ph, Pw, C)``).
-
-        The raw/pre-patched dispatch is driven by ``is_raw_image`` (a Python bool
-        set in ``_resolve_inputs``) rather than ``x.ndim`` so ``torch.fx`` can
-        trace the raw-image path without tripping on control flow.
         """
-        if is_raw_image:
+        if x.ndim == 4:
             x = self.patch_embed(x, position_ids, padding_positions)
         else:
             patches = self._naflex_to_internal_patches(x)
@@ -812,10 +793,8 @@ class Gemma4Vit(nn.Module):
         patch_coord: Optional[torch.Tensor] = None,
         patch_valid: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        x, position_ids, padding_positions, _, _, is_raw_image = self._resolve_inputs(
-            x, patch_coord, patch_valid,
-        )
-        return self._embed_and_encode(x, position_ids, padding_positions, is_raw_image=is_raw_image)
+        x, position_ids, padding_positions, _, _ = self._resolve_inputs(x, patch_coord, patch_valid)
+        return self._embed_and_encode(x, position_ids, padding_positions)
 
     def forward_head(
         self,
@@ -850,10 +829,10 @@ class Gemma4Vit(nn.Module):
         patch_coord: Optional[torch.Tensor] = None,
         patch_valid: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        x, position_ids, padding_positions, patch_coord, patch_valid, is_raw_image = self._resolve_inputs(
+        x, position_ids, padding_positions, patch_coord, patch_valid = self._resolve_inputs(
             x, patch_coord, patch_valid,
         )
-        features = self._embed_and_encode(x, position_ids, padding_positions, is_raw_image=is_raw_image)
+        features = self._embed_and_encode(x, position_ids, padding_positions)
         return self.forward_head(features, patch_coord=patch_coord, patch_valid=patch_valid)
 
     def forward_intermediates(
@@ -883,11 +862,10 @@ class Gemma4Vit(nn.Module):
         reshape = output_fmt == 'NCHW'
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
 
-        x, position_ids, padding_positions, _, _, is_raw_image = self._resolve_inputs(
-            x, patch_coord, patch_valid,
-        )
+        x, position_ids, padding_positions, _, _ = self._resolve_inputs(x, patch_coord, patch_valid)
 
         intermediates: List[torch.Tensor] = []
+        raw_input_ndim = x.ndim
 
         def _cb(i: int, y: torch.Tensor) -> None:
             if i in take_indices:
@@ -901,13 +879,12 @@ class Gemma4Vit(nn.Module):
             x,
             position_ids,
             padding_positions,
-            is_raw_image=is_raw_image,
             block_callback=_cb,
             max_block_index=max_block_index,
         )
 
         if reshape:
-            if not is_raw_image:
+            if raw_input_ndim != 4:
                 raise ValueError("output_fmt='NCHW' requires a raw image (B, C, H, W) input.")
             # Recover grid from internal position_ids (x, y) max.
             B = position_ids.shape[0]
