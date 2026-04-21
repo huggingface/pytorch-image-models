@@ -65,3 +65,8 @@ markers = [
     "fxforward: marker for model tests using torch fx (only forward)",
     "fxbackward: marker for model tests using torch fx (only backward)",
 ]
+
+[tool.wruff.format]
+quote-style = "preserve"
+preview = true
+
