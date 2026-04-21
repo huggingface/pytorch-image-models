@@ -100,10 +100,10 @@ def rotate_half(x: torch.Tensor) -> torch.Tensor:
 
 
 def apply_rotary_pos_emb(
-    x: torch.Tensor,
-    cos: torch.Tensor,
-    sin: torch.Tensor,
-    unsqueeze_dim: int = 2,
+        x: torch.Tensor,
+        cos: torch.Tensor,
+        sin: torch.Tensor,
+        unsqueeze_dim: int = 2,
 ) -> torch.Tensor:
     """Apply rotary position embedding to input tensor."""
     cos = cos.unsqueeze(unsqueeze_dim)
@@ -112,11 +112,11 @@ def apply_rotary_pos_emb(
 
 
 def apply_multidimensional_rope(
-    x: torch.Tensor,
-    cos: torch.Tensor,
-    sin: torch.Tensor,
-    ndim: int = 2,
-    unsqueeze_dim: int = 2,
+        x: torch.Tensor,
+        cos: torch.Tensor,
+        sin: torch.Tensor,
+        ndim: int = 2,
+        unsqueeze_dim: int = 2,
 ) -> torch.Tensor:
     """Apply multidimensional RoPE to input tensor.
 
@@ -170,9 +170,8 @@ class Gemma4RotaryEmbedding2D(nn.Module):
         """Compute and fill non-persistent buffer values."""
         spatial_dim = self.head_dim // 2
         inv_freq = 1.0 / (
-            self.rope_theta ** (
-                torch.arange(0, spatial_dim, 2, dtype=torch.float, device=self.inv_freq.device) / spatial_dim
-            )
+            self.rope_theta
+            ** (torch.arange(0, spatial_dim, 2, dtype=torch.float, device=self.inv_freq.device) / spatial_dim)
         )
         self.inv_freq.copy_(inv_freq)
 
@@ -184,9 +183,9 @@ class Gemma4RotaryEmbedding2D(nn.Module):
         self._init_buffers()
 
     def forward(
-        self,
-        x: torch.Tensor,
-        position_ids: torch.Tensor,
+            self,
+            x: torch.Tensor,
+            position_ids: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Args:
@@ -249,7 +248,7 @@ class Gemma4PatchEmbed(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        trunc_normal_tf_(self.position_embedding_table, std=.02)
+        trunc_normal_tf_(self.position_embedding_table, std=0.02)
 
     def _extract_patches(self, pixel_values: torch.Tensor) -> torch.Tensor:
         """Extract and flatten patches from (B, C, H, W) image tensor."""
@@ -262,9 +261,9 @@ class Gemma4PatchEmbed(nn.Module):
         return x
 
     def _position_embeddings(
-        self,
-        position_ids: torch.Tensor,
-        padding_positions: torch.Tensor,
+            self,
+            position_ids: torch.Tensor,
+            padding_positions: torch.Tensor,
     ) -> torch.Tensor:
         """Compute position embeddings from 2D position table using one-hot matmul.
 
@@ -282,10 +281,10 @@ class Gemma4PatchEmbed(nn.Module):
         return position_embeddings
 
     def _project_patches(
-        self,
-        patches: torch.Tensor,
-        position_ids: torch.Tensor,
-        padding_positions: torch.Tensor,
+            self,
+            patches: torch.Tensor,
+            position_ids: torch.Tensor,
+            padding_positions: torch.Tensor,
     ) -> torch.Tensor:
         """Project pre-extracted patches and add 2D position embeddings.
 
@@ -301,10 +300,10 @@ class Gemma4PatchEmbed(nn.Module):
         return hidden_states + position_embeddings
 
     def forward(
-        self,
-        pixel_values: torch.Tensor,
-        position_ids: torch.Tensor,
-        padding_positions: torch.Tensor,
+            self,
+            pixel_values: torch.Tensor,
+            position_ids: torch.Tensor,
+            padding_positions: torch.Tensor,
     ) -> torch.Tensor:
         """Raw-image patch-embedding entry point (kept for the ``(B, C, H, W)`` path).
 
@@ -366,12 +365,12 @@ class Gemma4Attention(nn.Module):
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(
-        self,
-        x: torch.Tensor,
-        rope_cos: torch.Tensor,
-        rope_sin: torch.Tensor,
-        position_ids: torch.Tensor,
-        attn_mask: Optional[torch.Tensor] = None,
+            self,
+            x: torch.Tensor,
+            rope_cos: torch.Tensor,
+            rope_sin: torch.Tensor,
+            position_ids: torch.Tensor,
+            attn_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         B, N, C = x.shape
 
@@ -501,12 +500,12 @@ class Gemma4Block(nn.Module):
         self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
     def forward(
-        self,
-        x: torch.Tensor,
-        rope_cos: torch.Tensor,
-        rope_sin: torch.Tensor,
-        position_ids: torch.Tensor,
-        attn_mask: Optional[torch.Tensor] = None,
+            self,
+            x: torch.Tensor,
+            rope_cos: torch.Tensor,
+            rope_sin: torch.Tensor,
+            position_ids: torch.Tensor,
+            attn_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         # Attention with sandwich norm
         residual = x
@@ -538,10 +537,10 @@ class Gemma4VisionPooler(nn.Module):
         self.pooling_kernel_size = pooling_kernel_size
 
     def _avg_pool_by_positions(
-        self,
-        hidden_states: torch.Tensor,
-        position_ids: torch.Tensor,
-        output_length: int,
+            self,
+            hidden_states: torch.Tensor,
+            position_ids: torch.Tensor,
+            output_length: int,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """2D spatial pooling on a ``k × k`` grid using ``self.pooling_kernel_size``.
 
@@ -571,11 +570,11 @@ class Gemma4VisionPooler(nn.Module):
         return output.to(hidden_states.dtype), mask
 
     def forward(
-        self,
-        hidden_states: torch.Tensor,
-        position_ids: torch.Tensor,
-        padding_positions: torch.Tensor,
-        output_length: int,
+            self,
+            hidden_states: torch.Tensor,
+            position_ids: torch.Tensor,
+            padding_positions: torch.Tensor,
+            output_length: int,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Args:
@@ -670,25 +669,23 @@ class Gemma4Vit(nn.Module):
 
         # Transformer blocks
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]
-        self.blocks = nn.ModuleList(
-            [
-                Gemma4Block(
-                    dim=embed_dim,
-                    num_heads=num_heads,
-                    head_dim=head_dim,
-                    num_kv_heads=num_kv_heads,
-                    intermediate_size=intermediate_size,
-                    norm_eps=norm_eps,
-                    attn_drop=attn_drop_rate,
-                    proj_drop=proj_drop_rate,
-                    drop_path=dpr[i],
-                    act_layer=act_layer,
-                    use_clipped_linears=use_clipped_linears,
-                    **dd,
-                )
-                for i in range(depth)
-            ]
-        )
+        self.blocks = nn.ModuleList([
+            Gemma4Block(
+                dim=embed_dim,
+                num_heads=num_heads,
+                head_dim=head_dim,
+                num_kv_heads=num_kv_heads,
+                intermediate_size=intermediate_size,
+                norm_eps=norm_eps,
+                attn_drop=attn_drop_rate,
+                proj_drop=proj_drop_rate,
+                drop_path=dpr[i],
+                act_layer=act_layer,
+                use_clipped_linears=use_clipped_linears,
+                **dd,
+            )
+            for i in range(depth)
+        ])
 
         # Pooler
         self.pooler = Gemma4VisionPooler(
@@ -767,11 +764,11 @@ class Gemma4Vit(nn.Module):
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
     def _default_patch_coord(
-        self,
-        batch_size: int,
-        pH: int,
-        pW: int,
-        device: torch.device,
+            self,
+            batch_size: int,
+            pH: int,
+            pW: int,
+            device: torch.device,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Create default grid patch coords + valid mask in NaFlex external (y, x) convention."""
         ys = torch.arange(pH, device=device)
@@ -799,10 +796,10 @@ class Gemma4Vit(nn.Module):
         raise ValueError(f"Pre-patchified input must have ndim in (3, 5); got {x.ndim}")
 
     def _resolve_inputs(
-        self,
-        x: Union[torch.Tensor, Dict[str, torch.Tensor]],
-        patch_coord: Optional[torch.Tensor],
-        patch_valid: Optional[torch.Tensor],
+            self,
+            x: Union[torch.Tensor, Dict[str, torch.Tensor]],
+            patch_coord: Optional[torch.Tensor],
+            patch_valid: Optional[torch.Tensor],
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Normalize inputs from NaFlex (dict or tensor + coords) to internal form.
 
@@ -852,12 +849,12 @@ class Gemma4Vit(nn.Module):
         return x, position_ids, padding_positions, patch_coord, patch_valid
 
     def _embed_and_encode(
-        self,
-        x: torch.Tensor,
-        position_ids: torch.Tensor,
-        padding_positions: torch.Tensor,
-        block_callback: Optional[Callable[[int, torch.Tensor], None]] = None,
-        max_block_index: Optional[int] = None,
+            self,
+            x: torch.Tensor,
+            position_ids: torch.Tensor,
+            padding_positions: torch.Tensor,
+            block_callback: Optional[Callable[[int, torch.Tensor], None]] = None,
+            max_block_index: Optional[int] = None,
     ) -> torch.Tensor:
         """Shared patch-embed + RoPE + encoder-block pipeline.
 
@@ -883,7 +880,7 @@ class Gemma4Vit(nn.Module):
         if max_block_index is None:
             blocks = self.blocks
         else:
-            blocks = self.blocks[: max_block_index + 1]
+            blocks = self.blocks[:max_block_index + 1]
 
         for i, blk in enumerate(blocks):
             if self.grad_checkpointing and not torch.jit.is_scripting():
@@ -896,20 +893,20 @@ class Gemma4Vit(nn.Module):
         return x
 
     def forward_features(
-        self,
-        x: Union[torch.Tensor, Dict[str, torch.Tensor]],
-        patch_coord: Optional[torch.Tensor] = None,
-        patch_valid: Optional[torch.Tensor] = None,
+            self,
+            x: Union[torch.Tensor, Dict[str, torch.Tensor]],
+            patch_coord: Optional[torch.Tensor] = None,
+            patch_valid: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         x, position_ids, padding_positions, _, _ = self._resolve_inputs(x, patch_coord, patch_valid)
         return self._embed_and_encode(x, position_ids, padding_positions)
 
     def forward_head(
-        self,
-        x: torch.Tensor,
-        patch_coord: Optional[torch.Tensor] = None,
-        patch_valid: Optional[torch.Tensor] = None,
-        pre_logits: bool = False,
+            self,
+            x: torch.Tensor,
+            patch_coord: Optional[torch.Tensor] = None,
+            patch_valid: Optional[torch.Tensor] = None,
+            pre_logits: bool = False,
     ) -> torch.Tensor:
         position_ids = patch_coord.flip(dims=(-1,)) if patch_coord is not None else None
         padding_positions = ~patch_valid if patch_valid is not None else None
@@ -917,7 +914,7 @@ class Gemma4Vit(nn.Module):
         if self.global_pool == 'gemma4' and position_ids is not None:
             if padding_positions is None:
                 padding_positions = torch.zeros(x.shape[:2], dtype=torch.bool, device=x.device)
-            output_length = x.shape[1] // (self.pooling_kernel_size ** 2)
+            output_length = x.shape[1] // (self.pooling_kernel_size**2)
             x, _ = self.pooler(x, position_ids, padding_positions, output_length)
             if self.std_bias is not None:
                 x = (x - self.std_bias) * self.std_scale
@@ -932,27 +929,29 @@ class Gemma4Vit(nn.Module):
         return x if pre_logits else self.head(x)
 
     def forward(
-        self,
-        x: Union[torch.Tensor, Dict[str, torch.Tensor]],
-        patch_coord: Optional[torch.Tensor] = None,
-        patch_valid: Optional[torch.Tensor] = None,
+            self,
+            x: Union[torch.Tensor, Dict[str, torch.Tensor]],
+            patch_coord: Optional[torch.Tensor] = None,
+            patch_valid: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         x, position_ids, padding_positions, patch_coord, patch_valid = self._resolve_inputs(
-            x, patch_coord, patch_valid,
+            x,
+            patch_coord,
+            patch_valid,
         )
         features = self._embed_and_encode(x, position_ids, padding_positions)
         return self.forward_head(features, patch_coord=patch_coord, patch_valid=patch_valid)
 
     def forward_intermediates(
-        self,
-        x: Union[torch.Tensor, Dict[str, torch.Tensor]],
-        patch_coord: Optional[torch.Tensor] = None,
-        patch_valid: Optional[torch.Tensor] = None,
-        indices: Optional[Union[int, List[int]]] = None,
-        norm: bool = False,
-        stop_early: bool = False,
-        output_fmt: str = 'NCHW',
-        intermediates_only: bool = False,
+            self,
+            x: Union[torch.Tensor, Dict[str, torch.Tensor]],
+            patch_coord: Optional[torch.Tensor] = None,
+            patch_valid: Optional[torch.Tensor] = None,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
         """Forward features returning intermediates.
 
@@ -1006,14 +1005,14 @@ class Gemma4Vit(nn.Module):
         return x, intermediates
 
     def prune_intermediate_layers(
-        self,
-        indices: Union[int, List[int]] = 1,
-        prune_norm: bool = False,
-        prune_head: bool = True,
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
     ) -> List[int]:
         """Prune layers not required for specified intermediates."""
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
-        self.blocks = self.blocks[: max_index + 1]
+        self.blocks = self.blocks[:max_index + 1]
         if prune_head:
             self.reset_classifier(0, '')
         return take_indices
@@ -1028,7 +1027,7 @@ def init_weights_gemma4_vit(module: nn.Module, name: str = '', needs_reset: bool
         needs_reset: If True, call ``reset_parameters`` on modules that define one.
     """
     if isinstance(module, nn.Linear):
-        trunc_normal_tf_(module.weight, std=.02)
+        trunc_normal_tf_(module.weight, std=0.02)
         if module.bias is not None:
             nn.init.zeros_(module.bias)
     elif hasattr(module, 'init_weights'):
@@ -1128,18 +1127,16 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
     }
 
 
-default_cfgs = generate_default_cfgs(
-    {
-        'gemma4_vit_e4b.gemma4_e4b': _cfg(
-            hf_hub_id='developer0hye/gemma4_vit_e4b',
-            license='apache-2.0',
-        ),
-        'gemma4_vit_31b.gemma4_31b': _cfg(
-            hf_hub_id='developer0hye/gemma4_vit_31b',
-            license='apache-2.0',
-        ),
-    }
-)
+default_cfgs = generate_default_cfgs({
+    'gemma4_vit_e4b.gemma4_e4b': _cfg(
+        hf_hub_id='developer0hye/gemma4_vit_e4b',
+        license='apache-2.0',
+    ),
+    'gemma4_vit_31b.gemma4_31b': _cfg(
+        hf_hub_id='developer0hye/gemma4_vit_31b',
+        license='apache-2.0',
+    ),
+})
 
 
 @register_model
