@@ -18,11 +18,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, to_2tuple, use_fused_attn
+from timm.layers import DropPath, to_2tuple, trunc_normal_tf_, use_fused_attn
 
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
-from ._manipulate import checkpoint
+from ._manipulate import checkpoint, named_apply
 from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['Gemma4Vit']
@@ -35,15 +35,34 @@ class Gemma4ClippableLinear(nn.Module):
     When use_clipped=False, behaves as a standard nn.Linear (no buffers registered).
     """
 
-    def __init__(self, in_features: int, out_features: int, use_clipped: bool = False):
+    def __init__(
+            self,
+            in_features: int,
+            out_features: int,
+            use_clipped: bool = False,
+            device=None,
+            dtype=None,
+    ) -> None:
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.use_clipped = use_clipped
-        self.linear = nn.Linear(in_features, out_features, bias=False)
+        self.linear = nn.Linear(in_features, out_features, bias=False, **dd)
         if use_clipped:
-            self.register_buffer('input_min', torch.tensor(-float('inf')))
-            self.register_buffer('input_max', torch.tensor(float('inf')))
-            self.register_buffer('output_min', torch.tensor(-float('inf')))
-            self.register_buffer('output_max', torch.tensor(float('inf')))
+            self.register_buffer('input_min', torch.empty((), **dd))
+            self.register_buffer('input_max', torch.empty((), **dd))
+            self.register_buffer('output_min', torch.empty((), **dd))
+            self.register_buffer('output_max', torch.empty((), **dd))
+
+            self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        # ``nn.Linear`` handles its own weight init; only clamp buffers need resetting.
+        # Default to no-op clamp (±inf); pretrained checkpoints overwrite these.
+        if self.use_clipped:
+            self.input_min.fill_(-float('inf'))
+            self.input_max.fill_(float('inf'))
+            self.output_min.fill_(-float('inf'))
+            self.output_max.fill_(float('inf'))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.use_clipped:
@@ -54,40 +73,23 @@ class Gemma4ClippableLinear(nn.Module):
         return x
 
 
-class Gemma4RMSNorm(nn.Module):
-    """RMSNorm matching HuggingFace Gemma4 implementation exactly.
+class Gemma4RMSNorm(nn.RMSNorm):
+    """RMSNorm with optional learnable scale.
 
-    Key differences from timm's RmsNorm:
-    - Upcasts to float32 for norm computation (critical for numerical equivalence)
-    - Supports with_scale=False mode (for V normalization)
-    - Uses pow(-0.5) instead of rsqrt (matching HF's JAX-compatible impl)
+    Thin wrapper over ``nn.RMSNorm`` that renames ``elementwise_affine`` to
+    ``with_scale`` (HF Gemma4 omits the V-norm gain so we need a way to
+    request the no-scale variant).
     """
 
-    # Class-level annotation so TorchScript knows the type of ``weight`` even
-    # when ``with_scale=False`` (V-norm has no learnable gain in HF Gemma4).
-    weight: Optional[torch.Tensor]
-
-    def __init__(self, dim: int, eps: float = 1e-6, with_scale: bool = True):
-        super().__init__()
-        self.eps = eps
-        self.with_scale = with_scale
-        if with_scale:
-            self.weight = nn.Parameter(torch.ones(dim))
-        else:
-            # ``register_parameter(..., None)`` keeps ``weight`` out of the
-            # state-dict (matches HF checkpoints that omit ``v_norm.weight``)
-            # while still declaring the slot for scripting.
-            self.register_parameter('weight', None)
-
-    def _norm(self, x: torch.Tensor) -> torch.Tensor:
-        return x * torch.pow(x.pow(2).mean(-1, keepdim=True) + self.eps, -0.5)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        output = self._norm(x.float())
-        weight = self.weight
-        if weight is not None:
-            output = output * weight.float()
-        return output.type_as(x)
+    def __init__(
+            self,
+            dim: int,
+            eps: float = 1e-6,
+            with_scale: bool = True,
+            device=None,
+            dtype=None,
+    ) -> None:
+        super().__init__(dim, eps=eps, elementwise_affine=with_scale, device=device, dtype=dtype)
 
 
 def rotate_half(x: torch.Tensor) -> torch.Tensor:
@@ -142,16 +144,44 @@ class Gemma4RotaryEmbedding2D(nn.Module):
     using theta=100.0 and the partitioned head_dim.
     """
 
-    def __init__(self, head_dim: int, rope_theta: float = 100.0):
+    def __init__(
+            self,
+            head_dim: int,
+            rope_theta: float = 100.0,
+            device=None,
+            dtype=None,
+    ) -> None:
         super().__init__()
         self.head_dim = head_dim
         self.rope_theta = rope_theta
 
-        # Each spatial dimension uses head_dim//2 channels,
-        # so we need head_dim//4 frequencies per dimension
-        spatial_dim = head_dim // 2
-        inv_freq = 1.0 / (rope_theta ** (torch.arange(0, spatial_dim, 2, dtype=torch.float) / spatial_dim))
-        self.register_buffer('inv_freq', inv_freq, persistent=False)
+        # Each spatial dimension uses head_dim//2 channels, so head_dim//4 frequencies per dimension.
+        # ``inv_freq`` is always kept in float32 regardless of module dtype.
+        num_freqs = (head_dim // 2) // 2
+        self.register_buffer(
+            'inv_freq',
+            torch.empty(num_freqs, device=device, dtype=torch.float),
+            persistent=False,
+        )
+
+        self._init_buffers()
+
+    def _init_buffers(self) -> None:
+        """Compute and fill non-persistent buffer values."""
+        spatial_dim = self.head_dim // 2
+        inv_freq = 1.0 / (
+            self.rope_theta ** (
+                torch.arange(0, spatial_dim, 2, dtype=torch.float, device=self.inv_freq.device) / spatial_dim
+            )
+        )
+        self.inv_freq.copy_(inv_freq)
+
+    def reset_parameters(self) -> None:
+        self._init_buffers()
+
+    def init_non_persistent_buffers(self) -> None:
+        """Initialize non-persistent buffers."""
+        self._init_buffers()
 
     def forward(
         self,
@@ -197,19 +227,29 @@ class Gemma4PatchEmbed(nn.Module):
     """
 
     def __init__(
-        self,
-        patch_size: int = 16,
-        in_chans: int = 3,
-        embed_dim: int = 768,
-        position_embedding_size: int = 10240,
-    ):
+            self,
+            patch_size: int = 16,
+            in_chans: int = 3,
+            embed_dim: int = 768,
+            position_embedding_size: int = 10240,
+            device=None,
+            dtype=None,
+    ) -> None:
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.patch_size = patch_size
         self.embed_dim = embed_dim
         self.position_embedding_size = position_embedding_size
 
-        self.input_proj = nn.Linear(in_chans * patch_size**2, embed_dim, bias=False)
-        self.position_embedding_table = nn.Parameter(torch.ones(2, position_embedding_size, embed_dim))
+        self.input_proj = nn.Linear(in_chans * patch_size**2, embed_dim, bias=False, **dd)
+        self.position_embedding_table = nn.Parameter(
+            torch.empty(2, position_embedding_size, embed_dim, **dd)
+        )
+
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        trunc_normal_tf_(self.position_embedding_table, std=.02)
 
     def _extract_patches(self, pixel_values: torch.Tensor) -> torch.Tensor:
         """Extract and flatten patches from (B, C, H, W) image tensor."""
@@ -293,16 +333,19 @@ class Gemma4Attention(nn.Module):
     fused_attn: torch.jit.Final[bool]
 
     def __init__(
-        self,
-        dim: int,
-        num_heads: int = 12,
-        head_dim: int = 64,
-        num_kv_heads: Optional[int] = None,
-        attn_drop: float = 0.0,
-        proj_drop: float = 0.0,
-        norm_eps: float = 1e-6,
-        use_clipped_linears: bool = False,
-    ):
+            self,
+            dim: int,
+            num_heads: int = 12,
+            head_dim: int = 64,
+            num_kv_heads: Optional[int] = None,
+            attn_drop: float = 0.0,
+            proj_drop: float = 0.0,
+            norm_eps: float = 1e-6,
+            use_clipped_linears: bool = False,
+            device=None,
+            dtype=None,
+    ) -> None:
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.num_heads = num_heads
         self.head_dim = head_dim
@@ -310,14 +353,14 @@ class Gemma4Attention(nn.Module):
         self.num_kv_groups = num_heads // self.num_kv_heads
         self.fused_attn = use_fused_attn()
 
-        self.q_proj = Gemma4ClippableLinear(dim, num_heads * head_dim, use_clipped=use_clipped_linears)
-        self.k_proj = Gemma4ClippableLinear(dim, self.num_kv_heads * head_dim, use_clipped=use_clipped_linears)
-        self.v_proj = Gemma4ClippableLinear(dim, self.num_kv_heads * head_dim, use_clipped=use_clipped_linears)
-        self.o_proj = Gemma4ClippableLinear(num_heads * head_dim, dim, use_clipped=use_clipped_linears)
+        self.q_proj = Gemma4ClippableLinear(dim, num_heads * head_dim, use_clipped=use_clipped_linears, **dd)
+        self.k_proj = Gemma4ClippableLinear(dim, self.num_kv_heads * head_dim, use_clipped=use_clipped_linears, **dd)
+        self.v_proj = Gemma4ClippableLinear(dim, self.num_kv_heads * head_dim, use_clipped=use_clipped_linears, **dd)
+        self.o_proj = Gemma4ClippableLinear(num_heads * head_dim, dim, use_clipped=use_clipped_linears, **dd)
 
-        self.q_norm = Gemma4RMSNorm(head_dim, eps=norm_eps, with_scale=True)
-        self.k_norm = Gemma4RMSNorm(head_dim, eps=norm_eps, with_scale=True)
-        self.v_norm = Gemma4RMSNorm(head_dim, eps=norm_eps, with_scale=False)
+        self.q_norm = Gemma4RMSNorm(head_dim, eps=norm_eps, with_scale=True, **dd)
+        self.k_norm = Gemma4RMSNorm(head_dim, eps=norm_eps, with_scale=True, **dd)
+        self.v_norm = Gemma4RMSNorm(head_dim, eps=norm_eps, with_scale=False, **dd)
 
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj_drop = nn.Dropout(proj_drop)
@@ -386,17 +429,20 @@ class Gemma4GatedMlp(nn.Module):
     """
 
     def __init__(
-        self,
-        in_features: int,
-        hidden_features: int,
-        act_layer: Callable = None,
-        drop: float = 0.0,
-        use_clipped_linears: bool = False,
-    ):
+            self,
+            in_features: int,
+            hidden_features: int,
+            act_layer: Optional[Callable] = None,
+            drop: float = 0.0,
+            use_clipped_linears: bool = False,
+            device=None,
+            dtype=None,
+    ) -> None:
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.gate_proj = Gemma4ClippableLinear(in_features, hidden_features, use_clipped=use_clipped_linears)
-        self.up_proj = Gemma4ClippableLinear(in_features, hidden_features, use_clipped=use_clipped_linears)
-        self.down_proj = Gemma4ClippableLinear(hidden_features, in_features, use_clipped=use_clipped_linears)
+        self.gate_proj = Gemma4ClippableLinear(in_features, hidden_features, use_clipped=use_clipped_linears, **dd)
+        self.up_proj = Gemma4ClippableLinear(in_features, hidden_features, use_clipped=use_clipped_linears, **dd)
+        self.down_proj = Gemma4ClippableLinear(hidden_features, in_features, use_clipped=use_clipped_linears, **dd)
         self.act = act_layer() if act_layer is not None else nn.GELU(approximate='tanh')
         self.drop = nn.Dropout(drop)
 
@@ -413,21 +459,24 @@ class Gemma4Block(nn.Module):
     """
 
     def __init__(
-        self,
-        dim: int,
-        num_heads: int,
-        head_dim: int,
-        intermediate_size: int,
-        num_kv_heads: Optional[int] = None,
-        norm_eps: float = 1e-6,
-        attn_drop: float = 0.0,
-        proj_drop: float = 0.0,
-        drop_path: float = 0.0,
-        act_layer: Callable = None,
-        use_clipped_linears: bool = False,
-    ):
+            self,
+            dim: int,
+            num_heads: int,
+            head_dim: int,
+            intermediate_size: int,
+            num_kv_heads: Optional[int] = None,
+            norm_eps: float = 1e-6,
+            attn_drop: float = 0.0,
+            proj_drop: float = 0.0,
+            drop_path: float = 0.0,
+            act_layer: Optional[Callable] = None,
+            use_clipped_linears: bool = False,
+            device=None,
+            dtype=None,
+    ) -> None:
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.norm1 = Gemma4RMSNorm(dim, eps=norm_eps)
+        self.norm1 = Gemma4RMSNorm(dim, eps=norm_eps, **dd)
         self.attn = Gemma4Attention(
             dim=dim,
             num_heads=num_heads,
@@ -437,16 +486,18 @@ class Gemma4Block(nn.Module):
             proj_drop=proj_drop,
             norm_eps=norm_eps,
             use_clipped_linears=use_clipped_linears,
+            **dd,
         )
-        self.norm2 = Gemma4RMSNorm(dim, eps=norm_eps)
-        self.norm3 = Gemma4RMSNorm(dim, eps=norm_eps)
+        self.norm2 = Gemma4RMSNorm(dim, eps=norm_eps, **dd)
+        self.norm3 = Gemma4RMSNorm(dim, eps=norm_eps, **dd)
         self.mlp = Gemma4GatedMlp(
             in_features=dim,
             hidden_features=intermediate_size,
             act_layer=act_layer,
             use_clipped_linears=use_clipped_linears,
+            **dd,
         )
-        self.norm4 = Gemma4RMSNorm(dim, eps=norm_eps)
+        self.norm4 = Gemma4RMSNorm(dim, eps=norm_eps, **dd)
         self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
     def forward(
@@ -490,22 +541,31 @@ class Gemma4VisionPooler(nn.Module):
         self,
         hidden_states: torch.Tensor,
         position_ids: torch.Tensor,
-        length: int,
+        output_length: int,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """2D spatial pooling by position grid.
+        """2D spatial pooling on a ``k × k`` grid using ``self.pooling_kernel_size``.
 
-        ``position_ids`` follows the Gemma4-internal ``(x, y)`` convention.
+        ``position_ids`` follows the Gemma4-internal ``(x, y)`` convention. Caller
+        guarantees both grid dimensions divide by ``k``; we assert ``k^2 * output_length == N``
+        so a mis-sized grid fails loudly instead of silently aliasing.
         """
-        input_seq_len = hidden_states.shape[1]
-        k = int((input_seq_len // length) ** 0.5)
+        N = hidden_states.shape[1]
+        k = self.pooling_kernel_size
         k_squared = k * k
+        if k_squared * output_length != N:
+            raise ValueError(
+                f"Cannot pool {N} tokens into {output_length} with k={k}: "
+                f"k^2 * output_length ({k_squared * output_length}) must equal N ({N}). "
+                f"Both grid dimensions must be divisible by k."
+            )
 
+        # Per-sample grid width (max x-coord + 1); used as the y-stride when flattening (x, y) -> index.
         clamped_positions = position_ids.clamp(min=0)
         max_x = clamped_positions[..., 0].max(dim=-1, keepdim=True)[0] + 1
         kernel_idxs = torch.div(clamped_positions, k, rounding_mode='floor')
         kernel_idxs = kernel_idxs[..., 0] + (max_x // k) * kernel_idxs[..., 1]
 
-        weights = F.one_hot(kernel_idxs.long(), length).float() / k_squared
+        weights = F.one_hot(kernel_idxs.long(), output_length).float() / k_squared
         output = weights.transpose(1, 2) @ hidden_states.float()
         mask = torch.logical_not((weights == 0).all(dim=1))
         return output.to(hidden_states.dtype), mask
@@ -552,30 +612,34 @@ class Gemma4Vit(nn.Module):
     """
 
     def __init__(
-        self,
-        img_size: Union[int, Tuple[int, int]] = 896,
-        patch_size: int = 16,
-        in_chans: int = 3,
-        num_classes: int = 0,
-        global_pool: str = 'gemma4',
-        embed_dim: int = 768,
-        depth: int = 16,
-        num_heads: int = 12,
-        head_dim: int = 64,
-        num_kv_heads: Optional[int] = None,
-        intermediate_size: int = 3072,
-        norm_eps: float = 1e-6,
-        rope_theta: float = 100.0,
-        position_embedding_size: int = 10240,
-        pooling_kernel_size: int = 3,
-        standardize: bool = False,
-        use_clipped_linears: bool = False,
-        drop_rate: float = 0.0,
-        proj_drop_rate: float = 0.0,
-        attn_drop_rate: float = 0.0,
-        drop_path_rate: float = 0.0,
-        act_layer: Optional[Callable] = None,
-    ):
+            self,
+            img_size: Union[int, Tuple[int, int]] = 768,
+            patch_size: int = 16,
+            in_chans: int = 3,
+            num_classes: int = 0,
+            global_pool: str = 'gemma4',
+            embed_dim: int = 768,
+            depth: int = 16,
+            num_heads: int = 12,
+            head_dim: int = 64,
+            num_kv_heads: Optional[int] = None,
+            intermediate_size: int = 3072,
+            norm_eps: float = 1e-6,
+            rope_theta: float = 100.0,
+            position_embedding_size: int = 10240,
+            pooling_kernel_size: int = 3,
+            standardize: bool = False,
+            use_clipped_linears: bool = False,
+            drop_rate: float = 0.0,
+            proj_drop_rate: float = 0.0,
+            attn_drop_rate: float = 0.0,
+            drop_path_rate: float = 0.0,
+            act_layer: Optional[Callable] = None,
+            weight_init: str = '',
+            device=None,
+            dtype=None,
+    ) -> None:
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.num_classes = num_classes
         self.global_pool = global_pool
@@ -584,7 +648,6 @@ class Gemma4Vit(nn.Module):
         self.grad_checkpointing = False
         self.patch_size = patch_size
         self.pooling_kernel_size = pooling_kernel_size
-        self.standardize = standardize
         self.use_clipped_linears = use_clipped_linears
 
         act_layer = act_layer or partial(nn.GELU, approximate='tanh')
@@ -595,12 +658,14 @@ class Gemma4Vit(nn.Module):
             in_chans=in_chans,
             embed_dim=embed_dim,
             position_embedding_size=position_embedding_size,
+            **dd,
         )
 
         # 2D RoPE
         self.rotary_emb = Gemma4RotaryEmbedding2D(
             head_dim=head_dim,
             rope_theta=rope_theta,
+            **dd,
         )
 
         # Transformer blocks
@@ -619,6 +684,7 @@ class Gemma4Vit(nn.Module):
                     drop_path=dpr[i],
                     act_layer=act_layer,
                     use_clipped_linears=use_clipped_linears,
+                    **dd,
                 )
                 for i in range(depth)
             ]
@@ -630,20 +696,50 @@ class Gemma4Vit(nn.Module):
             pooling_kernel_size=pooling_kernel_size,
         )
 
-        # Optional standardization buffers (used in 31B variant)
+        # Optional standardization buffers (used in 31B variant).
+        # Values are set in ``init_weights`` (no-op transform by default;
+        # pretrained checkpoints overwrite these).
         if standardize:
-            self.register_buffer('std_bias', torch.zeros(embed_dim))
-            self.register_buffer('std_scale', torch.ones(embed_dim))
+            self.register_buffer('std_bias', torch.empty(embed_dim, **dd))
+            self.register_buffer('std_scale', torch.empty(embed_dim, **dd))
         else:
             self.std_bias = None
             self.std_scale = None
 
         # Classification head
         self.head_drop = nn.Dropout(drop_rate)
-        self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
         # Feature info for intermediate extraction
         self.feature_info = [dict(num_chs=embed_dim, reduction=patch_size, module=f'blocks.{i}') for i in range(depth)]
+
+        self.weight_init_mode = 'reset' if weight_init == 'skip' else weight_init
+        # TODO: skip init when on meta device when safe to do so
+        if weight_init != 'skip':
+            self.init_weights(needs_reset=False)
+
+    @torch.jit.ignore
+    def init_weights(self, mode: str = '', needs_reset: bool = True) -> None:
+        """Initialize model weights.
+
+        Args:
+            mode: Init mode. '' applies trunc-normal-TF Linear init; 'reset'
+                only calls ``reset_parameters`` on each sub-module.
+            needs_reset: If True, call ``reset_parameters`` on modules that
+                have one (for post-``to_empty()`` reinit). Set to False during
+                ``__init__`` since modules already self-initialize there.
+        """
+        mode = mode or self.weight_init_mode
+        assert mode in ('', 'reset')
+
+        # Top-level standardization buffers default to a no-op transform;
+        # pretrained checkpoints overwrite these.
+        if self.std_bias is not None:
+            nn.init.zeros_(self.std_bias)
+        if self.std_scale is not None:
+            nn.init.ones_(self.std_scale)
+
+        named_apply(get_init_weights_gemma4_vit(mode, needs_reset=needs_reset), self)
 
     @torch.jit.ignore
     def no_weight_decay(self) -> Set[str]:
@@ -724,8 +820,20 @@ class Gemma4Vit(nn.Module):
 
         if x.ndim == 4 and patch_coord is None:
             B, _, H, W = x.shape
-            pH = H // self.patch_size
-            pW = W // self.patch_size
+            P = self.patch_size
+            # When using the built-in gemma4 spatial pooler, both image dims must
+            # divide cleanly into (patch_size * pooling_kernel_size)-sized cells.
+            # Pre-patchified / NaFlex inputs are assumed to already be conformant.
+            if self.global_pool == 'gemma4':
+                cell = P * self.pooling_kernel_size
+                if H % cell != 0 or W % cell != 0:
+                    raise ValueError(
+                        f"Image size ({H}, {W}) must be divisible by "
+                        f"patch_size * pooling_kernel_size ({cell}) when global_pool='gemma4'. "
+                        f"Resize to multiples of {cell}, or use global_pool='avg'."
+                    )
+            pH = H // P
+            pW = W // P
             patch_coord, patch_valid = self._default_patch_coord(B, pH, pW, x.device)
 
         if patch_coord is None:
@@ -811,7 +919,7 @@ class Gemma4Vit(nn.Module):
                 padding_positions = torch.zeros(x.shape[:2], dtype=torch.bool, device=x.device)
             output_length = x.shape[1] // (self.pooling_kernel_size ** 2)
             x, _ = self.pooler(x, position_ids, padding_positions, output_length)
-            if self.standardize and self.std_bias is not None:
+            if self.std_bias is not None:
                 x = (x - self.std_bias) * self.std_scale
         elif self.global_pool == 'avg':
             if padding_positions is not None:
@@ -911,6 +1019,29 @@ class Gemma4Vit(nn.Module):
         return take_indices
 
 
+def init_weights_gemma4_vit(module: nn.Module, name: str = '', needs_reset: bool = True) -> None:
+    """Per-module init for Gemma4Vit (trunc-normal-TF for Linear weights).
+
+    Args:
+        module: Module to initialize.
+        name: Dotted module name (from ``named_apply``).
+        needs_reset: If True, call ``reset_parameters`` on modules that define one.
+    """
+    if isinstance(module, nn.Linear):
+        trunc_normal_tf_(module.weight, std=.02)
+        if module.bias is not None:
+            nn.init.zeros_(module.bias)
+    elif hasattr(module, 'init_weights'):
+        module.init_weights()
+    elif needs_reset and hasattr(module, 'reset_parameters'):
+        module.reset_parameters()
+
+
+def get_init_weights_gemma4_vit(mode: str = '', needs_reset: bool = True) -> Callable:
+    # Only the default trunc-normal scheme; 'reset' is handled inside the fn.
+    return partial(init_weights_gemma4_vit, needs_reset=needs_reset)
+
+
 def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: Gemma4Vit) -> Dict[str, torch.Tensor]:
     """Convert HuggingFace Transformers Gemma4 vision encoder weights to timm format.
 
@@ -984,7 +1115,7 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
     return {
         'url': url,
         'num_classes': 0,
-        'input_size': (3, 896, 896),
+        'input_size': (3, 768, 768),
         'pool_size': None,
         'crop_pct': 1.0,
         'interpolation': 'bicubic',
