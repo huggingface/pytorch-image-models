@@ -24,8 +24,9 @@ from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint, named_apply
 from ._registry import generate_default_cfgs, register_model
+from .naflexvit import batch_patchify
 
-__all__ = ['Gemma4Vit']
+__all__ = ['Gemma4VitEncoder', 'Gemma4VitClassifier']
 
 
 class Gemma4ClippableLinear(nn.Module):
@@ -77,7 +78,7 @@ class Gemma4RMSNorm(nn.RMSNorm):
     """RMSNorm with optional learnable scale.
 
     Thin wrapper over ``nn.RMSNorm`` that renames ``elementwise_affine`` to
-    ``with_scale`` (HF Gemma4 omits the V-norm gain so we need a way to
+    ``with_scale`` (Original Gemma4 omits the V-norm gain so we need a way to
     request the no-scale variant).
     """
 
@@ -190,7 +191,7 @@ class Gemma4RotaryEmbedding2D(nn.Module):
         """
         Args:
             x: Hidden states tensor, used only for dtype/device.
-            position_ids: (B, N, 2) tensor of (x, y) patch coordinates.
+            position_ids: (B, N, 2) Gemma4-internal ``(x, y)`` patch coords.
 
         Returns:
             cos, sin: (B, N, head_dim) tensors for RoPE application.
@@ -218,16 +219,25 @@ class Gemma4RotaryEmbedding2D(nn.Module):
 
 
 class Gemma4PatchEmbed(nn.Module):
-    """Linear patch embedding with learned 2D position embedding table.
+    """Linear patch embedding with a 2D position-embedding table.
 
-    Unlike standard ViT PatchEmbed (conv2d), Gemma4 uses:
-    - Linear projection on flattened patches
-    - Separate 2D position embedding table with one-hot lookup
+    Unlike the standard ViT PatchEmbed (Conv2d), Gemma4 uses a Linear projection
+    on flattened patches plus a separate 2D position-embedding table applied via
+    one-hot lookup. Inputs may be supplied as:
+
+      * ``(B, C, H, W)`` raw images — patchified inline in P-P-C flat order.
+      * ``(B, N, P*P*C)`` pre-patchified P-P-C patches (NaFlex loader output).
+      * ``(B, N, Ph, Pw, C)`` pre-patchified unflattened patches.
+      * ``dict`` with keys ``patches`` / ``patch_coord`` / ``patch_valid``.
+
+    All input-dispatch logic is owned by this module; the parent model simply
+    calls ``self.patch_embed(x, patch_coord, patch_valid)`` and unpacks the
+    returned tensors.
     """
 
     def __init__(
             self,
-            patch_size: int = 16,
+            patch_size: Union[int, Tuple[int, int]] = 16,
             in_chans: int = 3,
             embed_dim: int = 768,
             position_embedding_size: int = 10240,
@@ -236,11 +246,12 @@ class Gemma4PatchEmbed(nn.Module):
     ) -> None:
         dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.patch_size = patch_size
+        self.patch_size = to_2tuple(patch_size)  # (ph, pw); may be non-square
         self.embed_dim = embed_dim
         self.position_embedding_size = position_embedding_size
 
-        self.input_proj = nn.Linear(in_chans * patch_size**2, embed_dim, bias=False, **dd)
+        ph, pw = self.patch_size
+        self.input_proj = nn.Linear(in_chans * ph * pw, embed_dim, bias=False, **dd)
         self.position_embedding_table = nn.Parameter(
             torch.empty(2, position_embedding_size, embed_dim, **dd)
         )
@@ -250,22 +261,28 @@ class Gemma4PatchEmbed(nn.Module):
     def reset_parameters(self) -> None:
         trunc_normal_tf_(self.position_embedding_table, std=0.02)
 
-    def _extract_patches(self, pixel_values: torch.Tensor) -> torch.Tensor:
-        """Extract and flatten patches from (B, C, H, W) image tensor."""
-        B, C, H, W = pixel_values.shape
-        pH = H // self.patch_size
-        pW = W // self.patch_size
-        x = pixel_values.reshape(B, C, pH, self.patch_size, pW, self.patch_size)
-        x = x.permute(0, 2, 4, 1, 3, 5)  # (B, pH, pW, C, P, P)
-        x = x.reshape(B, pH * pW, C * self.patch_size * self.patch_size)
-        return x
+    def _default_patch_coord(
+            self,
+            batch_size: int,
+            pH: int,
+            pW: int,
+            device: torch.device,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Row-major grid coords in external NaFlex ``(y, x)`` order."""
+        ys = torch.arange(pH, device=device)
+        xs = torch.arange(pW, device=device)
+        grid_y, grid_x = torch.meshgrid(ys, xs, indexing='ij')
+        patch_coord = torch.stack([grid_y.flatten(), grid_x.flatten()], dim=-1)
+        patch_coord = patch_coord.unsqueeze(0).expand(batch_size, -1, -1)
+        patch_valid = torch.ones(batch_size, pH * pW, dtype=torch.bool, device=device)
+        return patch_coord, patch_valid
 
     def _position_embeddings(
             self,
             position_ids: torch.Tensor,
             padding_positions: torch.Tensor,
     ) -> torch.Tensor:
-        """Compute position embeddings from 2D position table using one-hot matmul.
+        """Compute position embeddings via one-hot matmul against the 2D table.
 
         ``position_ids`` follows the Gemma4-internal ``(x, y)`` convention.
         """
@@ -274,49 +291,77 @@ class Gemma4PatchEmbed(nn.Module):
         one_hot = one_hot.permute(0, 2, 1, 3).to(self.position_embedding_table)
         # (B, 2, N, pos_size) @ (2, pos_size, embed_dim) -> (B, 2, N, embed_dim)
         position_embeddings = one_hot @ self.position_embedding_table
-        # Sum across x and y dimensions
         position_embeddings = position_embeddings.sum(dim=1)  # (B, N, embed_dim)
-        # Zero out padding positions
-        position_embeddings = torch.where(padding_positions.unsqueeze(-1), 0.0, position_embeddings)
+        position_embeddings = torch.where(
+            padding_positions.unsqueeze(-1), 0.0, position_embeddings,
+        )
         return position_embeddings
-
-    def _project_patches(
-            self,
-            patches: torch.Tensor,
-            position_ids: torch.Tensor,
-            padding_positions: torch.Tensor,
-    ) -> torch.Tensor:
-        """Project pre-extracted patches and add 2D position embeddings.
-
-        Args:
-            patches: (B, N, C*P*P) patches in Gemma4-internal ``C-P-P`` flatten order.
-            position_ids: (B, N, 2) patch coordinates in Gemma4-internal ``(x, y)`` convention.
-            padding_positions: (B, N) boolean mask, True for padding tokens.
-        """
-        # Scale to [-1, 1] (matching HF's `2 * (pixel_values - 0.5)`)
-        patches = 2 * (patches - 0.5)
-        hidden_states = self.input_proj(patches.to(self.input_proj.weight.dtype))
-        position_embeddings = self._position_embeddings(position_ids, padding_positions)
-        return hidden_states + position_embeddings
 
     def forward(
             self,
-            pixel_values: torch.Tensor,
-            position_ids: torch.Tensor,
-            padding_positions: torch.Tensor,
-    ) -> torch.Tensor:
-        """Raw-image patch-embedding entry point (kept for the ``(B, C, H, W)`` path).
+            x: Union[torch.Tensor, Dict[str, torch.Tensor]],
+            patch_coord: Optional[torch.Tensor] = None,
+            patch_valid: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Normalize inputs, patchify / project / position-embed.
 
-        Args:
-            pixel_values: (B, C, H, W) image tensor, normalized to [0, 1].
-            position_ids: (B, N, 2) patch position coordinates (Gemma4-internal ``(x, y)``).
-            padding_positions: (B, N) boolean mask, True for padding.
+        Accepts external NaFlex ``patch_coord`` (y, x) / ``patch_valid`` inputs
+        and returns the internal (x, y) form used by the rest of the model.
 
         Returns:
-            (B, N, embed_dim) patch embeddings with position information.
+            embeddings: (B, N, embed_dim) patch embeddings with position info added.
+            position_ids: (B, N, 2) Gemma4-internal (x, y) coords.
+            padding_positions: (B, N) True for padding tokens.
         """
-        patches = self._extract_patches(pixel_values)
-        return self._project_patches(patches, position_ids, padding_positions)
+        if isinstance(x, dict):
+            patch_coord = x.get('patch_coord', patch_coord)
+            patch_valid = x.get('patch_valid', patch_valid)
+            x = x['patches']
+
+        ph, pw = self.patch_size
+        if x.ndim == 4:
+            # Raw (B, C, H, W): patchify to C-Ph-Pw (Gemma4 native layout).
+            B, _, H, W = x.shape
+            if patch_coord is None:
+                patch_coord, patch_valid = self._default_patch_coord(B, H // ph, W // pw, x.device)
+            x, _ = batch_patchify(x, (ph, pw), pad=False, channels_last=False)  # (B, N, C*Ph*Pw)
+        elif x.ndim == 5:
+            # (B, N, Ph, Pw, C) pre-patchified unflattened (NaFlex loader convention).
+            # Permute channels in from last to second to produce C-Ph-Pw flat.
+            x = x.permute(0, 1, 4, 2, 3).reshape(x.shape[0], x.shape[1], -1)
+        elif x.ndim == 3:
+            # (B, N, Ph*Pw*C) pre-patchified flat in NaFlex P-P-C layout; reinterpret as
+            # (B, N, Ph, Pw, C) then permute to C-Ph-Pw flat so input_proj matches layout.
+            B, N, PPC = x.shape
+            C = PPC // (ph * pw)
+            x = x.view(B, N, ph, pw, C).permute(0, 1, 4, 2, 3).reshape(B, N, PPC)
+        else:
+            raise ValueError(
+                f"Expected input ndim in (3, 4, 5); got {x.ndim}."
+            )
+
+        if patch_coord is None:
+            raise ValueError("patch_coord is required for pre-patchified input.")
+
+        if patch_valid is None:
+            sentinel = (patch_coord == -1).all(dim=-1)
+            if sentinel.any():
+                patch_valid = ~sentinel
+            else:
+                patch_valid = torch.ones(
+                    patch_coord.shape[:2], dtype=torch.bool, device=patch_coord.device,
+                )
+
+        # Scale [0, 1] pixels to [-1, 1] (matches original Gemma4's `2 * (pixel_values - 0.5)`)
+        x = 2 * (x - 0.5)
+        x = self.input_proj(x.to(self.input_proj.weight.dtype))
+
+        # Convert once to the internal (x, y) form used by rotary / pooler / table lookup.
+        position_ids = patch_coord.flip(dims=(-1,))
+        padding_positions = ~patch_valid
+        x = x + self._position_embeddings(position_ids, padding_positions)
+
+        return x, position_ids, padding_positions
 
 
 class Gemma4Attention(nn.Module):
@@ -369,7 +414,6 @@ class Gemma4Attention(nn.Module):
             x: torch.Tensor,
             rope_cos: torch.Tensor,
             rope_sin: torch.Tensor,
-            position_ids: torch.Tensor,
             attn_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         B, N, C = x.shape
@@ -504,13 +548,12 @@ class Gemma4Block(nn.Module):
             x: torch.Tensor,
             rope_cos: torch.Tensor,
             rope_sin: torch.Tensor,
-            position_ids: torch.Tensor,
             attn_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         # Attention with sandwich norm
         residual = x
         x = self.norm1(x)
-        x = self.attn(x, rope_cos, rope_sin, position_ids, attn_mask=attn_mask)
+        x = self.attn(x, rope_cos, rope_sin, attn_mask=attn_mask)
         x = self.norm2(x)
         x = residual + self.drop_path(x)
 
@@ -540,25 +583,23 @@ class Gemma4VisionPooler(nn.Module):
             self,
             hidden_states: torch.Tensor,
             position_ids: torch.Tensor,
-            output_length: int,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """2D spatial pooling on a ``k × k`` grid using ``self.pooling_kernel_size``.
+        """2D spatial pooling on a ``k × k`` grid (k = ``self.pooling_kernel_size``).
 
-        ``position_ids`` follows the Gemma4-internal ``(x, y)`` convention. Caller
-        guarantees both grid dimensions divide by ``k``; we assert ``k^2 * output_length == N``
-        so a mis-sized grid fails loudly instead of silently aliasing.
+        ``N`` patches are binned into ``k^2``-sized cells, so the pool requires
+        ``N % k^2 == 0`` (caller ensures both grid dims divide by k upstream).
+        ``position_ids`` follows the Gemma4-internal ``(x, y)`` convention.
         """
         N = hidden_states.shape[1]
         k = self.pooling_kernel_size
         k_squared = k * k
-        if k_squared * output_length != N:
+        if N % k_squared != 0:
             raise ValueError(
-                f"Cannot pool {N} tokens into {output_length} with k={k}: "
-                f"k^2 * output_length ({k_squared * output_length}) must equal N ({N}). "
+                f"Cannot pool {N} tokens with k={k}: N must be divisible by k^2={k_squared}. "
                 f"Both grid dimensions must be divisible by k."
             )
+        output_length = N // k_squared
 
-        # Per-sample grid width (max x-coord + 1); used as the y-stride when flattening (x, y) -> index.
         clamped_positions = position_ids.clamp(min=0)
         max_x = clamped_positions[..., 0].max(dim=-1, keepdim=True)[0] + 1
         kernel_idxs = torch.div(clamped_positions, k, rounding_mode='floor')
@@ -574,40 +615,40 @@ class Gemma4VisionPooler(nn.Module):
             hidden_states: torch.Tensor,
             position_ids: torch.Tensor,
             padding_positions: torch.Tensor,
-            output_length: int,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
+        """Spatial pool with ``pooling_kernel_size × pooling_kernel_size`` cells.
+
         Args:
             hidden_states: (B, N, D) encoder output.
-            position_ids: (B, N, 2) patch coordinates in Gemma4-internal ``(x, y)`` convention.
-            padding_positions: (B, N) boolean mask, True for padding.
-            output_length: Number of output tokens after pooling.
+            position_ids: (B, N, 2) Gemma4-internal ``(x, y)`` coords.
+            padding_positions: (B, N) True for padding tokens.
 
         Returns:
-            Tuple of:
-            - pooled hidden states (B, output_length, D)
-            - pooler mask (B, output_length) True for valid tokens
+            pooled hidden states (B, N // k^2, D) and validity mask (B, N // k^2).
         """
+        # Zero out padding tokens so they contribute nothing to their pool cell.
         hidden_states = hidden_states.masked_fill(padding_positions.unsqueeze(-1), 0.0)
-
-        if hidden_states.shape[1] != output_length:
-            hidden_states, pooler_mask = self._avg_pool_by_positions(
-                hidden_states,
-                position_ids,
-                output_length,
-            )
-        else:
-            pooler_mask = ~padding_positions
-
+        hidden_states, pooler_mask = self._avg_pool_by_positions(hidden_states, position_ids)
         hidden_states = hidden_states * self.root_hidden_size
         return hidden_states, pooler_mask
 
 
-class Gemma4Vit(nn.Module):
-    """Gemma4 Vision Transformer.
+class Gemma4VitEncoder(nn.Module):
+    """Gemma4 Vision Encoder.
 
-    A custom ViT used as the image encoder in Google's Gemma 4 multimodal model.
-    Features 2D RoPE, gated MLP, QKV normalization, and 4-norm sandwich blocks.
+    The pure encoder from Google's Gemma 4 multimodal model. Custom ViT with 2D
+    RoPE, gated MLP, QKV normalization, and 4-norm sandwich blocks.
+
+    When ``standardize=True`` (31B variant), ``std_bias/std_scale`` are applied
+    after the soft-token pooler (original contract). Other pool modes don't apply it.
+    Output shape depends on ``global_pool``:
+
+    - ``'soft'`` (default): spatial ``k×k`` pooler + ``√D`` scale + optional
+      standardization. Output ``(B, num_soft_tokens, embed_dim)``
+    - ``'avg'``: masked mean over patch tokens; skips the pooler's ``√D`` scale
+      and standardization. Output ``(B, embed_dim)``.
+    - ``'none'`` / ``''``: no pool — returns raw patch tokens
+      ``(B, N, embed_dim)``. Useful for building custom pool heads.
     """
 
     def __init__(
@@ -615,8 +656,7 @@ class Gemma4Vit(nn.Module):
             img_size: Union[int, Tuple[int, int]] = 768,
             patch_size: int = 16,
             in_chans: int = 3,
-            num_classes: int = 0,
-            global_pool: str = 'gemma4',
+            global_pool: str = 'soft',
             embed_dim: int = 768,
             depth: int = 16,
             num_heads: int = 12,
@@ -629,7 +669,6 @@ class Gemma4Vit(nn.Module):
             pooling_kernel_size: int = 3,
             standardize: bool = False,
             use_clipped_linears: bool = False,
-            drop_rate: float = 0.0,
             proj_drop_rate: float = 0.0,
             attn_drop_rate: float = 0.0,
             drop_path_rate: float = 0.0,
@@ -640,20 +679,24 @@ class Gemma4Vit(nn.Module):
     ) -> None:
         dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.num_classes = num_classes
+        assert global_pool in ('soft', 'avg', 'none', ''), \
+            f"global_pool must be one of 'soft', 'avg', 'none' (or ''); got {global_pool!r}"
         self.global_pool = global_pool
-        self.num_features = self.head_hidden_size = self.embed_dim = embed_dim
+        self.num_features = self.embed_dim = embed_dim
         self.num_prefix_tokens = 0
         self.grad_checkpointing = False
-        self.patch_size = patch_size
+        # ``patch_size`` is a 2-tuple at the model level (matches NaFlexVit
+        # convention for downstream data-pipeline helpers). Non-square patches
+        # are supported — arithmetic unpacks ``(ph, pw)`` at each use site.
+        self.patch_size = to_2tuple(patch_size)
         self.pooling_kernel_size = pooling_kernel_size
         self.use_clipped_linears = use_clipped_linears
 
         act_layer = act_layer or partial(nn.GELU, approximate='tanh')
 
-        # Patch embedding
+        # Patch embedding — accepts int or 2-tuple, normalizes internally.
         self.patch_embed = Gemma4PatchEmbed(
-            patch_size=patch_size,
+            patch_size=self.patch_size,
             in_chans=in_chans,
             embed_dim=embed_dim,
             position_embedding_size=position_embedding_size,
@@ -703,12 +746,11 @@ class Gemma4Vit(nn.Module):
             self.std_bias = None
             self.std_scale = None
 
-        # Classification head
-        self.head_drop = nn.Dropout(drop_rate)
-        self.head = nn.Linear(embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
-
-        # Feature info for intermediate extraction
-        self.feature_info = [dict(num_chs=embed_dim, reduction=patch_size, module=f'blocks.{i}') for i in range(depth)]
+        # Feature info for intermediate extraction. ``reduction`` is kept scalar
+        # for compatibility with timm feature hooks; use the max of (ph, pw) for
+        # non-square patches.
+        _red = max(self.patch_size)
+        self.feature_info = [dict(num_chs=embed_dim, reduction=_red, module=f'blocks.{i}') for i in range(depth)]
 
         self.weight_init_mode = 'reset' if weight_init == 'skip' else weight_init
         # TODO: skip init when on meta device when safe to do so
@@ -743,6 +785,11 @@ class Gemma4Vit(nn.Module):
         return {'patch_embed.position_embedding_table'}
 
     @torch.jit.ignore
+    def get_patch_size(self) -> Tuple[int, int]:
+        """Return the 2-tuple patch size. For NaFlex dataloader / transform wiring."""
+        return self.patch_size
+
+    @torch.jit.ignore
     def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
         return dict(
             stem=r'^patch_embed|^rotary_emb',
@@ -754,101 +801,38 @@ class Gemma4Vit(nn.Module):
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self) -> nn.Module:
-        return self.head
+    def set_clamp_enabled(self, enabled: bool = True) -> None:
+        """Toggle the ``Gemma4ClippableLinear`` clamp ops.
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
-        self.num_classes = num_classes
-        if global_pool is not None:
-            self.global_pool = global_pool
-        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
-
-    def _default_patch_coord(
-            self,
-            batch_size: int,
-            pH: int,
-            pW: int,
-            device: torch.device,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Create default grid patch coords + valid mask in NaFlex external (y, x) convention."""
-        ys = torch.arange(pH, device=device)
-        xs = torch.arange(pW, device=device)
-        grid_y, grid_x = torch.meshgrid(ys, xs, indexing='ij')
-        patch_coord = torch.stack([grid_y.flatten(), grid_x.flatten()], dim=-1)  # (N, 2) (y, x)
-        patch_coord = patch_coord.unsqueeze(0).expand(batch_size, -1, -1)
-        patch_valid = torch.ones(batch_size, pH * pW, dtype=torch.bool, device=device)
-        return patch_coord, patch_valid
-
-    def _naflex_to_internal_patches(self, x: torch.Tensor) -> torch.Tensor:
-        """Convert NaFlex pre-patched layout to Gemma4 internal C-P-P flat order.
-
-        Accepts ``(B, N, P*P*C)`` (NaFlex P-P-C flat) or ``(B, N, Ph, Pw, C)`` and
-        returns ``(B, N, C*P*P)`` in Gemma4's C-P-P flat order, ready for ``input_proj``.
+        Gemma4's pretrained E4B checkpoint ships finite clamp buffers on every
+        projection, which can saturate and stall gradient flow during classifier
+        fine-tuning. Setting ``enabled=False`` skips both the input and output
+        clamps in the forward pass (buffers are left untouched so the call is
+        reversible and checkpoint-safe).
         """
-        P = self.patch_size
-        if x.ndim == 5:
-            B, N, Ph, Pw, C = x.shape
-            return x.permute(0, 1, 4, 2, 3).reshape(B, N, C * Ph * Pw)
-        if x.ndim == 3:
-            B, N, PPC = x.shape
-            C = PPC // (P * P)
-            return x.reshape(B, N, P, P, C).permute(0, 1, 4, 2, 3).reshape(B, N, C * P * P)
-        raise ValueError(f"Pre-patchified input must have ndim in (3, 5); got {x.ndim}")
+        for mod in self.modules():
+            if isinstance(mod, Gemma4ClippableLinear):
+                mod.use_clipped = enabled
 
-    def _resolve_inputs(
-            self,
-            x: Union[torch.Tensor, Dict[str, torch.Tensor]],
-            patch_coord: Optional[torch.Tensor],
-            patch_valid: Optional[torch.Tensor],
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Normalize inputs from NaFlex (dict or tensor + coords) to internal form.
-
-        Returns:
-            x: tensor (raw image or pre-patched), with ``dict`` unwrapped.
-            position_ids: (B, N, 2) Gemma4-internal (x, y) coords.
-            padding_positions: (B, N) True for padding tokens.
-            patch_coord: (B, N, 2) external NaFlex (y, x) coords (preserved for downstream).
-            patch_valid: (B, N) True for valid tokens.
+    def _assert_raw_img_conformant(self, x: torch.Tensor) -> None:
+        """When using the soft-token pooler, raw-image H/W must divide
+        by ``patch_size * pooling_kernel_size`` so the pool cell grid is integral.
+        Pre-patchified / NaFlex inputs are assumed to be conformant already.
         """
-        if isinstance(x, dict):
-            patch_coord = x.get('patch_coord', patch_coord)
-            patch_valid = x.get('patch_valid', patch_valid)
-            x = x['patches']
+        if x.ndim != 4 or self.global_pool != 'soft':
+            return
+        H, W = x.shape[-2:]
+        ph, pw = self.patch_size
+        k = self.pooling_kernel_size
+        cell_h, cell_w = ph * k, pw * k
+        if H % cell_h != 0 or W % cell_w != 0:
+            raise ValueError(
+                f"Image size ({H}, {W}) must be divisible by "
+                f"(patch_size * pooling_kernel_size) = ({cell_h}, {cell_w}) when global_pool='soft'. "
+                f"Resize to multiples of ({cell_h}, {cell_w}), or use global_pool='avg'/'none'."
+            )
 
-        if x.ndim == 4 and patch_coord is None:
-            B, _, H, W = x.shape
-            P = self.patch_size
-            # When using the built-in gemma4 spatial pooler, both image dims must
-            # divide cleanly into (patch_size * pooling_kernel_size)-sized cells.
-            # Pre-patchified / NaFlex inputs are assumed to already be conformant.
-            if self.global_pool == 'gemma4':
-                cell = P * self.pooling_kernel_size
-                if H % cell != 0 or W % cell != 0:
-                    raise ValueError(
-                        f"Image size ({H}, {W}) must be divisible by "
-                        f"patch_size * pooling_kernel_size ({cell}) when global_pool='gemma4'. "
-                        f"Resize to multiples of {cell}, or use global_pool='avg'."
-                    )
-            pH = H // P
-            pW = W // P
-            patch_coord, patch_valid = self._default_patch_coord(B, pH, pW, x.device)
-
-        if patch_coord is None:
-            raise ValueError("patch_coord is required for pre-patchified input.")
-
-        if patch_valid is None:
-            sentinel = (patch_coord == -1).all(dim=-1)
-            if sentinel.any():
-                patch_valid = ~sentinel
-            else:
-                patch_valid = torch.ones(patch_coord.shape[:2], dtype=torch.bool, device=patch_coord.device)
-
-        # External NaFlex (y, x) → Gemma4 internal (x, y)
-        position_ids = patch_coord.flip(dims=(-1,))
-        padding_positions = ~patch_valid
-        return x, position_ids, padding_positions, patch_coord, patch_valid
-
-    def _embed_and_encode(
+    def _encode(
             self,
             x: torch.Tensor,
             position_ids: torch.Tensor,
@@ -856,24 +840,13 @@ class Gemma4Vit(nn.Module):
             block_callback: Optional[Callable[[int, torch.Tensor], None]] = None,
             max_block_index: Optional[int] = None,
     ) -> torch.Tensor:
-        """Shared patch-embed + RoPE + encoder-block pipeline.
-
-        ``x`` may be either a raw image ``(B, C, H, W)`` or a pre-patched tensor
-        (``(B, N, P*P*C)`` / ``(B, N, Ph, Pw, C)``).
-        """
-        if x.ndim == 4:
-            x = self.patch_embed(x, position_ids, padding_positions)
-        else:
-            patches = self._naflex_to_internal_patches(x)
-            x = self.patch_embed._project_patches(patches, position_ids, padding_positions)
-
+        """RoPE + transformer-block pipeline over already-embedded tokens."""
         B, N = x.shape[:2]
         rope_cos, rope_sin = self.rotary_emb(x, position_ids)
 
         attn_mask: Optional[torch.Tensor] = None
         if padding_positions.any():
-            # Column-only additive mask broadcast over heads (B, 1, 1, N) -> (B, heads, q, N).
-            # Matches HF Gemma4 implementation and preserves bit-perfect equivalence.
+            # Column-only additive mask broadcast over heads: (B, 1, 1, N) -> (B, heads, q, N).
             attn_mask = torch.zeros(B, 1, 1, N, device=x.device, dtype=x.dtype)
             attn_mask.masked_fill_(padding_positions[:, None, None, :], float('-inf'))
 
@@ -884,9 +857,9 @@ class Gemma4Vit(nn.Module):
 
         for i, blk in enumerate(blocks):
             if self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint(blk, x, rope_cos, rope_sin, position_ids, attn_mask)
+                x = checkpoint(blk, x, rope_cos, rope_sin, attn_mask)
             else:
-                x = blk(x, rope_cos, rope_sin, position_ids, attn_mask=attn_mask)
+                x = blk(x, rope_cos, rope_sin, attn_mask=attn_mask)
             if block_callback is not None:
                 block_callback(i, x)
 
@@ -898,35 +871,10 @@ class Gemma4Vit(nn.Module):
             patch_coord: Optional[torch.Tensor] = None,
             patch_valid: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        x, position_ids, padding_positions, _, _ = self._resolve_inputs(x, patch_coord, patch_valid)
-        return self._embed_and_encode(x, position_ids, padding_positions)
-
-    def forward_head(
-            self,
-            x: torch.Tensor,
-            patch_coord: Optional[torch.Tensor] = None,
-            patch_valid: Optional[torch.Tensor] = None,
-            pre_logits: bool = False,
-    ) -> torch.Tensor:
-        position_ids = patch_coord.flip(dims=(-1,)) if patch_coord is not None else None
-        padding_positions = ~patch_valid if patch_valid is not None else None
-
-        if self.global_pool == 'gemma4' and position_ids is not None:
-            if padding_positions is None:
-                padding_positions = torch.zeros(x.shape[:2], dtype=torch.bool, device=x.device)
-            output_length = x.shape[1] // (self.pooling_kernel_size**2)
-            x, _ = self.pooler(x, position_ids, padding_positions, output_length)
-            if self.std_bias is not None:
-                x = (x - self.std_bias) * self.std_scale
-        elif self.global_pool == 'avg':
-            if padding_positions is not None:
-                x = x.masked_fill(padding_positions.unsqueeze(-1), 0.0)
-                x = x.sum(dim=1) / (~padding_positions).sum(dim=1, keepdim=True).clamp(min=1)
-            else:
-                x = x.mean(dim=1)
-
-        x = self.head_drop(x)
-        return x if pre_logits else self.head(x)
+        """Raw patch tokens pre-pool. Returns ``(B, N, embed_dim)``."""
+        self._assert_raw_img_conformant(x if not isinstance(x, dict) else x['patches'])
+        x, position_ids, padding_positions = self.patch_embed(x, patch_coord, patch_valid)
+        return self._encode(x, position_ids, padding_positions)
 
     def forward(
             self,
@@ -934,13 +882,33 @@ class Gemma4Vit(nn.Module):
             patch_coord: Optional[torch.Tensor] = None,
             patch_valid: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        x, position_ids, padding_positions, patch_coord, patch_valid = self._resolve_inputs(
-            x,
-            patch_coord,
-            patch_valid,
-        )
-        features = self._embed_and_encode(x, position_ids, padding_positions)
-        return self.forward_head(features, patch_coord=patch_coord, patch_valid=patch_valid)
+        """Encode + apply the configured pool.
+
+        Output shape depends on ``self.global_pool``:
+          ``'soft'`` → ``(B, num_soft_tokens, D)``
+          ``'avg'``  → ``(B, D)``
+          ``'none'`` → ``(B, N, D)`` (raw patch tokens, identical to forward_features)
+        """
+        self._assert_raw_img_conformant(x if not isinstance(x, dict) else x['patches'])
+        x, position_ids, padding_positions = self.patch_embed(x, patch_coord, patch_valid)
+        x = self._encode(x, position_ids, padding_positions)
+
+        if self.global_pool == 'soft':
+            x, _ = self.pooler(x, position_ids, padding_positions)
+            # Standardization is applied post-pooler as per contract for ``'soft'`` from original
+            if self.std_bias is not None:
+                x = (x - self.std_bias) * self.std_scale
+            # (B, num_soft_tokens, D).
+        elif self.global_pool == 'avg':
+            # Masked mean over patch tokens; skips the pooler's √D scale.
+            if padding_positions.any():
+                x = x.masked_fill(padding_positions.unsqueeze(-1), 0.0)
+                x = x.sum(dim=1) / (~padding_positions).sum(dim=1, keepdim=True).clamp(min=1)
+            else:
+                x = x.mean(dim=1)
+            # (B, D).
+        # 'none' / '': return raw (B, N, D) patch tokens unchanged.
+        return x
 
     def forward_intermediates(
             self,
@@ -969,10 +937,12 @@ class Gemma4Vit(nn.Module):
         reshape = output_fmt == 'NCHW'
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
 
-        x, position_ids, padding_positions, _, _ = self._resolve_inputs(x, patch_coord, patch_valid)
+        raw = x if not isinstance(x, dict) else x['patches']
+        raw_input_ndim = raw.ndim
+        self._assert_raw_img_conformant(raw)
+        x, position_ids, padding_positions = self.patch_embed(x, patch_coord, patch_valid)
 
         intermediates: List[torch.Tensor] = []
-        raw_input_ndim = x.ndim
 
         def _cb(i: int, y: torch.Tensor) -> None:
             if i in take_indices:
@@ -982,7 +952,7 @@ class Gemma4Vit(nn.Module):
         if stop_early and not torch.jit.is_scripting():
             max_block_index = max_index
 
-        x = self._embed_and_encode(
+        x = self._encode(
             x,
             position_ids,
             padding_positions,
@@ -993,7 +963,7 @@ class Gemma4Vit(nn.Module):
         if reshape:
             if raw_input_ndim != 4:
                 raise ValueError("output_fmt='NCHW' requires a raw image (B, C, H, W) input.")
-            # Recover grid from internal position_ids (x, y) max.
+            # Recover grid from internal (x, y) position_ids max.
             B = position_ids.shape[0]
             pW = int(position_ids[..., 0].max().item()) + 1
             pH = int(position_ids[..., 1].max().item()) + 1
@@ -1010,11 +980,254 @@ class Gemma4Vit(nn.Module):
             prune_norm: bool = False,
             prune_head: bool = True,
     ) -> List[int]:
-        """Prune layers not required for specified intermediates."""
+        """Prune layers not required for specified intermediates.
+
+        ``prune_head`` is accepted for API compatibility; the encoder has no
+        classifier head so it's a no-op here. (The wrapping ``Gemma4VitClassifier``
+        handles its own head pruning.)
+        """
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
         self.blocks = self.blocks[:max_index + 1]
+        return take_indices
+
+
+class Gemma4VitClassifier(nn.Module):
+    """Classification wrapper around ``Gemma4VitEncoder``.
+
+    Holds:
+        - ``encoder``: a ``Gemma4VitEncoder`` (constructed with
+          ``global_pool='avg'``, though the classifier actually uses
+          ``encoder.forward_features`` and does its own masked-mean pool in
+          ``forward_head`` — the encoder's ``global_pool`` setting is kept
+          consistent so ``encoder.forward(...)`` also produces the
+          classifier-style ``(B, D)`` output if invoked directly).
+        - ``norm``: optional ``Gemma4RMSNorm`` after pooling.
+        - ``head``: linear classifier.
+
+    Input/output contract matches timm convention: ``forward_features`` returns
+    pre-pool ``(B, N, D)`` patch tokens; ``forward_head`` does pool + norm + head;
+    ``forward`` = ``forward_features`` + ``forward_head``.
+    """
+
+    def __init__(
+            self,
+            img_size: Union[int, Tuple[int, int]] = 768,
+            patch_size: int = 16,
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            global_pool: str = 'avg',
+            embed_dim: int = 768,
+            depth: int = 16,
+            num_heads: int = 12,
+            head_dim: int = 64,
+            num_kv_heads: Optional[int] = None,
+            intermediate_size: int = 3072,
+            norm_eps: float = 1e-6,
+            rope_theta: float = 100.0,
+            position_embedding_size: int = 10240,
+            pooling_kernel_size: int = 3,
+            standardize: bool = False,
+            use_clipped_linears: bool = False,
+            final_norm: bool = True,
+            drop_rate: float = 0.0,
+            proj_drop_rate: float = 0.0,
+            attn_drop_rate: float = 0.0,
+            drop_path_rate: float = 0.0,
+            act_layer: Optional[Callable] = None,
+            weight_init: str = '',
+            device=None,
+            dtype=None,
+    ) -> None:
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
+        assert global_pool in ('avg', 'none', ''), \
+            f"Gemma4VitClassifier global_pool must be 'avg', 'none', or '' (got {global_pool!r}); " \
+            f"use Gemma4VitEncoder directly for 'soft' VLM-style pooling."
+        self.num_classes = num_classes
+        self.global_pool = global_pool
+        # The inner encoder is always no-pool; the classifier does its own
+        # pooling in ``forward_head`` based on ``self.global_pool``.
+        self.encoder = Gemma4VitEncoder(
+            img_size=img_size,
+            patch_size=patch_size,
+            in_chans=in_chans,
+            global_pool='',  # global pool disabled at encoder level
+            embed_dim=embed_dim,
+            depth=depth,
+            num_heads=num_heads,
+            head_dim=head_dim,
+            num_kv_heads=num_kv_heads,
+            intermediate_size=intermediate_size,
+            norm_eps=norm_eps,
+            rope_theta=rope_theta,
+            position_embedding_size=position_embedding_size,
+            pooling_kernel_size=pooling_kernel_size,
+            standardize=standardize,
+            use_clipped_linears=use_clipped_linears,
+            proj_drop_rate=proj_drop_rate,
+            attn_drop_rate=attn_drop_rate,
+            drop_path_rate=drop_path_rate,
+            act_layer=act_layer,
+            weight_init=weight_init,
+            **dd,
+        )
+        self.norm = Gemma4RMSNorm(embed_dim, eps=norm_eps, with_scale=False, **dd) if final_norm else nn.Identity()
+        self.head_drop = nn.Dropout(drop_rate)
+        self.head = nn.Linear(embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
+
+        # Expose encoder attributes commonly read by timm factory / feature utils.
+        self.num_features = self.encoder.num_features
+        self.embed_dim = self.encoder.embed_dim
+        self.patch_size = self.encoder.patch_size
+        self.feature_info = self.encoder.feature_info
+
+        self.weight_init_mode = self.encoder.weight_init_mode
+        if weight_init != 'skip':
+            # Encoder already self-inited; only init head bias here.
+            if isinstance(self.head, nn.Linear) and self.head.bias is not None:
+                nn.init.zeros_(self.head.bias)
+
+    @torch.jit.ignore
+    def init_weights(self, mode: str = '', needs_reset: bool = True) -> None:
+        """Init encoder + classifier-specific pieces (head bias to zero)."""
+        self.encoder.init_weights(mode=mode, needs_reset=needs_reset)
+        if isinstance(self.head, nn.Linear) and self.head.bias is not None:
+            nn.init.zeros_(self.head.bias)
+
+    @torch.jit.ignore
+    def no_weight_decay(self) -> Set[str]:
+        return {f'encoder.{k}' for k in self.encoder.no_weight_decay()}
+
+    @torch.jit.ignore
+    def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
+        # Encoder params are nested under ``encoder.``. ``norm`` / ``head`` are
+        # intentionally left unmatched so they fall through to ``(inf,)`` and
+        # land in their own top-layer bucket (``lr_scale=1.0``), separate from
+        # the last encoder block. Regex alternations must NOT use capture
+        # groups — ``timm._manipulate`` casts every captured group to float and
+        # treats it as a layer id; only the per-block ``(\d+)`` capture is
+        # allowed.
+        return dict(
+            stem=r'^encoder\.patch_embed|^encoder\.rotary_emb',
+            blocks=[(r'^encoder\.blocks\.(\d+)', None)],
+        )
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable: bool = True) -> None:
+        self.encoder.set_grad_checkpointing(enable)
+
+    @torch.jit.ignore
+    def set_clamp_enabled(self, enabled: bool = True) -> None:
+        self.encoder.set_clamp_enabled(enabled)
+
+    @torch.jit.ignore
+    def get_patch_size(self) -> Tuple[int, int]:
+        """Return the 2-tuple patch size. For NaFlex dataloader / transform wiring."""
+        return self.encoder.get_patch_size()
+
+    @torch.jit.ignore
+    def get_classifier(self) -> nn.Module:
+        return self.head
+
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
+        self.num_classes = num_classes
+        if global_pool is not None:
+            assert global_pool in ('avg', 'none', ''), \
+                f"Gemma4VitClassifier global_pool must be 'avg', 'none', or '' (got {global_pool!r})"
+            self.global_pool = global_pool
+        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        if isinstance(self.head, nn.Linear) and self.head.bias is not None:
+            nn.init.zeros_(self.head.bias)
+
+    def forward_features(
+            self,
+            x: Union[torch.Tensor, Dict[str, torch.Tensor]],
+            patch_coord: Optional[torch.Tensor] = None,
+            patch_valid: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """Raw patch tokens pre-pool — ``(B, N, embed_dim)``."""
+        return self.encoder.forward_features(x, patch_coord=patch_coord, patch_valid=patch_valid)
+
+    def forward_head(
+            self,
+            x: torch.Tensor,
+            patch_valid: Optional[torch.Tensor] = None,
+            pre_logits: bool = False,
+    ) -> torch.Tensor:
+        """Pool (if configured) → norm → head_drop → head.
+
+        Args:
+            x: ``(B, N, D)`` patch tokens from ``forward_features``.
+            patch_valid: ``(B, N)`` valid mask for masked mean. None → simple mean.
+            pre_logits: If True, return pre-classifier features.
+        """
+        if self.global_pool == 'avg':
+            if patch_valid is not None:
+                x = x.masked_fill((~patch_valid).unsqueeze(-1), 0.0)
+                x = x.sum(dim=1) / patch_valid.sum(dim=1, keepdim=True).clamp(min=1)
+            else:
+                x = x.mean(dim=1)
+        # 'none' / '': leave x as (B, N, D)
+        x = self.norm(x)
+        x = self.head_drop(x)
+        return x if pre_logits else self.head(x)
+
+    def forward(
+            self,
+            x: Union[torch.Tensor, Dict[str, torch.Tensor]],
+            patch_coord: Optional[torch.Tensor] = None,
+            patch_valid: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        # Resolve patch_valid once up front so forward_features and forward_head
+        # see a consistent mask. Mirrors ``Gemma4PatchEmbed``'s own resolution:
+        #   - dict input → pull ``patch_coord`` / ``patch_valid`` from the dict
+        #   - ``patch_coord`` with any ``-1`` sentinel rows and no explicit
+        #     ``patch_valid`` → derive ``patch_valid = ~sentinel``
+        #   - raw image / fully-valid coords → ``patch_valid`` stays None and
+        #     ``forward_head`` does unmasked mean (correct; all tokens valid).
+        if isinstance(x, dict):
+            patch_coord = x.get('patch_coord', patch_coord)
+            patch_valid = x.get('patch_valid', patch_valid)
+            x = x['patches']
+        if patch_valid is None and patch_coord is not None:
+            sentinel = (patch_coord == -1).all(dim=-1)
+            if sentinel.any():
+                patch_valid = ~sentinel
+
+        feats = self.forward_features(x, patch_coord=patch_coord, patch_valid=patch_valid)
+        return self.forward_head(feats, patch_valid=patch_valid)
+
+    def forward_intermediates(
+            self,
+            x: Union[torch.Tensor, Dict[str, torch.Tensor]],
+            patch_coord: Optional[torch.Tensor] = None,
+            patch_valid: Optional[torch.Tensor] = None,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        return self.encoder.forward_intermediates(
+            x,
+            patch_coord=patch_coord,
+            patch_valid=patch_valid,
+            indices=indices,
+            norm=norm,
+            stop_early=stop_early,
+            output_fmt=output_fmt,
+            intermediates_only=intermediates_only,
+        )
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        take_indices = self.encoder.prune_intermediate_layers(indices, prune_norm=prune_norm, prune_head=False)
         if prune_head:
-            self.reset_classifier(0, '')
+            self.reset_classifier(0)
         return take_indices
 
 
@@ -1041,20 +1254,22 @@ def get_init_weights_gemma4_vit(mode: str = '', needs_reset: bool = True) -> Cal
     return partial(init_weights_gemma4_vit, needs_reset=needs_reset)
 
 
-def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: Gemma4Vit) -> Dict[str, torch.Tensor]:
-    """Convert HuggingFace Transformers Gemma4 vision encoder weights to timm format.
+def checkpoint_filter_fn_encoder(
+        state_dict: Dict[str, torch.Tensor],
+        model: Gemma4VitEncoder,
+) -> Dict[str, torch.Tensor]:
+    """Convert HuggingFace Gemma4 vision encoder weights → ``Gemma4VitEncoder`` keys.
 
-    Handles key remapping from HF naming conventions to timm naming conventions.
-    Supports both `model.vision_tower.` (actual) and `model.vision_model.` (docs) prefixes.
-    Preserves ClippableLinear structure (.linear.weight and clamp buffers) for E4B variant.
+    Pure key remapping — no value transforms. The encoder consumes patches in
+    HF's native C-P-P flat layout (via ``batch_patchify(channels_last=False)``
+    in ``Gemma4PatchEmbed``), so ``input_proj.weight`` passes through unchanged.
+    ``Gemma4ClippableLinear`` preserves HF's ``.linear.weight`` + clamp-buffer
+    structure, so those pass through too.
     """
     out_dict = {}
-
-    # Detect prefix from keys
     hf_prefixes = ('model.vision_tower.', 'model.vision_model.', 'vision_model.', 'vision_tower.')
 
     for k, v in state_dict.items():
-        # Check if this is a vision key
         matched_prefix = None
         for prefix in hf_prefixes:
             if k.startswith(prefix):
@@ -1062,52 +1277,82 @@ def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: Gemma4Vit) 
                 break
 
         if matched_prefix is None:
-            # Already in timm format — pass through
-            if k.startswith(('patch_embed.', 'blocks.', 'std_', 'head.', 'pooler.', 'rotary_emb.')):
+            # Already in timm-encoder format — pass through
+            if k.startswith(('patch_embed.', 'blocks.', 'std_', 'pooler.', 'rotary_emb.')):
                 out_dict[k] = v
             continue
 
-        # Strip HF prefix
-        new_k = k[len(matched_prefix) :]
+        new_k = k[len(matched_prefix):]
 
         # Skip rotary embedding buffers (recomputed in model)
         if 'rotary_emb' in new_k:
             continue
 
-        # Remap patch embedder
         new_k = new_k.replace('patch_embedder.', 'patch_embed.')
-
-        # Remap encoder layers
         new_k = new_k.replace('encoder.layers.', 'blocks.')
-
-        # Remap norm layers
         new_k = new_k.replace('.input_layernorm.', '.norm1.')
         new_k = new_k.replace('.post_attention_layernorm.', '.norm2.')
         new_k = new_k.replace('.pre_feedforward_layernorm.', '.norm3.')
         new_k = new_k.replace('.post_feedforward_layernorm.', '.norm4.')
-
-        # Remap attention
         new_k = new_k.replace('.self_attn.', '.attn.')
-
-        # Note: .linear.weight and clamp buffers (input_min etc.) are preserved as-is
-        # since our model uses Gemma4ClippableLinear which has the same structure.
 
         out_dict[new_k] = v
 
     return out_dict
 
 
-def _create_gemma4_vit(variant: str, pretrained: bool = False, **kwargs) -> Gemma4Vit:
+def checkpoint_filter_fn_classifier(
+        state_dict: Dict[str, torch.Tensor],
+        model: 'Gemma4VitClassifier',
+) -> Dict[str, torch.Tensor]:
+    """Convert HF or timm-encoder state dict → ``Gemma4VitClassifier`` keys.
+
+    Runs the encoder filter, then prefixes every encoder-owned key with
+    ``encoder.``. Top-level keys that belong to the classifier (``norm.*``,
+    ``head.*``) pass through unchanged — they're absent from HF checkpoints, so
+    the model's own init values stand.
+    """
+    # Classifier-local keys (already correct form) are passed through; everything
+    # else is routed through the encoder filter and re-prefixed.
+    classifier_local_prefixes = ('norm.', 'head.')
+    classifier_local = {k: v for k, v in state_dict.items()
+                        if k.startswith(classifier_local_prefixes) or k.startswith('encoder.')}
+    to_filter = {k: v for k, v in state_dict.items() if k not in classifier_local}
+
+    encoder_dict = checkpoint_filter_fn_encoder(to_filter, model.encoder)
+    prefixed = {f'encoder.{k}': v for k, v in encoder_dict.items()}
+    prefixed.update(classifier_local)
+    return prefixed
+
+
+def _create_gemma4_vit_encoder(variant: str, pretrained: bool = False, **kwargs) -> Gemma4VitEncoder:
     out_indices = kwargs.pop('out_indices', 3)
-    model = build_model_with_cfg(
-        Gemma4Vit,
+    # Encoder has no classifier head; strip ``num_classes`` (auto-injected from
+    # the pretrained_cfg). ``global_pool`` is now a legitimate encoder kwarg so
+    # it passes through unfiltered.
+    return build_model_with_cfg(
+        Gemma4VitEncoder,
         variant,
         pretrained,
-        pretrained_filter_fn=checkpoint_filter_fn,
+        pretrained_filter_fn=checkpoint_filter_fn_encoder,
+        feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
+        kwargs_filter=('num_classes',),
+        **kwargs,
+    )
+
+
+def _create_gemma4_vit_classifier(variant: str, pretrained: bool = False, **kwargs) -> Gemma4VitClassifier:
+    out_indices = kwargs.pop('out_indices', 3)
+    # non-strict: ``norm.weight`` / ``head.*`` absent from the HF checkpoint.
+    return build_model_with_cfg(
+        Gemma4VitClassifier,
+        variant,
+        pretrained,
+        pretrained_filter_fn=checkpoint_filter_fn_classifier,
+        pretrained_strict=False,
         feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
         **kwargs,
     )
-    return model
 
 
 def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
@@ -1119,8 +1364,12 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
         'crop_pct': 1.0,
         'interpolation': 'bicubic',
         'fixed_input_size': False,
-        'mean': (0.5, 0.5, 0.5),
-        'std': (0.5, 0.5, 0.5),
+        # Gemma4 does ``2 * (x - 0.5)`` internally in ``Gemma4PatchEmbed``, so the
+        # data pipeline must pass raw [0, 1] tensors. Setting mean/std to zero/one
+        # disables normalization in timm's standard pipeline and prevents a
+        # double-normalize (would map [0, 1] → [-1, 1] → [-3, 1]).
+        'mean': (0.0, 0.0, 0.0),
+        'std': (1.0, 1.0, 1.0),
         'first_conv': 'patch_embed.input_proj',
         'classifier': 'head',
         **kwargs,
@@ -1128,6 +1377,7 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
 
 
 default_cfgs = generate_default_cfgs({
+    # Classifier-friendly defaults (avg pool + norm).
     'gemma4_vit_e4b.gemma4_e4b': _cfg(
         hf_hub_id='developer0hye/gemma4_vit_e4b',
         license='apache-2.0',
@@ -1136,33 +1386,82 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='developer0hye/gemma4_vit_31b',
         license='apache-2.0',
     ),
+    # Native VLM encoder variants (gemma4 spatial-bin pool, no norm).
+    'gemma4_vit_e4b_enc.gemma4_e4b': _cfg(
+        hf_hub_id='developer0hye/gemma4_vit_e4b',
+        license='apache-2.0',
+    ),
+    'gemma4_vit_31b_enc.gemma4_31b': _cfg(
+        hf_hub_id='developer0hye/gemma4_vit_31b',
+        license='apache-2.0',
+    ),
 })
 
 
-@register_model
-def gemma4_vit_e4b(pretrained: bool = False, **kwargs) -> Gemma4Vit:
-    """Gemma4 Vision Encoder from the E4B (4B) model variant (~150M params)."""
-    model_args = dict(
-        embed_dim=768,
-        depth=16,
-        num_heads=12,
-        head_dim=64,
-        intermediate_size=3072,
-        standardize=False,
-        use_clipped_linears=True,
-    )
-    return _create_gemma4_vit('gemma4_vit_e4b', pretrained=pretrained, **dict(model_args, **kwargs))
+_E4B_ARCH = dict(
+    embed_dim=768,
+    depth=16,
+    num_heads=12,
+    head_dim=64,
+    intermediate_size=3072,
+    standardize=False,
+    use_clipped_linears=True,
+)
+
+_31B_ARCH = dict(
+    embed_dim=1152,
+    depth=27,
+    num_heads=16,
+    head_dim=72,
+    intermediate_size=4304,
+    standardize=True,
+)
 
 
 @register_model
-def gemma4_vit_31b(pretrained: bool = False, **kwargs) -> Gemma4Vit:
-    """Gemma4 Vision Encoder from the 31B model variant (~550M params)."""
-    model_args = dict(
-        embed_dim=1152,
-        depth=27,
-        num_heads=16,
-        head_dim=72,
-        intermediate_size=4304,
-        standardize=True,
-    )
-    return _create_gemma4_vit('gemma4_vit_31b', pretrained=pretrained, **dict(model_args, **kwargs))
+def gemma4_vit_e4b(pretrained: bool = False, **kwargs) -> Gemma4VitClassifier:
+    """Gemma4 E4B (~167M) classifier.
+
+    Masked mean pool over patch tokens + norm + linear classifier. Output:
+    ``(B, num_classes)``. For the native VLM encoder interface (soft-token
+    output), use ``gemma4_vit_e4b_enc``.
+    """
+    model_args = dict(_E4B_ARCH, final_norm=True)
+    return _create_gemma4_vit_classifier('gemma4_vit_e4b', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def gemma4_vit_e4b_enc(pretrained: bool = False, **kwargs) -> Gemma4VitEncoder:
+    """Gemma4 E4B (~167M) — native VLM encoder.
+
+    ``global_pool='soft'`` applies the spatial ``k×k`` soft-token pool + √D
+    scale; output: ``(B, num_soft_tokens, embed_dim)``. Bit-perfect with HF
+    ``Gemma4VisionModel`` on matching weights.
+    """
+    model_args = dict(_E4B_ARCH, global_pool='soft')
+    return _create_gemma4_vit_encoder('gemma4_vit_e4b_enc', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def gemma4_vit_31b(pretrained: bool = False, **kwargs) -> Gemma4VitClassifier:
+    """Gemma4 31B (~570M) classifier.
+
+    Masked mean pool over patch tokens + norm + linear classifier. Output:
+    ``(B, num_classes)``. The classifier uses ``encoder.forward_features`` and
+    does its own pool + norm; the encoder's ``std_bias/std_scale`` (which only
+    applies in ``'soft'`` pool mode) is not used on the classifier path.
+    """
+    model_args = dict(_31B_ARCH, final_norm=True)
+    return _create_gemma4_vit_classifier('gemma4_vit_31b', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def gemma4_vit_31b_enc(pretrained: bool = False, **kwargs) -> Gemma4VitEncoder:
+    """Gemma4 31B (~570M) — native VLM encoder.
+
+    ``global_pool='soft'`` output ``(B, num_soft_tokens, embed_dim)`` with
+    ``std_bias/std_scale`` standardization applied post-pool (HF-native
+    ordering — bit-perfect with ``Gemma4VisionModel``).
+    """
+    model_args = dict(_31B_ARCH, global_pool='soft')
+    return _create_gemma4_vit_encoder('gemma4_vit_31b_enc', pretrained=pretrained, **dict(model_args, **kwargs))
