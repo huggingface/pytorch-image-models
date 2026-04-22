@@ -289,6 +289,13 @@ def checkpoint_seq(
 def adapt_input_conv(in_chans: int, conv_weight: Tensor) -> Tensor:
     conv_type = conv_weight.dtype
     conv_weight = conv_weight.float()  # Some weights are in torch.half, ensure it's float for sum on CPU
+    if conv_weight.ndim != 4:
+        # Non-Conv2d first-conv weight (e.g., Linear patch embed in NaFlexVit /
+        # Gemma4Vit). Can't infer the (C, P, P) factorization from shape alone,
+        # so delegate to the caller's fallback (weight dropped, strict=False).
+        raise NotImplementedError(
+            f'adapt_input_conv only supports 4D Conv2d weights; got ndim={conv_weight.ndim}.'
+        )
     O, I, J, K = conv_weight.shape
     if in_chans == 1:
         if I > 3:

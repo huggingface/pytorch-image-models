@@ -682,7 +682,12 @@ class Gemma4VitEncoder(nn.Module):
         assert global_pool in ('soft', 'avg', 'none', ''), \
             f"global_pool must be one of 'soft', 'avg', 'none' (or ''); got {global_pool!r}"
         self.global_pool = global_pool
-        self.num_features = self.embed_dim = embed_dim
+        self.num_features = self.head_hidden_size = self.embed_dim = embed_dim
+        # Encoder has no classifier head; ``num_classes`` kept for timm API
+        self.num_classes = 0
+        # Output is ``(B, num_soft_tokens, D)`` for ``pool='soft'`` (default) or
+        # ``(B, N, D)`` for ``pool='none'``; channel dim is last in both cases.
+        self.output_fmt = 'NLC'
         self.num_prefix_tokens = 0
         self.grad_checkpointing = False
         # ``patch_size`` is a 2-tuple at the model level (matches NaFlexVit
@@ -875,6 +880,9 @@ class Gemma4VitEncoder(nn.Module):
         self._assert_raw_img_conformant(x if not isinstance(x, dict) else x['patches'])
         x, position_ids, padding_positions = self.patch_embed(x, patch_coord, patch_valid)
         return self._encode(x, position_ids, padding_positions)
+
+    def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
+        raise NotImplementedError("Gemma4VitEncoder does not support classification use cases.")
 
     def forward(
             self,
@@ -1076,7 +1084,7 @@ class Gemma4VitClassifier(nn.Module):
         self.head = nn.Linear(embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
         # Expose encoder attributes commonly read by timm factory / feature utils.
-        self.num_features = self.encoder.num_features
+        self.num_features = self.head_hidden_size = self.encoder.num_features
         self.embed_dim = self.encoder.embed_dim
         self.patch_size = self.encoder.patch_size
         self.feature_info = self.encoder.feature_info
@@ -1100,13 +1108,7 @@ class Gemma4VitClassifier(nn.Module):
 
     @torch.jit.ignore
     def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
-        # Encoder params are nested under ``encoder.``. ``norm`` / ``head`` are
-        # intentionally left unmatched so they fall through to ``(inf,)`` and
-        # land in their own top-layer bucket (``lr_scale=1.0``), separate from
-        # the last encoder block. Regex alternations must NOT use capture
-        # groups — ``timm._manipulate`` casts every captured group to float and
-        # treats it as a layer id; only the per-block ``(\d+)`` capture is
-        # allowed.
+        # Encoder params are nested under ``encoder.`
         return dict(
             stem=r'^encoder\.patch_embed|^encoder\.rotary_emb',
             blocks=[(r'^encoder\.blocks\.(\d+)', None)],
@@ -1327,9 +1329,6 @@ def checkpoint_filter_fn_classifier(
 
 def _create_gemma4_vit_encoder(variant: str, pretrained: bool = False, **kwargs) -> Gemma4VitEncoder:
     out_indices = kwargs.pop('out_indices', 3)
-    # Encoder has no classifier head; strip ``num_classes`` (auto-injected from
-    # the pretrained_cfg). ``global_pool`` is now a legitimate encoder kwarg so
-    # it passes through unfiltered.
     return build_model_with_cfg(
         Gemma4VitEncoder,
         variant,
@@ -1349,7 +1348,6 @@ def _create_gemma4_vit_classifier(variant: str, pretrained: bool = False, **kwar
         variant,
         pretrained,
         pretrained_filter_fn=checkpoint_filter_fn_classifier,
-        pretrained_strict=False,
         feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
         **kwargs,
     )
@@ -1360,6 +1358,10 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
         'url': url,
         'num_classes': 0,
         'input_size': (3, 768, 768),
+        # Smallest square divisible by ``patch_size * pooling_kernel_size = 48``
+        # so the test harness' size-clamp doesn't land at 128 and blow the
+        # ``global_pool='soft'`` divisibility assert.
+        'min_input_size': (3, 96, 96),
         'pool_size': None,
         'crop_pct': 1.0,
         'interpolation': 'bicubic',
@@ -1380,10 +1382,12 @@ default_cfgs = generate_default_cfgs({
     # Classifier-friendly defaults (avg pool + norm).
     'gemma4_vit_e4b.gemma4_e4b': _cfg(
         hf_hub_id='developer0hye/gemma4_vit_e4b',
+        first_conv='encoder.patch_embed.input_proj',
         license='apache-2.0',
     ),
     'gemma4_vit_31b.gemma4_31b': _cfg(
         hf_hub_id='developer0hye/gemma4_vit_31b',
+        first_conv='encoder.patch_embed.input_proj',
         license='apache-2.0',
     ),
     # Native VLM encoder variants (gemma4 spatial-bin pool, no norm).
