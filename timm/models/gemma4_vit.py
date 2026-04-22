@@ -18,7 +18,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, to_2tuple, trunc_normal_tf_, use_fused_attn
+from timm.layers import RmsNorm, DropPath, to_2tuple, trunc_normal_tf_, use_fused_attn
 
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
@@ -72,25 +72,6 @@ class Gemma4ClippableLinear(nn.Module):
         if self.use_clipped:
             x = torch.clamp(x, self.output_min, self.output_max)
         return x
-
-
-class Gemma4RMSNorm(nn.RMSNorm):
-    """RMSNorm with optional learnable scale.
-
-    Thin wrapper over ``nn.RMSNorm`` that renames ``elementwise_affine`` to
-    ``with_scale`` (Original Gemma4 omits the V-norm gain so we need a way to
-    request the no-scale variant).
-    """
-
-    def __init__(
-            self,
-            dim: int,
-            eps: float = 1e-6,
-            with_scale: bool = True,
-            device=None,
-            dtype=None,
-    ) -> None:
-        super().__init__(dim, eps=eps, elementwise_affine=with_scale, device=device, dtype=dtype)
 
 
 def rotate_half(x: torch.Tensor) -> torch.Tensor:
@@ -402,9 +383,10 @@ class Gemma4Attention(nn.Module):
         self.v_proj = Gemma4ClippableLinear(dim, self.num_kv_heads * head_dim, use_clipped=use_clipped_linears, **dd)
         self.o_proj = Gemma4ClippableLinear(num_heads * head_dim, dim, use_clipped=use_clipped_linears, **dd)
 
-        self.q_norm = Gemma4RMSNorm(head_dim, eps=norm_eps, with_scale=True, **dd)
-        self.k_norm = Gemma4RMSNorm(head_dim, eps=norm_eps, with_scale=True, **dd)
-        self.v_norm = Gemma4RMSNorm(head_dim, eps=norm_eps, with_scale=False, **dd)
+        self.q_norm = RmsNorm(head_dim, eps=norm_eps, affine=True, **dd)
+        self.k_norm = RmsNorm(head_dim, eps=norm_eps, affine=True, **dd)
+        # v_norm has no learnable gain in Gemma4 (HF omits it entirely).
+        self.v_norm = RmsNorm(head_dim, eps=norm_eps, affine=False, **dd)
 
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj_drop = nn.Dropout(proj_drop)
@@ -519,7 +501,7 @@ class Gemma4Block(nn.Module):
     ) -> None:
         dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        self.norm1 = Gemma4RMSNorm(dim, eps=norm_eps, **dd)
+        self.norm1 = RmsNorm(dim, eps=norm_eps, **dd)
         self.attn = Gemma4Attention(
             dim=dim,
             num_heads=num_heads,
@@ -531,8 +513,8 @@ class Gemma4Block(nn.Module):
             use_clipped_linears=use_clipped_linears,
             **dd,
         )
-        self.norm2 = Gemma4RMSNorm(dim, eps=norm_eps, **dd)
-        self.norm3 = Gemma4RMSNorm(dim, eps=norm_eps, **dd)
+        self.norm2 = RmsNorm(dim, eps=norm_eps, **dd)
+        self.norm3 = RmsNorm(dim, eps=norm_eps, **dd)
         self.mlp = Gemma4GatedMlp(
             in_features=dim,
             hidden_features=intermediate_size,
@@ -540,7 +522,7 @@ class Gemma4Block(nn.Module):
             use_clipped_linears=use_clipped_linears,
             **dd,
         )
-        self.norm4 = Gemma4RMSNorm(dim, eps=norm_eps, **dd)
+        self.norm4 = RmsNorm(dim, eps=norm_eps, **dd)
         self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
     def forward(
@@ -1009,7 +991,7 @@ class Gemma4VitClassifier(nn.Module):
           ``forward_head`` — the encoder's ``global_pool`` setting is kept
           consistent so ``encoder.forward(...)`` also produces the
           classifier-style ``(B, D)`` output if invoked directly).
-        - ``norm``: optional ``Gemma4RMSNorm`` after pooling.
+        - ``norm``: optional ``RmsNorm`` after pooling.
         - ``head``: linear classifier.
 
     Input/output contract matches timm convention: ``forward_features`` returns
@@ -1079,7 +1061,7 @@ class Gemma4VitClassifier(nn.Module):
             weight_init=weight_init,
             **dd,
         )
-        self.norm = Gemma4RMSNorm(embed_dim, eps=norm_eps, with_scale=False, **dd) if final_norm else nn.Identity()
+        self.norm = RmsNorm(embed_dim, eps=norm_eps, affine=False, **dd) if final_norm else nn.Identity()
         self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
