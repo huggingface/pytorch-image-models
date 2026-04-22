@@ -39,6 +39,7 @@ class NaFlexPrefetchLoader:
             re_mode: str = 'const',
             re_count: int = 1,
             re_num_splits: int = 0,
+            patchify_channels_last: bool = True,
         ) -> None:
         """Initialize NaFlexPrefetchLoader.
 
@@ -53,16 +54,25 @@ class NaFlexPrefetchLoader:
             re_mode: Random erasing mode.
             re_count: Maximum number of erasing rectangles.
             re_num_splits: Number of augmentation splits.
+            patchify_channels_last: Per-patch flat layout produced by the
+                upstream Patchify. ``True`` (default): channel index is the
+                innermost (P-P-C). ``False``: channel index is the outermost
+                (C-P-P). Controls how ``patches`` tensors are viewed for
+                normalization and erasing.
         """
         self.loader = loader
         self.device = device
         self.img_dtype = img_dtype or torch.float32
 
-        # Create mean/std tensors for normalization (will be applied to patches)
+        # Create mean/std tensors for normalization (will be applied to patches).
+        # Broadcast shape depends on where the channel axis sits after viewing:
+        #   channels_last  → view (..., pixel, C) → normalize over last axis
+        #   channels_first → view (..., C, pixel) → normalize over axis -2
         mean = adapt_to_chs(mean, channels)
         std = adapt_to_chs(std, channels)
-        normalization_shape = (1, 1, channels)
         self.channels = channels
+        self.patchify_channels_last = patchify_channels_last
+        normalization_shape = (1, 1, channels) if patchify_channels_last else (1, channels, 1)
         self.mean = torch.tensor(
             [x * 255 for x in mean], device=device, dtype=self.img_dtype).view(normalization_shape)
         self.std = torch.tensor(
@@ -114,33 +124,52 @@ class NaFlexPrefetchLoader:
 
                 next_target = next_target.to(device=self.device, non_blocking=True)
 
-                # Normalize patch values - handle both [B, N, P*P*C] and [B, N, Ph, Pw, C] formats
+                # Normalize patch values. Layout depends on ``self.patchify_channels_last``:
+                #   True  → flat [B, N, P*P*C] or unflat [B, N, Ph, Pw, C] — C varies fastest.
+                #   False → flat [B, N, C*P*P] or unflat [B, N, C, Ph, Pw] — C varies slowest.
                 patches_tensor = next_input_dict['patches']
                 original_shape = patches_tensor.shape
 
                 if patches_tensor.ndim == 3:
-                    # Format: [B, N, P*P*C] - flattened patches
-                    batch_size, num_patches, patch_pixels = original_shape
-                    # To [B*N, P*P, C] for normalization and erasing
-                    patches = patches_tensor.view(batch_size, num_patches, -1, self.channels)
+                    # Flat patches.
+                    batch_size, num_patches, _ = original_shape
+                    if self.patchify_channels_last:
+                        # [B, N, P*P*C] → [B, N, P*P, C]
+                        patches = patches_tensor.view(batch_size, num_patches, -1, self.channels)
+                    else:
+                        # [B, N, C*P*P] → [B, N, C, P*P]
+                        patches = patches_tensor.view(batch_size, num_patches, self.channels, -1)
                 elif patches_tensor.ndim == 5:
-                    # Format: [B, N, Ph, Pw, C] - unflattened patches (variable patch size mode)
-                    batch_size, num_patches, patch_h, patch_w, channels = original_shape
-                    assert channels == self.channels, f"Expected {self.channels} channels, got {channels}"
-                    # To [B*N, Ph*Pw, C] for normalization and erasing
-                    patches = patches_tensor.view(batch_size, num_patches, -1, self.channels)
+                    # Unflattened patches (variable patch size mode).
+                    batch_size, num_patches = original_shape[:2]
+                    if self.patchify_channels_last:
+                        # [B, N, Ph, Pw, C] → [B, N, Ph*Pw, C]
+                        assert original_shape[-1] == self.channels, \
+                            f"Expected {self.channels} channels, got {original_shape[-1]}"
+                        patches = patches_tensor.view(batch_size, num_patches, -1, self.channels)
+                    else:
+                        # [B, N, C, Ph, Pw] → [B, N, C, Ph*Pw]
+                        assert original_shape[2] == self.channels, \
+                            f"Expected {self.channels} channels, got {original_shape[2]}"
+                        patches = patches_tensor.view(batch_size, num_patches, self.channels, -1)
                 else:
                     raise ValueError(f"Unexpected patches tensor dimensions: {patches_tensor.ndim}. Expected 3 or 5.")
 
-                # Apply normalization
+                # Apply normalization (broadcast shape was chosen at __init__ based on layout).
                 patches = patches.sub(self.mean).div(self.std)
 
                 if self.random_erasing is not None:
+                    # PatchRandomErasing expects channels-last [B, N, P*P, C];
+                    # permute in/out if we're in channels-first mode.
+                    if not self.patchify_channels_last:
+                        patches = patches.transpose(-2, -1).contiguous()
                     patches = self.random_erasing(
                         patches,
                         patch_coord=next_input_dict['patch_coord'],
                         patch_valid=next_input_dict.get('patch_valid', None),
                     )
+                    if not self.patchify_channels_last:
+                        patches = patches.transpose(-2, -1).contiguous()
 
                 # Reshape back to original format
                 next_input_dict['patches'] = patches.view(original_shape)
@@ -235,6 +264,7 @@ def create_naflex_loader(
         device: Union[str, torch.device] = torch.device('cuda'),
         persistent_workers: bool = True,
         worker_seeding: str = 'all',
+        patchify_channels_last: bool = True,
     ) -> Union[torch.utils.data.DataLoader, NaFlexPrefetchLoader]:
     """Create a data loader with dynamic sequence length sampling for training.
 
@@ -283,6 +313,10 @@ def create_naflex_loader(
         device: Device to move tensors to.
         persistent_workers: Whether to use persistent workers.
         worker_seeding: Worker seeding mode.
+        patchify_channels_last: Per-patch flat layout. ``True`` (default):
+            channel index varies fastest (NaFlex default). ``False``: C-P-P
+            (channels first — Gemma4 / HF native layout). Forwarded to the
+            upstream ``Patchify`` and to the prefetcher's normalization layout.
 
     Returns:
         DataLoader or NaFlexPrefetchLoader instance.
@@ -317,6 +351,7 @@ def create_naflex_loader(
             re_count=re_count,
             use_prefetcher=use_prefetcher,
             naflex=True,
+            patchify_channels_last=patchify_channels_last,
         )
 
         max_train_seq_len = max(train_seq_lens)
@@ -340,6 +375,7 @@ def create_naflex_loader(
             world_size=world_size,
             shuffle=True,
             epoch=epoch,
+            patchify_channels_last=patchify_channels_last,
         )
 
         # NOTE: Collation is handled by the dataset wrapper for training
@@ -364,6 +400,7 @@ def create_naflex_loader(
                 re_prob=re_prob,
                 re_mode=re_mode,
                 re_count=re_count,
+                patchify_channels_last=patchify_channels_last,
             )
 
     else:
@@ -379,6 +416,7 @@ def create_naflex_loader(
             patch_size=patch_size,
             max_seq_len=max_seq_len,
             patchify=True,
+            patchify_channels_last=patchify_channels_last,
         )
 
         # Create the collator
@@ -409,6 +447,7 @@ def create_naflex_loader(
                 std=std,
                 img_dtype=img_dtype,
                 device=device,
+                patchify_channels_last=patchify_channels_last,
             )
 
     return loader

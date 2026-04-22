@@ -411,6 +411,9 @@ group.add_argument('--naflex-patch-size-probs', type=float, nargs='+', default=N
                    help='Probabilities for each patch size (must sum to 1.0, uniform if not specified)')
 group.add_argument('--naflex-loss-scale', default='linear', type=str,
                    help='Scale loss (gradient) by batch_size ("none", "sqrt", or "linear")')
+group.add_argument('--naflex-patchify-channels-first', action='store_true', default=False,
+                   help='Emit NaFlex patches in C-P-P (channels-first) flat layout instead of the default '
+                        'P-P-C (channels-last). Use for models that consume HF/Gemma4-style C-P-P patches.')
 
 # Knowledge Distillation parameters
 parser.add_argument('--kd-model-name', default=None, type=str,
@@ -577,8 +580,10 @@ def main():
 
     model_patch_size = None
     if args.naflex_loader:
-        # NaFlexVit models have embeds.patch_size. Needs to be extracted here before mutating the model.
-        model_patch_size = getattr(getattr(model, "embeds", None), "patch_size", None)
+        # NaFlex-compatible models expose a ``get_patch_size()`` method returning a 2-tuple.
+        # Extract here before mutating the model.
+        if hasattr(model, 'get_patch_size'):
+            model_patch_size = model.get_patch_size()
 
     if args.torchscript:
         assert not args.torchcompile
@@ -798,6 +803,7 @@ def main():
             mixup_fn=naflex_mixup_fn,
             rank=args.rank,
             world_size=args.world_size,
+            patchify_channels_last=not args.naflex_patchify_channels_first,
             **patch_loader_kwargs,
             **common_loader_kwargs,
             **train_loader_kwargs,
@@ -848,6 +854,7 @@ def main():
                 dataset=dataset_eval,
                 patch_size=model_patch_size,  # Use model's native patch size (already determined above)
                 max_seq_len=args.naflex_max_seq_len,
+                patchify_channels_last=not args.naflex_patchify_channels_first,
                 **common_loader_kwargs,
                 **eval_loader_kwargs
             )

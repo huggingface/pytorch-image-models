@@ -224,6 +224,7 @@ class NaFlexMapDatasetWrapper(IterableDataset):
             world_size: int = 1,
             epoch: int = 0,
             batch_divisor: int = 8,
+            patchify_channels_last: bool = True,
     ) -> None:
         """Initialize NaFlexMapDatasetWrapper.
 
@@ -243,6 +244,9 @@ class NaFlexMapDatasetWrapper(IterableDataset):
             world_size: Total number of processes.
             epoch: Starting epoch.
             batch_divisor: Ensure batch size is divisible by this.
+            patchify_channels_last: If True, per-patch flat layout is P-P-C
+                (channel index varies fastest). If False, C-P-P (channels first,
+                Gemma4 / HF native).
         """
         super().__init__()
         if not hasattr(base_dataset, '__len__') or not hasattr(base_dataset, '__getitem__'):
@@ -278,7 +282,8 @@ class NaFlexMapDatasetWrapper(IterableDataset):
             # Pre-initialize patchifiers for each patch size (indexed by patch_idx)
             self.patchifiers.append(Patchify(
                 patch_size=patch_size_tuple,
-                flatten_patches=not self.variable_patch_size
+                flatten_patches=not self.variable_patch_size,
+                channels_last=patchify_channels_last,
             ))
 
             # Create transforms for each (seq_len, patch_idx) combination

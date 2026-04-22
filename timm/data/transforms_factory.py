@@ -89,6 +89,7 @@ def transforms_imagenet_train(
         patch_size: Union[int, Tuple[int, int]] = 16,
         max_seq_len: int = 576,  # 24x24 for 16x16 patch
         patchify: bool = False,
+        patchify_channels_last: bool = True,
 ):
     """ ImageNet-oriented image transforms for training.
 
@@ -261,7 +262,7 @@ def transforms_imagenet_train(
             ]
 
     if patchify:
-        final_tfl += [Patchify(patch_size=patch_size)]
+        final_tfl += [Patchify(patch_size=patch_size, channels_last=patchify_channels_last)]
 
     if separate:
         return transforms.Compose(primary_tfl), transforms.Compose(secondary_tfl), transforms.Compose(final_tfl)
@@ -283,6 +284,7 @@ def transforms_imagenet_eval(
         patch_size: Union[int, Tuple[int, int]] = 16,
         max_seq_len: int = 576,  # 24x24 for 16x16 patch
         patchify: bool = False,
+        patchify_channels_last: bool = True,
 ):
     """ ImageNet-oriented image transform for evaluation and inference.
 
@@ -369,7 +371,7 @@ def transforms_imagenet_eval(
         ]
 
     if patchify:
-        tfl += [Patchify(patch_size=patch_size)]
+        tfl += [Patchify(patch_size=patch_size, channels_last=patchify_channels_last)]
 
     return transforms.Compose(tfl)
 
@@ -405,7 +407,8 @@ def create_transform(
         naflex: bool = False,
         patch_size: Union[int, Tuple[int, int]] = 16,
         max_seq_len: int = 576,  # 24x24 for 16x16 patch
-        patchify: bool = False
+        patchify: bool = False,
+        patchify_channels_last: bool = True,
 ):
     """
 
@@ -493,6 +496,7 @@ def create_transform(
                 patch_size=patch_size,
                 max_seq_len=max_seq_len,
                 patchify=patchify,
+                patchify_channels_last=patchify_channels_last,
             )
         else:
             assert not separate, "Separate transforms not supported for validation preprocessing"
@@ -510,6 +514,7 @@ def create_transform(
                 patch_size=patch_size,
                 max_seq_len=max_seq_len,
                 patchify=patchify,
+                patchify_channels_last=patchify_channels_last,
             )
 
     return transform

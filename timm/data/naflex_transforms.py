@@ -754,7 +754,22 @@ def patchify_image(
         pad: bool = True,
         include_info: bool = True,
         flatten_patches: bool = True,
+        channels_last: bool = True,
 ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+    """Patchify a single ``(C, H, W)`` image.
+
+    Args:
+        img: Input image tensor of shape ``[C, H, W]``.
+        patch_size: Patch dimensions ``(patch_h, patch_w)``.
+        pad: Whether to zero-pad to a multiple of patch size.
+        include_info: Also return ``(patch_coord, patch_valid)``.
+        flatten_patches: If ``True``, returned patches are 2-D ``[N, P*P*C]``;
+            otherwise 4-D (unflattened per-patch).
+        channels_last: Per-patch flat layout. ``True`` (default) yields ``P-P-C``
+            flat; ``False`` yields ``C-P-P`` flat (HF / Gemma4 native). When
+            ``flatten_patches=False``, ``True`` returns ``[N, Ph, Pw, C]`` and
+            ``False`` returns ``[N, C, Ph, Pw]``.
+    """
     c, h, w = img.shape
     ph, pw = patch_size
 
@@ -768,9 +783,14 @@ def patchify_image(
     # Calculate number of patches in each dimension
     nh, nw = h // ph, w // pw
     # Reshape image to patches
-    patches = img.view(c, nh, ph, nw, pw).permute(1, 3, 2, 4, 0)
-    # [nh, nw, ph, pw, c] -> [nh * nw, ph * pw * c] or [nh * nw, ph, pw, c]
-    patches = patches.reshape(-1, ph * pw * c) if flatten_patches else patches.reshape(-1, ph, pw, c)
+    if channels_last:
+        patches = img.view(c, nh, ph, nw, pw).permute(1, 3, 2, 4, 0)   # (nh, nw, ph, pw, c)
+        # [nh, nw, ph, pw, c] -> [nh * nw, ph * pw * c] or [nh * nw, ph, pw, c]
+        patches = patches.reshape(-1, ph * pw * c) if flatten_patches else patches.reshape(-1, ph, pw, c)
+    else:
+        patches = img.view(c, nh, ph, nw, pw).permute(1, 3, 0, 2, 4)   # (nh, nw, c, ph, pw)
+        # [nh, nw, c, ph, pw] -> [nh * nw, c * ph * pw] or [nh * nw, c, ph, pw]
+        patches = patches.reshape(-1, c * ph * pw) if flatten_patches else patches.reshape(-1, c, ph, pw)
 
     if include_info:
         # Create coordinate indices
@@ -790,11 +810,13 @@ class Patchify(torch.nn.Module):
     def __init__(
             self,
             patch_size: Union[int, Tuple[int, int]],
-            flatten_patches: bool = True
+            flatten_patches: bool = True,
+            channels_last: bool = True,
     ):
         super().__init__()
         self.patch_size = patch_size if isinstance(patch_size, tuple) else (patch_size, patch_size)
         self.flatten_patches = flatten_patches
+        self.channels_last = channels_last
 
     def forward(self, img):
         """
@@ -804,7 +826,8 @@ class Patchify(torch.nn.Module):
         Returns:
             A dictionary containing:
                 - patches: Tensor of shape [N, P*P*C] if flatten_patches=True,
-                          or [N, Ph, Pw, C] if flatten_patches=False
+                          or [N, Ph, Pw, C] if flatten_patches=False and channels_last=True
+                          or [N, C*P*P] / [N, C, Ph, Pw] if channels_last=False
                 - patch_coord: Tensor of shape [N, 2] with (y, x) coordinates
                 - patch_valid: Valid indicator (all 1s for non-padding patches)
         """
@@ -812,7 +835,12 @@ class Patchify(torch.nn.Module):
             # Convert PIL Image to tensor [C, H, W]
             img = transforms.functional.to_tensor(img)
 
-        patches, coord, valid = patchify_image(img, self.patch_size, flatten_patches=self.flatten_patches)
+        patches, coord, valid = patchify_image(
+            img,
+            self.patch_size,
+            flatten_patches=self.flatten_patches,
+            channels_last=self.channels_last,
+        )
 
         return {
             'patches': patches,
