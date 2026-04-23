@@ -985,18 +985,21 @@ class Gemma4VitClassifier(nn.Module):
     """Classification wrapper around ``Gemma4VitEncoder``.
 
     Holds:
-        - ``encoder``: a ``Gemma4VitEncoder`` (constructed with
-          ``global_pool='avg'``, though the classifier actually uses
-          ``encoder.forward_features`` and does its own masked-mean pool in
-          ``forward_head`` — the encoder's ``global_pool`` setting is kept
-          consistent so ``encoder.forward(...)`` also produces the
-          classifier-style ``(B, D)`` output if invoked directly).
+        - ``encoder``: a ``Gemma4VitEncoder``. By default constructed with
+          ``global_pool=''`` so the classifier does its own masked-mean pool
+          over raw patch tokens in ``forward_head``. Pass
+          ``encoder_pool='soft'`` to turn on the native VLM spatial ``k×k``
+          soft-token pool inside the encoder; ``forward_features`` then
+          returns ``(B, num_soft_tokens, D)`` already pooled (plus the ``√D``
+          scale and, for the 31B variant, ``std_bias/std_scale``).
         - ``norm``: optional ``RmsNorm`` after pooling.
         - ``head``: linear classifier.
 
     Input/output contract matches timm convention: ``forward_features`` returns
-    pre-pool ``(B, N, D)`` patch tokens; ``forward_head`` does pool + norm + head;
-    ``forward`` = ``forward_features`` + ``forward_head``.
+    pre-head features (pre-pool ``(B, N, D)`` patch tokens by default, or
+    ``(B, num_soft_tokens, D)`` post-soft-pool when ``encoder_pool='soft'``);
+    ``forward_head`` does classifier pool + norm + head; ``forward`` =
+    ``forward_features`` + ``forward_head``.
     """
 
     def __init__(
@@ -1006,6 +1009,7 @@ class Gemma4VitClassifier(nn.Module):
             in_chans: int = 3,
             num_classes: int = 1000,
             global_pool: str = 'avg',
+            encoder_pool: str = '',
             embed_dim: int = 768,
             depth: int = 16,
             num_heads: int = 12,
@@ -1033,15 +1037,19 @@ class Gemma4VitClassifier(nn.Module):
         assert global_pool in ('avg', 'none', ''), \
             f"Gemma4VitClassifier global_pool must be 'avg', 'none', or '' (got {global_pool!r}); " \
             f"use Gemma4VitEncoder directly for 'soft' VLM-style pooling."
+        assert encoder_pool in ('', 'none', 'soft'), \
+            f"Gemma4VitClassifier encoder_pool must be '', 'none', or 'soft' (got {encoder_pool!r})."
         self.num_classes = num_classes
         self.global_pool = global_pool
-        # The inner encoder is always no-pool; the classifier does its own
-        # pooling in ``forward_head`` based on ``self.global_pool``.
+        self.encoder_pool = encoder_pool
+        # Inner encoder pool stays disabled by default; with ``encoder_pool='soft'``
+        # the encoder applies its native k×k spatial pool (plus √D scale and
+        # optional std_bias/std_scale) before the classifier pool + head.
         self.encoder = Gemma4VitEncoder(
             img_size=img_size,
             patch_size=patch_size,
             in_chans=in_chans,
-            global_pool='',  # global pool disabled at encoder level
+            global_pool=encoder_pool,
             embed_dim=embed_dim,
             depth=depth,
             num_heads=num_heads,
@@ -1129,7 +1137,16 @@ class Gemma4VitClassifier(nn.Module):
             patch_coord: Optional[torch.Tensor] = None,
             patch_valid: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        """Raw patch tokens pre-pool — ``(B, N, embed_dim)``."""
+        """Pre-head features.
+
+        Shape depends on ``encoder_pool``:
+          ``''`` / ``'none'``: raw patch tokens ``(B, N, embed_dim)``.
+          ``'soft'``: spatial ``k×k`` soft-token pool output
+              ``(B, num_soft_tokens, embed_dim)`` (with ``√D`` scale + optional
+              ``std_bias/std_scale`` baked in by the encoder).
+        """
+        if self.encoder_pool == 'soft':
+            return self.encoder(x, patch_coord=patch_coord, patch_valid=patch_valid)
         return self.encoder.forward_features(x, patch_coord=patch_coord, patch_valid=patch_valid)
 
     def forward_head(
@@ -1141,17 +1158,20 @@ class Gemma4VitClassifier(nn.Module):
         """Pool (if configured) → norm → head_drop → head.
 
         Args:
-            x: ``(B, N, D)`` patch tokens from ``forward_features``.
-            patch_valid: ``(B, N)`` valid mask for masked mean. None → simple mean.
+            x: pre-head features from ``forward_features``.
+            patch_valid: ``(B, N)`` valid mask for masked mean over raw patch
+                tokens. Ignored when ``encoder_pool='soft'`` (the soft pooler
+                has already collapsed padding tokens, and the new token count
+                no longer aligns with ``patch_valid``).
             pre_logits: If True, return pre-classifier features.
         """
         if self.global_pool == 'avg':
-            if patch_valid is not None:
+            if self.encoder_pool == 'soft' or patch_valid is None:
+                x = x.mean(dim=1)
+            else:
                 x = x.masked_fill((~patch_valid).unsqueeze(-1), 0.0)
                 x = x.sum(dim=1) / patch_valid.sum(dim=1, keepdim=True).clamp(min=1)
-            else:
-                x = x.mean(dim=1)
-        # 'none' / '': leave x as (B, N, D)
+        # 'none' / '': leave x at its pre-head rank.
         x = self.norm(x)
         x = self.head_drop(x)
         return x if pre_logits else self.head(x)
