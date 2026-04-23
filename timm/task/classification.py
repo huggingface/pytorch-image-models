@@ -65,6 +65,21 @@ class ClassificationTask(TrainingTask):
         self.model = DDP(self.model, device_ids=device_ids, **ddp_kwargs)
         return self
 
+    def compile(
+            self,
+            backend: str = 'inductor',
+            mode: Optional[str] = None,
+            **compile_kwargs,
+    ) -> nn.Module:
+        """Compile the classification model before DDP wrapping."""
+        self.model = torch.compile(self.model, backend=backend, mode=mode, **compile_kwargs)
+        return self.model
+
+    def no_sync(self):
+        if hasattr(self.model, 'no_sync'):
+            return self.model.no_sync()
+        return super().no_sync()
+
     def forward(
             self,
             input: torch.Tensor,

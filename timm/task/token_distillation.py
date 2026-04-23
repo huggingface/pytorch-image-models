@@ -86,6 +86,16 @@ class TokenDistillationTeacher(nn.Module):
         self.register_buffer('mean_kd', mean_kd, persistent=False)
         self.register_buffer('std_kd', std_kd, persistent=False)
 
+    def compile(
+            self,
+            backend: str = 'inductor',
+            mode: Optional[str] = None,
+            **compile_kwargs,
+    ) -> 'TokenDistillationTeacher':
+        """Compile teacher logit inference."""
+        self.model = torch.compile(self.model, backend=backend, mode=mode, **compile_kwargs)
+        return self
+
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         """Forward pass through teacher model.
 
@@ -295,6 +305,22 @@ class TokenDistillationTask(TrainingTask):
 
         self.student = DDP(self.student, device_ids=device_ids, **ddp_kwargs)
         return self
+
+    def compile(
+            self,
+            backend: str = 'inductor',
+            mode: Optional[str] = None,
+            **compile_kwargs,
+    ) -> nn.Module:
+        """Compile student eval/train forward and teacher logit forward."""
+        self.student = torch.compile(self.student, backend=backend, mode=mode, **compile_kwargs)
+        self.teacher.compile(backend=backend, mode=mode, **compile_kwargs)
+        return self.student
+
+    def no_sync(self):
+        if hasattr(self.student, 'no_sync'):
+            return self.student.no_sync()
+        return super().no_sync()
 
     def forward(
             self,

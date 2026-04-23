@@ -950,18 +950,23 @@ def main():
             verbose=utils.is_primary(args),
         )
 
+    # Compile task components before DDP wrapping. This keeps DDP out of the
+    # compiled graph while preserving a compiled model reference for validation.
+    if args.torchcompile:
+        assert has_compile, 'A version of torch w/ torch.compile() is required for --compile, possibly a nightly.'
+        if utils.is_primary(args):
+            _logger.info(
+                f"Compiling task components with backend={args.torchcompile}, mode={args.torchcompile_mode}"
+            )
+        compiled_model = task.compile(backend=args.torchcompile, mode=args.torchcompile_mode)
+        if compiled_model is not None:
+            model = compiled_model
+
     # Prepare task for distributed training
     if args.distributed:
         if utils.is_primary(args):
             _logger.info("Preparing task for distributed training")
         task.prepare_distributed(device_ids=[device])
-
-    # Compile task if requested (should be done after DDP)
-    if args.torchcompile:
-        assert has_compile, 'A version of torch w/ torch.compile() is required for --compile, possibly a nightly.'
-        if utils.is_primary(args):
-            _logger.info(f"Compiling task with backend={args.torchcompile}, mode={args.torchcompile_mode}")
-        task = torch.compile(task, backend=args.torchcompile, mode=args.torchcompile_mode)
 
     # setup checkpoint saver and eval metric tracking
     eval_metric = args.eval_metric if loader_eval is not None else 'loss'
@@ -1190,7 +1195,7 @@ def train_one_epoch(
             mixup_fn.mixup_enabled = False
 
     second_order = hasattr(optimizer, 'is_second_order') and optimizer.is_second_order
-    has_no_sync = hasattr(model, "no_sync")
+    has_no_sync = args.distributed
     update_time_m = utils.AverageMeter()
     data_time_m = utils.AverageMeter()
     losses_m = utils.AverageMeter()
@@ -1280,7 +1285,7 @@ def train_one_epoch(
                 global_batch_size = batch_size
 
             if has_no_sync and not need_update:
-                with model.no_sync():
+                with task.no_sync():
                     loss, result = _forward()
                     scaled_loss = local_scale * loss
                     if dist_scale is not None:
@@ -1298,7 +1303,7 @@ def train_one_epoch(
                 global_batch_size *= args.world_size
 
             if has_no_sync and not need_update:
-                with model.no_sync():
+                with task.no_sync():
                     loss, result = _forward()
                     _backward(loss)
             else:
