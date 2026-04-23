@@ -4,6 +4,7 @@ This module provides the base TrainingTask class that encapsulates a complete
 forward pass including loss computation. Tasks return a dictionary with loss
 components and outputs for logging.
 """
+from contextlib import nullcontext
 from typing import Dict, Optional
 
 import torch
@@ -77,11 +78,35 @@ class TrainingTask(nn.Module):
 
         Example:
             >>> task = LogitDistillationTask(student, teacher, criterion)
+            >>> task.compile()
             >>> task.prepare_distributed(device_ids=[args.local_rank])
-            >>> task = torch.compile(task)  # Compile after DDP
         """
         # Default implementation - subclasses override if they need DDP
         return self
+
+    def compile(
+            self,
+            backend: str = 'inductor',
+            mode: Optional[str] = None,
+            **compile_kwargs,
+    ) -> Optional[nn.Module]:
+        """Compile hot task components before distributed wrapping.
+
+        Subclasses should compile the train/eval modules that do the tensor
+        work, not the outer task wrapper. Returning a module lets training
+        scripts keep their external eval/checkpoint model reference aligned
+        with the compiled model.
+        """
+        return None
+
+    def no_sync(self):
+        """Return a no-sync context for gradient accumulation.
+
+        Tasks that wrap a trainable component with DDP should override this and
+        delegate to that component's no_sync(). Non-distributed tasks use a
+        no-op context.
+        """
+        return nullcontext()
 
     def forward(
             self,

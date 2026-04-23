@@ -86,6 +86,36 @@ class DistillationTeacher(nn.Module):
         std_kd = torch.tensor(std, device=device, dtype=dtype).view(1, -1, 1, 1)
         self.register_buffer('mean_kd', mean_kd, persistent=False)
         self.register_buffer('std_kd', std_kd, persistent=False)
+        self._compiled_forward_features = None
+
+    def _forward_features(self, input: torch.Tensor) -> torch.Tensor:
+        if not hasattr(self.model, 'forward_features') or not hasattr(self.model, 'forward_head'):
+            raise ValueError(
+                f"Model {self.model.__class__.__name__} does not support feature extraction. "
+                "Ensure the model has 'forward_features' and 'forward_head' methods."
+            )
+        feature_map = self.model.forward_features(input)
+        return self.model.forward_head(feature_map, pre_logits=True)
+
+    def compile(
+            self,
+            backend: str = 'inductor',
+            mode: Optional[str] = None,
+            compile_model: bool = True,
+            compile_features: bool = False,
+            **compile_kwargs,
+    ) -> 'DistillationTeacher':
+        """Compile teacher inference paths used by distillation tasks."""
+        if compile_model:
+            self.model = torch.compile(self.model, backend=backend, mode=mode, **compile_kwargs)
+        if compile_features:
+            self._compiled_forward_features = torch.compile(
+                self._forward_features,
+                backend=backend,
+                mode=mode,
+                **compile_kwargs,
+            )
+        return self
 
     def forward(
             self,
@@ -102,13 +132,9 @@ class DistillationTeacher(nn.Module):
             Logits or pooled pre-logits features depending on return_features flag
         """
         if return_features:
-            if not hasattr(self.model, 'forward_features') or not hasattr(self.model, 'forward_head'):
-                raise ValueError(
-                    f"Model {self.model.__class__.__name__} does not support feature extraction. "
-                    "Ensure the model has 'forward_features' and 'forward_head' methods."
-                )
-            feature_map = self.model.forward_features(input)
-            return self.model.forward_head(feature_map, pre_logits=True)
+            if self._compiled_forward_features is not None:
+                return self._compiled_forward_features(input)
+            return self._forward_features(input)
         else:
             return self.model(input)
 
@@ -319,6 +345,28 @@ class LogitDistillationTask(TrainingTask):
 
         self.student = DDP(self.student, device_ids=device_ids, **ddp_kwargs)
         return self
+
+    def compile(
+            self,
+            backend: str = 'inductor',
+            mode: Optional[str] = None,
+            **compile_kwargs,
+    ) -> nn.Module:
+        """Compile student eval/train forward and teacher logit forward."""
+        self.student = torch.compile(self.student, backend=backend, mode=mode, **compile_kwargs)
+        self.teacher.compile(
+            backend=backend,
+            mode=mode,
+            compile_model=True,
+            compile_features=False,
+            **compile_kwargs,
+        )
+        return self.student
+
+    def no_sync(self):
+        if hasattr(self.student, 'no_sync'):
+            return self.student.no_sync()
+        return super().no_sync()
 
     def forward(
             self,
@@ -575,6 +623,34 @@ class FeatureDistillationTask(TrainingTask):
 
         self.trainable_module = DDP(self.trainable_module, device_ids=device_ids, **ddp_kwargs)
         return self
+
+    def compile(
+            self,
+            backend: str = 'inductor',
+            mode: Optional[str] = None,
+            **compile_kwargs,
+    ) -> nn.Module:
+        """Compile feature-distillation train and eval entry points."""
+        eval_model = torch.compile(self.trainable_module.student, backend=backend, mode=mode, **compile_kwargs)
+        self.trainable_module = torch.compile(
+            self.trainable_module,
+            backend=backend,
+            mode=mode,
+            **compile_kwargs,
+        )
+        self.teacher.compile(
+            backend=backend,
+            mode=mode,
+            compile_model=False,
+            compile_features=True,
+            **compile_kwargs,
+        )
+        return eval_model
+
+    def no_sync(self):
+        if hasattr(self.trainable_module, 'no_sync'):
+            return self.trainable_module.no_sync()
+        return super().no_sync()
 
     def forward(
             self,
