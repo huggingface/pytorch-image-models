@@ -12,6 +12,11 @@
 
 ## What's New
 
+## April 23, 2026
+* Add Gemma4 ViT encoders w/ NaFlex pipeline support (variable aspect/size per image). Thanks [Yonghye Kwon](https://github.com/developer0hye)
+* Support DINOv3 weights in NaFlexVit. Thanks [Yonghye Kwon](https://github.com/developer0hye)
+* Some improvements to Muon fallback (AdamW/NadamW) lr behavior
+
 ## March 23, 2026
 * Improve pickle checkpoint handling security. Default all loading to `weights_only=True`, add safe_global for ArgParse.
 * Improve attention mask handling for core ViT/EVA models & layers. Resolve bool masks, pass `is_causal` through for SSL tasks.
