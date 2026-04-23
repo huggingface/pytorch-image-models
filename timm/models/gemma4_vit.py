@@ -1362,29 +1362,29 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
 
 default_cfgs = generate_default_cfgs({
     # Classifier-friendly defaults (avg pool + norm).
-    'gemma4_vit_e4b.gemma4_e4b': _cfg(
-        hf_hub_id='developer0hye/gemma4_vit_e4b',
+    'gemma4_vit_167m.gemma4_e4b_it': _cfg(
+        hf_hub_id='timm/gemma4_vit_167m.gemma4_e4b_it',
         first_conv='encoder.patch_embed.input_proj',
         license='apache-2.0',
     ),
-    'gemma4_vit_31b.gemma4_31b': _cfg(
-        hf_hub_id='developer0hye/gemma4_vit_31b',
+    'gemma4_vit_570m.gemma4_31b_it': _cfg(
+        hf_hub_id='timm/gemma4_vit_570m.gemma4_31b_it',
         first_conv='encoder.patch_embed.input_proj',
         license='apache-2.0',
     ),
     # Native VLM encoder variants (gemma4 spatial-bin pool, no norm).
-    'gemma4_vit_e4b_enc.gemma4_e4b': _cfg(
-        hf_hub_id='developer0hye/gemma4_vit_e4b',
+    'gemma4_vit_167m_enc.gemma4_e4b_it': _cfg(
+        hf_hub_id='timm/gemma4_vit_167m_enc.gemma4_e4b_it',
         license='apache-2.0',
     ),
-    'gemma4_vit_31b_enc.gemma4_31b': _cfg(
-        hf_hub_id='developer0hye/gemma4_vit_31b',
+    'gemma4_vit_570m_enc.gemma4_31b_it': _cfg(
+        hf_hub_id='timm/gemma4_vit_570m_enc.gemma4_31b_it',
         license='apache-2.0',
     ),
 })
 
 
-_E4B_ARCH = dict(
+_167M_ARCH = dict(
     embed_dim=768,
     depth=16,
     num_heads=12,
@@ -1394,7 +1394,7 @@ _E4B_ARCH = dict(
     use_clipped_linears=True,
 )
 
-_31B_ARCH = dict(
+_570M_ARCH = dict(
     embed_dim=1152,
     depth=27,
     num_heads=16,
@@ -1405,49 +1405,49 @@ _31B_ARCH = dict(
 
 
 @register_model
-def gemma4_vit_e4b(pretrained: bool = False, **kwargs) -> Gemma4VitClassifier:
-    """Gemma4 E4B (~167M) classifier.
+def gemma4_vit_167m(pretrained: bool = False, **kwargs) -> Gemma4VitClassifier:
+    """Gemma4 ~167M (E2B/E4B  vision tower) classifier.
 
     Masked mean pool over patch tokens + norm + linear classifier. Output:
     ``(B, num_classes)``. For the native VLM encoder interface (soft-token
-    output), use ``gemma4_vit_e4b_enc``.
+    output), use ``gemma4_vit_167m_enc``.
     """
-    model_args = dict(_E4B_ARCH, final_norm=True)
-    return _create_gemma4_vit_classifier('gemma4_vit_e4b', pretrained=pretrained, **dict(model_args, **kwargs))
+    model_args = dict(_167M_ARCH, final_norm=True)
+    return _create_gemma4_vit_classifier('gemma4_vit_167m', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def gemma4_vit_e4b_enc(pretrained: bool = False, **kwargs) -> Gemma4VitEncoder:
-    """Gemma4 E4B (~167M) — native VLM encoder.
+def gemma4_vit_167m_enc(pretrained: bool = False, **kwargs) -> Gemma4VitEncoder:
+    """Gemma4 ~167M (E2B/E4B vision tower) — native VLM encoder.
 
     ``global_pool='soft'`` applies the spatial ``k×k`` soft-token pool + √D
     scale; output: ``(B, num_soft_tokens, embed_dim)``. Bit-perfect with HF
     ``Gemma4VisionModel`` on matching weights.
     """
-    model_args = dict(_E4B_ARCH, global_pool='soft')
-    return _create_gemma4_vit_encoder('gemma4_vit_e4b_enc', pretrained=pretrained, **dict(model_args, **kwargs))
+    model_args = dict(_167M_ARCH, global_pool='soft')
+    return _create_gemma4_vit_encoder('gemma4_vit_167m_enc', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def gemma4_vit_31b(pretrained: bool = False, **kwargs) -> Gemma4VitClassifier:
-    """Gemma4 31B (~570M) classifier.
+def gemma4_vit_570m(pretrained: bool = False, **kwargs) -> Gemma4VitClassifier:
+    """Gemma4 ~570M (26B/31B vision tower) classifier.
 
     Masked mean pool over patch tokens + norm + linear classifier. Output:
     ``(B, num_classes)``. The classifier uses ``encoder.forward_features`` and
     does its own pool + norm; the encoder's ``std_bias/std_scale`` (which only
     applies in ``'soft'`` pool mode) is not used on the classifier path.
     """
-    model_args = dict(_31B_ARCH, final_norm=True)
-    return _create_gemma4_vit_classifier('gemma4_vit_31b', pretrained=pretrained, **dict(model_args, **kwargs))
+    model_args = dict(_570M_ARCH, final_norm=True)
+    return _create_gemma4_vit_classifier('gemma4_vit_570m', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def gemma4_vit_31b_enc(pretrained: bool = False, **kwargs) -> Gemma4VitEncoder:
-    """Gemma4 31B (~570M) — native VLM encoder.
+def gemma4_vit_570m_enc(pretrained: bool = False, **kwargs) -> Gemma4VitEncoder:
+    """Gemma4 ~570M (26B/31B vision tower) — native VLM encoder.
 
     ``global_pool='soft'`` output ``(B, num_soft_tokens, embed_dim)`` with
     ``std_bias/std_scale`` standardization applied post-pool (HF-native
     ordering — bit-perfect with ``Gemma4VisionModel``).
     """
-    model_args = dict(_31B_ARCH, global_pool='soft')
-    return _create_gemma4_vit_encoder('gemma4_vit_31b_enc', pretrained=pretrained, **dict(model_args, **kwargs))
+    model_args = dict(_570M_ARCH, global_pool='soft')
+    return _create_gemma4_vit_encoder('gemma4_vit_570m_enc', pretrained=pretrained, **dict(model_args, **kwargs))
