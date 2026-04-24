@@ -131,8 +131,8 @@ def test_feature_distillation_checkpoint_keeps_projection_in_task_state(tmp_path
         verbose=False,
     )
     fresh_task.setup_ema(decay=0.0)
-    resume_task_checkpoint(fresh_task, path, log_info=False)
-    load_task_ema_checkpoint(fresh_task, path)
+    resume_task_checkpoint(fresh_task, path, log_info=False, weights_only=False)
+    load_task_ema_checkpoint(fresh_task, path, weights_only=False)
 
     matcher = task.get_trainable_module().group_matcher()
     assert matcher('projection.weight') == matcher('student.head.weight')
