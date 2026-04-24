@@ -152,21 +152,23 @@ class TrainingTask(nn.Module):
 
     def get_clip_parameters(self, exclude_head: bool = False):
         """Return parameters to use for gradient clipping."""
-        trainable_module = unwrap_model(self.get_trainable_module())
+        trainable_module = self.get_trainable_module()
         if exclude_head:
             return [p for p in trainable_module.parameters()][:-2]
         return trainable_module.parameters()
 
     def get_eval_model(self, module: Optional[nn.Module] = None, ema: bool = False) -> Optional[nn.Module]:
-        """Return the eval model/callable used for validation/checkpoint export."""
+        """Return the eval model/callable used for validation.
+
+        Checkpoint state_dict handling uses unwrap_model separately so DDP and
+        compiled wrappers do not leak into saved keys.
+        """
         if module is None:
             eval_attr = 'eval_model_ema' if ema else 'eval_model'
             if hasattr(self, eval_attr):
                 return getattr(self, eval_attr)
             module = self.get_trainable_module(ema=ema)
-        if module is None:
-            return None
-        return unwrap_model(module)
+        return module
 
     def get_task_state(self, module: Optional[nn.Module] = None, ema: bool = False) -> Dict[str, Any]:
         """Return task-owned state outside the eval model state_dict."""
@@ -214,7 +216,7 @@ class TrainingTask(nn.Module):
             if ema:
                 raise RuntimeError("Cannot load EMA checkpoint state before setup_ema().")
             raise RuntimeError("Cannot load checkpoint state without an eval model.")
-        eval_model.load_state_dict(state_dict, strict=strict)
+        unwrap_model(eval_model).load_state_dict(state_dict, strict=strict)
         self.load_task_state(task_state, strict=strict, ema=ema)
 
     def no_sync(self):

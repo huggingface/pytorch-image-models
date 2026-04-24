@@ -667,15 +667,15 @@ class FeatureDistillationTask(TrainingTask):
         return eval_model
 
     def get_eval_model(self, module: Optional[nn.Module] = None, ema: bool = False) -> Optional[nn.Module]:
-        if module is None:
-            eval_attr = 'eval_model_ema' if ema else 'eval_model'
-            if hasattr(self, eval_attr):
-                return getattr(self, eval_attr)
-            module = self.get_trainable_module(ema=ema)
-        if module is None:
-            return None
-        trainable = unwrap_model(module)
-        return unwrap_model(trainable.student)
+        resolved = super().get_eval_model(module=module, ema=ema)
+        current = resolved
+        while current is not None:
+            if isinstance(current, FeatureDistillationTrainableModule):
+                return current.student
+            if not hasattr(current, 'module'):
+                break
+            current = current.module
+        return resolved
 
     def get_task_state(
             self,
