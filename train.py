@@ -36,7 +36,7 @@ from timm.data import create_dataset, create_loader, create_naflex_loader, resol
     Mixup, FastCollateMixup, AugMixDataset
 from timm.layers import convert_splitbn_model, convert_sync_batchnorm, set_fast_norm
 from timm.loss import JsdCrossEntropy, SoftTargetCrossEntropy, BinaryCrossEntropy, LabelSmoothingCrossEntropy
-from timm.models import create_model, safe_model_name, resume_checkpoint, load_checkpoint, model_parameters
+from timm.models import create_model, safe_model_name
 from timm.optim import create_optimizer_v2, optimizer_kwargs
 from timm.scheduler import create_scheduler_v2, scheduler_kwargs
 from timm.utils import NativeScaler
@@ -45,6 +45,8 @@ from timm.task import (
     LogitDistillationTask,
     FeatureDistillationTask,
     TokenDistillationTask,
+    resume_task_checkpoint,
+    load_task_ema_checkpoint,
 )
 
 
@@ -64,6 +66,7 @@ has_compile = hasattr(torch, 'compile')
 
 
 _logger = logging.getLogger('train')
+
 
 # The first arg parser parses out only the --config argument, this argument is used to
 # load a yaml file containing key-values that override the defaults for the main parser below
@@ -604,19 +607,6 @@ def main():
                 f'Learning rate ({args.lr}) calculated from base learning rate ({args.lr_base}) '
                 f'and effective global batch size ({global_batch_size}) with {args.lr_base_scale} scaling.')
 
-    optimizer = create_optimizer_v2(
-        model,
-        **optimizer_kwargs(cfg=args),
-        **args.opt_kwargs,
-    )
-    if utils.is_primary(args):
-        defaults = copy.deepcopy(optimizer.defaults)
-        defaults['weight_decay'] = args.weight_decay  # this isn't stored in optimizer.defaults
-        defaults = ', '.join([f'{k}: {v}' for k, v in defaults.items()])
-        logging.info(
-            f'Created {type(optimizer).__name__} ({args.opt}) optimizer: {defaults}'
-        )
-
     # setup automatic mixed-precision (AMP) loss scaling and op casting
     amp_autocast = suppress  # do nothing
     loss_scaler = None
@@ -630,36 +620,6 @@ def main():
     else:
         if utils.is_primary(args):
             _logger.info(f'AMP not enabled. Training in {model_dtype or torch.float32}.')
-
-    # optionally resume from a checkpoint
-    resume_epoch = None
-    if args.resume:
-        resume_epoch = resume_checkpoint(
-            model,
-            args.resume,
-            optimizer=None if args.no_resume_opt else optimizer,
-            loss_scaler=None if args.no_resume_opt else loss_scaler,
-            log_info=utils.is_primary(args),
-        )
-
-    # setup exponential moving average of model weights, SWA could be used here too
-    model_ema = None
-    if args.model_ema:
-        # Important to create EMA model after cuda(), DP wrapper, and AMP but before DDP wrapper
-        model_ema = utils.ModelEmaV3(
-            model,
-            decay=args.model_ema_decay,
-            use_warmup=args.model_ema_warmup,
-            device='cpu' if args.model_ema_force_cpu else None,
-        )
-        if args.resume:
-            load_checkpoint(model_ema.module, args.resume, use_ema=True)
-        if args.torchcompile:
-            model_ema = torch.compile(
-                model_ema,
-                backend=args.torchcompile,
-                mode=args.torchcompile_mode,
-            )
 
     # create the train and eval datasets
     if args.data and not args.data_dir:
@@ -950,6 +910,44 @@ def main():
             verbose=utils.is_primary(args),
         )
 
+    model = task.get_trainable_module()
+    eval_model = task.get_eval_model()
+
+    optimizer = create_optimizer_v2(
+        model,
+        **optimizer_kwargs(cfg=args),
+        **args.opt_kwargs,
+    )
+    if utils.is_primary(args):
+        defaults = copy.deepcopy(optimizer.defaults)
+        defaults['weight_decay'] = args.weight_decay  # this isn't stored in optimizer.defaults
+        defaults = ', '.join([f'{k}: {v}' for k, v in defaults.items()])
+        logging.info(
+            f'Created {type(optimizer).__name__} ({args.opt}) optimizer: {defaults}'
+        )
+
+    # optionally resume from a checkpoint
+    resume_epoch = None
+    if args.resume:
+        resume_epoch = resume_task_checkpoint(
+            task,
+            args.resume,
+            optimizer=None if args.no_resume_opt else optimizer,
+            loss_scaler=None if args.no_resume_opt else loss_scaler,
+            log_info=utils.is_primary(args),
+        )
+
+    # setup exponential moving average of model weights, SWA could be used here too
+    if args.model_ema:
+        # Important to create EMA model after cuda(), DP wrapper, and AMP but before DDP wrapper
+        task.setup_ema(
+            decay=args.model_ema_decay,
+            use_warmup=args.model_ema_warmup,
+            device='cpu' if args.model_ema_force_cpu else None,
+        )
+        if args.resume:
+            load_task_ema_checkpoint(task, args.resume)
+
     # Compile task components before DDP wrapping. This keeps DDP out of the
     # compiled graph while preserving a compiled model reference for validation.
     if args.torchcompile:
@@ -958,15 +956,21 @@ def main():
             _logger.info(
                 f"Compiling task components with backend={args.torchcompile}, mode={args.torchcompile_mode}"
             )
-        compiled_model = task.compile(backend=args.torchcompile, mode=args.torchcompile_mode)
-        if compiled_model is not None:
-            model = compiled_model
+        task.compile(backend=args.torchcompile, mode=args.torchcompile_mode)
+        model = task.get_trainable_module()
+        eval_model = task.get_eval_model()
+        if task.has_ema():
+            task.compile_ema(
+                backend=args.torchcompile,
+                mode=args.torchcompile_mode,
+            )
 
     # Prepare task for distributed training
     if args.distributed:
         if utils.is_primary(args):
             _logger.info("Preparing task for distributed training")
-        task.prepare_distributed(device_ids=[device])
+        task.prepare_distributed(device_ids=[device], broadcast_buffers=not args.no_ddp_bb)
+        model = task.get_trainable_module()
 
     # setup checkpoint saver and eval metric tracking
     eval_metric = args.eval_metric if loader_eval is not None else 'loss'
@@ -989,12 +993,12 @@ def main():
             model=model,
             optimizer=optimizer,
             args=args,
-            model_ema=model_ema,
             amp_scaler=loss_scaler,
             checkpoint_dir=output_dir,
             recovery_dir=output_dir,
             decreasing=decreasing_metric,
-            max_history=args.checkpoint_hist
+            max_history=args.checkpoint_hist,
+            task=task,
         )
         with open(os.path.join(output_dir, 'args.yaml'), 'w') as f:
             f.write(args_text)
@@ -1065,7 +1069,6 @@ def main():
                 amp_autocast=amp_autocast,
                 loss_scaler=loss_scaler,
                 model_dtype=model_dtype,
-                model_ema=model_ema,
                 mixup_fn=mixup_fn,
                 num_updates_total=num_epochs * updates_per_epoch,
                 naflex_mode=naflex_mode,
@@ -1090,7 +1093,7 @@ def main():
 
             if loader_eval is not None:
                 eval_metrics = validate(
-                    model,
+                    eval_model,
                     loader_eval,
                     validate_loss_fn,
                     args,
@@ -1099,12 +1102,13 @@ def main():
                     model_dtype=model_dtype,
                 )
 
-                if model_ema is not None and not args.model_ema_force_cpu:
+                ema_model = task.get_trainable_module(ema=True)
+                if ema_model is not None and not args.model_ema_force_cpu:
                     if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
-                        utils.distribute_bn(model_ema, args.world_size, args.dist_bn == 'reduce')
+                        utils.distribute_bn(ema_model, args.world_size, args.dist_bn == 'reduce')
 
                     ema_eval_metrics = validate(
-                        model_ema,
+                        task.get_eval_model(ema=True),
                         loader_eval,
                         validate_loss_fn,
                         args,
@@ -1183,7 +1187,6 @@ def train_one_epoch(
         amp_autocast=suppress,
         loss_scaler=None,
         model_dtype=None,
-        model_ema=None,
         mixup_fn=None,
         num_updates_total=None,
         naflex_mode=False,
@@ -1195,12 +1198,13 @@ def train_one_epoch(
             mixup_fn.mixup_enabled = False
 
     second_order = hasattr(optimizer, 'is_second_order') and optimizer.is_second_order
-    has_no_sync = args.distributed
+    has_no_sync = args.distributed and hasattr(task.get_trainable_module(), 'no_sync')
     update_time_m = utils.AverageMeter()
     data_time_m = utils.AverageMeter()
     losses_m = utils.AverageMeter()
 
-    model.train()
+    trainable_module = task.get_trainable_module()
+    trainable_module.train()
 
     accum_steps = args.grad_accum_steps
     last_accum_steps = len(loader) % accum_steps
@@ -1240,13 +1244,16 @@ def train_one_epoch(
             return _loss, result
 
         def _backward(_loss):
+            clip_parameters = None
+            if args.clip_grad is not None:
+                clip_parameters = task.get_clip_parameters(exclude_head='agc' in args.clip_mode)
             if loss_scaler is not None:
                 loss_scaler(
                     _loss,
                     optimizer,
                     clip_grad=args.clip_grad,
                     clip_mode=args.clip_mode,
-                    parameters=model_parameters(model, exclude_head='agc' in args.clip_mode),
+                    parameters=clip_parameters,
                     create_graph=second_order,
                     need_update=need_update,
                 )
@@ -1255,7 +1262,7 @@ def train_one_epoch(
                 if need_update:
                     if args.clip_grad is not None:
                         utils.dispatch_clip_grad(
-                            model_parameters(model, exclude_head='agc' in args.clip_mode),
+                            clip_parameters,
                             value=args.clip_grad,
                             mode=args.clip_mode,
                         )
@@ -1319,8 +1326,7 @@ def train_one_epoch(
 
         num_updates += 1
         optimizer.zero_grad()
-        if model_ema is not None:
-            model_ema.update(model, step=num_updates)
+        task.update_ema(step=num_updates)
 
         if args.synchronize_step:
             if device.type == 'cuda':

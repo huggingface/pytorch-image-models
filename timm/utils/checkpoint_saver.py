@@ -33,11 +33,13 @@ class CheckpointSaver:
             recovery_dir='',
             decreasing=False,
             max_history=10,
-            unwrap_fn=unwrap_model
+            unwrap_fn=unwrap_model,
+            task=None,
     ):
 
         # objects to save state_dicts of
         self.model = model
+        self.task = task
         self.optimizer = optimizer
         self.args = args
         self.model_ema = model_ema
@@ -88,7 +90,6 @@ class CheckpointSaver:
         save_state = {
             'epoch': epoch,
             'arch': type(self.model).__name__.lower(),
-            'state_dict': get_state_dict(self.model, self.unwrap_fn),
             'optimizer': self.optimizer.state_dict(),
             'version': 2,  # version < 2 increments epoch before save
         }
@@ -97,8 +98,13 @@ class CheckpointSaver:
             save_state['args'] = self.args
         if self.amp_scaler is not None:
             save_state[self.amp_scaler.state_dict_key] = self.amp_scaler.state_dict()
-        if self.model_ema is not None:
-            save_state['state_dict_ema'] = get_state_dict(self.model_ema, self.unwrap_fn)
+        if self.task is not None:
+            save_state.update(self.task.get_checkpoint_state(unwrap_fn=self.unwrap_fn))
+            save_state.update(self.task.get_checkpoint_state(ema=True, unwrap_fn=self.unwrap_fn))
+        else:
+            save_state['state_dict'] = get_state_dict(self.model, self.unwrap_fn)
+            if self.model_ema is not None:
+                save_state['state_dict_ema'] = get_state_dict(self.model_ema, self.unwrap_fn)
         if metric is not None:
             save_state['metric'] = metric
         torch.save(save_state, save_path)

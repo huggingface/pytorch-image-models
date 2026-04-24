@@ -38,7 +38,7 @@ class ClassificationTask(TrainingTask):
             verbose: bool = True,
     ):
         super().__init__(device=device, dtype=dtype, verbose=verbose)
-        self.model = model
+        self.trainable_module = model
         self.criterion = criterion
 
         if self.verbose:
@@ -62,7 +62,7 @@ class ClassificationTask(TrainingTask):
             self (for method chaining)
         """
         from torch.nn.parallel import DistributedDataParallel as DDP
-        self.model = DDP(self.model, device_ids=device_ids, **ddp_kwargs)
+        self.trainable_module = DDP(self.trainable_module, device_ids=device_ids, **ddp_kwargs)
         return self
 
     def compile(
@@ -72,13 +72,10 @@ class ClassificationTask(TrainingTask):
             **compile_kwargs,
     ) -> nn.Module:
         """Compile the classification model before DDP wrapping."""
-        self.model = torch.compile(self.model, backend=backend, mode=mode, **compile_kwargs)
-        return self.model
-
-    def no_sync(self):
-        if hasattr(self.model, 'no_sync'):
-            return self.model.no_sync()
-        return super().no_sync()
+        self.trainable_module = torch.compile(self.trainable_module, backend=backend, mode=mode, **compile_kwargs)
+        # Classification uses the same forward for training and eval.
+        self.eval_model = self.trainable_module
+        return self.trainable_module
 
     def forward(
             self,
@@ -96,7 +93,7 @@ class ClassificationTask(TrainingTask):
                 - 'loss': Classification loss
                 - 'output': Model logits
         """
-        output = self.model(input)
+        output = self.trainable_module(input)
         loss = self.criterion(output, target)
 
         return {
