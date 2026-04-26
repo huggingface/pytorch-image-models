@@ -83,6 +83,79 @@ def swap_shape_xy(seq: List[int]) -> List[int]:
     return [seq[1], seq[0]] + list(seq[2:])
 
 
+def _build_fourier_pos_embed(
+        feat_shape: List[int],
+        bands: torch.Tensor,
+        include_grid: bool = False,
+        in_pixels: bool = True,
+        ref_feat_shape: Optional[List[int]] = None,
+        grid_offset: float = 0.,
+        grid_indexing: str = 'ij',
+        device: Optional[torch.device] = None,
+        dtype: torch.dtype = torch.float32,
+) -> List[torch.Tensor]:
+    if device is None:
+        device = bands.device
+    if dtype is None:
+        dtype = bands.dtype
+
+    if grid_indexing == 'xy':
+        feat_shape = swap_shape_xy(feat_shape)
+        if ref_feat_shape is not None:
+            ref_feat_shape = swap_shape_xy(ref_feat_shape)
+
+    if in_pixels:
+        t = [
+            torch.linspace(-1., 1., steps=s, device=device, dtype=torch.float32)
+            for s in feat_shape
+        ]
+    else:
+        t = [
+            torch.arange(s, device=device, dtype=torch.int64).to(torch.float32) + grid_offset
+            for s in feat_shape
+        ]
+
+    if ref_feat_shape is not None:
+        # eva's scheme for resizing rope embeddings (ref shape = pretrain)
+        t = [x / f * r for x, f, r in zip(t, feat_shape, ref_feat_shape)]
+
+    grid = torch.stack(torch.meshgrid(t, indexing=grid_indexing), dim=-1)
+    grid = grid.unsqueeze(-1)
+    pos = grid * bands
+
+    pos_sin, pos_cos = pos.sin().to(dtype=dtype), pos.cos().to(dtype=dtype)
+    out = [grid, pos_sin, pos_cos] if include_grid else [pos_sin, pos_cos]
+    return out
+
+
+def _compute_bands(
+        bands: Optional[torch.Tensor],
+        num_bands: int,
+        max_res: int,
+        temperature: float,
+        linear_bands: bool,
+        in_pixels: bool,
+        device: Optional[torch.device],
+        dtype: torch.dtype,
+) -> torch.Tensor:
+    if bands is None:
+        if in_pixels:
+            bands = pixel_freq_bands(
+                num_bands,
+                float(max_res),
+                linear_bands=linear_bands,
+                device=device,
+            )
+        else:
+            bands = freq_bands(
+                num_bands,
+                temperature=temperature,
+                step=1,
+                device=device,
+            )
+    return bands
+
+
 def build_fourier_pos_embed(
         feat_shape: List[int],
         bands: Optional[torch.Tensor] = None,
@@ -118,54 +191,27 @@ def build_fourier_pos_embed(
     Returns:
 
     """
-    if bands is None:
-        if in_pixels:
-            bands = pixel_freq_bands(
-                num_bands,
-                float(max_res),
-                linear_bands=linear_bands,
-                device=device,
-            )
-        else:
-            bands = freq_bands(
-                num_bands,
-                temperature=temperature,
-                step=1,
-                device=device,
-            )
-    else:
-        if device is None:
-            device = bands.device
-        if dtype is None:
-            dtype = bands.dtype
-
-    if grid_indexing == 'xy':
-        feat_shape = swap_shape_xy(feat_shape)
-        if ref_feat_shape is not None:
-            ref_feat_shape = swap_shape_xy(ref_feat_shape)
-
-    if in_pixels:
-        t = [
-            torch.linspace(-1., 1., steps=s, device=device, dtype=torch.float32)
-            for s in feat_shape
-        ]
-    else:
-        t = [
-            torch.arange(s, device=device, dtype=torch.int64).to(torch.float32) + grid_offset
-            for s in feat_shape
-        ]
-
-    if ref_feat_shape is not None:
-        # eva's scheme for resizing rope embeddings (ref shape = pretrain)
-        t = [x / f * r for x, f, r in zip(t, feat_shape, ref_feat_shape)]
-
-    grid = torch.stack(torch.meshgrid(t, indexing=grid_indexing), dim=-1)
-    grid = grid.unsqueeze(-1)
-    pos = grid * bands
-
-    pos_sin, pos_cos = pos.sin().to(dtype=dtype), pos.cos().to(dtype=dtype)
-    out = [grid, pos_sin, pos_cos] if include_grid else [pos_sin, pos_cos]
-    return out
+    bands = _compute_bands(
+        bands=bands,
+        num_bands=num_bands,
+        max_res=max_res,
+        temperature=temperature,
+        linear_bands=linear_bands,
+        in_pixels=in_pixels,
+        device=device,
+        dtype=dtype,
+    )
+    return _build_fourier_pos_embed(
+        feat_shape,
+        bands,
+        include_grid,
+        in_pixels,
+        ref_feat_shape,
+        grid_offset,
+        grid_indexing,
+        device,
+        dtype,
+    )
 
 
 class FourierEmbed(nn.Module):
@@ -204,7 +250,7 @@ class FourierEmbed(nn.Module):
     def forward(self, x):
         B, C = x.shape[:2]
         feat_shape = x.shape[2:]
-        emb = build_fourier_pos_embed(
+        emb = _build_fourier_pos_embed(
             feat_shape,
             self.bands,
             include_grid=self.concat_grid,
@@ -334,6 +380,35 @@ def apply_keep_indices_nlc(
     return pos_embed.gather(-2, keep_indices)
 
 
+def _build_rotary_pos_embed(
+        feat_shape: List[int],
+        bands: torch.Tensor,
+        in_pixels: bool = True,
+        ref_feat_shape: Optional[List[int]] = None,
+        grid_offset: float = 0.,
+        grid_indexing: str = 'ij',
+        device: Optional[torch.device] = None,
+        dtype: torch.dtype = torch.float32,
+):
+    sin_emb, cos_emb = _build_fourier_pos_embed(
+        feat_shape,
+        bands=bands,
+        in_pixels=in_pixels,
+        ref_feat_shape=ref_feat_shape,
+        grid_offset=grid_offset,
+        grid_indexing=grid_indexing,
+        device=device,
+        dtype=dtype,
+    )
+    num_spatial_dim = 1
+    # this would be much nicer as a .numel() call to torch.Size(), but torchscript sucks
+    for x in feat_shape:
+        num_spatial_dim *= x
+    sin_emb = sin_emb.reshape(num_spatial_dim, -1).repeat_interleave(2, -1)
+    cos_emb = cos_emb.reshape(num_spatial_dim, -1).repeat_interleave(2, -1)
+    return sin_emb, cos_emb
+
+
 def build_rotary_pos_embed(
         feat_shape: List[int],
         bands: Optional[torch.Tensor] = None,
@@ -367,27 +442,26 @@ def build_rotary_pos_embed(
     Returns:
 
     """
-    sin_emb, cos_emb = build_fourier_pos_embed(
-        feat_shape,
+    bands = _compute_bands(
         bands=bands,
         num_bands=dim // 4,
         max_res=max_res,
         temperature=temperature,
         linear_bands=linear_bands,
         in_pixels=in_pixels,
-        ref_feat_shape=ref_feat_shape,
-        grid_offset=grid_offset,
-        grid_indexing=grid_indexing,
         device=device,
         dtype=dtype,
     )
-    num_spatial_dim = 1
-    # this would be much nicer as a .numel() call to torch.Size(), but torchscript sucks
-    for x in feat_shape:
-        num_spatial_dim *= x
-    sin_emb = sin_emb.reshape(num_spatial_dim, -1).repeat_interleave(2, -1)
-    cos_emb = cos_emb.reshape(num_spatial_dim, -1).repeat_interleave(2, -1)
-    return sin_emb, cos_emb
+    return _build_rotary_pos_embed(
+        feat_shape,
+        bands,
+        in_pixels,
+        ref_feat_shape,
+        grid_offset,
+        grid_indexing,
+        device,
+        dtype,
+    )
 
 
 class RotaryEmbedding(nn.Module):
@@ -478,12 +552,10 @@ class RotaryEmbedding(nn.Module):
         return bands.to(device=device, dtype=dtype)
 
     def _get_pos_embed_values(self, feat_shape: List[int], device=None, dtype=torch.float32):
-        emb_sin, emb_cos = build_rotary_pos_embed(
+        bands = self._compute_bands(device, dtype)
+        emb_sin, emb_cos = _build_rotary_pos_embed(
             feat_shape=feat_shape,
-            dim=self.dim,
-            max_res=self.max_res,
-            temperature=self.temperature,
-            linear_bands=self.linear_bands,
+            bands=bands,
             in_pixels=self.in_pixels,
             ref_feat_shape=self.ref_feat_shape,
             grid_offset=self.grid_offset,
@@ -512,7 +584,7 @@ class RotaryEmbedding(nn.Module):
     def get_embed(self, shape: Optional[List[int]] = None):
         if shape is not None and self.bands is not None:
             # rebuild embeddings every call, use if target shape changes
-            return build_rotary_pos_embed(
+            return _build_rotary_pos_embed(
                 shape,
                 self.bands,
                 in_pixels=self.in_pixels,
@@ -612,12 +684,10 @@ class RotaryEmbeddingCat(nn.Module):
         return bands.to(device=device, dtype=dtype)
 
     def _get_pos_embed_values(self, feat_shape: List[int], device=None, dtype=torch.float32):
-        embeds = build_rotary_pos_embed(
+        bands = self._compute_bands(device, dtype)
+        embeds = _build_rotary_pos_embed(
             feat_shape=feat_shape,
-            dim=self.dim,
-            max_res=self.max_res,
-            temperature=self.temperature,
-            linear_bands=self.linear_bands,
+            bands=bands,
             in_pixels=self.in_pixels,
             ref_feat_shape=self.ref_feat_shape,
             grid_offset=self.grid_offset,
@@ -645,7 +715,7 @@ class RotaryEmbeddingCat(nn.Module):
     def get_embed(self, shape: Optional[List[int]] = None):
         if shape is not None and self.bands is not None:
             # rebuild embeddings from cached bands every call, use if target shape changes
-            embeds = build_rotary_pos_embed(
+            embeds = _build_rotary_pos_embed(
                 shape,
                 self.bands,
                 in_pixels=self.in_pixels,
@@ -689,7 +759,7 @@ class RotaryEmbeddingCat(nn.Module):
         max_w = max(w for h, w in shapes)
 
         # Generate embeddings for max size ONCE
-        sin_emb, cos_emb = build_rotary_pos_embed(
+        sin_emb, cos_emb = _build_rotary_pos_embed(
             feat_shape=(max_h, max_w),
             bands=self.bands,
             in_pixels=self.in_pixels,
