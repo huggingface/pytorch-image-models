@@ -24,6 +24,8 @@ class ParseKwargs(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         kw = {}
         for value in values:
+            if not value:
+                continue
             key, value = value.split('=')
             try:
                 kw[key] = ast.literal_eval(value)
