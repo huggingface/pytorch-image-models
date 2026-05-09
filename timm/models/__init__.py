@@ -73,6 +73,7 @@ from .swin_transformer import *
 from .swin_transformer_v2 import *
 from .swin_transformer_v2_cr import *
 from .tiny_vit import *
+from .tipsv2 import *
 from .tnt import *
 from .tresnet import *
 from .twins import *
