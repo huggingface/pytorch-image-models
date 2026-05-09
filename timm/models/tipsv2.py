@@ -1,5 +1,5 @@
 # Copyright 2025 Google LLC (Apache 2.0)
-# Adapted for timm by [your name]
+# Adapted for timm by Sanketh Singh
 """TIPSv2 vision encoder for timm.
 
 Paper: https://arxiv.org/abs/2604.12012
@@ -19,12 +19,6 @@ from timm.models._builder import build_model_with_cfg
 from timm.models._registry import register_model
 # from timm.models._pretrained import PretrainedCfg
 
-
-# ── Copy these from image_encoder.py ─────────────────────────────────────────
-# PatchEmbed, Mlp, SwiGLUFFN, Attention, LayerScale, DropPath, Block,
-# VisionTransformer (rename to TipsV2VisionTransformer to avoid conflict)
-# init_weights_vit_timm
-# ─────────────────────────────────────────────────────────────────────────────
 class Mlp(nn.Module):
   """Transformer MLP, following DINOv2 implementation."""
 
