@@ -22,6 +22,7 @@ import torch
 import torch.nn as nn
 import torch.nn.parallel
 
+from timm import utils
 from timm.data import create_dataset, create_loader, resolve_data_config, RealLabelsImagenet
 from timm.layers import apply_test_time_pool, set_fast_norm
 from timm.models import create_model, load_checkpoint, is_model, list_models
@@ -156,6 +157,8 @@ parser.add_argument('--valid-labels', default='', type=str, metavar='FILENAME',
                     help='Valid label indices txt file for validation of partial label space')
 parser.add_argument('--retry', default=False, action='store_true',
                     help='Enable batch size decay & retry for single model validation')
+parser.add_argument('--seed', type=int, default=42, metavar='S',
+                    help='random seed (default: 42)')
 
 parser.add_argument('--metrics-avg', type=str, default=None,
                     choices=['micro', 'macro', 'weighted'],
@@ -200,6 +203,8 @@ def validate(args):
         _logger.info('Validating in mixed precision with native PyTorch AMP.')
     else:
         _logger.info(f'Validating in {model_dtype or torch.float32}. AMP not enabled.')
+
+    utils.random_seed(args.seed)
 
     if args.fuser:
         set_jit_fuser(args.fuser)
@@ -282,6 +287,7 @@ def validate(args):
         input_img_mode=input_img_mode,
         target_key=args.target_key,
         trust_remote_code=args.dataset_trust_remote_code,
+        seed=args.seed,
     )
 
     if args.valid_labels:
