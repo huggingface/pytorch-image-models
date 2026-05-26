@@ -55,12 +55,12 @@ Modifications Copyright 2021 Ross Wightman
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-import math
 from typing import Optional, Tuple
 
 import torch
 from torch.optim import Optimizer
 
+from ._helpers import _add_scaled_, _get_value, _init_scalar, _validate_scalar
 from ._types import ParamsT
 
 
@@ -103,6 +103,9 @@ class Lamb(Optimizer):
             decoupled_decay: bool = False,
             corrected_weight_decay: bool = False,
     ):
+        _validate_scalar("learning rate", lr)
+        _validate_scalar("epsilon", eps)
+        _validate_scalar("weight_decay", weight_decay)
         defaults = dict(
             lr=lr,
             bias_correction=bias_correction,
@@ -125,6 +128,8 @@ class Lamb(Optimizer):
             group.setdefault('caution', False)
             group.setdefault('decoupled_decay', False)
             group.setdefault('corrected_weight_decay', False)
+            if 'step' in group:
+                group['step'] = _init_scalar(float(group['step']), device='cpu')
 
     def _get_clip_grad_norm(self):
         max_grad_norm = self.defaults['max_grad_norm']
@@ -164,16 +169,19 @@ class Lamb(Optimizer):
             grad_averaging = 1 if group['grad_averaging'] else 0
             beta3 = 1 - beta1 if grad_averaging else 1.0
 
+            if not any(p.grad is not None for p in group['params']):
+                continue
+
             # assume same step across group now to simplify things
             # per parameter step can be easily support by making it tensor, or pass list into kernel
-            if 'step' in group:
-                group['step'] += 1
-            else:
-                group['step'] = 1
+            if 'step' not in group:
+                group['step'] = _init_scalar(device='cpu')
+            group['step'].add_(1)
+            step = _get_value(group['step'])
 
             if bias_correction:
-                bias_correction1 = 1 - beta1 ** group['step']
-                bias_correction2 = 1 - beta2 ** group['step']
+                bias_correction1 = 1 - beta1 ** step
+                bias_correction2 = 1 - beta2 ** step
             else:
                 bias_correction1, bias_correction2 = 1.0, 1.0
 
@@ -200,7 +208,7 @@ class Lamb(Optimizer):
                 exp_avg.mul_(beta1).add_(grad, alpha=beta3)  # m_t
                 exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)  # v_t
 
-                denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(group['eps'])
+                denom = (exp_avg_sq.sqrt() / (bias_correction2 ** 0.5)).add_(group['eps'])
                 update = (exp_avg / bias_correction1).div_(denom)
 
                 if group['caution']:
@@ -216,7 +224,7 @@ class Lamb(Optimizer):
                             wd_scale = group['lr'] ** 2 / self.defaults['lr']
                         else:
                             wd_scale = group['lr']
-                        p.add_(p, alpha=-wd_scale * weight_decay)
+                        _add_scaled_(p, p, -wd_scale * weight_decay)
                     else:
                         update.add_(p, alpha=weight_decay)
 
@@ -238,6 +246,6 @@ class Lamb(Optimizer):
                         trust_ratio = torch.clamp(trust_ratio, max=1.0)
                     update.mul_(trust_ratio)
 
-                p.add_(update, alpha=-group['lr'])
+                _add_scaled_(p, update, -group['lr'])
 
         return loss

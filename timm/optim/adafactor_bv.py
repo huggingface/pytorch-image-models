@@ -16,12 +16,8 @@ import torch
 from torch import Tensor
 from torch.optim import Optimizer
 
+from ._helpers import _get_scalar_dtype, _get_value, _init_scalar, _validate_scalar
 from ._types import ParamsT
-
-
-def _get_scalar_dtype():
-    """Get the scalar dtype that the optimizer uses for state"""
-    return torch.float64
 
 
 def _factored_dims(
@@ -85,6 +81,8 @@ class AdafactorBigVision(Optimizer):
                 assert momentum_dtype == 'float32', f'{momentum_dtype} dtype not supported'
                 momentum_dtype = torch.float32
         # FIXME try to check if momentum dtype is appropriate for device? Torch API not great for this.
+        _validate_scalar("learning rate", lr)
+        _validate_scalar("weight_decay", weight_decay)
 
         defaults = dict(
             lr=lr,
@@ -112,8 +110,8 @@ class AdafactorBigVision(Optimizer):
             group.setdefault('foreach', None)
             for p in group['params']:
                 p_state = self.state.get(p, {})
-                if len(p_state) != 0 and not torch.is_tensor(p_state['step']):
-                    p_state['step'] = torch.tensor(float(p_state['step']), dtype=_get_scalar_dtype())
+                if len(p_state) != 0 and 'step' in p_state:
+                    p_state['step'] = _init_scalar(float(p_state['step']), device='cpu')
 
                 if 'exp_avg' in p_state and torch.is_tensor(p_state['exp_avg']):
                     # FIXME this is a bit of a hack, optimizer.load_state_dict appears to upcast
@@ -150,8 +148,7 @@ class AdafactorBigVision(Optimizer):
                 state = self.state[p]
 
                 if len(state) == 0:
-                    # NOTE step on CPU, probably need some more though to make capturable
-                    state['step'] = torch.tensor(0.0, dtype=_get_scalar_dtype())
+                    state['step'] = _init_scalar(device='cpu')
 
                     shape = p.grad.shape
                     factored_dims = _factored_dims(
@@ -244,8 +241,13 @@ def _single_tensor_adafactor(
             eps = 1e-7 if grad.dtype == torch.float16 else 1e-30
 
         # Update step
-        step_t += 1
-        beta2_t = min(beta2_cap, 1.0 - float(step_t) ** (-beta2_decay))
+        step_t.add_(1)
+        step = _get_value(step_t)
+        if torch.is_tensor(step):
+            beta2_cap_t = torch.tensor(beta2_cap, dtype=step.dtype, device=step.device)
+            beta2_t = torch.minimum(beta2_cap_t, 1.0 - torch.pow(step, -beta2_decay))
+        else:
+            beta2_t = min(beta2_cap, 1.0 - step ** (-beta2_decay))
         one_minus_beta2_t = 1 - beta2_t
 
         grad_sqr = torch.square(grad) + eps
