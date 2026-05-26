@@ -32,6 +32,7 @@ try:
 except ImportError:
     has_dtensor = False
 
+from ._helpers import _add_scaled_, _check_capturable_devices, _get_value, _validate_scalar, _zeros_scalar
 from ._types import ParamsT
 from .adamw import adamw
 from .nadamw import nadamw
@@ -84,6 +85,10 @@ _COEFFICIENTS = {
 
 
 NSCoeff = Union[str, Tuple[float, float, float], List[Tuple[float, float, float]]]
+
+
+def _init_step(param: torch.Tensor, capturable: bool = False) -> torch.Tensor:
+    return _zeros_scalar(device=param.device if capturable else None)
 
 
 def scale_eps_for_ns(
@@ -377,6 +382,7 @@ def muon(
         conv_mode: str,
         normalize_spatial: bool,
         scale_eps: bool,
+        capturable: bool = False,
 ) -> None:
     """Functional API that performs Muon algorithm computation."""
     _single_tensor_muon(
@@ -395,6 +401,7 @@ def muon(
         conv_mode=conv_mode,
         normalize_spatial=normalize_spatial,
         scale_eps=scale_eps,
+        capturable=capturable,
     )
 
 
@@ -418,6 +425,7 @@ def adamuon(
         conv_mode: str,
         normalize_spatial: bool,
         scale_eps: bool,
+        capturable: bool = False,
 ) -> None:
     """Functional API that performs AdaMuon algorithm computation.
 
@@ -446,6 +454,7 @@ def adamuon(
         conv_mode=conv_mode,
         normalize_spatial=normalize_spatial,
         scale_eps=scale_eps,
+        capturable=capturable,
     )
 
 
@@ -466,6 +475,7 @@ def _single_tensor_muon(
         conv_mode: str,
         normalize_spatial: bool,
         scale_eps: bool,
+        capturable: bool = False,
 ) -> None:
     """Single tensor Muon update."""
     ns_coefficients = resolve_ns_coefficients(ns_coefficients, _COEFFICIENTS)
@@ -515,7 +525,7 @@ def _single_tensor_muon(
         update_ortho = update_ortho.reshape(original_shape)
 
         # Apply update
-        param.add_(update_ortho, alpha=-lr * scale)
+        _add_scaled_(param, update_ortho, -lr * scale)
 
 
 def _single_tensor_adamuon(
@@ -538,6 +548,7 @@ def _single_tensor_adamuon(
         conv_mode: str,
         normalize_spatial: bool,
         scale_eps: bool,
+        capturable: bool = False,
 ) -> None:
     """Single tensor AdaMuon update.
 
@@ -553,6 +564,8 @@ def _single_tensor_adamuon(
         6. RMS-aligned rescaling and apply update
     """
     ns_coefficients = resolve_ns_coefficients(ns_coefficients, _COEFFICIENTS)
+    if capturable:
+        _check_capturable_devices(params, state_steps)
 
     for i, param in enumerate(params):
         grad = grads[i]
@@ -561,8 +574,8 @@ def _single_tensor_adamuon(
         step_t = state_steps[i]
 
         # Increment step
-        step_t += 1
-        step = step_t.item()
+        step_t.add_(1)
+        step = step_t if capturable else _get_value(step_t)
 
         # Apply weight decay (decoupled)
         param.mul_(1 - lr * weight_decay)
@@ -608,7 +621,7 @@ def _single_tensor_adamuon(
             denom = exp_avg_sq.sqrt().add_(eps)
         else:
             # Bias correction for second moment
-            bias_correction2 = 1.0 - beta2 ** step
+            bias_correction2 = 1.0 - torch.pow(beta2, step) if torch.is_tensor(step) else 1.0 - beta2 ** step
             denom = (exp_avg_sq / bias_correction2).sqrt().add_(eps)
 
         # Adaptive scaling: divide by sqrt of bias-corrected second moment
@@ -631,7 +644,7 @@ def _single_tensor_adamuon(
                 scale *= spatial_prod ** -0.5
 
         # Apply update
-        param.add_(update_adaptive, alpha=-lr * scale)
+        _add_scaled_(param, update_adaptive, -lr * scale)
 
 
 class Muon(torch.optim.Optimizer):
@@ -665,6 +678,7 @@ class Muon(torch.optim.Optimizer):
             betas: Tuple[float, float] = (0.9, 0.95),
             algo: str = "muon",
             scale_eps: bool = False,
+            capturable: bool = False,
             verbose: bool = False,
     ):
         """ Create Muon optimizer.
@@ -692,6 +706,8 @@ class Muon(torch.optim.Optimizer):
                 adaptive second moment estimation (https://arxiv.org/abs/2507.11005)
             scale_eps: If True, scale epsilon by sqrt(din/dout) in Newton-Schulz for μP
                 compatibility (https://arxiv.org/abs/2512.05620)
+            capturable: Whether this instance is safe to capture in a CUDA graph. Capturable mode supports
+                tensor learning rates and requires optimizer state tensors to live on the parameter device.
             verbose: Log parameter routing decisions (Muon vs AdamW)
 
         Example:
@@ -709,14 +725,10 @@ class Muon(torch.optim.Optimizer):
             ])
             ```
         """
-        if not 0.0 <= lr:
-            raise ValueError(f"Invalid learning rate: {lr}")
-        if not 0.0 <= weight_decay:
-            raise ValueError(f"Invalid weight_decay value: {weight_decay}")
-        if not 0.0 <= momentum < 1.0:
-            raise ValueError(f"Invalid momentum value: {momentum}")
-        if not 0.0 <= eps:
-            raise ValueError(f"Invalid epsilon value: {eps}")
+        _validate_scalar("learning rate", lr)
+        _validate_scalar("weight_decay", weight_decay)
+        _validate_scalar("momentum", momentum, max_value=1.0)
+        _validate_scalar("epsilon", eps)
         if conv_mode not in ["flatten", "batched"]:
             raise ValueError(f"Invalid conv_mode: {conv_mode}")
         if algo not in ["muon", "adamuon"]:
@@ -729,6 +741,8 @@ class Muon(torch.optim.Optimizer):
                 FutureWarning,
                 stacklevel=2,
             )
+            if torch.is_tensor(lr):
+                raise ValueError("adamw_lr is not supported with tensor lr; use fallback_lr_scale instead.")
             if lr == 0:
                 raise ValueError("Cannot compute fallback_lr_scale from adamw_lr when lr=0")
             fallback_lr_scale = adamw_lr / lr
@@ -749,6 +763,7 @@ class Muon(torch.optim.Optimizer):
             betas=betas,
             algo=algo,
             scale_eps=scale_eps,
+            capturable=capturable,
             verbose=verbose,
         )
         super().__init__(params, defaults)
@@ -758,6 +773,7 @@ class Muon(torch.optim.Optimizer):
         for group in self.param_groups:
             group.setdefault('algo', 'muon')
             group.setdefault('scale_eps', False)
+            group.setdefault('capturable', False)
             # Migrate old adamw_lr to fallback_lr_scale for checkpoint compat
             if 'fallback_lr_scale' not in group:
                 adamw_lr = group.pop('adamw_lr', group['lr'])
@@ -766,6 +782,12 @@ class Muon(torch.optim.Optimizer):
     @torch.no_grad()
     def step(self, closure=None):
         """Performs a single optimization step."""
+        if self.defaults.get("capturable", False):
+            if hasattr(self, '_accelerator_graph_capture_health_check'):
+                self._accelerator_graph_capture_health_check()
+            elif hasattr(self, '_cuda_graph_capture_health_check'):
+                self._cuda_graph_capture_health_check()
+
         loss = None
         if closure is not None:
             with torch.enable_grad():
@@ -849,7 +871,7 @@ class Muon(torch.optim.Optimizer):
                     # Additional state for adamuon mode
                     if algo == "adamuon":
                         if "step" not in state:
-                            state["step"] = torch.tensor(0.)
+                            state["step"] = _init_step(p, group["capturable"])
                             state["exp_avg_sq"] = torch.zeros_like(p, memory_format=torch.preserve_format)
                         muon_exp_avg_sqs.append(state["exp_avg_sq"])
                         muon_state_steps.append(state["step"])
@@ -861,7 +883,7 @@ class Muon(torch.optim.Optimizer):
 
                     # State initialization for AdamW
                     if "step" not in state:
-                        state["step"] = torch.tensor(0.)
+                        state["step"] = _init_step(p, group["capturable"])
                         state["exp_avg"] = torch.zeros_like(p, memory_format=torch.preserve_format)
                         state["exp_avg_sq"] = torch.zeros_like(p, memory_format=torch.preserve_format)
 
@@ -892,6 +914,7 @@ class Muon(torch.optim.Optimizer):
                         conv_mode=group["conv_mode"],
                         normalize_spatial=group["normalize_spatial"],
                         scale_eps=group["scale_eps"],
+                        capturable=group["capturable"],
                     )
                 else:
                     muon(
@@ -910,6 +933,7 @@ class Muon(torch.optim.Optimizer):
                         conv_mode=group["conv_mode"],
                         normalize_spatial=group["normalize_spatial"],
                         scale_eps=group["scale_eps"],
+                        capturable=group["capturable"],
                     )
 
             # Apply AdamW updates
@@ -932,7 +956,7 @@ class Muon(torch.optim.Optimizer):
                         eps=group["eps"],
                         caution=False,
                         maximize=False,
-                        capturable=False,
+                        capturable=group["capturable"],
                         max_lr=None,
                     )
                 else:
@@ -952,7 +976,7 @@ class Muon(torch.optim.Optimizer):
                         eps=group["eps"],
                         caution=False,
                         maximize=False,
-                        capturable=False,
+                        capturable=group["capturable"],
                         max_lr=None,
                 )
 

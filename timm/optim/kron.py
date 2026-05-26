@@ -47,6 +47,7 @@ try:
 except AttributeError:
     has_dynamo = False
 
+from ._helpers import _add_scaled_, _validate_scalar
 from ._types import ParamsT
 
 _logger = logging.getLogger(__name__)
@@ -132,8 +133,7 @@ class Kron(torch.optim.Optimizer):
         if not has_opt_einsum:
             warnings.warn("It is highly recommended to have 'opt_einsum' installed for this optimizer.")
 
-        if not 0.0 <= lr:
-            raise ValueError(f"Invalid learning rate: {lr}")
+        _validate_scalar("learning rate", lr)
         if not 0.0 <= momentum < 1.0:
             raise ValueError(f"Invalid beta parameter: {momentum}")
         if not 0.0 <= weight_decay:
@@ -374,7 +374,7 @@ class Kron(torch.optim.Optimizer):
                         pre_grad.add_(p, alpha=weight_decay)
 
                 # Update parameters
-                p.add_(pre_grad, alpha=-group["lr"])
+                _add_scaled_(p, pre_grad, -group["lr"])
 
         if total_momentum_size > 0:
             _logger.info(f"PSGD Momentum buffer size: {total_momentum_size} elements, {total_momentum_mb:.2f} MB")

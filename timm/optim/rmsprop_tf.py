@@ -14,6 +14,7 @@ Modifications Copyright 2021 Ross Wightman
 import torch
 from torch.optim import Optimizer
 
+from ._helpers import _add_scaled_, _addcdiv_scaled_, _init_scalar, _validate_scalar
 from ._types import ParamsT
 
 
@@ -62,14 +63,10 @@ class RMSpropTF(Optimizer):
             lr_in_momentum: bool = True,
             caution: bool = False,
     ):
-        if not 0.0 <= lr:
-            raise ValueError("Invalid learning rate: {}".format(lr))
-        if not 0.0 <= eps:
-            raise ValueError("Invalid epsilon value: {}".format(eps))
-        if not 0.0 <= momentum:
-            raise ValueError("Invalid momentum value: {}".format(momentum))
-        if not 0.0 <= weight_decay:
-            raise ValueError("Invalid weight_decay value: {}".format(weight_decay))
+        _validate_scalar("learning rate", lr)
+        _validate_scalar("epsilon", eps)
+        _validate_scalar("momentum", momentum)
+        _validate_scalar("weight_decay", weight_decay)
         if not 0.0 <= alpha:
             raise ValueError("Invalid alpha value: {}".format(alpha))
 
@@ -94,6 +91,10 @@ class RMSpropTF(Optimizer):
             group.setdefault('centered', False)
             group.setdefault('caution', False)
             group.setdefault('corrected_weight_decay', False)
+            for p in group['params']:
+                p_state = self.state.get(p, {})
+                if p_state and 'step' in p_state:
+                    p_state['step'] = _init_scalar(float(p_state['step']), device='cpu')
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -119,7 +120,7 @@ class RMSpropTF(Optimizer):
 
                 # State initialization
                 if len(state) == 0:
-                    state['step'] = 0
+                    state['step'] = _init_scalar(device='cpu')
                     state['square_avg'] = torch.ones_like(p)  # PyTorch inits to zero
                     if group['momentum'] > 0:
                         state['momentum_buffer'] = torch.zeros_like(p)
@@ -129,7 +130,7 @@ class RMSpropTF(Optimizer):
                 square_avg = state['square_avg']
                 one_minus_alpha = 1. - group['alpha']
 
-                state['step'] += 1
+                state['step'].add_(1)
 
                 if group['weight_decay'] != 0:
                     if group['decoupled_decay']:
@@ -165,7 +166,7 @@ class RMSpropTF(Optimizer):
 
                     if group['lr_in_momentum']:
                         # Tensorflow accumulates the LR scaling in the momentum buffer
-                        buf.addcdiv_(grad, avg, value=group['lr'])
+                        _addcdiv_scaled_(buf, grad, avg, group['lr'])
                         if group['caution']:
                             buf = _apply_caution(buf, grad)
                         p.add_(-buf)
@@ -174,8 +175,8 @@ class RMSpropTF(Optimizer):
                         buf.addcdiv_(grad, avg)
                         if group['caution']:
                             buf = _apply_caution(buf, grad)
-                        p.add_(buf, alpha=-group['lr'])
+                        _add_scaled_(p, buf, -group['lr'])
                 else:
-                    p.addcdiv_(grad, avg, value=-group['lr'])
+                    _addcdiv_scaled_(p, grad, avg, -group['lr'])
 
         return loss

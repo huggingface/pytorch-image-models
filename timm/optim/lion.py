@@ -25,6 +25,7 @@ from typing import List, Optional, Tuple
 import torch
 from torch.optim.optimizer import Optimizer
 
+from ._helpers import _add_scaled_, _validate_scalar
 from ._types import ParamsT
 
 
@@ -53,8 +54,7 @@ class Lion(Optimizer):
             corrected_weight_decay: apply corrected weight decay (lr**2 / max_lr)
         """
 
-        if not 0.0 <= lr:
-            raise ValueError('Invalid learning rate: {}'.format(lr))
+        _validate_scalar("learning rate", lr)
         if not 0.0 <= betas[0] < 1.0:
             raise ValueError('Invalid beta parameter at index 0: {}'.format(betas[0]))
         if not 0.0 <= betas[1] < 1.0:
@@ -154,6 +154,8 @@ def lion(
         try:
             # cannot do foreach if this overload doesn't exist when caution enabled
             foreach = not caution or 'Scalar' in torch.ops.aten._foreach_maximum_.overloads()
+            if foreach and torch.is_tensor(lr):
+                foreach = False
         except Exception:
             foreach = False
 
@@ -214,7 +216,7 @@ def _single_tensor_lion(
             mask.div_(mask.mean().clamp_(min=1e-3))
             update.mul_(mask)
 
-        param.add_(update, alpha=-lr)
+        _add_scaled_(param, update, -lr)
 
         # Decay the momentum running average coefficient
         exp_avg.lerp_(grad, 1 - beta2)
