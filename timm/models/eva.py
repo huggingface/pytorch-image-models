@@ -1764,16 +1764,13 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
     ),
     'vit_tiny_patch16_dinov3_qkvb.eupe_lvd1689m': _eupe_cfg(
-        hf_hub_id='facebook/EUPE-ViT-T',
-        hf_hub_filename='EUPE-ViT-T.pt',
+        hf_hub_id='timm/',
     ),
     'vit_small_patch16_dinov3_qkvb.eupe_lvd1689m': _eupe_cfg(
-        hf_hub_id='facebook/EUPE-ViT-S',
-        hf_hub_filename='EUPE-ViT-S.pt',
+        hf_hub_id='timm/',
     ),
     'vit_base_patch16_dinov3_qkvb.eupe_lvd1689m': _eupe_cfg(
-        hf_hub_id='facebook/EUPE-ViT-B',
-        hf_hub_filename='EUPE-ViT-B.pt',
+        hf_hub_id='timm/',
     ),
     'vit_large_patch16_dinov3.lvd1689m': _dinov3_cfg(
         hf_hub_id='timm/',

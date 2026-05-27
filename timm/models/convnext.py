@@ -1138,8 +1138,7 @@ default_cfgs = generate_default_cfgs({
         license='dinov3-license',
     ),
     'convnext_tiny.eupe_lvd1689m': _cfg(
-        hf_hub_id='facebook/EUPE-ConvNeXt-T',
-        hf_hub_filename='EUPE-ConvNeXt-T.pt',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256),
         pool_size=(8, 8),
         crop_pct=1.0,
@@ -1147,8 +1146,7 @@ default_cfgs = generate_default_cfgs({
         license='fair-noncommercial-research-license',
     ),
     'convnext_small.eupe_lvd1689m': _cfg(
-        hf_hub_id='facebook/EUPE-ConvNeXt-S',
-        hf_hub_filename='EUPE-ConvNeXt-S.pt',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256),
         pool_size=(8, 8),
         crop_pct=1.0,
@@ -1156,8 +1154,7 @@ default_cfgs = generate_default_cfgs({
         license='fair-noncommercial-research-license',
     ),
     'convnext_base.eupe_lvd1689m': _cfg(
-        hf_hub_id='facebook/EUPE-ConvNeXt-B',
-        hf_hub_filename='EUPE-ConvNeXt-B.pt',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256),
         pool_size=(8, 8),
         crop_pct=1.0,
