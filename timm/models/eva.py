@@ -1213,6 +1213,9 @@ def checkpoint_filter_fn(
             if any([k.endswith(f) for f in ['.periods', '.bias_mask', 'mask_token']]):
                 # discard unused/non-persistent/pretrain only params
                 continue
+            if k.startswith('projectors.'):
+                # discard optional distillation projection heads from EUPE checkpoints
+                continue
             if k.startswith('local_cls_norm'):
                 # discard, only used for 7b dinov3 pretrain w/ local crops
                 continue
@@ -1372,6 +1375,18 @@ def _dinov3_cfg(url: str = '', **kwargs) -> Dict[str, Any]:
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'patch_embed.proj', 'classifier': 'head',
         'license': 'dinov3-license', **kwargs
+    }
+
+
+def _eupe_cfg(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Generate default configuration for EUPE models."""
+    return {
+        'url': url,
+        'num_classes': 0, 'input_size': (3, 256, 256), 'pool_size': None,
+        'crop_pct': 1.0, 'interpolation': 'bicubic', 'fixed_input_size': True,
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'patch_embed.proj', 'classifier': 'head',
+        'license': 'fair-noncommercial-research-license', **kwargs
     }
 
 default_cfgs = generate_default_cfgs({
@@ -1747,6 +1762,18 @@ default_cfgs = generate_default_cfgs({
     ),
     'vit_base_patch16_dinov3_qkvb.lvd1689m': _dinov3_cfg(
         hf_hub_id='timm/',
+    ),
+    'vit_tiny_patch16_dinov3_qkvb.eupe_lvd1689m': _eupe_cfg(
+        hf_hub_id='facebook/EUPE-ViT-T',
+        hf_hub_filename='EUPE-ViT-T.pt',
+    ),
+    'vit_small_patch16_dinov3_qkvb.eupe_lvd1689m': _eupe_cfg(
+        hf_hub_id='facebook/EUPE-ViT-S',
+        hf_hub_filename='EUPE-ViT-S.pt',
+    ),
+    'vit_base_patch16_dinov3_qkvb.eupe_lvd1689m': _eupe_cfg(
+        hf_hub_id='facebook/EUPE-ViT-B',
+        hf_hub_filename='EUPE-ViT-B.pt',
     ),
     'vit_large_patch16_dinov3.lvd1689m': _dinov3_cfg(
         hf_hub_id='timm/',
@@ -2717,6 +2744,32 @@ def vit_large_patch16_rope_mixed_ape_224(pretrained: bool = False, **kwargs) -> 
 
 
 @register_model
+def vit_tiny_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
+    """DINOv3-style T/16 w/ QKV bias enabled."""
+    model_args = dict(
+        patch_size=16,
+        dynamic_img_size=True,
+        embed_dim=192,
+        depth=12,
+        num_heads=3,
+        qkv_bias=True,
+        # global_pool='token',  # upstream uses CLS token; default here is 'avg', pass via kwargs or --gp
+        init_values=1.0e-05, # layer-scale
+        rope_type='dinov3',
+        rope_temperature=100,
+        #rope_rescale_coords=2,  # haven't added to interface
+        rope_rotate_half=True,
+        use_rot_pos_emb=True,
+        use_abs_pos_emb=False,
+        num_reg_tokens=4,
+        use_fc_norm=False,
+        norm_layer=partial(LayerNorm, eps=1e-5),
+    )
+    model = _create_eva('vit_tiny_patch16_dinov3_qkvb', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
 def vit_small_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
     """DINOv3 S/16 https://arxiv.org/abs/2508.10104
     NOTE: Pass global_pool='token' to use CLS-token pooling (matches upstream DINOv3).
@@ -2728,6 +2781,7 @@ def vit_small_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
         depth=12,
         num_heads=6,
         qkv_bias=False,
+        # global_pool='token',  # upstream uses CLS token; default here is 'avg', pass via kwargs or --gp
         init_values=1.0e-05, # layer-scale
         rope_type='dinov3',
         rope_temperature=100,
@@ -2755,6 +2809,7 @@ def vit_small_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
         depth=12,
         num_heads=6,
         qkv_bias=True,
+        # global_pool='token',  # upstream uses CLS token; default here is 'avg', pass via kwargs or --gp
         init_values=1.0e-05, # layer-scale
         rope_type='dinov3',
         rope_temperature=100,
@@ -2782,6 +2837,7 @@ def vit_small_plus_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
         depth=12,
         num_heads=6,
         qkv_bias=False,
+        # global_pool='token',  # upstream uses CLS token; default here is 'avg', pass via kwargs or --gp
         init_values=1.0e-05, # layer-scale
         rope_type='dinov3',
         rope_temperature=100,
@@ -2811,6 +2867,7 @@ def vit_small_plus_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Ev
         depth=12,
         num_heads=6,
         qkv_bias=True,
+        # global_pool='token',  # upstream uses CLS token; default here is 'avg', pass via kwargs or --gp
         init_values=1.0e-05, # layer-scale
         rope_type='dinov3',
         rope_temperature=100,
@@ -2840,6 +2897,7 @@ def vit_base_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
         depth=12,
         num_heads=12,
         qkv_bias=False,
+        # global_pool='token',  # upstream uses CLS token; default here is 'avg', pass via kwargs or --gp
         init_values=1.0e-05, # layer-scale
         rope_type='dinov3',
         rope_temperature=100,
@@ -2867,6 +2925,7 @@ def vit_base_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
         depth=12,
         num_heads=12,
         qkv_bias=True,
+        # global_pool='token',  # upstream uses CLS token; default here is 'avg', pass via kwargs or --gp
         init_values=1.0e-05, # layer-scale
         rope_type='dinov3',
         rope_temperature=100,
@@ -2894,6 +2953,7 @@ def vit_large_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
         depth=24,
         num_heads=16,
         qkv_bias=False,
+        # global_pool='token',  # upstream uses CLS token; default here is 'avg', pass via kwargs or --gp
         init_values=1.0e-5, # layer-scale
         rope_type='dinov3',
         rope_temperature=100,
@@ -2921,6 +2981,7 @@ def vit_large_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva:
         depth=24,
         num_heads=16,
         qkv_bias=True,
+        # global_pool='token',  # upstream uses CLS token; default here is 'avg', pass via kwargs or --gp
         init_values=1.0e-5, # layer-scale
         rope_type='dinov3',
         rope_temperature=100,
@@ -2948,6 +3009,7 @@ def vit_huge_plus_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
         depth=32,
         num_heads=20,
         qkv_bias=False,
+        # global_pool='token',  # upstream uses CLS token; default here is 'avg', pass via kwargs or --gp
         init_values=1.0e-5, # layer-scale
         rope_type='dinov3',
         rope_temperature=100,
@@ -2978,6 +3040,7 @@ def vit_huge_plus_patch16_dinov3_qkvb(pretrained: bool = False, **kwargs) -> Eva
         depth=32,
         num_heads=20,
         qkv_bias=True,
+        # global_pool='token',  # upstream uses CLS token; default here is 'avg', pass via kwargs or --gp
         init_values=1.0e-5, # layer-scale
         rope_type='dinov3',
         rope_temperature=100,
@@ -3007,6 +3070,7 @@ def vit_7b_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
         depth=40,
         num_heads=32,
         qkv_bias=False,
+        # global_pool='token',  # upstream uses CLS token; default here is 'avg', pass via kwargs or --gp
         mlp_ratio=2,
         init_values=1.0e-5, # layer-scale
         rope_type='dinov3',
