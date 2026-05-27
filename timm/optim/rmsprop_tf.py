@@ -94,7 +94,7 @@ class RMSpropTF(Optimizer):
             for p in group['params']:
                 p_state = self.state.get(p, {})
                 if p_state and 'step' in p_state:
-                    p_state['step'] = _init_scalar(float(p_state['step']), device='cpu')
+                    p_state['step'] = _init_scalar(p_state['step'], device='cpu')
 
     @torch.no_grad()
     def step(self, closure=None):

@@ -16,7 +16,7 @@ import torch
 from torch import Tensor
 from torch.optim import Optimizer
 
-from ._helpers import _get_scalar_dtype, _get_value, _init_scalar, _validate_scalar
+from ._helpers import _get_value, _init_scalar, _validate_scalar
 from ._types import ParamsT
 
 
@@ -111,7 +111,7 @@ class AdafactorBigVision(Optimizer):
             for p in group['params']:
                 p_state = self.state.get(p, {})
                 if len(p_state) != 0 and 'step' in p_state:
-                    p_state['step'] = _init_scalar(float(p_state['step']), device='cpu')
+                    p_state['step'] = _init_scalar(p_state['step'], device='cpu', dtype=torch.float64)
 
                 if 'exp_avg' in p_state and torch.is_tensor(p_state['exp_avg']):
                     # FIXME this is a bit of a hack, optimizer.load_state_dict appears to upcast
@@ -148,7 +148,7 @@ class AdafactorBigVision(Optimizer):
                 state = self.state[p]
 
                 if len(state) == 0:
-                    state['step'] = _init_scalar(device='cpu')
+                    state['step'] = _init_scalar(device='cpu', dtype=torch.float64)
 
                     shape = p.grad.shape
                     factored_dims = _factored_dims(

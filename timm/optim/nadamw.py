@@ -87,7 +87,7 @@ class NAdamW(torch.optim.Optimizer):
                 p_state = self.state.get(p, {})
                 if p_state and 'step' in p_state:
                     p_state['step'] = _init_scalar(
-                        float(p_state['step']),
+                        p_state['step'],
                         device=p.device if group['capturable'] else 'cpu',
                     )
 

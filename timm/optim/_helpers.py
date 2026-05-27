@@ -1,6 +1,6 @@
 """Small optimizer helpers shared by timm optimizer implementations."""
 
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, Union
 
 import torch
 from torch import Tensor
@@ -10,12 +10,22 @@ def _get_scalar_dtype() -> torch.dtype:
     return torch.float64 if torch.get_default_dtype() == torch.float64 else torch.float32
 
 
-def _init_scalar(value: float = 0.0, device=None) -> Tensor:
-    return torch.tensor(value, dtype=_get_scalar_dtype(), device=device)
+def _init_scalar(
+        value: Union[float, Tensor] = 0.0,
+        device=None,
+        dtype: Optional[torch.dtype] = None,
+) -> Tensor:
+    if isinstance(value, Tensor):
+        dtype = dtype or value.dtype
+        device = value.device if device is None else torch.device(device)
+        if value.device == device and value.dtype == dtype:
+            return value
+        return value.to(device=device, dtype=dtype)
+    return torch.tensor(value, dtype=dtype or _get_scalar_dtype(), device=device)
 
 
-def _zeros_scalar(device=None) -> Tensor:
-    return torch.zeros((), dtype=_get_scalar_dtype(), device=device)
+def _zeros_scalar(device=None, dtype: Optional[torch.dtype] = None) -> Tensor:
+    return torch.zeros((), dtype=dtype or _get_scalar_dtype(), device=device)
 
 
 def _is_compiling() -> bool:
