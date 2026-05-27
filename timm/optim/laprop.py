@@ -66,19 +66,15 @@ class LaProp(Optimizer):
                 if not p_state:
                     continue
                 if 'step' in p_state:
-                    p_state['step'] = _init_scalar(float(p_state['step']), device='cpu')
-                if (
-                        'exp_avg_lr_1' in p_state
-                        and torch.is_tensor(group['lr'])
-                        and not torch.is_tensor(p_state['exp_avg_lr_1'])
-                ):
-                    p_state['exp_avg_lr_1'] = torch.tensor(
-                        float(p_state['exp_avg_lr_1']),
+                    p_state['step'] = _init_scalar(p_state['step'], device='cpu')
+                if 'exp_avg_lr_1' in p_state and torch.is_tensor(group['lr']):
+                    p_state['exp_avg_lr_1'] = _init_scalar(
+                        p_state['exp_avg_lr_1'],
                         dtype=group['lr'].dtype,
                         device=group['lr'].device,
                     )
                 if 'exp_avg_lr_2' in p_state:
-                    p_state['exp_avg_lr_2'] = _init_scalar(float(p_state['exp_avg_lr_2']), device='cpu')
+                    p_state['exp_avg_lr_2'] = _init_scalar(p_state['exp_avg_lr_2'], device='cpu')
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -129,9 +125,10 @@ class LaProp(Optimizer):
 
                 # 1 - beta1 ** state['step']
                 if torch.is_tensor(group['lr']):
+                    lr_safe = torch.where(group['lr'] != 0., group['lr'], torch.ones_like(group['lr']))
                     bias_correction1 = torch.where(
                         group['lr'] != 0.,
-                        state['exp_avg_lr_1'] / group['lr'],
+                        state['exp_avg_lr_1'] / lr_safe,
                         torch.ones_like(group['lr']),
                     )
                 else:

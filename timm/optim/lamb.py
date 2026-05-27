@@ -129,7 +129,7 @@ class Lamb(Optimizer):
             group.setdefault('decoupled_decay', False)
             group.setdefault('corrected_weight_decay', False)
             if 'step' in group:
-                group['step'] = _init_scalar(float(group['step']), device='cpu')
+                group['step'] = _init_scalar(group['step'], device='cpu')
 
     def _get_clip_grad_norm(self):
         max_grad_norm = self.defaults['max_grad_norm']
@@ -169,14 +169,15 @@ class Lamb(Optimizer):
             grad_averaging = 1 if group['grad_averaging'] else 0
             beta3 = 1 - beta1 if grad_averaging else 1.0
 
-            if not any(p.grad is not None for p in group['params']):
-                continue
-
             # assume same step across group now to simplify things
             # per parameter step can be easily support by making it tensor, or pass list into kernel
             if 'step' not in group:
                 group['step'] = _init_scalar(device='cpu')
             group['step'].add_(1)
+
+            if not any(p.grad is not None for p in group['params']):
+                continue
+
             step = _get_value(group['step'])
 
             if bias_correction:
