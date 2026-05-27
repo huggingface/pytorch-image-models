@@ -11,6 +11,11 @@
 - [Citing](#citing)
 
 ## What's New
+
+## May 27, 2026
+* Add model defs and pretrained weights for EUPE ViT (DINOv3-style) and ConvNeXt models. See the [Efficient Universal Perception Encoder paper](https://arxiv.org/abs/2603.22387).
+* Add TIPSv2 model defs and pretrained weights for (DINOv2-style) ViTs. See the [TIPSv2 paper](https://arxiv.org/abs/2604.12012).
+
 ## May 8, 2026
 * Release 1.0.27
 
