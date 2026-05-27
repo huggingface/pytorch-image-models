@@ -1732,6 +1732,11 @@ def checkpoint_filter_fn(
         state_dict = _convert_openai_clip(state_dict, model, prefix='module.visual.')
     elif "mask_token" in state_dict:
         state_dict = _convert_dinov2(state_dict, model)
+    elif "vision_encoder.mask_token" in state_dict:
+        # TIPSv2 multimodal checkpoint, vision encoder is DINOv2-style under a 'vision_encoder.' prefix
+        ve_prefix = 'vision_encoder.'
+        state_dict = {k[len(ve_prefix):]: v for k, v in state_dict.items() if k.startswith(ve_prefix)}
+        state_dict = _convert_dinov2(state_dict, model)
     elif any('beit3.' in k for k in state_dict.keys()):
         # BEiT3 model - multimodal checkpoint with beit3.* prefix
         state_dict = _convert_beit3(state_dict, model)
@@ -2042,6 +2047,29 @@ default_cfgs = {
         license='apache-2.0',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0,
         input_size=(3, 518, 518), crop_pct=1.0),
+
+    # TIPSv2 (DINOv2-style ViT w/ 1 register, no input normalization).
+    # Paper: https://arxiv.org/abs/2604.12012  Weights: https://huggingface.co/google/tipsv2-b14
+    'vit_base_patch14_reg1_tipsv2.webli': _cfg(
+        hf_hub_id='timm/',
+        license='apache-2.0',
+        mean=(0., 0., 0.), std=(1., 1., 1.), num_classes=0,
+        input_size=(3, 448, 448), crop_pct=1.0),
+    'vit_large_patch14_reg1_tipsv2.webli': _cfg(
+        hf_hub_id='timm/',
+        license='apache-2.0',
+        mean=(0., 0., 0.), std=(1., 1., 1.), num_classes=0,
+        input_size=(3, 448, 448), crop_pct=1.0),
+    'vit_so400m_patch14_reg1_tipsv2.webli': _cfg(
+        hf_hub_id='timm/',
+        license='apache-2.0',
+        mean=(0., 0., 0.), std=(1., 1., 1.), num_classes=0,
+        input_size=(3, 448, 448), crop_pct=1.0),
+    'vit_giant_patch14_reg1_tipsv2.webli': _cfg(
+        hf_hub_id='timm/',
+        license='apache-2.0',
+        mean=(0., 0., 0.), std=(1., 1., 1.), num_classes=0,
+        input_size=(3, 448, 448), crop_pct=1.0),
 
     # ViT ImageNet-21K-P pretraining by MILL
     'vit_base_patch16_224_miil.in21k': _cfg(
@@ -3923,6 +3951,61 @@ def vit_giant_patch14_reg4_dinov2(pretrained: bool = False, **kwargs) -> VisionT
     )
     model = _create_vision_transformer(
         'vit_giant_patch14_reg4_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_base_patch14_reg1_tipsv2(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT-B/14 for TIPSv2 (DINOv2-style w/ 1 register token, LayerScale init=1.0).
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=768, depth=12, num_heads=12, init_values=1.0,
+        reg_tokens=1, no_embed_class=True,
+    )
+    model = _create_vision_transformer(
+        'vit_base_patch14_reg1_tipsv2', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_large_patch14_reg1_tipsv2(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT-L/14 for TIPSv2 (DINOv2-style w/ 1 register token, LayerScale init=1.0).
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=1024, depth=24, num_heads=16, init_values=1.0,
+        reg_tokens=1, no_embed_class=True,
+    )
+    model = _create_vision_transformer(
+        'vit_large_patch14_reg1_tipsv2', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_so400m_patch14_reg1_tipsv2(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ SoViT-400M/14 for TIPSv2 (DINOv2-style w/ 1 register token, LayerScale init=1.0).
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=1152, depth=27, num_heads=16, init_values=1.0,
+        mlp_ratio=4304 / 1152, reg_tokens=1, no_embed_class=True,
+    )
+    model = _create_vision_transformer(
+        'vit_so400m_patch14_reg1_tipsv2', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_giant_patch14_reg1_tipsv2(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT-G/14 for TIPSv2 (DINOv2-style w/ SwiGLU FFN, 1 register token, LayerScale init=1.0).
+    """
+    # SwiGLU hidden after DINOv2's (2/3, align-8) reduction is 4096; SwiGLUPacked fc1 outputs 2*4096=8192,
+    # so mlp_ratio = 8192 / 1536 = 16/3.
+    model_args = dict(
+        patch_size=14, embed_dim=1536, depth=40, num_heads=24, init_values=1.0,
+        mlp_ratio=2.66667 * 2, mlp_layer=SwiGLUPacked, act_layer=nn.SiLU,
+        reg_tokens=1, no_embed_class=True,
+    )
+    model = _create_vision_transformer(
+        'vit_giant_patch14_reg1_tipsv2', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
