@@ -671,6 +671,9 @@ def checkpoint_filter_fn(state_dict, model):
 
     import re
     for k, v in state_dict.items():
+        if k.startswith(('projectors.', 'norms.')):
+            # discard optional EUPE distillation/projector heads and feature norms
+            continue
         k = k.replace('downsample_layers.0.', 'stem.')
         k = re.sub(r'stages.([0-9]+).([0-9]+)', r'stages.\1.blocks.\2', k)
         k = re.sub(r'downsample_layers.([0-9]+).([0-9]+)', r'stages.\1.downsample.\2', k)
@@ -1133,6 +1136,33 @@ default_cfgs = generate_default_cfgs({
         crop_pct=1.0,
         num_classes=0,
         license='dinov3-license',
+    ),
+    'convnext_tiny.eupe_lvd1689m': _cfg(
+        hf_hub_id='facebook/EUPE-ConvNeXt-T',
+        hf_hub_filename='EUPE-ConvNeXt-T.pt',
+        input_size=(3, 256, 256),
+        pool_size=(8, 8),
+        crop_pct=1.0,
+        num_classes=0,
+        license='fair-noncommercial-research-license',
+    ),
+    'convnext_small.eupe_lvd1689m': _cfg(
+        hf_hub_id='facebook/EUPE-ConvNeXt-S',
+        hf_hub_filename='EUPE-ConvNeXt-S.pt',
+        input_size=(3, 256, 256),
+        pool_size=(8, 8),
+        crop_pct=1.0,
+        num_classes=0,
+        license='fair-noncommercial-research-license',
+    ),
+    'convnext_base.eupe_lvd1689m': _cfg(
+        hf_hub_id='facebook/EUPE-ConvNeXt-B',
+        hf_hub_filename='EUPE-ConvNeXt-B.pt',
+        input_size=(3, 256, 256),
+        pool_size=(8, 8),
+        crop_pct=1.0,
+        num_classes=0,
+        license='fair-noncommercial-research-license',
     ),
 
     "test_convnext.r160_in1k": _cfg(
