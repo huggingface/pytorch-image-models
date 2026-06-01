@@ -135,6 +135,7 @@ from .pos_embed_sincos import (
     RotaryEmbedding,
     RotaryEmbeddingCat,
     RotaryEmbeddingMixed,
+    RotaryEmbeddingMRope,
     RotaryEmbeddingDinoV3,
     get_mixed_freqs,
     create_rope_embed,
