@@ -60,6 +60,7 @@ class Attention(nn.Module):
             qk_norm: bool = False,
             scale_norm: bool = False,
             proj_bias: bool = True,
+            gated: bool = False,
             attn_drop: float = 0.,
             proj_drop: float = 0.,
             norm_layer: Optional[Type[nn.Module]] = None,
@@ -77,6 +78,7 @@ class Attention(nn.Module):
             qk_norm: Whether to apply normalization to query and key vectors.
             scale_norm: Whether to apply normalization to attention output before projection.
             proj_bias: Whether to use bias in the output projection.
+            gated: Apply a per-head sigmoid gate to the attention output (anti attention-sink, GenLIP-style).
             attn_drop: Dropout rate applied to the attention weights.
             proj_drop: Dropout rate applied after the output projection.
             norm_layer: Normalization layer constructor for QK normalization if enabled.
@@ -102,6 +104,7 @@ class Attention(nn.Module):
         self.k_norm = norm_layer(head_dim, **dd) if qk_norm else nn.Identity()
         self.attn_drop = nn.Dropout(attn_drop)
         self.norm = norm_layer(self.attn_dim, **dd) if scale_norm else nn.Identity()
+        self.gate = nn.Linear(dim, self.attn_dim, bias=qkv_bias, **dd) if gated else None
         self.proj = nn.Linear(self.attn_dim, dim_out, bias=proj_bias, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
 
@@ -112,6 +115,7 @@ class Attention(nn.Module):
             is_causal: bool = False,
     ) -> torch.Tensor:
         B, N, C = x.shape
+        gate = self.gate(x).sigmoid() if self.gate is not None else None
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)
         q, k = self.q_norm(q), self.k_norm(k)
@@ -134,6 +138,8 @@ class Attention(nn.Module):
 
         x = x.transpose(1, 2).reshape(B, N, self.attn_dim)
         x = self.norm(x)
+        if gate is not None:
+            x = x * gate
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
@@ -165,6 +171,7 @@ class AttentionRope(nn.Module):
             scale_norm: bool = False,
             proj_bias: bool = True,
             rotate_half: bool = False,
+            gated: bool = False,
             device=None,
             dtype=None,
     ):
@@ -218,6 +225,7 @@ class AttentionRope(nn.Module):
         self.k_norm = norm_layer(head_dim, **dd) if qk_norm else nn.Identity()
         self.attn_drop = nn.Dropout(attn_drop)
         self.norm = norm_layer(self.attn_dim, **dd) if scale_norm else nn.Identity()
+        self.gate = nn.Linear(dim, self.attn_dim, bias=qkv_bias, **dd) if gated else None
         self.proj = nn.Linear(self.attn_dim, dim_out, bias=proj_bias, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
 
@@ -240,6 +248,7 @@ class AttentionRope(nn.Module):
             Tensor of shape (batch_size, sequence_length, dim_out)
         """
         B, N, C = x.shape
+        gate = self.gate(x).sigmoid() if self.gate is not None else None
 
         if self.qkv is not None:
             qkv = self.qkv(x)
@@ -277,6 +286,8 @@ class AttentionRope(nn.Module):
 
         x = x.transpose(1, 2).reshape(B, N, self.attn_dim)
         x = self.norm(x)
+        if gate is not None:
+            x = x * gate
         x = self.proj(x)
         x = self.proj_drop(x)
         return x

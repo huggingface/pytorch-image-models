@@ -98,12 +98,13 @@ class NaFlexVitCfg:
     pos_embed_use_grid_sample: bool = False  # Whether to use grid_sample for naflex position embedding interpolation
 
     # ROPE specific configuration
-    rope_type: str = ''  # ROPE type: '' or 'none' for no ROPE, 'axial' for standard, 'mixed' for learnable frequencies
+    rope_type: str = ''  # ROPE type: '' / 'none', 'axial', 'mixed', 'dinov3', or 'mrope' (interleaved multimodal)
     rope_temperature: float = 10000.0  # Temperature for ROPE frequency computation
     rope_ref_feat_shape: Optional[Tuple[int, int]] = None
     rope_grid_offset: float = 0.  # Grid offset for non-pixel ROPE mode
     rope_grid_indexing: str = 'ij'  # Grid indexing mode for ROPE ('ij' or 'xy')
-    rope_rotate_half: bool = False  # Use rotate_half layout for ROPE (DINOv3 uses True)
+    rope_rotate_half: bool = False  # Use rotate_half layout for ROPE (DINOv3 and 'mrope' use True)
+    rope_mrope_section: Optional[Tuple[int, int, int]] = None  # (T,H,W) channel split for rope_type='mrope'
 
     # Image processing
     dynamic_img_pad: bool = False  # Whether to enable dynamic padding for variable resolution
@@ -137,6 +138,7 @@ class NaFlexVitCfg:
 
     # EVA-specific parameters
     attn_type: str = 'standard'  # Attention type: 'standard', 'eva', 'rope'
+    attn_gated: bool = False  # Apply sigmoid output gate in attention (anti attention-sink, GenLIP-style)
     swiglu_mlp: bool = False  # Use SwiGLU MLP variant
     qkv_fused: bool = True  # Whether to use fused QKV projections
 
@@ -282,7 +284,8 @@ def get_block_fn(cfg: NaFlexVitCfg) -> Callable:
     use_eva_features = (
         cfg.attn_type in ('eva', 'rope') or
         cfg.rope_type not in ('', 'none') or  # Any ROPE type requires EVA blocks
-        cfg.swiglu_mlp
+        cfg.swiglu_mlp or
+        cfg.attn_gated  # gated attention is implemented on the EVA/rope attention path
     )
 
     if use_eva_features:
@@ -300,7 +303,8 @@ def get_block_fn(cfg: NaFlexVitCfg) -> Callable:
             scale_attn_inner=cfg.scale_attn_inner_norm,
             qkv_fused=cfg.qkv_fused,
             num_prefix_tokens=num_prefix_tokens,
-            rotate_half=cfg.rope_rotate_half,
+            rotate_half=cfg.rope_rotate_half or cfg.rope_type == 'mrope',  # MRoPE requires the half-rotation layout
+            gated_attn=cfg.attn_gated,
         )
     else:
         # Standard ViT block
@@ -1194,7 +1198,9 @@ class NaFlexVit(nn.Module):
         self.rope: Optional[nn.Module] = None
         self.rope_is_mixed = False
         if cfg.rope_type and cfg.rope_type != 'none':
-            from timm.layers.pos_embed_sincos import RotaryEmbeddingCat, RotaryEmbeddingDinoV3, RotaryEmbeddingMixed
+            from timm.layers.pos_embed_sincos import (
+                RotaryEmbeddingCat, RotaryEmbeddingDinoV3, RotaryEmbeddingMixed, RotaryEmbeddingMRope,
+            )
             if cfg.rope_type == 'mixed':
                 self.rope = RotaryEmbeddingMixed(
                     cfg.embed_dim,
@@ -1225,6 +1231,16 @@ class NaFlexVit(nn.Module):
                     feat_shape=None,  # Dynamic shapes for NaFlex
                     grid_indexing=cfg.rope_grid_indexing,
                     rotate_half=cfg.rope_rotate_half,
+                    **dd,
+                )
+                self.rope_is_mixed = False
+            elif cfg.rope_type == 'mrope':
+                assert cfg.rope_mrope_section is not None, "rope_type='mrope' requires cfg.rope_mrope_section"
+                self.rope = RotaryEmbeddingMRope(
+                    cfg.embed_dim // cfg.num_heads,
+                    mrope_section=cfg.rope_mrope_section,
+                    temperature=cfg.rope_temperature,
+                    grid_indexing=cfg.rope_grid_indexing,
                     **dd,
                 )
                 self.rope_is_mixed = False

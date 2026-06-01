@@ -790,6 +790,84 @@ def get_mixed_freqs(
     return rope_embeds.to(dtype)
 
 
+class RotaryEmbeddingMRope(nn.Module):
+    """Interleaved multimodal RoPE (Qwen2-VL style) for vision, matching the reference GenLIP layout.
+
+    Drop-in sibling of ``RotaryEmbeddingCat``: ``get_embed(shape) -> [N, 2*dim]``, consumed by
+    ``apply_rot_embed_cat(..., half=True)`` (no new apply path / no separate sin/cos tensors). The ``dim // 2``
+    frequency channels are assigned to height/width/temporal axes in a strided ``T,H,W,T,H,W,...`` interleave
+    (the reference ``apply_interleaved_mrope``): channels ``1,4,7,...`` -> height, ``2,5,8,...`` -> width, and
+    the remainder -> temporal. ``mrope_section`` sets the strided extent per axis; the actual per-axis channel
+    *counts* equal ``mrope_section`` only for the standard equal-section configs that tile exactly
+    (``3*section == dim // 2``, e.g. ``(12,12,12)`` -> 36 channels = 12/12/12), and are otherwise the clamped
+    interleave (e.g. ``dim=64, (8,12,12)`` -> 11/11/10) -- this matches the reference, which also clamps.
+
+    For an image encoder there is no text, so the temporal channels sit at position 0 (inert) and this reduces
+    to a 2-axis ``(h, w)`` rope -- numerically identical to a checkpoint trained with the reference MRoPE.
+
+    Only ``grid_indexing='ij'`` is supported (GenLIP / NaFlex ``(y, x)`` row-major patch order); ``'xy'`` would
+    require mirroring the timm axial shape-swap and is intentionally not implemented here.
+    """
+
+    def __init__(
+            self,
+            dim: int,
+            mrope_section: Tuple[int, int, int] = (8, 12, 12),
+            temperature: float = 10000.,
+            grid_indexing: str = 'ij',
+            device=None,
+            dtype=None,
+    ):
+        super().__init__()
+        assert dim % 2 == 0, 'dim (head_dim) must be even'
+        assert sum(mrope_section) == dim // 2, \
+            f"sum(mrope_section)={sum(mrope_section)} must equal head_dim//2={dim // 2}"
+        assert grid_indexing == 'ij', \
+            "RotaryEmbeddingMRope supports grid_indexing='ij' only (GenLIP/NaFlex (y,x) patch order)."
+        self.dim = dim
+        self.mrope_section = mrope_section
+        self.temperature = temperature
+        self.grid_indexing = grid_indexing
+
+        # theta-style frequencies, one per channel (the same vector for every axis, as in Qwen2-VL MRoPE)
+        inv_freq = 1.0 / (temperature ** (torch.arange(0, dim, 2, device=device).float() / dim))  # [dim//2]
+        self.register_buffer('inv_freq', inv_freq, persistent=False)
+
+        # axis id per channel over dim//2: 0 = temporal (inert for images), 1 = height, 2 = width.
+        # Slice assignment clamps the stop to dim//2, matching the reference `slice(offset, section*3, 3)`.
+        # The temporal section is the remainder (sec_t is implied by sum == dim//2, not used directly).
+        _sec_t, sec_h, sec_w = mrope_section
+        axis = torch.zeros(dim // 2, dtype=torch.long, device=device)  # default temporal
+        axis[1:sec_h * 3:3] = 1  # H at channels {1, 4, 7, ...}
+        axis[2:sec_w * 3:3] = 2  # W at channels {2, 5, 8, ...}
+        self.register_buffer('axis', axis, persistent=False)
+
+    def get_embed(self, shape: List[int]) -> torch.Tensor:
+        """Args:
+            shape: ``(H, W)`` patch grid.
+
+        Returns:
+            Rope tensor of shape ``[H*W, 2*dim]`` for ``apply_rot_embed_cat(..., half=True)``.
+        """
+        h, w = shape
+        device = self.inv_freq.device
+        ys, xs = torch.meshgrid(
+            torch.arange(h, device=device),
+            torch.arange(w, device=device),
+            indexing=self.grid_indexing,
+        )
+        ys, xs = ys.reshape(-1).float(), xs.reshape(-1).float()  # [N]
+
+        pos = torch.zeros(ys.shape[0], self.dim // 2, device=device)  # [N, dim//2]
+        pos[:, self.axis == 1] = ys[:, None]  # H channels rotate by row (h)
+        pos[:, self.axis == 2] = xs[:, None]  # W channels rotate by col (w)
+        # temporal channels keep pos=0 -> angle 0 -> cos=1, sin=0 -> identity (inert)
+
+        angles = pos * self.inv_freq  # [N, dim//2]
+        emb = torch.cat([angles, angles], dim=-1)  # [N, dim]
+        return torch.cat([emb.sin(), emb.cos()], dim=-1)  # [N, 2*dim]
+
+
 class RotaryEmbeddingMixed(nn.Module):
     """Rotary position embedding with depth-dependent learnable frequencies.
 
@@ -1246,6 +1324,7 @@ def create_rope_embed(
             - 'cat': RotaryEmbeddingCat (concatenated sin/cos)
             - 'mixed': RotaryEmbeddingMixed (learnable per-depth frequencies)
             - 'dinov3': RotaryEmbeddingDinoV3 (with coordinate transforms)
+            - 'mrope': RotaryEmbeddingMRope (interleaved multimodal RoPE; requires `mrope_section`)
         dim: Total embedding dimension
         num_heads: Number of attention heads
         **kwargs: Additional arguments passed to the specific RoPE class
@@ -1268,5 +1347,9 @@ def create_rope_embed(
         kwargs.pop('in_pixels', None)  # doesn't support
         kwargs.pop('ref_feat_shape', None)  # doesn't support
         return RotaryEmbeddingDinoV3(dim=dim // num_heads, **kwargs)
+    elif rope_type == 'mrope':
+        for k in ('in_pixels', 'ref_feat_shape', 'rotate_half'):
+            kwargs.pop(k, None)  # mrope builds the half-layout cat tensor itself; these don't apply
+        return RotaryEmbeddingMRope(dim=dim // num_heads, **kwargs)
     else:
         raise ValueError(f"Unknown RoPE type: {rope_type}")

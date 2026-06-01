@@ -122,6 +122,7 @@ class EvaAttention(nn.Module):
             qk_norm: bool = False,
             scale_norm: bool = True,
             rotate_half: bool = False,
+            gated: bool = False,
             device=None,
             dtype=None,
     ):
@@ -176,6 +177,7 @@ class EvaAttention(nn.Module):
         self.k_norm = norm_layer(self.head_dim, **dd) if qk_norm else nn.Identity()
         self.attn_drop = nn.Dropout(attn_drop)
         self.norm = norm_layer(attn_dim, **dd) if scale_norm else nn.Identity()
+        self.gate = nn.Linear(dim, attn_dim, bias=qkv_bias, **dd) if gated else None
         self.proj = nn.Linear(attn_dim, dim, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
 
@@ -213,6 +215,7 @@ class EvaAttention(nn.Module):
             Tensor of shape (batch_size, sequence_length, embedding_dim)
         """
         B, N, C = x.shape
+        gate = self.gate(x).sigmoid() if self.gate is not None else None
 
         if self.qkv is not None:
             if self.q_bias is None:
@@ -257,6 +260,8 @@ class EvaAttention(nn.Module):
 
         x = x.transpose(1, 2).reshape(B, N, C)
         x = self.norm(x)
+        if gate is not None:
+            x = x * gate
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
@@ -282,6 +287,7 @@ class EvaBlock(nn.Module):
             num_prefix_tokens: int = 1,
             attn_type: str = 'eva',
             rotate_half: bool = False,
+            gated_attn: bool = False,
             proj_drop: float = 0.,
             attn_drop: float = 0.,
             drop_path: float = 0.,
@@ -331,6 +337,7 @@ class EvaBlock(nn.Module):
             norm_layer=norm_layer,
             scale_norm=scale_attn_inner,
             rotate_half=rotate_half,
+            gated=gated_attn,
             **dd,
         )
         self.init_values = init_values
@@ -409,6 +416,7 @@ class EvaBlockPostNorm(nn.Module):
             mlp_ratio: float = 4.,
             attn_type: str = 'eva',
             rotate_half: bool = False,
+            gated_attn: bool = False,
             swiglu_mlp: bool = False,
             swiglu_align_to: int = 0,
             scale_mlp: bool = False,
@@ -462,6 +470,7 @@ class EvaBlockPostNorm(nn.Module):
             norm_layer=norm_layer,
             scale_norm=scale_attn_inner,
             rotate_half=rotate_half,
+            gated=gated_attn,
             **dd,
         )
         self.norm1 = norm_layer(dim, **dd)
