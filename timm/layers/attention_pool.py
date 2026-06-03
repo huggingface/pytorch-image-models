@@ -26,6 +26,7 @@ class AttentionPoolLatent(nn.Module):
             feat_size: Optional[int] = None,
             mlp_ratio: float = 4.0,
             qkv_bias: bool = True,
+            q_proj: bool = True,
             qk_norm: bool = False,
             latent_len: int = 1,
             latent_dim: int = None,
@@ -57,10 +58,17 @@ class AttentionPoolLatent(nn.Module):
             self.pos_embed = None
 
         self.latent_dim = latent_dim or embed_dim
+        if not q_proj:
+            # No query projection -> the latent IS the query, so it must already be embed_dim wide to split heads.
+            assert self.latent_dim == embed_dim, \
+                f"q_proj=False uses the latent directly as the query; latent_dim must equal embed_dim " \
+                f"(got latent_dim={self.latent_dim}, embed_dim={embed_dim})."
         self.latent_len = latent_len
-        self.latent = nn.Parameter(torch.zeros(1, self.latent_len, embed_dim, **dd))
+        self.latent = nn.Parameter(torch.zeros(1, self.latent_len, self.latent_dim, **dd))
 
-        self.q = nn.Linear(embed_dim, embed_dim, bias=qkv_bias, **dd)
+        # q projects the latent query (latent_dim) up to embed_dim. q_proj=False uses the latent directly as the
+        # query. The projection is redundant for a learnable query, so it drops params with no expressivity change.
+        self.q = nn.Linear(self.latent_dim, embed_dim, bias=qkv_bias, **dd) if q_proj else nn.Identity()
         self.kv = nn.Linear(embed_dim, embed_dim * 2, bias=qkv_bias, **dd)
         if qk_norm:
             qk_norm_layer = norm_layer or nn.LayerNorm
