@@ -94,6 +94,41 @@ class TestAttentionPool:
         out = pool(x)
         assert out.shape == (2, 64)
 
+    def test_attention_pool_latent_q_proj_default_unchanged(self):
+        # Default keeps the query projection (back-compat: latent is embed_dim wide, q.weight/q.bias present).
+        from timm.layers import AttentionPoolLatent
+        pool = AttentionPoolLatent(in_features=64, num_heads=4).to(torch_device)
+        assert isinstance(pool.q, nn.Linear)
+        assert pool.latent.shape[-1] == 64
+        sd = pool.state_dict()
+        assert 'q.weight' in sd and 'q.bias' in sd
+
+    def test_attention_pool_latent_no_q_proj(self):
+        # q_proj=False uses the latent directly as the query (AIM-style): q is Identity, no q.* params.
+        from timm.layers import AttentionPoolLatent
+        x = torch.randn(2, 49, 64, device=torch_device)
+        pool = AttentionPoolLatent(in_features=64, num_heads=4, q_proj=False).to(torch_device)
+        assert isinstance(pool.q, nn.Identity)
+        assert not any(k.startswith('q.') for k in pool.state_dict())  # no q.weight / q.bias
+        out = pool(x)
+        assert out.shape == (2, 64)
+
+    def test_attention_pool_latent_latent_dim(self):
+        # latent_dim != embed_dim: the latent is latent_dim wide and q projects latent_dim -> embed_dim.
+        from timm.layers import AttentionPoolLatent
+        x = torch.randn(2, 49, 64, device=torch_device)
+        pool = AttentionPoolLatent(in_features=64, embed_dim=64, num_heads=4, latent_dim=32).to(torch_device)
+        assert pool.latent.shape[-1] == 32
+        assert pool.q.weight.shape == (64, 32)  # Linear(in=latent_dim=32, out=embed_dim=64)
+        out = pool(x)
+        assert out.shape == (2, 64)
+
+    def test_attention_pool_latent_no_q_proj_requires_matching_dim(self):
+        # q_proj=False with latent_dim != embed_dim is invalid: the latent can't be used directly as the query.
+        from timm.layers import AttentionPoolLatent
+        with pytest.raises(AssertionError):
+            AttentionPoolLatent(in_features=64, embed_dim=64, num_heads=4, latent_dim=32, q_proj=False)
+
     def test_attention_pool2d_basic(self):
         from timm.layers import AttentionPool2d
         x = torch.randn(2, 64, 7, 7, device=torch_device)
