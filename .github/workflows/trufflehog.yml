@@ -13,3 +13,9 @@ jobs:
         fetch-depth: 0
     - name: Secret Scanning
       uses: trufflesecurity/trufflehog@6bd2d14f7a4bc1e569fa3550efa7ec632a4fa67b  # main
+      with:
+        # Only fail on verified secrets. Avoids CI breakage from unverified false positives
+        # (e.g. high-entropy base64 blobs in old notebook output cells) surfaced by full-tree
+        # scans when scanner detectors change. See PR #2708 discussion.
+        # NOTE: use --results=verified, not the deprecated/undocumented --only-verified alias.
+        extra_args: --results=verified
