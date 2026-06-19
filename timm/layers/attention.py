@@ -78,7 +78,7 @@ class Attention(nn.Module):
             qk_norm: Whether to apply normalization to query and key vectors.
             scale_norm: Whether to apply normalization to attention output before projection.
             proj_bias: Whether to use bias in the output projection.
-            gated: Apply a per-head sigmoid gate to the attention output (anti attention-sink, GenLIP-style).
+            gated: Apply an elementwise sigmoid gate to the attention output (anti attention-sink, GenLIP-style).
             attn_drop: Dropout rate applied to the attention weights.
             proj_drop: Dropout rate applied after the output projection.
             norm_layer: Normalization layer constructor for QK normalization if enabled.

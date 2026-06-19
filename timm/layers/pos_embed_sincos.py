@@ -820,8 +820,10 @@ class RotaryEmbeddingMRope(nn.Module):
     ):
         super().__init__()
         assert dim % 2 == 0, 'dim (head_dim) must be even'
-        assert sum(mrope_section) == dim // 2, \
-            f"sum(mrope_section)={sum(mrope_section)} must equal head_dim//2={dim // 2}"
+        # Interleaved layout: H/W sections set the strided extent, temporal is the remainder -- so unlike
+        # chunked MRoPE, sum(mrope_section) need not equal dim // 2 (e.g. GenLIP L/16 (8,12,12), head_dim 72).
+        assert all(s >= 0 for s in mrope_section), \
+            f"mrope_section entries must be non-negative, got {mrope_section}"
         assert grid_indexing == 'ij', \
             "RotaryEmbeddingMRope supports grid_indexing='ij' only (GenLIP/NaFlex (y,x) patch order)."
         self.dim = dim
@@ -835,7 +837,7 @@ class RotaryEmbeddingMRope(nn.Module):
 
         # axis id per channel over dim//2: 0 = temporal (inert for images), 1 = height, 2 = width.
         # Slice assignment clamps the stop to dim//2, matching the reference `slice(offset, section*3, 3)`.
-        # The temporal section is the remainder (sec_t is implied by sum == dim//2, not used directly).
+        # The temporal section is the leftover remainder (sec_t is nominal, not used directly).
         _sec_t, sec_h, sec_w = mrope_section
         axis = torch.zeros(dim // 2, dtype=torch.long, device=device)  # default temporal
         axis[1:sec_h * 3:3] = 1  # H at channels {1, 4, 7, ...}
