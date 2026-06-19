@@ -17,5 +17,8 @@ jobs:
         # Only fail on verified secrets. Avoids CI breakage from unverified false positives
         # (e.g. high-entropy base64 blobs in old notebook output cells) surfaced by full-tree
         # scans when scanner detectors change. See PR #2708 discussion.
-        # NOTE: use --results=verified, not the deprecated/undocumented --only-verified alias.
-        extra_args: --results=verified
+        # 'unknown' = real candidates whose live verification errored (e.g. provider
+        # unreachable), so we still fail on maybe-real secrets; 'unverified' (the noisy
+        # false-positive bucket) is deliberately excluded.
+        # NOTE: use --results=..., not the deprecated/undocumented --only-verified alias.
+        extra_args: --results=verified,unknown
