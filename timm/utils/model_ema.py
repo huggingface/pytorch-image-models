@@ -50,7 +50,9 @@ class ModelEma:
             p.requires_grad_(False)
 
     def _load_checkpoint(self, checkpoint_path):
-        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+        # local import to avoid a circular import (timm.utils -> timm.models)
+        from timm.models._helpers import _torch_load
+        checkpoint = _torch_load(checkpoint_path, map_location='cpu', weights_only=True)
         assert isinstance(checkpoint, dict)
         if 'state_dict_ema' in checkpoint:
             new_state_dict = OrderedDict()

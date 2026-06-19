@@ -28,6 +28,23 @@ _logger = logging.getLogger(__name__)
 CACHE_FILENAME_SUFFIX = '_tarinfos.pickle'
 
 
+class _TarInfoUnpickler(pickle.Unpickler):
+    """Restricted unpickler for the tarinfo cache file.
+
+    The cache only ever contains plain containers (dict/list/str/int/None) plus
+    ``tarfile.TarInfo`` instances. Built-in containers are handled by pickle opcodes
+    and never reach ``find_class``, so allowing only ``tarfile.TarInfo`` is sufficient
+    to load valid caches while blocking arbitrary code execution from a crafted cache
+    file (CWE-502, GHSA-pqww-w348-m542).
+    """
+    _allowed_globals = {('tarfile', 'TarInfo')}
+
+    def find_class(self, module: str, name: str):
+        if (module, name) in self._allowed_globals:
+            return super().find_class(module, name)
+        raise pickle.UnpicklingError(f'Global {module}.{name} is not permitted in a tar info cache file.')
+
+
 class TarState:
 
     def __init__(self, tf: tarfile.TarFile = None, ti: tarfile.TarInfo = None):
@@ -93,7 +110,9 @@ def extract_tarinfos(
     if os.path.exists(cache_path):
         _logger.info(f'Reading tar info from cache file {cache_path}.')
         with open(cache_path, 'rb') as pf:
-            info = pickle.load(pf)
+            info = _TarInfoUnpickler(pf).load()
+        if not isinstance(info, dict) or not isinstance(info.get('tartrees'), list):
+            raise ValueError(f'Invalid or corrupt tar info cache file {cache_path}.')
         assert len(info['tartrees']) == num_tars, "Cached tartree len doesn't match number of tarfiles"
     else:
         for i, fn in enumerate(tar_filenames):
