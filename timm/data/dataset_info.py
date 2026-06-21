@@ -71,3 +71,8 @@ class CustomDatasetInfo(DatasetInfo):
     def index_to_description(self, index: int, detailed: bool = False) -> str:
         label = self.index_to_label_name(index)
         return self.label_name_to_description(label, detailed=detailed)
+
+
+def get_dataset_info_from_class_map(class_map):
+    label_names = {v: k for k, v in class_map.items()}
+    return CustomDatasetInfo(label_names)

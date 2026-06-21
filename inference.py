@@ -19,6 +19,8 @@ import pandas as pd
 import torch
 
 from timm.data import create_dataset, create_loader, resolve_data_config, ImageNetInfo, infer_imagenet_subset
+from timm.data.readers.class_map import load_class_map
+from timm.data.dataset_info import get_dataset_info_from_class_map
 from timm.layers import apply_test_time_pool
 from timm.models import create_model
 from timm.utils import AverageMeter, setup_default_logging, set_jit_fuser, ParseKwargs
@@ -247,9 +249,18 @@ def main():
 
     to_label = None
     if args.label_type in ('name', 'description', 'detail'):
-        imagenet_subset = infer_imagenet_subset(model)
-        if imagenet_subset is not None:
-            dataset_info = ImageNetInfo(imagenet_subset)
+        dataset_info = None
+        if args.class_map:
+            class_map = load_class_map(args.class_map)
+            dataset_info = get_dataset_info_from_class_map(class_map)
+        else:
+            imagenet_subset = infer_imagenet_subset(model)
+            if imagenet_subset is not None:
+                dataset_info = ImageNetInfo(imagenet_subset)
+            else:
+                _logger.error("Cannot deduce ImageNet subset from model, no labelling will be performed.")
+
+        if dataset_info:
             if args.label_type == 'name':
                 to_label = lambda x: dataset_info.index_to_label_name(x)
             elif args.label_type == 'detail':
@@ -257,8 +268,6 @@ def main():
             else:
                 to_label = lambda x: dataset_info.index_to_description(x)
             to_label = np.vectorize(to_label)
-        else:
-            _logger.error("Cannot deduce ImageNet subset from model, no labelling will be performed.")
 
     top_k = min(args.topk, args.num_classes)
     batch_time = AverageMeter()
