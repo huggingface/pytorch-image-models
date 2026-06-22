@@ -18,7 +18,8 @@ import numpy as np
 import pandas as pd
 import torch
 
-from timm.data import create_dataset, create_loader, resolve_data_config, ImageNetInfo, infer_imagenet_subset
+from timm.data import create_dataset, create_loader, resolve_data_config, ImageNetInfo, infer_imagenet_subset, \
+    CustomDatasetInfo
 from timm.layers import apply_test_time_pool
 from timm.models import create_model
 from timm.utils import AverageMeter, setup_default_logging, set_jit_fuser, ParseKwargs
@@ -247,9 +248,22 @@ def main():
 
     to_label = None
     if args.label_type in ('name', 'description', 'detail'):
-        imagenet_subset = infer_imagenet_subset(model)
-        if imagenet_subset is not None:
-            dataset_info = ImageNetInfo(imagenet_subset)
+        dataset_info = None
+        label_names = model.pretrained_cfg.get('label_names', None)
+        label_descriptions = model.pretrained_cfg.get('label_descriptions', None)
+        if label_names is not None:
+            # custom labels pushed with the model (e.g. fine-tuned on a non-ImageNet dataset)
+            dataset_info = CustomDatasetInfo(
+                label_names=label_names,
+                label_descriptions=label_descriptions,
+            )
+        else:
+            imagenet_subset = infer_imagenet_subset(model)
+            if imagenet_subset is not None:
+                dataset_info = ImageNetInfo(imagenet_subset)
+            else:
+                _logger.error("Cannot deduce ImageNet subset from model, no labelling will be performed.")
+        if dataset_info is not None:
             if args.label_type == 'name':
                 to_label = lambda x: dataset_info.index_to_label_name(x)
             elif args.label_type == 'detail':
@@ -257,8 +271,6 @@ def main():
             else:
                 to_label = lambda x: dataset_info.index_to_description(x)
             to_label = np.vectorize(to_label)
-        else:
-            _logger.error("Cannot deduce ImageNet subset from model, no labelling will be performed.")
 
     top_k = min(args.topk, args.num_classes)
     batch_time = AverageMeter()
