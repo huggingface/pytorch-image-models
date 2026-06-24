@@ -108,6 +108,7 @@ class NaFlexVitCfg:
 
     # Image processing
     dynamic_img_pad: bool = False  # Whether to enable dynamic padding for variable resolution
+    patchify_channels_last: bool = True  # Patch flat layout (matches data pipeline): True=(ph,pw,C), False=(C,ph,pw)
 
     # Other architecture choices
     pre_norm: bool = False  # Whether to apply normalization before attention/MLP layers (start of blocks)
@@ -384,6 +385,7 @@ class NaFlexEmbeds(nn.Module):
             norm_layer: Optional[Type[nn.Module]] = None,
             pos_drop_rate: float = 0.,
             enable_patch_interpolator: bool = False,
+            channels_last: bool = True,
             device=None,
             dtype=None,
     ) -> None:
@@ -408,6 +410,7 @@ class NaFlexEmbeds(nn.Module):
             norm_layer: Default normalization layer.
             pos_drop_rate: Dropout rate for position embeddings.
             enable_patch_interpolator: Enable dynamic patch size support.
+            channels_last: Per-patch flat layout: True=(ph,pw,C) [NaFlex default], False=(C,ph,pw).
         """
         dd = {'device': device, 'dtype': dtype}
         super().__init__()
@@ -421,6 +424,7 @@ class NaFlexEmbeds(nn.Module):
         self.embed_dim = embed_dim
         self.dynamic_img_pad = dynamic_img_pad
         self.enable_patch_interpolator = enable_patch_interpolator
+        self.channels_last = channels_last
 
         # Calculate number of prefix tokens
         self.num_prefix_tokens = 1 if class_token else 0
@@ -476,6 +480,7 @@ class NaFlexEmbeds(nn.Module):
                 embed_dim=embed_dim,
                 interpolation=pos_embed_interp_mode,
                 antialias=True,
+                channels_last=channels_last,
             )
         else:
             self.patch_interpolator = None
@@ -886,22 +891,25 @@ class NaFlexEmbeds(nn.Module):
             if patch_coord is None:
                 # Standard 2D (B, C, H, W) mode
                 _assert(x.ndim == 4, 'Expecting 2D image input with input ndim == 4')
-                x, grid_size = batch_patchify(x, self.patch_size, pad=self.dynamic_img_pad)
+                x, grid_size = batch_patchify(
+                    x, self.patch_size, pad=self.dynamic_img_pad, channels_last=self.channels_last)
             else:
-                # Pre-patchified NaFlex mode
-                # Variable patch size mode: [B, N, Ph, Pw, C], normal mode: [B, N, P*P*C]
+                # Pre-patchified NaFlex mode. Variable patch size (ndim==5) is channels_last
+                # [B, N, Ph, Pw, C] or channels_first [B, N, C, Ph, Pw]; normal mode (ndim==3): [B, N, P*P*C].
                 _assert(x.ndim == 5 or x.ndim == 3, 'Expecting patchified input with ndim == 3 or 5.')
 
             # Handle variable patch size projection
             if self.enable_patch_interpolator and x.ndim == 5:
                 _assert(self.norm_input is None, 'input norm not supported with patch resizing')
 
+                # patch (Ph, Pw) sits at axes (2, 3) for channels_last, (3, 4) for channels_first
+                patch_hw = tuple(x.shape[2:4] if self.channels_last else x.shape[3:5])
                 # Apply projection with interpolation
                 x = self.patch_interpolator(
                     x,
                     self.proj.weight,
                     self.proj.bias,
-                    patch_size=tuple(x.shape[2:4]),  # patch size from [B, N, Ph, Pw, C] shape
+                    patch_size=patch_hw,
                     is_linear=True,
                 )
             else:
@@ -1190,6 +1198,7 @@ class NaFlexVit(nn.Module):
             proj_norm_layer=embed_norm_layer,
             pos_drop_rate=cfg.pos_drop_rate,
             enable_patch_interpolator=getattr(cfg, 'enable_patch_interpolator', False),
+            channels_last=getattr(cfg, 'patchify_channels_last', True),
             **dd,
         )
         self.norm_pre = norm_layer(cfg.embed_dim, **dd) if cfg.pre_norm else nn.Identity()
