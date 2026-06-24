@@ -118,12 +118,13 @@ class NaFlexCollator:
 
         # Check if patches are flattened or unflattened
         patches_tensor = patch_dicts[0]['patches']
-        is_unflattened = patches_tensor.ndim == 4  # [N, Ph, Pw, C]
+        is_unflattened = patches_tensor.ndim == 4  # [N, Ph, Pw, C] or [N, C, Ph, Pw]
 
         if is_unflattened:
-            # Patches are [N, Ph, Pw, C] - variable patch size mode
-            _, ph, pw, c = patches_tensor.shape
-            patches = torch.zeros((batch_size, max_patches, ph, pw, c), dtype=torch.float32)
+            # Variable patch size mode. Per-patch dims kept as-is (channels_last [N, Ph, Pw, C] or
+            # channels_first [N, C, Ph, Pw]); the pad buffer is shaped from the source dims -> layout-agnostic.
+            patch_dims = patches_tensor.shape[1:]
+            patches = torch.zeros((batch_size, max_patches, *patch_dims), dtype=torch.float32)
         else:
             # Patches are [N, P*P*C] - normal mode
             patch_dim = patches_tensor.shape[1]

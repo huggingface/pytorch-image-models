@@ -444,6 +444,8 @@ class PatchEmbedInterpolator(nn.Module):
         embed_dim: Embedding dimension
         interpolation: Interpolation mode for resampling
         antialias: Whether to use antialiasing during interpolation
+        channels_last: Per-patch flat layout of the linear weight / patches:
+            True -> (ph, pw, C) [NaFlex default], False -> (C, ph, pw).
     """
 
     def __init__(
@@ -453,6 +455,7 @@ class PatchEmbedInterpolator(nn.Module):
             embed_dim: int = 768,
             interpolation: str = 'bicubic',
             antialias: bool = True,
+            channels_last: bool = True,
     ):
         super().__init__()
         self.base_patch_size = base_patch_size
@@ -460,6 +463,7 @@ class PatchEmbedInterpolator(nn.Module):
         self.embed_dim = embed_dim
         self.interpolation = interpolation
         self.antialias = antialias
+        self.channels_last = channels_last
 
     def resample_linear_weight(
             self,
@@ -482,12 +486,14 @@ class PatchEmbedInterpolator(nn.Module):
         base_ph, base_pw = self.base_patch_size
         target_ph, target_pw = target_patch_size
 
-        # Reshape linear weight to conv2d format
-        # [embed_dim, ph*pw*C] -> [embed_dim, C, ph, pw]
-        weight_conv = weight.reshape(embed_dim, base_ph, base_pw, self.in_chans)
-        weight_conv = weight_conv.permute(0, 3, 1, 2)
+        # Reshape linear weight to conv2d format [embed_dim, C, ph, pw] for the (spatial-only) resize.
+        # The flattened patch order is channels_last (ph, pw, C) or channels_first (C, ph, pw).
+        if self.channels_last:
+            weight_conv = weight.reshape(embed_dim, base_ph, base_pw, self.in_chans).permute(0, 3, 1, 2)
+        else:
+            weight_conv = weight.reshape(embed_dim, self.in_chans, base_ph, base_pw)
 
-        # Resample using existing function
+        # Resample using existing function (operates on [out, in, h, w], layout-agnostic)
         weight_conv_resampled = resample_patch_embed(
             weight_conv,
             new_size=[target_ph, target_pw],
@@ -496,10 +502,11 @@ class PatchEmbedInterpolator(nn.Module):
             verbose=False,
         )
 
-        # Reshape back to linear format
-        # [embed_dim, C, ph, pw] -> [embed_dim, ph*pw*C]
-        weight_resampled = weight_conv_resampled.permute(0, 2, 3, 1)
-        weight_resampled = weight_resampled.reshape(embed_dim, -1)
+        # Reshape back to linear format [embed_dim, ph*pw*C] in the same channel order.
+        if self.channels_last:
+            weight_resampled = weight_conv_resampled.permute(0, 2, 3, 1).reshape(embed_dim, -1)
+        else:
+            weight_resampled = weight_conv_resampled.reshape(embed_dim, -1)
 
         return weight_resampled
 
@@ -559,21 +566,23 @@ class PatchEmbedInterpolator(nn.Module):
 
         if is_linear:
             if patch_size != self.base_patch_size:
-                # Need to resample - expects unflattened patches
-                assert patches.ndim == 5, "Patches must be [B, N, Ph, Pw, C] for resampling"
-                B, N, Ph, Pw, C = patches.shape
+                # Need to resample - expects unflattened patches: channels_last [B, N, Ph, Pw, C] or
+                # channels_first [B, N, C, Ph, Pw]. The flatten below preserves that axis order, which
+                # matches the order resample_linear_weight returns the weight in.
+                assert patches.ndim == 5, \
+                    "Patches must be 5-D ([B, N, Ph, Pw, C] or [B, N, C, Ph, Pw]) for resampling"
+                B, N = patches.shape[:2]
 
-                # Resample the weight
+                # Resample the weight (channel layout handled per self.channels_last)
                 weight_resampled = self.resample_linear_weight(proj_weight, patch_size)
 
                 # Flatten patches and apply linear projection
                 patches_flat = patches.reshape(B, N, -1)
                 output = torch.nn.functional.linear(patches_flat, weight_resampled, proj_bias)
             else:
-                # No resampling needed, patches can be pre-flattened
+                # No resampling needed, patches can be pre-flattened (flatten preserves layout order)
                 if patches.ndim == 5:
-                    B, N, Ph, Pw, C = patches.shape
-                    patches = patches.reshape(B, N, -1)
+                    patches = patches.reshape(patches.shape[0], patches.shape[1], -1)
                 output = torch.nn.functional.linear(patches, proj_weight, proj_bias)
         else:
             # Conv mode
