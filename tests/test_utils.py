@@ -11,6 +11,14 @@ from timm.utils.model import _freeze_unfreeze
 from timm.utils.model import avg_sq_ch_mean, avg_ch_var, avg_ch_var_residual
 from timm.utils.model import reparameterize_model
 from timm.utils.model import get_state_dict
+from timm.utils.metrics import AverageMeter
+
+def test_average_meter_zero_count():
+    # update with n=0 on a fresh meter (count == 0) must not raise ZeroDivisionError
+    meter = AverageMeter()
+    meter.update(1.0, n=0)
+    assert meter.avg == 0
+
 
 def test_freeze_unfreeze():
     model = timm.create_model('resnet18')
