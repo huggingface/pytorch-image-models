@@ -798,7 +798,7 @@ class Eva(nn.Module):
     @torch.jit.ignore
     def no_weight_decay(self) -> Set[str]:
         """Parameters to exclude from weight decay."""
-        nwd = {'pos_embed', 'cls_token'}
+        nwd = {'pos_embed', 'cls_token', 'reg_token'}
         if (rope := getattr(self, "rope", None)) and hasattr(rope, "no_weight_decay"):
             return nwd | {f"rope.{p}" for p in rope.no_weight_decay()}
         return nwd
@@ -812,7 +812,7 @@ class Eva(nn.Module):
     def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
         """Create layer groupings for optimization."""
         matcher = dict(
-            stem=r'^cls_token|pos_embed|patch_embed',  # stem and embed
+            stem=r'^cls_token|reg_token|pos_embed|patch_embed',  # stem and embed
             blocks=[(r'^blocks\.(\d+)', None), (r'^norm', (99999,))],
         )
         return matcher

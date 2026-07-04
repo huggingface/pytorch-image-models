@@ -609,6 +609,57 @@ def test_param_groups_layer_decay_with_matcher():
         assert len(group['params']) > 0
 
 
+@pytest.mark.parametrize('model_name', ['eva', 'vit'])
+def test_param_groups_layer_decay_reg_token_stem(model_name):
+    from timm.models import group_parameters
+    from timm.models.eva import Eva
+    from timm.models.vision_transformer import VisionTransformer
+
+    if model_name == 'eva':
+        model = Eva(
+            img_size=16,
+            patch_size=8,
+            embed_dim=8,
+            depth=1,
+            num_heads=2,
+            num_reg_tokens=1,
+            num_classes=0,
+        )
+    else:
+        model = VisionTransformer(
+            img_size=16,
+            patch_size=8,
+            embed_dim=8,
+            depth=1,
+            num_heads=2,
+            reg_tokens=1,
+            num_classes=0,
+        )
+
+    no_weight_decay = model.no_weight_decay()
+    assert 'reg_token' in no_weight_decay
+
+    layer_map = group_parameters(model, model.group_matcher(coarse=False), reverse=True)
+    assert layer_map['reg_token'] == layer_map['cls_token'] == layer_map['pos_embed']
+
+    param_groups = param_groups_layer_decay(
+        model,
+        weight_decay=0.05,
+        no_weight_decay_list=no_weight_decay,
+        layer_decay=0.75,
+    )
+    param_to_group = {
+        id(param): group
+        for group in param_groups
+        for param in group['params']
+    }
+
+    cls_group = param_to_group[id(model.cls_token)]
+    reg_group = param_to_group[id(model.reg_token)]
+    assert reg_group['lr_scale'] == cls_group['lr_scale']
+    assert reg_group['weight_decay'] == 0.
+
+
 def test_param_groups_weight_decay():
     model = torch.nn.Sequential(
         torch.nn.Linear(10, 5),
