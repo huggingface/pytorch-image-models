@@ -958,7 +958,7 @@ class VisionTransformer(nn.Module):
     @torch.jit.ignore
     def no_weight_decay(self) -> Set[str]:
         """Set of parameters that should not use weight decay."""
-        return {'pos_embed', 'cls_token', 'dist_token'}
+        return {'pos_embed', 'cls_token', 'reg_token', 'dist_token'}
 
     @torch.jit.ignore
     def group_matcher(self, coarse: bool = False) -> Dict[str, Union[str, List]]:
@@ -971,7 +971,7 @@ class VisionTransformer(nn.Module):
             Dictionary mapping group names to regex patterns.
         """
         return dict(
-            stem=r'^cls_token|pos_embed|patch_embed',  # stem and embed
+            stem=r'^cls_token|reg_token|pos_embed|patch_embed',  # stem and embed
             blocks=[(r'^blocks\.(\d+)', None), (r'^norm', (99999,))]
         )
 
