@@ -164,21 +164,6 @@ def get_same_padding(kernel_size: int | tuple[int, ...], stride=1) -> int | tupl
 
 #########################################    MODEL MODULES     ######################################################
 
-class OpSequential(nn.Module):
-    def __init__(self, op_list: list[nn.Module | None]):
-        super(OpSequential, self).__init__()
-        valid_op_list = []
-        for op in op_list:
-            if op is not None:
-                valid_op_list.append(op)
-        self.op_list = nn.ModuleList(valid_op_list)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        for op in self.op_list:
-            x = op(x)
-        return x
-
-
 class IdentityLayer(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x
@@ -568,7 +553,7 @@ class CPUBoneBlock(nn.Module):
 ##############################    Classification specific Classes      ###############################
 
 
-class ClsHead(OpSequential):
+class ClsHead(nn.Sequential):
     def __init__(
         self,
         in_channels: int,
@@ -588,13 +573,13 @@ class ClsHead(OpSequential):
         ]
         if no_spatial:
             ops = ops[2:]
-        super().__init__(ops)
+        super().__init__(*ops)
 
         self.fid = fid
 
     def forward(self, feed_dict: dict[str, torch.Tensor]) -> torch.Tensor:
         x = feed_dict[self.fid]
-        return OpSequential.forward(self, x)
+        return nn.Sequential.forward(self, x)
 
 
 class CPUBoneCls(nn.Module):
@@ -634,96 +619,108 @@ class CPUBoneBackbone(nn.Module):
     ) -> None:
         super().__init__()
 
-        fuseconv = fastit and not just_unfused
-        stage_num = 0
+        self.expand_ratio = expand_ratio
+        self.norm = norm
+        self.act_func = act_func
+        self.bb_convattention = bb_convattention
+        self.bb_convin2 = bb_convin2
+        self.fuseconv = fastit and not just_unfused
+        self.fastit = fastit
+        self.huge_model = huge_model
+        self.bigit = bigit
+        self.grouping = grouping
+        self.smallk_only_lasts = smallk_only_lasts
+        self.lose_transpose = lose_transpose
 
-        ### STAGE 0
-        self.input_stem = [
+        self.input_stem, in_channels = self._build_stem(in_channels, width_list[0], depth_list[0])
+
+        ### Stages 1-4: early stages use plain conv blocks, later stages add attention
+        self.stages = nn.ModuleList()
+        for stage_num, (width, depth) in enumerate(zip(width_list[1:], depth_list[1:]), start=1):
+            if stage_num >= 3:
+                blocks, in_channels = self._build_attention_stage(in_channels, width, depth, stage_num)
+            else:
+                blocks, in_channels = self._build_conv_stage(in_channels, width, depth)
+            self.stages.append(nn.Sequential(*blocks))
+
+    def _build_stem(self, in_channels: int, stem_width: int, depth: int) -> tuple[nn.Sequential, int]:
+        """Stem: downsample by 2, then `depth` local blocks at the stem width."""
+        blocks = [
             ConvLayer(
                 in_channels=in_channels,
-                out_channels=width_list[0],
+                out_channels=stem_width,
                 kernel_size=3,
                 stride=2,
-                norm=norm,
-                act_func=act_func,
+                norm=self.norm,
+                act_func=self.act_func,
             )
         ]
-        for _ in range(depth_list[0]):
-            block = self.build_local_block(
-                in_channels=width_list[0],
-                out_channels=width_list[0],
-                stride=1,
-                expand_ratio=4 if huge_model else 2,
-                fusedmbconv=fuseconv,
-                grouping=grouping,
-                norm=norm,
-                act_func=act_func,
-            )
-            self.input_stem.append(ResidualBlock(block, IdentityLayer()))
-
-        in_channels = width_list[0]
-        self.input_stem = OpSequential(self.input_stem)
-        stage_num += 1
-
-        ### STAGE 1-2
-        self.stages = []
-        for w, d in zip(width_list[1:3], depth_list[1:3]):
-            stage = []
-            for i in range(d):
-                stride = 2 if i == 0 else 1
-                block = self.build_local_block(
-                    in_channels=in_channels,
-                    out_channels=w,
-                    stride=stride,
-                    expand_ratio=6 if stride == 2 and (bigit or huge_model) else expand_ratio,
-                    fusedmbconv=fuseconv,
-                    grouping=grouping,
-                    norm=norm,
-                    act_func=act_func,
-                )
-                stage.append(ResidualBlock(block, IdentityLayer() if stride == 1 else None))
-                in_channels = w
-            self.stages.append(OpSequential(stage))
-            stage_num += 1
-
-        ### STAGE 3-4
-        for w, d in zip(width_list[3:], depth_list[3:]):
-            stage = []
+        in_channels = stem_width
+        for _ in range(depth):
             block = self.build_local_block(
                 in_channels=in_channels,
-                out_channels=w,
-                stride=2,
-                expand_ratio=6 if bigit or (huge_model and stage_num < 4) else expand_ratio,
-                fusedmbconv=fastit and (not huge_model or stage_num < 5),
-                grouping=grouping,
-                norm=norm,
-                act_func=act_func,
+                out_channels=in_channels,
+                stride=1,
+                expand_ratio=4 if self.huge_model else 2,
+                fusedmbconv=self.fuseconv,
+                grouping=self.grouping,
+                norm=self.norm,
+                act_func=self.act_func,
             )
-            stage.append(ResidualBlock(block, None))
-            in_channels = w
+            blocks.append(ResidualBlock(block, IdentityLayer()))
+        return nn.Sequential(*blocks), in_channels
 
-            for _ in range(d):
-                stage.append(
-                    CPUBoneBlock(
-                        in_channels=in_channels,
-                        expand_ratio=expand_ratio,
-                        norm=norm,
-                        act_func=act_func,
-                        bb_convattention=bb_convattention,
-                        fuseconv=fuseconv,
-                        bb_convin2=bb_convin2,
-                        grouping=grouping,
-                        att_stride=2 if stage_num == 3 else 1,
-                        mlpexpans=4 if fastit else 2,
-                        smallkernel=smallk_only_lasts,
-                        lose_transpose=lose_transpose,
-                    )
+    def _build_conv_stage(self, in_channels: int, width: int, depth: int) -> tuple[list[nn.Module], int]:
+        """Stages 1-2: `depth` plain conv blocks, downsampling (stride 2) on the first one."""
+        blocks = []
+        for i in range(depth):
+            stride = 2 if i == 0 else 1
+            block = self.build_local_block(
+                in_channels=in_channels,
+                out_channels=width,
+                stride=stride,
+                expand_ratio=6 if stride == 2 and (self.bigit or self.huge_model) else self.expand_ratio,
+                fusedmbconv=self.fuseconv,
+                grouping=self.grouping,
+                norm=self.norm,
+                act_func=self.act_func,
+            )
+            blocks.append(ResidualBlock(block, IdentityLayer() if stride == 1 else None))
+            in_channels = width
+        return blocks, in_channels
+
+    def _build_attention_stage(self, in_channels: int, width: int, depth: int, stage_num: int) -> tuple[list[nn.Module], int]:
+        """Stages 3-4: one downsampling conv block, followed by `depth` CPUBoneBlocks (attention + local conv)."""
+        downsample = self.build_local_block(
+            in_channels=in_channels,
+            out_channels=width,
+            stride=2,
+            expand_ratio=6 if self.bigit or (self.huge_model and stage_num < 4) else self.expand_ratio,
+            fusedmbconv=self.fastit and (not self.huge_model or stage_num < 5),
+            grouping=self.grouping,
+            norm=self.norm,
+            act_func=self.act_func,
+        )
+        in_channels = width
+        blocks = [ResidualBlock(downsample, None)]
+        for _ in range(depth):
+            blocks.append(
+                CPUBoneBlock(
+                    in_channels=in_channels,
+                    expand_ratio=self.expand_ratio,
+                    norm=self.norm,
+                    act_func=self.act_func,
+                    bb_convattention=self.bb_convattention,
+                    fuseconv=self.fuseconv,
+                    bb_convin2=self.bb_convin2,
+                    grouping=self.grouping,
+                    att_stride=2 if stage_num == 3 else 1,
+                    mlpexpans=4 if self.fastit else 2,
+                    smallkernel=self.smallk_only_lasts,
+                    lose_transpose=self.lose_transpose,
                 )
-
-            self.stages.append(OpSequential(stage))
-            stage_num += 1
-
-        self.stages = nn.ModuleList(self.stages)
+            )
+        return blocks, in_channels
 
     @staticmethod
     def build_local_block(
@@ -764,16 +761,13 @@ class CPUBoneBackbone(nn.Module):
         return block
 
     def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
-
-        output_dict = {}
-        output_dict["stage0"] = x = self.input_stem(x)
-        temp = 0
-        for stage_id, stage in enumerate(self.stages, start=1):
-            output_dict["stage%d" % stage_id] = x = stage(x)
-            temp = stage_id # last stage id after loop
-        
-        output_dict["stage_final"] = output_dict.pop("stage%d" % temp) 
-
+        x = self.input_stem(x)
+        output_dict = {"stage0": x}
+        num_stages = len(self.stages)
+        for stage_num, stage in enumerate(self.stages, start=1):
+            x = stage(x)
+            key = "stage_final" if stage_num == num_stages else f"stage{stage_num}"
+            output_dict[key] = x
         return output_dict
 
 ## Model function
