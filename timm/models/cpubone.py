@@ -2,7 +2,8 @@
 # Moritz Nottebaum, Matteo Dunnhofer, Christian Micheloni
 # Conference on Computer Vision and Pattern Recognition (CVPR), 2025
 
-import os, sys, yaml, math
+import os, yaml, math
+from typing import Any
 from inspect import signature
 from copy import deepcopy
 import torch
@@ -21,7 +22,7 @@ class SafeLoaderWithTuple(yaml.SafeLoader):
 
 SafeLoaderWithTuple.add_constructor("tag:yaml.org,2002:python/tuple", SafeLoaderWithTuple.construct_python_tuple)
 
-def val2tuple(x: list or tuple or any, min_len: int = 1, idx_repeat: int = -1) -> tuple:
+def val2tuple(x: list | tuple | Any, min_len: int = 1, idx_repeat: int = -1) -> tuple:
     x = val2list(x)
 
     # repeat elements if necessary
@@ -31,7 +32,7 @@ def val2tuple(x: list or tuple or any, min_len: int = 1, idx_repeat: int = -1) -
     return tuple(x)
 
 
-def val2list(x: list or tuple or any, repeat_time=1) -> list:
+def val2list(x: list | tuple | Any, repeat_time=1) -> list:
     if isinstance(x, (list, tuple)):
         return list(x)
     return [x for _ in range(repeat_time)]
@@ -58,7 +59,7 @@ def load_config(filename: str) -> dict:
     return yaml.load(open(filename), Loader=SafeLoaderWithTuple)
 
 
-def setup_exp_config(config_path: str, recursive=True, opt_args: dict or None = None) -> dict:
+def setup_exp_config(config_path: str, recursive=True, opt_args: dict | None = None) -> dict:
     # load config
     if not os.path.isfile(config_path):
         raise ValueError(config_path)
@@ -105,7 +106,7 @@ def remap_legacy_state_dict(state_dict: dict[str, torch.Tensor]) -> dict[str, to
     return remapped
 
 
-def build_norm(name="bn2d", num_features=None, **kwargs) -> nn.Module or None:
+def build_norm(name="bn2d", num_features=None, **kwargs) -> nn.Module | None:
     
     REGISTERED_NORM_DICT: dict[str, type] = {
         "bn2d": nn.BatchNorm2d,
@@ -126,7 +127,7 @@ def build_norm(name="bn2d", num_features=None, **kwargs) -> nn.Module or None:
 
 
 
-def build_act(name: str, **kwargs) -> nn.Module or None:
+def build_act(name: str, **kwargs) -> nn.Module | None:
     REGISTERED_ACT_DICT: dict[str, type] = {
         "relu": nn.ReLU,
         "relu6": nn.ReLU6,
@@ -142,7 +143,7 @@ def build_act(name: str, **kwargs) -> nn.Module or None:
         return None
 
 
-def get_same_padding(kernel_size: int or tuple[int, ...], stride=1) -> int or tuple[int, ...]:
+def get_same_padding(kernel_size: int | tuple[int, ...], stride=1) -> int | tuple[int, ...]:
     if isinstance(kernel_size, tuple):
         return tuple([get_same_padding(ks) for ks in kernel_size])
     elif kernel_size == 2:
@@ -164,7 +165,7 @@ def get_same_padding(kernel_size: int or tuple[int, ...], stride=1) -> int or tu
 #########################################    MODEL MODULES     ######################################################
 
 class OpSequential(nn.Module):
-    def __init__(self, op_list: list[nn.Module or None]):
+    def __init__(self, op_list: list[nn.Module | None]):
         super(OpSequential, self).__init__()
         valid_op_list = []
         for op in op_list:
@@ -221,10 +222,10 @@ class LinearLayer(nn.Module):
 class ResidualBlock(nn.Module):
     def __init__(
         self,
-        main: nn.Module or None,
-        shortcut: nn.Module or None,
+        main: nn.Module | None,
+        shortcut: nn.Module | None,
         post_act=None,
-        pre_norm: nn.Module or None = None,
+        pre_norm: nn.Module | None = None,
     ):
         super(ResidualBlock, self).__init__()
 
