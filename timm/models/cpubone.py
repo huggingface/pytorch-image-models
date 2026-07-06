@@ -1,17 +1,21 @@
-# CPUBone: Efficient Vision Backbone Design for Devices with Low Parallelization Capabilities
-# Moritz Nottebaum, Matteo Dunnhofer, Christian Micheloni
-# Conference on Computer Vision and Pattern Recognition (CVPR), 2025
+"""CPUBone
 
+CPUBone: Efficient Vision Backbone Design for Devices with Low Parallelization Capabilities
+Moritz Nottebaum, Matteo Dunnhofer, Christian Micheloni
+Conference on Computer Vision and Pattern Recognition (CVPR), 2025
+
+Adapted from the original implementation (see `cpubone_original.py`) to idiomatic timm code.
+Remaining cleanup steps are tracked in `TODO_cpubone.md` at the repository root.
+"""
 import math
-from functools import partial
-from inspect import signature
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional, Tuple, Type
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from timm.layers import LayerType, get_act_layer, get_norm_layer
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_module
 from ._registry import register_model, generate_default_cfgs
@@ -19,30 +23,7 @@ from ._registry import register_model, generate_default_cfgs
 __all__ = ['CPUBoneBackbone', 'CPUBoneCls']
 
 
-def val2tuple(x: list | tuple | Any, min_len: int = 1, idx_repeat: int = -1) -> tuple:
-    x = val2list(x)
-
-    # repeat elements if necessary
-    if len(x) > 0:
-        x[idx_repeat:idx_repeat] = [x[idx_repeat] for _ in range(min_len - len(x))]
-
-    return tuple(x)
-
-
-def val2list(x: list | tuple | Any, repeat_time=1) -> list:
-    if isinstance(x, (list, tuple)):
-        return list(x)
-    return [x for _ in range(repeat_time)]
-
-def build_kwargs_from_config(config: dict, target_func: callable) -> dict[str, any]:
-    valid_keys = list(signature(target_func).parameters)
-    kwargs = {}
-    for key in config:
-        if key in valid_keys:
-            kwargs[key] = config[key]
-    return kwargs
-
-def remap_legacy_state_dict(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+def remap_legacy_state_dict(state_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
     """Remap keys from older checkpoint formats to the current model layout."""
     remapped = {}
     for k, v in state_dict.items():
@@ -53,170 +34,92 @@ def remap_legacy_state_dict(state_dict: dict[str, torch.Tensor]) -> dict[str, to
     return remapped
 
 
-def build_norm(name="bn2d", num_features=None, **kwargs) -> nn.Module | None:
-    
-    REGISTERED_NORM_DICT: dict[str, type] = {
-        "bn2d": nn.BatchNorm2d,
-        "ln": nn.LayerNorm,
-        # "ln2d": LayerNorm2d,
-    }
-    if name in ["ln", "ln2d"]:
-        kwargs["normalized_shape"] = num_features
-    else:
-        kwargs["num_features"] = num_features
-    if name in REGISTERED_NORM_DICT:
-        norm_cls = REGISTERED_NORM_DICT[name]
-        args = build_kwargs_from_config(kwargs, norm_cls)
-        return norm_cls(**args)
-    else:
-        return None
+def get_same_padding(kernel_size: int, stride: int = 1) -> int:
+    """Padding that keeps 'same' spatial behaviour for the kernel sizes used in CPUBone.
 
-
-
-
-def build_act(name: str, **kwargs) -> nn.Module | None:
-    REGISTERED_ACT_DICT: dict[str, type] = {
-        "relu": nn.ReLU,
-        "relu6": nn.ReLU6,
-        "hswish": nn.Hardswish,
-        "silu": nn.SiLU,
-        "gelu": partial(nn.GELU, approximate="tanh"),
-    }
-    if name in REGISTERED_ACT_DICT:
-        act_cls = REGISTERED_ACT_DICT[name]
-        args = build_kwargs_from_config(kwargs, act_cls)
-        return act_cls(**args)
-    else:
-        return None
-
-
-def get_same_padding(kernel_size: int | tuple[int, ...], stride=1) -> int | tuple[int, ...]:
-    if isinstance(kernel_size, tuple):
-        return tuple([get_same_padding(ks) for ks in kernel_size])
-    elif kernel_size == 2:
-        if stride==2:
-            return 0
-        return -1 #(1,1)#(1,0)
-    else:
-        assert kernel_size % 2 > 0, "kernel size should be odd number"
-        return kernel_size // 2
-
-
-#       /\
-#      /||\
-#       ||
-#       ||
-#       ||
-# helper functions only
-
-#########################################    MODEL MODULES     ######################################################
-
-class IdentityLayer(nn.Module):
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x
+    kernel_size 2 is special: with stride 2 it tiles exactly (no padding), with stride 1 it needs an
+    asymmetric left/top pad, signalled by -1 and handled in ConvLayer with an explicit ZeroPad2d.
+    """
+    if kernel_size == 2:
+        return 0 if stride == 2 else -1
+    assert kernel_size % 2 > 0, "kernel size should be odd number"
+    return kernel_size // 2
 
 
 class LinearLayer(nn.Module):
     def __init__(
-        self,
-        in_features: int,
-        out_features: int,
-        use_bias=True,
-        dropout=0,
-        norm=None,
-        act_func=None,
-        squeeze_it=False,
+            self,
+            in_features: int,
+            out_features: int,
+            use_bias: bool = True,
+            dropout: float = 0.,
+            norm_layer: Optional[Type[nn.Module]] = None,
+            act_layer: Optional[Type[nn.Module]] = None,
     ):
-        super(LinearLayer, self).__init__()
-
+        super().__init__()
         self.dropout = nn.Dropout(dropout, inplace=False) if dropout > 0 else None
         self.linear = nn.Linear(in_features, out_features, use_bias)
-        self.norm = build_norm(norm, num_features=out_features)
-        self.act = build_act(act_func)
-        self.squeeze_it = squeeze_it
-
-    def _try_squeeze(self, x: torch.Tensor) -> torch.Tensor:
-        if self.squeeze_it:# or x.dim() > 2:
-            x = torch.flatten(x, start_dim=1)
-        return x
+        # note: covers nn.LayerNorm, whose first arg is normalized_shape rather than num_features
+        self.norm = norm_layer(out_features) if norm_layer is not None else None
+        self.act = act_layer() if act_layer is not None else None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self._try_squeeze(x)
-        if not self.dropout is None:
+        if self.dropout is not None:
             x = self.dropout(x)
         x = self.linear(x)
-        if not self.norm is None:
+        if self.norm is not None:
             x = self.norm(x)
-        if not self.act is None:
+        if self.act is not None:
             x = self.act(x)
         return x
 
+
 class ResidualBlock(nn.Module):
     def __init__(
-        self,
-        main: nn.Module | None,
-        shortcut: nn.Module | None,
-        post_act=None,
-        pre_norm: nn.Module | None = None,
+            self,
+            main: nn.Module,
+            shortcut: Optional[nn.Module] = None,
     ):
-        super(ResidualBlock, self).__init__()
-
-        self.pre_norm = pre_norm
+        super().__init__()
         self.main = main
         self.shortcut = shortcut
-        self.post_act = build_act(post_act)
-
-    def forward_main(self, x: torch.Tensor) -> torch.Tensor:
-        if self.pre_norm is None:
-            return self.main(x)
-        else:
-            return self.main(self.pre_norm(x))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if self.main is None:
-            res = x
-        elif self.shortcut is None:
-            res = self.forward_main(x)
-        else:
-            res = self.forward_main(x) + self.shortcut(x)
-            if not self.post_act is None:
-                res = self.post_act(res)
-        return res
-
+        if self.shortcut is None:
+            return self.main(x)
+        return self.main(x) + self.shortcut(x)
 
 
 class ConvLayer(nn.Module):
     def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        kernel_size=3,
-        stride=1,
-        dilation=1,
-        groups=1,
-        use_bias=False,
-        dropout=0,
-        norm="bn2d",
-        act_func="relu",
+            self,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: int = 3,
+            stride: int = 1,
+            dilation: int = 1,
+            groups: int = 1,
+            use_bias: bool = False,
+            norm_layer: Optional[Type[nn.Module]] = nn.BatchNorm2d,
+            act_layer: Optional[Type[nn.Module]] = nn.ReLU,
     ):
-        super(ConvLayer, self).__init__()
-
+        super().__init__()
         padding = get_same_padding(kernel_size, stride)
-        # padding *= dilation
-
-        self.dropout = nn.Dropout2d(dropout, inplace=False) if dropout > 0 else None
         if padding == -1:
-            self.conv = nn.Sequential(torch.nn.ZeroPad2d((1,0,1,0)),
+            # even kernel at stride 1: pad asymmetrically (left/top) to keep the spatial size
+            self.conv = nn.Sequential(
+                nn.ZeroPad2d((1, 0, 1, 0)),
                 nn.Conv2d(
-                in_channels,
-                out_channels,
-                kernel_size=(kernel_size, kernel_size),
-                stride=(stride, stride),
-                padding=0,
-                dilation=(dilation, dilation),
-                groups=groups,
-                bias=use_bias,
-            ))
+                    in_channels,
+                    out_channels,
+                    kernel_size=(kernel_size, kernel_size),
+                    stride=(stride, stride),
+                    padding=0,
+                    dilation=(dilation, dilation),
+                    groups=groups,
+                    bias=use_bias,
+                ),
+            )
         else:
             self.conv = nn.Conv2d(
                 in_channels,
@@ -228,106 +131,90 @@ class ConvLayer(nn.Module):
                 groups=groups,
                 bias=use_bias,
             )
-        self.norm = build_norm(norm, num_features=out_channels)
-        self.act = build_act(act_func)
+        self.norm = norm_layer(out_channels) if norm_layer is not None else None
+        self.act = act_layer() if act_layer is not None else None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if self.dropout is not None:
-            x = self.dropout(x)
         x = self.conv(x)
-        if not self.norm is None:
+        if self.norm is not None:
             x = self.norm(x)
-        if not self.act is None:
+        if self.act is not None:
             x = self.act(x)
         return x
 
 
 class MBConv(nn.Module):
     def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        kernel_size=3,
-        stride=1,
-        mid_channels=None,
-        expand_ratio=6,
-        grouping=1,
-        use_bias=False,
-        norm=("bn2d", "bn2d", "bn2d"),
-        act_func=("relu6", "relu6", None),
+            self,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: int = 3,
+            stride: int = 1,
+            mid_channels: Optional[int] = None,
+            expand_ratio: float = 6,
+            grouping: int = 1,
+            use_bias: Tuple[bool, bool, bool] = (False, False, False),
+            norm_layer: Tuple[Optional[Type[nn.Module]], ...] = (nn.BatchNorm2d, nn.BatchNorm2d, nn.BatchNorm2d),
+            act_layer: Tuple[Optional[Type[nn.Module]], ...] = (nn.ReLU6, nn.ReLU6, None),
     ):
-        super(MBConv, self).__init__()
-
-        self.stride = stride
-        self.in_channels = in_channels
-        use_bias = val2tuple(use_bias, 3)
-        norm = val2tuple(norm, 3)
-        act_func = val2tuple(act_func, 3)
+        super().__init__()
         mid_channels = mid_channels or round(in_channels * expand_ratio)
 
-        # pwise
+        # pointwise expand
         self.inverted_conv = ConvLayer(
             in_channels,
             mid_channels,
             1,
             stride=1,
             groups=grouping,
-            norm=norm[0],
-            act_func=act_func[0],
+            norm_layer=norm_layer[0],
+            act_layer=act_layer[0],
             use_bias=use_bias[0],
         )
-        # dwise
+        # depthwise
         self.depth_conv = ConvLayer(
             mid_channels,
             mid_channels,
             kernel_size,
             stride=stride,
             groups=mid_channels,
-            norm=norm[1],
-            act_func=act_func[1],
+            norm_layer=norm_layer[1],
+            act_layer=act_layer[1],
             use_bias=use_bias[1],
         )
-
-        # pwise
+        # pointwise project
         self.point_conv = ConvLayer(
             mid_channels,
             out_channels,
             1,
             groups=1,
-            norm=norm[2],
-            act_func=act_func[2],
+            norm_layer=norm_layer[2],
+            act_layer=act_layer[2],
             use_bias=use_bias[2],
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.inverted_conv(x)
-    
         x = self.depth_conv(x)
-
         x = self.point_conv(x)
         return x
-    
+
 
 class FusedMBConv(nn.Module):
     def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        kernel_size=3,
-        stride=1,
-        mid_channels=None,
-        expand_ratio=6,
-        groups=1,
-        use_bias=False,
-        norm=("bn2d", "bn2d"),
-        act_func=("relu6", None),
+            self,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: int = 3,
+            stride: int = 1,
+            mid_channels: Optional[int] = None,
+            expand_ratio: float = 6,
+            groups: int = 1,
+            use_bias: Tuple[bool, bool] = (False, False),
+            norm_layer: Tuple[Optional[Type[nn.Module]], ...] = (nn.BatchNorm2d, nn.BatchNorm2d),
+            act_layer: Tuple[Optional[Type[nn.Module]], ...] = (nn.ReLU6, None),
     ):
         super().__init__()
-
-        use_bias = val2tuple(use_bias, 2)
-        norm = val2tuple(norm, 2)
-        act_func = val2tuple(act_func, 2)
-
         mid_channels = mid_channels or round(in_channels * expand_ratio)
 
         self.spatial_conv = ConvLayer(
@@ -337,8 +224,8 @@ class FusedMBConv(nn.Module):
             stride,
             groups=groups,
             use_bias=use_bias[0],
-            norm=norm[0],
-            act_func=act_func[0],
+            norm_layer=norm_layer[0],
+            act_layer=act_layer[0],
         )
         self.point_conv = ConvLayer(
             mid_channels,
@@ -346,22 +233,20 @@ class FusedMBConv(nn.Module):
             1,
             groups=1,
             use_bias=use_bias[1],
-            norm=norm[1],
-            act_func=act_func[1],
+            norm_layer=norm_layer[1],
+            act_layer=act_layer[1],
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.spatial_conv(x)
         x = self.point_conv(x)
-        
         return x
 
 
 class SDALayer(nn.Module):
-    def __init__(self):
-        super().__init__()
+    """Scaled dot-product attention."""
 
-    def scaled_dot_product(self, q, k, v):
+    def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
         d_k = q.size()[-1]
         attn_logits = torch.matmul(q, k.transpose(-2, -1))
         attn_logits = attn_logits / math.sqrt(d_k)
@@ -369,32 +254,45 @@ class SDALayer(nn.Module):
         values = torch.matmul(attention, v)
         return values
 
-    def forward(self, q, k, v) -> torch.Tensor:
-        return self.scaled_dot_product(q, k, v)
-
 
 @register_notrace_module  # forward() reshapes based on runtime tensor shapes, not FX-traceable
 class ConvAttention(nn.Module):
-    def __init__(self, input_dim, head_dim_mul=1.0, att_stride=4, att_kernel=7, fuseconv=False, smallkernel=False, lose_transpose=False):
+    def __init__(
+            self,
+            input_dim: int,
+            head_dim_mul: float = 1.0,
+            att_stride: int = 4,
+            att_kernel: int = 7,
+            fuseconv: bool = False,
+            smallkernel: bool = False,
+            lose_transpose: bool = False,
+    ):
         super().__init__()
-
-        self.head_dim_mul = head_dim_mul
-        self.num_heads = int(max(1, (input_dim * self.head_dim_mul) // 30))
-        self.input_dim = input_dim
-        self.head_dim = int((input_dim // self.num_heads) * self.head_dim_mul)
+        self.num_heads = int(max(1, (input_dim * head_dim_mul) // 30))
+        self.head_dim = int((input_dim // self.num_heads) * head_dim_mul)
         self.num_keys = 3
-        self.att_stride = att_stride
 
         total_dim = int(self.head_dim * self.num_heads * self.num_keys)
 
-        self.conv_proj = ConvLayer(input_dim, input_dim, kernel_size=2 if smallkernel else att_kernel, norm="bn2d", act_func=None, stride=att_stride, groups=input_dim)
+        self.conv_proj = ConvLayer(
+            input_dim,
+            input_dim,
+            kernel_size=2 if smallkernel else att_kernel,
+            stride=att_stride,
+            groups=input_dim,
+            norm_layer=nn.BatchNorm2d,
+            act_layer=None,
+        )
         self.pwise = nn.Sequential(nn.Conv2d(input_dim, total_dim, kernel_size=1, stride=1, padding=0, bias=False))
         self.sda = SDALayer()
 
         self.o_proj_inpdim = self.head_dim * self.num_heads
         self.o_proj = nn.Conv2d(self.o_proj_inpdim, input_dim, kernel_size=1, stride=1, padding=0)
 
-        self.upsampling = nn.ConvTranspose2d(input_dim, input_dim, kernel_size=att_stride*2, stride=att_stride, padding=att_stride//2, groups=input_dim)
+        # NOTE the att_stride == 1 case replaces the module created just before; the redundant first init is
+        # kept so the RNG stream matches the original implementation's parameter initialization exactly
+        self.upsampling = nn.ConvTranspose2d(
+            input_dim, input_dim, kernel_size=att_stride * 2, stride=att_stride, padding=att_stride // 2, groups=input_dim)
         if att_stride == 1:
             self.upsampling = nn.ConvTranspose2d(input_dim, input_dim, kernel_size=3, stride=1, padding=1, groups=input_dim)
 
@@ -403,7 +301,8 @@ class ConvAttention(nn.Module):
             if att_stride == 1:
                 self.upsampling = nn.ConvTranspose2d(self.o_proj_inpdim, input_dim, kernel_size=3, stride=1, padding=1)
             else:
-                self.upsampling = nn.ConvTranspose2d(self.o_proj_inpdim, input_dim, kernel_size=att_stride*2, stride=att_stride, padding=att_stride//2)
+                self.upsampling = nn.ConvTranspose2d(
+                    self.o_proj_inpdim, input_dim, kernel_size=att_stride * 2, stride=att_stride, padding=att_stride // 2)
 
         if lose_transpose:
             upsampling = [nn.Upsample(scale_factor=att_stride, mode="nearest") if att_stride > 1 else nn.Identity()]
@@ -411,7 +310,7 @@ class ConvAttention(nn.Module):
                 upsampling = [nn.Conv2d(self.o_proj_inpdim, input_dim, kernel_size=1, stride=1, padding=0)] + upsampling
             self.upsampling = nn.Sequential(*upsampling)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         N, C, H, W = x.size()
 
         xout = self.conv_proj(x)
@@ -428,24 +327,24 @@ class ConvAttention(nn.Module):
         o = self.upsampling(o)
         return o[:N, :C, :H, :W]
 
-class CPUBoneBlock(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        expand_ratio: float = 4,
-        norm="bn2d",
-        act_func="hswish",
-        fuseconv=False,
-        bb_convattention=False,
-        bb_convin2=False,
-        grouping=1,
-        att_stride=1,
-        mlpexpans=4,
-        smallkernel=False,
-        lose_transpose=False,
-    ):
-        super(CPUBoneBlock, self).__init__()
 
+class CPUBoneBlock(nn.Module):
+    """Attention (context) branch followed by a local conv branch, both with identity residuals."""
+
+    def __init__(
+            self,
+            in_channels: int,
+            expand_ratio: float = 4,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            act_layer: Type[nn.Module] = nn.Hardswish,
+            fuseconv: bool = False,
+            grouping: int = 1,
+            att_stride: int = 1,
+            mlpexpans: int = 4,
+            smallkernel: bool = False,
+            lose_transpose: bool = False,
+    ):
+        super().__init__()
         att_kernel = 5 if att_stride > 1 else 3
 
         block = ConvAttention(
@@ -458,7 +357,7 @@ class CPUBoneBlock(nn.Module):
             lose_transpose=lose_transpose,
         )
 
-        context_module = ResidualBlock(nn.Sequential(nn.GroupNorm(1, in_channels), block), IdentityLayer())
+        context_module = ResidualBlock(nn.Sequential(nn.GroupNorm(1, in_channels), block), nn.Identity())
         mlp = nn.Sequential(
             nn.GroupNorm(1, in_channels),
             nn.Conv2d(in_channels, in_channels * mlpexpans, kernel_size=1),
@@ -466,7 +365,7 @@ class CPUBoneBlock(nn.Module):
             nn.Conv2d(in_channels * mlpexpans, in_channels, kernel_size=1),
             nn.Dropout(p=0.1),
         )
-        context_module = nn.Sequential(context_module, ResidualBlock(mlp, IdentityLayer()))
+        context_module = nn.Sequential(context_module, ResidualBlock(mlp, nn.Identity()))
 
         if fuseconv and in_channels < 256:
             local_module = FusedMBConv(
@@ -476,8 +375,8 @@ class CPUBoneBlock(nn.Module):
                 use_bias=(True, False),
                 kernel_size=2 if smallkernel else 3,
                 groups=grouping,
-                norm=norm,
-                act_func=(act_func, None),
+                norm_layer=(norm_layer, norm_layer),
+                act_layer=(act_layer, None),
             )
         else:
             local_module = MBConv(
@@ -487,38 +386,35 @@ class CPUBoneBlock(nn.Module):
                 grouping=grouping,
                 use_bias=(True, True, False),
                 kernel_size=2 if smallkernel else 3,
-                norm=(None, None, norm),
-                act_func=(act_func, act_func, None),
+                norm_layer=(None, None, norm_layer),
+                act_layer=(act_layer, act_layer, None),
             )
 
-        self.total = nn.Sequential(context_module, ResidualBlock(local_module, IdentityLayer()))
+        self.total = nn.Sequential(context_module, ResidualBlock(local_module, nn.Identity()))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.total(x)
-        return x
-
-
-##############################    Classification specific Classes      ###############################
+        return self.total(x)
 
 
 class ClsHead(nn.Module):
     def __init__(
             self,
             in_channels: int,
-            width_list: list[int],
+            width_list: List[int],
             num_classes: int = 1000,
             dropout: float = 0.0,
-            norm: str = "bn2d",
-            act_func: str = "hswish",
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            act_layer: Type[nn.Module] = nn.Hardswish,
     ):
         super().__init__()
         self.num_features = width_list[-1]
         self.dropout = dropout
 
-        self.in_conv = ConvLayer(in_channels, width_list[0], 1, norm=norm, act_func=act_func)
+        self.in_conv = ConvLayer(in_channels, width_list[0], 1, norm_layer=norm_layer, act_layer=act_layer)
         self.global_pool = nn.AdaptiveAvgPool2d(output_size=1)
+        self.flatten = nn.Flatten(1)
         self.pre_classifier = LinearLayer(
-            width_list[0], width_list[1], False, norm="ln", act_func=act_func, squeeze_it=True)
+            width_list[0], width_list[1], False, norm_layer=nn.LayerNorm, act_layer=act_layer)
         self.classifier = (
             LinearLayer(width_list[1], num_classes, True, dropout) if num_classes > 0 else nn.Identity()
         )
@@ -532,27 +428,198 @@ class ClsHead(nn.Module):
     def forward(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
         x = self.in_conv(x)
         x = self.global_pool(x)
+        x = self.flatten(x)
         x = self.pre_classifier(x)
         if pre_logits:
             return x
         return self.classifier(x)
 
 
+class CPUBoneBackbone(nn.Module):
+    def __init__(
+            self,
+            width_list: List[int],
+            depth_list: List[int],
+            in_channels: int = 3,
+            expand_ratio: float = 4,
+            norm_layer: LayerType = nn.BatchNorm2d,
+            act_layer: LayerType = nn.Hardswish,
+            fastit: bool = False,
+            huge_model: bool = False,
+            bigit: bool = False,
+            grouping: int = 1,
+            smallk_only_lasts: bool = False,
+            lose_transpose: bool = False,
+            just_unfused: bool = False,
+    ) -> None:
+        super().__init__()
+        self.expand_ratio = expand_ratio
+        self.norm_layer = get_norm_layer(norm_layer)
+        self.act_layer = get_act_layer(act_layer)
+        self.fuseconv = fastit and not just_unfused
+        self.fastit = fastit
+        self.huge_model = huge_model
+        self.bigit = bigit
+        self.grouping = grouping
+        self.smallk_only_lasts = smallk_only_lasts
+        self.lose_transpose = lose_transpose
+
+        self.input_stem, in_channels = self._build_stem(in_channels, width_list[0], depth_list[0])
+
+        # stages 1-4: early stages use plain conv blocks, later stages add attention
+        self.stages = nn.ModuleList()
+        for stage_num, (width, depth) in enumerate(zip(width_list[1:], depth_list[1:]), start=1):
+            if stage_num >= 3:
+                blocks, in_channels = self._build_attention_stage(in_channels, width, depth, stage_num)
+            else:
+                blocks, in_channels = self._build_conv_stage(in_channels, width, depth)
+            self.stages.append(nn.Sequential(*blocks))
+
+    def _build_stem(self, in_channels: int, stem_width: int, depth: int) -> Tuple[nn.Sequential, int]:
+        """Stem: downsample by 2, then `depth` local blocks at the stem width."""
+        blocks = [
+            ConvLayer(
+                in_channels=in_channels,
+                out_channels=stem_width,
+                kernel_size=3,
+                stride=2,
+                norm_layer=self.norm_layer,
+                act_layer=self.act_layer,
+            )
+        ]
+        in_channels = stem_width
+        for _ in range(depth):
+            block = self.build_local_block(
+                in_channels=in_channels,
+                out_channels=in_channels,
+                stride=1,
+                expand_ratio=4 if self.huge_model else 2,
+                fusedmbconv=self.fuseconv,
+                grouping=self.grouping,
+                norm_layer=self.norm_layer,
+                act_layer=self.act_layer,
+            )
+            blocks.append(ResidualBlock(block, nn.Identity()))
+        return nn.Sequential(*blocks), in_channels
+
+    def _build_conv_stage(self, in_channels: int, width: int, depth: int) -> Tuple[List[nn.Module], int]:
+        """Stages 1-2: `depth` plain conv blocks, downsampling (stride 2) on the first one."""
+        blocks = []
+        for i in range(depth):
+            stride = 2 if i == 0 else 1
+            block = self.build_local_block(
+                in_channels=in_channels,
+                out_channels=width,
+                stride=stride,
+                expand_ratio=6 if stride == 2 and (self.bigit or self.huge_model) else self.expand_ratio,
+                fusedmbconv=self.fuseconv,
+                grouping=self.grouping,
+                norm_layer=self.norm_layer,
+                act_layer=self.act_layer,
+            )
+            blocks.append(ResidualBlock(block, nn.Identity() if stride == 1 else None))
+            in_channels = width
+        return blocks, in_channels
+
+    def _build_attention_stage(
+            self,
+            in_channels: int,
+            width: int,
+            depth: int,
+            stage_num: int,
+    ) -> Tuple[List[nn.Module], int]:
+        """Stages 3-4: one downsampling conv block, followed by `depth` CPUBoneBlocks (attention + local conv)."""
+        downsample = self.build_local_block(
+            in_channels=in_channels,
+            out_channels=width,
+            stride=2,
+            expand_ratio=6 if self.bigit or (self.huge_model and stage_num < 4) else self.expand_ratio,
+            fusedmbconv=self.fastit,
+            grouping=self.grouping,
+            norm_layer=self.norm_layer,
+            act_layer=self.act_layer,
+        )
+        in_channels = width
+        blocks = [ResidualBlock(downsample, None)]
+        for _ in range(depth):
+            blocks.append(
+                CPUBoneBlock(
+                    in_channels=in_channels,
+                    expand_ratio=self.expand_ratio,
+                    norm_layer=self.norm_layer,
+                    act_layer=self.act_layer,
+                    fuseconv=self.fuseconv,
+                    grouping=self.grouping,
+                    att_stride=2 if stage_num == 3 else 1,
+                    mlpexpans=4 if self.fastit else 2,
+                    smallkernel=self.smallk_only_lasts,
+                    lose_transpose=self.lose_transpose,
+                )
+            )
+        return blocks, in_channels
+
+    @staticmethod
+    def build_local_block(
+            in_channels: int,
+            out_channels: int,
+            stride: int,
+            expand_ratio: float,
+            norm_layer: Type[nn.Module],
+            act_layer: Type[nn.Module],
+            fusedmbconv: bool = False,
+            grouping: int = 1,
+            kernel_size: int = 3,
+    ) -> nn.Module:
+        if fusedmbconv:
+            block = FusedMBConv(
+                in_channels=in_channels,
+                out_channels=out_channels,
+                stride=stride,
+                expand_ratio=expand_ratio,
+                use_bias=(False, False),
+                kernel_size=kernel_size,
+                groups=grouping,
+                norm_layer=(norm_layer, norm_layer),
+                act_layer=(act_layer, None),
+            )
+        else:
+            block = MBConv(
+                in_channels=in_channels,
+                out_channels=out_channels,
+                stride=stride,
+                expand_ratio=expand_ratio,
+                kernel_size=kernel_size,
+                grouping=grouping,
+                use_bias=(False, False, False),
+                norm_layer=(None, None, norm_layer),
+                act_layer=(act_layer, act_layer, None),
+            )
+        return block
+
+    def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
+        x = self.input_stem(x)
+        output_dict = {"stage0": x}
+        num_stages = len(self.stages)
+        for stage_num, stage in enumerate(self.stages, start=1):
+            x = stage(x)
+            key = "stage_final" if stage_num == num_stages else f"stage{stage_num}"
+            output_dict[key] = x
+        return output_dict
+
+
 class CPUBoneCls(nn.Module):
     def __init__(
             self,
-            width_list: list[int],
-            depth_list: list[int],
+            width_list: List[int],
+            depth_list: List[int],
             in_chans: int = 3,
             num_classes: int = 1000,
             global_pool: str = "avg",
-            head_widths: tuple[int, int] = (1536, 1600),
+            head_widths: Tuple[int, int] = (1536, 1600),
             drop_rate: float = 0.0,
-            expand_ratio: int = 4,
-            norm: str = "bn2d",
-            act_func: str = "hswish",
-            bb_convattention: bool = False,
-            bb_convin2: bool = False,
+            expand_ratio: float = 4,
+            norm_layer: LayerType = nn.BatchNorm2d,
+            act_layer: LayerType = nn.Hardswish,
             fastit: bool = False,
             huge_model: bool = False,
             bigit: bool = False,
@@ -563,6 +630,8 @@ class CPUBoneCls(nn.Module):
     ) -> None:
         super().__init__()
         assert global_pool == "avg", "CPUBone only supports average pooling"
+        norm_layer = get_norm_layer(norm_layer)
+        act_layer = get_act_layer(act_layer)
         self.num_classes = num_classes
         self.num_features = width_list[-1]
         self.head_hidden_size = head_widths[-1]
@@ -572,10 +641,8 @@ class CPUBoneCls(nn.Module):
             depth_list=depth_list,
             in_channels=in_chans,
             expand_ratio=expand_ratio,
-            norm=norm,
-            act_func=act_func,
-            bb_convattention=bb_convattention,
-            bb_convin2=bb_convin2,
+            norm_layer=norm_layer,
+            act_layer=act_layer,
             fastit=fastit,
             huge_model=huge_model,
             bigit=bigit,
@@ -589,8 +656,8 @@ class CPUBoneCls(nn.Module):
             width_list=list(head_widths),
             num_classes=num_classes,
             dropout=drop_rate,
-            norm=norm,
-            act_func=act_func,
+            norm_layer=norm_layer,
+            act_layer=act_layer,
         )
         self.feature_info = [dict(num_chs=width_list[0], reduction=2, module="backbone.input_stem")]
         self.feature_info += [
@@ -599,7 +666,7 @@ class CPUBoneCls(nn.Module):
         ]
 
     @torch.jit.ignore
-    def group_matcher(self, coarse=False):
+    def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
         return dict(
             stem=r'^backbone\.input_stem',
             blocks=r'^backbone\.stages\.(\d+)',
@@ -609,7 +676,7 @@ class CPUBoneCls(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.head.classifier
 
-    def reset_classifier(self, num_classes: int, global_pool: str | None = None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
         if global_pool is not None:
             assert global_pool == "avg", "CPUBone only supports average pooling"
@@ -627,189 +694,12 @@ class CPUBoneCls(nn.Module):
         return x
 
 
-##############################    CPUBone Backbone Architecture      ###############################
-
-class CPUBoneBackbone(nn.Module):
-    def __init__(
-        self,
-        width_list: list[int],
-        depth_list: list[int],
-        in_channels=3,
-        expand_ratio=4,
-        norm="bn2d",
-        act_func="hswish",
-        bb_convattention=False,
-        bb_convin2=False,
-        fastit=False,
-        huge_model=False,
-        bigit=False,
-        grouping=1,
-        smallk_only_lasts=False,
-        lose_transpose=False,
-        just_unfused=False,
-    ) -> None:
-        super().__init__()
-
-        self.expand_ratio = expand_ratio
-        self.norm = norm
-        self.act_func = act_func
-        self.bb_convattention = bb_convattention
-        self.bb_convin2 = bb_convin2
-        self.fuseconv = fastit and not just_unfused
-        self.fastit = fastit
-        self.huge_model = huge_model
-        self.bigit = bigit
-        self.grouping = grouping
-        self.smallk_only_lasts = smallk_only_lasts
-        self.lose_transpose = lose_transpose
-
-        self.input_stem, in_channels = self._build_stem(in_channels, width_list[0], depth_list[0])
-
-        ### Stages 1-4: early stages use plain conv blocks, later stages add attention
-        self.stages = nn.ModuleList()
-        for stage_num, (width, depth) in enumerate(zip(width_list[1:], depth_list[1:]), start=1):
-            if stage_num >= 3:
-                blocks, in_channels = self._build_attention_stage(in_channels, width, depth, stage_num)
-            else:
-                blocks, in_channels = self._build_conv_stage(in_channels, width, depth)
-            self.stages.append(nn.Sequential(*blocks))
-
-    def _build_stem(self, in_channels: int, stem_width: int, depth: int) -> tuple[nn.Sequential, int]:
-        """Stem: downsample by 2, then `depth` local blocks at the stem width."""
-        blocks = [
-            ConvLayer(
-                in_channels=in_channels,
-                out_channels=stem_width,
-                kernel_size=3,
-                stride=2,
-                norm=self.norm,
-                act_func=self.act_func,
-            )
-        ]
-        in_channels = stem_width
-        for _ in range(depth):
-            block = self.build_local_block(
-                in_channels=in_channels,
-                out_channels=in_channels,
-                stride=1,
-                expand_ratio=4 if self.huge_model else 2,
-                fusedmbconv=self.fuseconv,
-                grouping=self.grouping,
-                norm=self.norm,
-                act_func=self.act_func,
-            )
-            blocks.append(ResidualBlock(block, IdentityLayer()))
-        return nn.Sequential(*blocks), in_channels
-
-    def _build_conv_stage(self, in_channels: int, width: int, depth: int) -> tuple[list[nn.Module], int]:
-        """Stages 1-2: `depth` plain conv blocks, downsampling (stride 2) on the first one."""
-        blocks = []
-        for i in range(depth):
-            stride = 2 if i == 0 else 1
-            block = self.build_local_block(
-                in_channels=in_channels,
-                out_channels=width,
-                stride=stride,
-                expand_ratio=6 if stride == 2 and (self.bigit or self.huge_model) else self.expand_ratio,
-                fusedmbconv=self.fuseconv,
-                grouping=self.grouping,
-                norm=self.norm,
-                act_func=self.act_func,
-            )
-            blocks.append(ResidualBlock(block, IdentityLayer() if stride == 1 else None))
-            in_channels = width
-        return blocks, in_channels
-
-    def _build_attention_stage(self, in_channels: int, width: int, depth: int, stage_num: int) -> tuple[list[nn.Module], int]:
-        """Stages 3-4: one downsampling conv block, followed by `depth` CPUBoneBlocks (attention + local conv)."""
-        downsample = self.build_local_block(
-            in_channels=in_channels,
-            out_channels=width,
-            stride=2,
-            expand_ratio=6 if self.bigit or (self.huge_model and stage_num < 4) else self.expand_ratio,
-            fusedmbconv=self.fastit and (not self.huge_model or stage_num < 5),
-            grouping=self.grouping,
-            norm=self.norm,
-            act_func=self.act_func,
-        )
-        in_channels = width
-        blocks = [ResidualBlock(downsample, None)]
-        for _ in range(depth):
-            blocks.append(
-                CPUBoneBlock(
-                    in_channels=in_channels,
-                    expand_ratio=self.expand_ratio,
-                    norm=self.norm,
-                    act_func=self.act_func,
-                    bb_convattention=self.bb_convattention,
-                    fuseconv=self.fuseconv,
-                    bb_convin2=self.bb_convin2,
-                    grouping=self.grouping,
-                    att_stride=2 if stage_num == 3 else 1,
-                    mlpexpans=4 if self.fastit else 2,
-                    smallkernel=self.smallk_only_lasts,
-                    lose_transpose=self.lose_transpose,
-                )
-            )
-        return blocks, in_channels
-
-    @staticmethod
-    def build_local_block(
-        in_channels: int,
-        out_channels: int,
-        stride: int,
-        expand_ratio: float,
-        norm: str,
-        act_func: str,
-        fusedmbconv: bool = False,
-        grouping: int = 1,
-        kernel_size: int = 3,
-    ) -> nn.Module:
-        if fusedmbconv:
-            block = FusedMBConv(
-                in_channels=in_channels,
-                out_channels=out_channels,
-                stride=stride,
-                expand_ratio=expand_ratio,
-                use_bias=False,
-                kernel_size=kernel_size,
-                groups=grouping,
-                norm=norm,
-                act_func=(act_func, None),
-            )
-        else:
-            block = MBConv(
-                in_channels=in_channels,
-                out_channels=out_channels,
-                stride=stride,
-                expand_ratio=expand_ratio,
-                kernel_size=kernel_size,
-                grouping=grouping,
-                use_bias=False,
-                norm=(None, None, norm),
-                act_func=(act_func, act_func, None),
-            )
-        return block
-
-    def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
-        x = self.input_stem(x)
-        output_dict = {"stage0": x}
-        num_stages = len(self.stages)
-        for stage_num, stage in enumerate(self.stages, start=1):
-            x = stage(x)
-            key = "stage_final" if stage_num == num_stages else f"stage{stage_num}"
-            output_dict[key] = x
-        return output_dict
-
-##############################    Model registration      ###############################
-
-
-def checkpoint_filter_fn(state_dict: dict, model: nn.Module) -> dict:
+def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: nn.Module) -> Dict[str, torch.Tensor]:
     state_dict = state_dict.get("state_dict", state_dict)
     return remap_legacy_state_dict(state_dict)
 
 
-def _cfg(url: str = "", **kwargs) -> dict[str, Any]:
+def _cfg(url: str = "", **kwargs: Any) -> Dict[str, Any]:
     return {
         "url": url,
         "num_classes": 1000,
@@ -839,7 +729,7 @@ default_cfgs = generate_default_cfgs({
 })
 
 
-def _create_cpubone(variant: str, pretrained: bool = False, **kwargs) -> CPUBoneCls:
+def _create_cpubone(variant: str, pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
     model = build_model_with_cfg(
         CPUBoneCls,
         variant,
@@ -852,62 +742,60 @@ def _create_cpubone(variant: str, pretrained: bool = False, **kwargs) -> CPUBone
 
 
 @register_model
-def cpubone_nano(pretrained: bool = False, **kwargs) -> CPUBoneCls:
+def cpubone_nano(pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
     model_args = dict(width_list=[12, 24, 48, 96, 192], depth_list=[0, 1, 1, 1, 2])
     return _create_cpubone("cpubone_nano", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def cpubone_t0(pretrained: bool = False, **kwargs) -> CPUBoneCls:
+def cpubone_t0(pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
     model_args = dict(width_list=[12, 24, 48, 96, 192], depth_list=[0, 1, 1, 1, 3])
     return _create_cpubone("cpubone_t0", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def cpubone_s0(pretrained: bool = False, **kwargs) -> CPUBoneCls:
+def cpubone_s0(pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
     model_args = dict(width_list=[12, 24, 48, 96, 192], depth_list=[0, 1, 1, 2, 3])
     return _create_cpubone("cpubone_s0", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def cpubone_s1(pretrained: bool = False, **kwargs) -> CPUBoneCls:
+def cpubone_s1(pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
     model_args = dict(width_list=[14, 28, 56, 112, 224], depth_list=[0, 1, 1, 2, 3])
     return _create_cpubone("cpubone_s1", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def cpubone_b0(pretrained: bool = False, **kwargs) -> CPUBoneCls:
+def cpubone_b0(pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
     model_args = dict(width_list=[16, 32, 64, 128, 256], depth_list=[0, 1, 1, 3, 4])
     return _create_cpubone("cpubone_b0", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def cpubone_b1(pretrained: bool = False, **kwargs) -> CPUBoneCls:
+def cpubone_b1(pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
     model_args = dict(width_list=[16, 32, 64, 128, 256], depth_list=[0, 1, 1, 5, 5])
     return _create_cpubone("cpubone_b1", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def cpubone_b15(pretrained: bool = False, **kwargs) -> CPUBoneCls:
+def cpubone_b15(pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
     model_args = dict(width_list=[20, 40, 80, 160, 320], depth_list=[0, 1, 1, 6, 6])
     return _create_cpubone("cpubone_b15", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def cpubone_b2(pretrained: bool = False, **kwargs) -> CPUBoneCls:
+def cpubone_b2(pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
     model_args = dict(width_list=[24, 48, 96, 192, 384], depth_list=[0, 1, 1, 6, 6])
     return _create_cpubone("cpubone_b2", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def cpubone_b25(pretrained: bool = False, **kwargs) -> CPUBoneCls:
+def cpubone_b25(pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
     model_args = dict(width_list=[24, 48, 96, 192, 384], depth_list=[0, 2, 3, 6, 6])
     return _create_cpubone("cpubone_b25", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def cpubone_b3(pretrained: bool = False, **kwargs) -> CPUBoneCls:
+def cpubone_b3(pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
     model_args = dict(width_list=[32, 64, 128, 256, 512], depth_list=[1, 2, 3, 6, 6])
     return _create_cpubone("cpubone_b3", pretrained=pretrained, **dict(model_args, **kwargs))
-
-
