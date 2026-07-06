@@ -6,6 +6,7 @@ from .coat import *
 from .convit import *
 from .convmixer import *
 from .convnext import *
+from .cpubone import *
 from .crossvit import *
 from .csatv2 import *
 from .cspnet import *

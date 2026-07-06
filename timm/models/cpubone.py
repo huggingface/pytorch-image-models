@@ -2,25 +2,22 @@
 # Moritz Nottebaum, Matteo Dunnhofer, Christian Micheloni
 # Conference on Computer Vision and Pattern Recognition (CVPR), 2025
 
-import os, yaml, math
-from typing import Any
-from inspect import signature
-from copy import deepcopy
-import torch
-
-import torch.nn.functional as F
-import torch.nn as nn
+import math
 from functools import partial
+from inspect import signature
+from typing import Any, Dict
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
-class SafeLoaderWithTuple(yaml.SafeLoader):
-    """A yaml safe loader with python tuple loading capabilities."""
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from ._builder import build_model_with_cfg
+from ._features_fx import register_notrace_module
+from ._registry import register_model, generate_default_cfgs
 
-    def construct_python_tuple(self, node):
-        return tuple(self.construct_sequence(node))
+__all__ = ['CPUBoneBackbone', 'CPUBoneCls']
 
-
-SafeLoaderWithTuple.add_constructor("tag:yaml.org,2002:python/tuple", SafeLoaderWithTuple.construct_python_tuple)
 
 def val2tuple(x: list | tuple | Any, min_len: int = 1, idx_repeat: int = -1) -> tuple:
     x = val2list(x)
@@ -44,56 +41,6 @@ def build_kwargs_from_config(config: dict, target_func: callable) -> dict[str, a
         if key in valid_keys:
             kwargs[key] = config[key]
     return kwargs
-
-def partial_update_config(config: dict, partial_config: dict) -> dict:
-    for key in partial_config:
-        if key in config and isinstance(partial_config[key], dict) and isinstance(config[key], dict):
-            partial_update_config(config[key], partial_config[key])
-        else:
-            config[key] = partial_config[key]
-    return config
-
-def load_config(filename: str) -> dict:
-    """Load a yaml file."""
-    filename = os.path.realpath(os.path.expanduser(filename))
-    return yaml.load(open(filename), Loader=SafeLoaderWithTuple)
-
-
-def setup_exp_config(config_path: str, recursive=True, opt_args: dict | None = None) -> dict:
-    # load config
-    if not os.path.isfile(config_path):
-        raise ValueError(config_path)
-
-    fpaths = [config_path]
-    if recursive:
-        extension = os.path.splitext(config_path)[1]
-        while os.path.dirname(config_path) != config_path:
-            config_path = os.path.dirname(config_path)
-            fpath = os.path.join(config_path, "default" + extension)
-            if os.path.isfile(fpath):
-                fpaths.append(fpath)
-        fpaths = fpaths[::-1]
-
-    default_config = load_config(fpaths[0])
-    exp_config = deepcopy(default_config)
-    for fpath in fpaths[1:]:
-        partial_update_config(exp_config, load_config(fpath))
-    # update config via args
-    if opt_args is not None:
-        partial_update_config(exp_config, opt_args)
-
-    return exp_config
-
-
-def load_state_dict_from_file(file: str, only_state_dict=True) -> dict[str, torch.Tensor]:
-    # file = os.path.realpath(os.path.expanduser(file))
-    checkpoint = torch.load(file, map_location="cpu")
-    if "epoch" in checkpoint:
-        print("checkpoint from epoch %d and its best validation result is %.3f" % (checkpoint["epoch"],checkpoint["best_val"]))
-    if only_state_dict and "state_dict" in checkpoint:
-        checkpoint = checkpoint["state_dict"]
-    return checkpoint
-
 
 def remap_legacy_state_dict(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
     """Remap keys from older checkpoint formats to the current model layout."""
@@ -426,6 +373,7 @@ class SDALayer(nn.Module):
         return self.scaled_dot_product(q, k, v)
 
 
+@register_notrace_module  # forward() reshapes based on runtime tensor shapes, not FX-traceable
 class ConvAttention(nn.Module):
     def __init__(self, input_dim, head_dim_mul=1.0, att_stride=4, att_kernel=7, fuseconv=False, smallkernel=False, lose_transpose=False):
         super().__init__()
@@ -553,47 +501,130 @@ class CPUBoneBlock(nn.Module):
 ##############################    Classification specific Classes      ###############################
 
 
-class ClsHead(nn.Sequential):
+class ClsHead(nn.Module):
     def __init__(
-        self,
-        in_channels: int,
-        width_list: list[int],
-        n_classes=1000,
-        dropout=0.0,
-        norm="bn2d",
-        no_spatial=False,
-        act_func="hswish",
-        fid="stage_final",
+            self,
+            in_channels: int,
+            width_list: list[int],
+            num_classes: int = 1000,
+            dropout: float = 0.0,
+            norm: str = "bn2d",
+            act_func: str = "hswish",
     ):
-        ops = [
-            ConvLayer(in_channels, width_list[0], 1, norm=norm, act_func=act_func),
-            nn.AdaptiveAvgPool2d(output_size=1),
-            LinearLayer(in_channels if no_spatial else width_list[0], width_list[1], False, norm="ln", act_func=act_func, squeeze_it=True),
-            LinearLayer(width_list[1], n_classes, True, dropout, None, None),
-        ]
-        if no_spatial:
-            ops = ops[2:]
-        super().__init__(*ops)
+        super().__init__()
+        self.num_features = width_list[-1]
+        self.dropout = dropout
 
-        self.fid = fid
+        self.in_conv = ConvLayer(in_channels, width_list[0], 1, norm=norm, act_func=act_func)
+        self.global_pool = nn.AdaptiveAvgPool2d(output_size=1)
+        self.pre_classifier = LinearLayer(
+            width_list[0], width_list[1], False, norm="ln", act_func=act_func, squeeze_it=True)
+        self.classifier = (
+            LinearLayer(width_list[1], num_classes, True, dropout) if num_classes > 0 else nn.Identity()
+        )
 
-    def forward(self, feed_dict: dict[str, torch.Tensor]) -> torch.Tensor:
-        x = feed_dict[self.fid]
-        return nn.Sequential.forward(self, x)
+    def reset(self, num_classes: int):
+        if num_classes > 0:
+            self.classifier = LinearLayer(self.num_features, num_classes, True, self.dropout)
+        else:
+            self.classifier = nn.Identity()
+
+    def forward(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
+        x = self.in_conv(x)
+        x = self.global_pool(x)
+        x = self.pre_classifier(x)
+        if pre_logits:
+            return x
+        return self.classifier(x)
 
 
 class CPUBoneCls(nn.Module):
-    def __init__(self, backbone, head, name: str) -> None:
+    def __init__(
+            self,
+            width_list: list[int],
+            depth_list: list[int],
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            global_pool: str = "avg",
+            head_widths: tuple[int, int] = (1536, 1600),
+            drop_rate: float = 0.0,
+            expand_ratio: int = 4,
+            norm: str = "bn2d",
+            act_func: str = "hswish",
+            bb_convattention: bool = False,
+            bb_convin2: bool = False,
+            fastit: bool = False,
+            huge_model: bool = False,
+            bigit: bool = False,
+            grouping: int = 1,
+            smallk_only_lasts: bool = False,
+            lose_transpose: bool = False,
+            just_unfused: bool = False,
+    ) -> None:
         super().__init__()
-        self.backbone = backbone
-        self.head = head
-        self.name = name
-    
+        assert global_pool == "avg", "CPUBone only supports average pooling"
+        self.num_classes = num_classes
+        self.num_features = width_list[-1]
+        self.head_hidden_size = head_widths[-1]
+
+        self.backbone = CPUBoneBackbone(
+            width_list=width_list,
+            depth_list=depth_list,
+            in_channels=in_chans,
+            expand_ratio=expand_ratio,
+            norm=norm,
+            act_func=act_func,
+            bb_convattention=bb_convattention,
+            bb_convin2=bb_convin2,
+            fastit=fastit,
+            huge_model=huge_model,
+            bigit=bigit,
+            grouping=grouping,
+            smallk_only_lasts=smallk_only_lasts,
+            lose_transpose=lose_transpose,
+            just_unfused=just_unfused,
+        )
+        self.head = ClsHead(
+            in_channels=width_list[-1],
+            width_list=list(head_widths),
+            num_classes=num_classes,
+            dropout=drop_rate,
+            norm=norm,
+            act_func=act_func,
+        )
+        self.feature_info = [dict(num_chs=width_list[0], reduction=2, module="backbone.input_stem")]
+        self.feature_info += [
+            dict(num_chs=width, reduction=2 ** (i + 2), module=f"backbone.stages.{i}")
+            for i, width in enumerate(width_list[1:])
+        ]
+
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(
+            stem=r'^backbone\.input_stem',
+            blocks=r'^backbone\.stages\.(\d+)',
+        )
+
+    @torch.jit.ignore
+    def get_classifier(self) -> nn.Module:
+        return self.head.classifier
+
+    def reset_classifier(self, num_classes: int, global_pool: str | None = None):
+        self.num_classes = num_classes
+        if global_pool is not None:
+            assert global_pool == "avg", "CPUBone only supports average pooling"
+        self.head.reset(num_classes)
+
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        return self.backbone(x)["stage_final"]
+
+    def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
+        return self.head(x, pre_logits=pre_logits)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        feed_dict = self.backbone(x)
-        output = self.head(feed_dict)
-        
-        return output
+        x = self.forward_features(x)
+        x = self.forward_head(x)
+        return x
 
 
 ##############################    CPUBone Backbone Architecture      ###############################
@@ -760,7 +791,7 @@ class CPUBoneBackbone(nn.Module):
             )
         return block
 
-    def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
         x = self.input_stem(x)
         output_dict = {"stage0": x}
         num_stages = len(self.stages)
@@ -770,153 +801,113 @@ class CPUBoneBackbone(nn.Module):
             output_dict[key] = x
         return output_dict
 
-## Model function
-def cpubone_backbone_b1(**kwargs) -> CPUBoneBackbone:
-    width_list = [16, 32, 64, 128, 256]
-    depth_list = [1, 2, 3, 3, 4]
+##############################    Model registration      ###############################
 
-    if "name" in kwargs:
-        
-        if kwargs["name"] == "nano":
-            width_list =  [12, 24, 48, 96, 192]
-            depth_list = [0,1,1,1,2]
-        
-        if kwargs["name"] == "t0":
-            width_list =  [12, 24, 48, 96, 192]
-            depth_list = [0,1,1,1,3]
-            
-        if kwargs["name"] == "s0": # t0 for grp_smklstag_notrans
-            width_list =  [12, 24, 48, 96, 192]
-            depth_list = [0,1,1,2,3]
-        
-        
-        if kwargs["name"] == "s1":
-            width_list =  [14, 28, 56, 112, 224]
-            depth_list = [0,1,1,2,3]
-        
-        
-        if kwargs["name"] == "b0":
-            width_list =  [16, 32, 64, 128, 256]
-            depth_list = [0,1,1,3,4]
 
-        if kwargs["name"] == "b1":
-            width_list =  [16, 32, 64, 128, 256]
-            depth_list = [0,1,1,5,5]
-        
-        if kwargs["name"] == "b15":
-            width_list =  [20, 40, 80, 160, 320]
-            depth_list = [0,1,1,6,6]
-        
-        if kwargs["name"] == "b2":
-            width_list =  [24, 48, 96, 192, 384]
-            depth_list = [0,1,1,6,6]
-        
-        if kwargs["name"] == "b25":
-            width_list =  [24, 48, 96, 192, 384]
-            depth_list = [0,2,3,6,6]
-        
-        if kwargs["name"] == "b3":
-            width_list =  [32, 64, 128, 256, 512]
-            depth_list = [1,2,3,6,6]
+def checkpoint_filter_fn(state_dict: dict, model: nn.Module) -> dict:
+    state_dict = state_dict.get("state_dict", state_dict)
+    return remap_legacy_state_dict(state_dict)
 
-        if kwargs["name"] == "b4":
-            depth_list = [2, 3, 6, 12, 8]
-            width_list = [64, 128, 256, 512, 1024]
 
-        if kwargs["name"] == "b5":
-            depth_list = [2, 4, 5, 20, 10]
-            width_list = [128, 256, 512, 1024, 2048]
+def _cfg(url: str = "", **kwargs) -> dict[str, Any]:
+    return {
+        "url": url,
+        "num_classes": 1000,
+        "input_size": (3, 224, 224),
+        "pool_size": (7, 7),
+        "crop_pct": 0.95,
+        "interpolation": "bicubic",
+        "mean": IMAGENET_DEFAULT_MEAN,
+        "std": IMAGENET_DEFAULT_STD,
+        "first_conv": "backbone.input_stem.0.conv",
+        "classifier": "head.classifier.linear",
+        **kwargs,
+    }
 
-        if kwargs["name"] == "custom":
-            width_list = kwargs.pop("width_list")
-            depth_list = kwargs.pop("depth_list")
-    
-    backbone = CPUBoneBackbone(
-        width_list=width_list,
-        depth_list=depth_list,
-        **build_kwargs_from_config(kwargs, CPUBoneBackbone),
+
+default_cfgs = generate_default_cfgs({
+    "cpubone_nano.untrained": _cfg(),
+    "cpubone_t0.untrained": _cfg(),
+    "cpubone_s0.untrained": _cfg(),
+    "cpubone_s1.untrained": _cfg(),
+    "cpubone_b0.untrained": _cfg(),
+    "cpubone_b1.untrained": _cfg(),
+    "cpubone_b15.untrained": _cfg(),
+    "cpubone_b2.untrained": _cfg(),
+    "cpubone_b25.untrained": _cfg(),
+    "cpubone_b3.untrained": _cfg(),
+})
+
+
+def _create_cpubone(variant: str, pretrained: bool = False, **kwargs) -> CPUBoneCls:
+    model = build_model_with_cfg(
+        CPUBoneCls,
+        variant,
+        pretrained,
+        pretrained_filter_fn=checkpoint_filter_fn,
+        feature_cfg=dict(feature_cls="hook"),
+        **kwargs,
     )
-    return backbone, width_list
-
-
-def cpubone_cls_b1(**kwargs) -> CPUBoneCls:
-
-    backbone, width_list = cpubone_backbone_b1(**kwargs)
-
-    cls_widths = [1536, 1600]
-    if "bighead" in kwargs and kwargs["bighead"]:
-        cls_widths = [2304, 2560]
-
-    head = ClsHead(
-        in_channels=width_list[-1],
-        width_list=cls_widths,
-        act_func="hswish",
-        **build_kwargs_from_config(kwargs, ClsHead),
-    )
-
-    model = CPUBoneCls(backbone, head, **build_kwargs_from_config(kwargs, CPUBoneCls))
     return model
 
 
-
-# Model retrieve function
-def get_cpubone(config_path="configs/cls/imagenet/cpubone_b1.yaml", checkpoint_path=".exp/cls/imagenet/cpubone_b1/checkpoint/evalmodel.pt", pretrained=True):
-
-    # load config as dict 
-    config = setup_exp_config(config_path, recursive=True, opt_args=None)
-    
-    # get classification model
-    model = cpubone_cls_b1(**config["net_config"])
-    
-    name = config["net_config"]["name"]
-    print("Model:",name)
-
-    try:
-        if pretrained:
-            if checkpoint_path is None:
-                raise ValueError(f"Do not find the pretrained weight of {name}.")
-            else:
-                weight = load_state_dict_from_file(checkpoint_path)
-                weight = remap_legacy_state_dict(weight)
-                model.load_state_dict(weight)
-    except Exception as e:
-        print("Model weights could not be loaded!!!!!!!!!!!!!!!!!!!",e)
-    
-    return model
+@register_model
+def cpubone_nano(pretrained: bool = False, **kwargs) -> CPUBoneCls:
+    model_args = dict(width_list=[12, 24, 48, 96, 192], depth_list=[0, 1, 1, 1, 2])
+    return _create_cpubone("cpubone_nano", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
+@register_model
+def cpubone_t0(pretrained: bool = False, **kwargs) -> CPUBoneCls:
+    model_args = dict(width_list=[12, 24, 48, 96, 192], depth_list=[0, 1, 1, 1, 3])
+    return _create_cpubone("cpubone_t0", pretrained=pretrained, **dict(model_args, **kwargs))
 
-def get_model_by_name(name, pretrained=True):
-    return get_cpubone(config_path="configs/cls/imagenet/cpubone_%s.yaml" % name, checkpoint_path=".exp/cls/imagenet/cpubone_%s/checkpoint/evalmodel.pt" % name, pretrained=pretrained)
+
+@register_model
+def cpubone_s0(pretrained: bool = False, **kwargs) -> CPUBoneCls:
+    model_args = dict(width_list=[12, 24, 48, 96, 192], depth_list=[0, 1, 1, 2, 3])
+    return _create_cpubone("cpubone_s0", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
+@register_model
+def cpubone_s1(pretrained: bool = False, **kwargs) -> CPUBoneCls:
+    model_args = dict(width_list=[14, 28, 56, 112, 224], depth_list=[0, 1, 1, 2, 3])
+    return _create_cpubone("cpubone_s1", pretrained=pretrained, **dict(model_args, **kwargs))
 
-def get_cpubone_nano(pretrained=True):
-    return get_model_by_name("nano", pretrained=pretrained)
 
-def get_cpubone_t0(pretrained=True):
-    return get_model_by_name("t0", pretrained=pretrained)
+@register_model
+def cpubone_b0(pretrained: bool = False, **kwargs) -> CPUBoneCls:
+    model_args = dict(width_list=[16, 32, 64, 128, 256], depth_list=[0, 1, 1, 3, 4])
+    return _create_cpubone("cpubone_b0", pretrained=pretrained, **dict(model_args, **kwargs))
 
-def get_cpubone_s0(pretrained=True):
-    return get_model_by_name("s0", pretrained=pretrained)
 
-def get_cpubone_b0(pretrained=True):
-    return get_model_by_name("b0", pretrained=pretrained)
+@register_model
+def cpubone_b1(pretrained: bool = False, **kwargs) -> CPUBoneCls:
+    model_args = dict(width_list=[16, 32, 64, 128, 256], depth_list=[0, 1, 1, 5, 5])
+    return _create_cpubone("cpubone_b1", pretrained=pretrained, **dict(model_args, **kwargs))
 
-def get_cpubone_b1(pretrained=True):
-    return get_model_by_name("b1", pretrained=pretrained)
 
-def get_cpubone_b15(pretrained=True):
-    return get_model_by_name("b15", pretrained=pretrained)
+@register_model
+def cpubone_b15(pretrained: bool = False, **kwargs) -> CPUBoneCls:
+    model_args = dict(width_list=[20, 40, 80, 160, 320], depth_list=[0, 1, 1, 6, 6])
+    return _create_cpubone("cpubone_b15", pretrained=pretrained, **dict(model_args, **kwargs))
 
-def get_cpubone_b2(pretrained=True):
-    return get_model_by_name("b2", pretrained=pretrained)
 
-def get_cpubone_b25(pretrained=True):
-    return get_model_by_name("b25", pretrained=pretrained)
+@register_model
+def cpubone_b2(pretrained: bool = False, **kwargs) -> CPUBoneCls:
+    model_args = dict(width_list=[24, 48, 96, 192, 384], depth_list=[0, 1, 1, 6, 6])
+    return _create_cpubone("cpubone_b2", pretrained=pretrained, **dict(model_args, **kwargs))
 
-def get_cpubone_b3(pretrained=True):
-    return get_model_by_name("b3", pretrained=pretrained)
-    
+
+@register_model
+def cpubone_b25(pretrained: bool = False, **kwargs) -> CPUBoneCls:
+    model_args = dict(width_list=[24, 48, 96, 192, 384], depth_list=[0, 2, 3, 6, 6])
+    return _create_cpubone("cpubone_b25", pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def cpubone_b3(pretrained: bool = False, **kwargs) -> CPUBoneCls:
+    model_args = dict(width_list=[32, 64, 128, 256, 512], depth_list=[1, 2, 3, 6, 6])
+    return _create_cpubone("cpubone_b3", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
