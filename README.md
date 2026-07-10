@@ -12,6 +12,12 @@
 
 ## What's New
 
+## July 10, 2026
+* Improve optimizer `torch.compile` and tensor learning-rate support.
+* Extend NaFlexViT patch-layout (for NaFlex-CLAP), and `forward_intermediates` (NaFlex dict input) support.
+* Harden pickle loading and improve custom-label inference.
+* Release 1.0.28
+
 ## May 27, 2026
 * Add model defs and pretrained weights for EUPE ViT (DINOv3-style) and ConvNeXt models. See the [Efficient Universal Perception Encoder paper](https://arxiv.org/abs/2603.22387).
 * Add TIPSv2 model defs and pretrained weights for (DINOv2-style) ViTs. See the [TIPSv2 paper](https://arxiv.org/abs/2604.12012).
