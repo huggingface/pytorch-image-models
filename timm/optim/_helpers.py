@@ -41,12 +41,6 @@ def _get_value(x):
     return x.item() if isinstance(x, torch.Tensor) else x
 
 
-def _stack_if_compiling(x):
-    if not torch.jit.is_scripting() and _is_compiling():
-        return torch.stack(x)
-    return x
-
-
 def _get_capturable_supported_devices(supports_xla: bool = True) -> List[str]:
     capturable_supported_devices = ["cuda", "xpu", "hpu"]
     if not torch.jit.is_scripting():
