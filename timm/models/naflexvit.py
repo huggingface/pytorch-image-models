@@ -1615,21 +1615,37 @@ class NaFlexVit(nn.Module):
             attn_mask: Optional attention mask for masked attention
         Returns:
             A tuple with (final_features, intermediates), a list of intermediate features, or a dictionary containing
-            'image_features' and 'image_intermediates' (and optionally 'image_intermediates_prefix')
-        """
+            'image_features' and 'image_intermediates' (and optionally 'image_intermediates_prefix').
 
-        # FIXME unfinished / untested
+        NaFlex (dict / pre-patchified) inputs: NLC output only (per-sample grids are variable, a single
+        spatial reshape is undefined); with ``output_dict=True`` the result also carries 'patch_valid'
+        aligned with the spatial intermediates so consumers can mask padding or scatter via patch_coord.
+        """
 
         assert output_fmt in ('NCHW', 'NLC'), 'Output format must be one of NCHW or NLC.'
         reshape = output_fmt == 'NCHW'
         intermediates = []
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
-        if isinstance(x, Dict):
-            # Handle dictionary input from NaFlex collator
+        if isinstance(x, dict):
+            # Dictionary input from the NaFlex collator. Per-sample grids are variable
+            # (native aspect) and padding tokens belong to no grid, so a single spatial
+            # reshape is undefined -- NLC output only.
+            if reshape:
+                raise ValueError(
+                    'output_fmt="NCHW" is not supported for NaFlex (dict) inputs, use "NLC". '
+                    'Per-sample grids vary; reconstruct spatial maps downstream via patch_coord.')
             patch_coord = x['patch_coord']
-            patch_valid = x['patch_valid']
+            patch_valid = x.get('patch_valid', patch_valid)
+            attn_mask = x.get('attn_mask', attn_mask)
             patches = x['patches']
-            assert False, 'WIP, patch mode needs more work'
+            H = W = None
+            if not output_dict and self.training and self.patch_drop is not None:
+                # patch dropout gathers the token sequence, so the caller's input patch_valid no
+                # longer aligns with the returned tokens -- the gathered mask is only surfaced in
+                # dict output mode. Tuple mode is fine at eval / without patch dropout.
+                raise ValueError(
+                    'NaFlex forward_intermediates with active patch dropout requires '
+                    'output_dict=True to return the gathered patch_valid.')
         else:
             patches = x
             height, width = x.shape[-2:]
@@ -1646,6 +1662,8 @@ class NaFlexVit(nn.Module):
         rope_embeds = embeds.get('rope_embeds', None)
         keep_indices = embeds.get('keep_indices', None)
         attn_mask = embeds.get('attn_mask', None)
+        # validity aligned with the token sequence (gathered through patch dropout)
+        patch_valid = embeds.get('patch_valid', patch_valid)
 
         # Forward pass through blocks
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
@@ -1705,8 +1723,6 @@ class NaFlexVit(nn.Module):
                 for y in intermediates
             ]
 
-        # FIXME always use dict for NaFlex mode to return masks and more?
-
         # For dictionary output
         if output_dict:
             result_dict = {}
@@ -1714,6 +1730,10 @@ class NaFlexVit(nn.Module):
             result_dict['image_intermediates'] = intermediates
             if prefix_tokens is not None and return_prefix_tokens:
                 result_dict['image_intermediates_prefix'] = prefix_tokens
+            if patch_valid is not None:
+                # NaFlex mode: patch-only validity aligned with the (spatial) intermediates,
+                # padding excluded -- consumers need this to mask or scatter tokens
+                result_dict['patch_valid'] = patch_valid
 
             # Only include features if not intermediates_only
             if not intermediates_only:
@@ -1861,7 +1881,7 @@ class NaFlexVit(nn.Module):
         Returns:
             Model output tensor.
         """
-        input_is_dict = isinstance(x, Dict)
+        input_is_dict = isinstance(x, dict)
         naflex_mode = input_is_dict or patch_coord is not None
         if naflex_mode:
             if input_is_dict:

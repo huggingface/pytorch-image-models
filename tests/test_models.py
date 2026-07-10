@@ -762,3 +762,63 @@ if 'GITHUB_ACTIONS' not in os.environ:
         for tensor in outputs:
             assert tensor.shape[0] == batch_size
             assert not torch.isnan(tensor).any(), 'Output included NaNs'
+
+def test_naflexvit_forward_intermediates_dict_input():
+    """NaFlex (pre-patchified dict) inputs through forward_intermediates: NLC-only, final-feature
+    parity with forward_features, patch_valid surfaced for downstream masking/scatter."""
+    model = create_model('naflexvit_base_patch16_gap', embed_dim=64, depth=2, num_heads=2)
+    model.eval()
+    n, pad = 16, 8
+    patches = torch.randn(2, n + pad, 16 * 16 * 3)
+    coord = torch.zeros(2, n + pad, 2, dtype=torch.long)
+    coord[:, :n, 0] = torch.arange(n) // 4
+    coord[:, :n, 1] = torch.arange(n) % 4
+    valid = torch.zeros(2, n + pad, dtype=torch.bool)
+    valid[:, :n] = True
+    batch = {'patches': patches, 'patch_coord': coord, 'patch_valid': valid}
+
+    with torch.no_grad():
+        out = model.forward_intermediates(batch, output_fmt='NLC', output_dict=True, norm=True)
+        ff = model.forward_features(patches, patch_coord=coord, patch_valid=valid)
+
+    assert len(out['image_intermediates']) == 2
+    assert out['image_intermediates'][-1].shape == (2, n + pad, 64)  # prefix split from intermediates
+    assert torch.allclose(out['image_features'], ff['patches'])
+    assert torch.equal(out['patch_valid'], ff['patch_valid'])
+
+    with pytest.raises(ValueError, match='NCHW'):
+        model.forward_intermediates(batch, output_fmt='NCHW')
+
+    # tuple mode is allowed for dict input (input mask stays aligned at eval)...
+    final, inter = model.forward_intermediates(batch, output_fmt='NLC')
+    assert torch.allclose(final, ff['patches'])
+    # ...but is rejected when patch dropout would silently desync the caller's mask
+    model_pd = create_model(
+        'naflexvit_base_patch16_gap', embed_dim=64, depth=2, num_heads=2, patch_drop_rate=0.25)
+    model_pd.train()
+    with pytest.raises(ValueError, match='patch dropout'):
+        model_pd.forward_intermediates(batch, output_fmt='NLC')
+
+def test_gemma4_forward_intermediates_dict_output():
+    """gemma4_vit dict-output intermediates match the NaFlexVit contract (API symmetry):
+    'image_intermediates' / 'image_features' / 'patch_valid' aligned with the token sequence."""
+    model = create_model('gemma4_vit_167m_enc', embed_dim=64, depth=2, num_heads=2, global_pool='')
+    model.eval()
+    ph, pw = model.patch_embed.patch_size if hasattr(model.patch_embed, 'patch_size') else (16, 16)
+    n, pad = 16, 8
+    patches = torch.randn(2, n + pad, ph * pw * 3)
+    coord = torch.zeros(2, n + pad, 2, dtype=torch.long)
+    coord[:, :n, 0] = torch.arange(n) // 4
+    coord[:, :n, 1] = torch.arange(n) % 4
+    valid = torch.zeros(2, n + pad, dtype=torch.bool)
+    valid[:, :n] = True
+    batch = {'patches': patches, 'patch_coord': coord, 'patch_valid': valid}
+
+    with torch.no_grad():
+        out = model.forward_intermediates(batch, output_fmt='NLC', output_dict=True)
+        final, inter = model.forward_intermediates(batch, output_fmt='NLC')
+
+    assert set(out.keys()) == {'image_intermediates', 'image_features', 'patch_valid'}
+    assert torch.equal(out['patch_valid'], valid)
+    assert torch.allclose(out['image_features'], final)
+    assert len(out['image_intermediates']) == len(inter)
