@@ -19,7 +19,7 @@ import pandas as pd
 import torch
 
 from timm.data import create_dataset, create_loader, resolve_data_config, ImageNetInfo, infer_imagenet_subset, \
-    CustomDatasetInfo
+    CustomDatasetInfo, DatasetInfoLabelMapper
 from timm.layers import apply_test_time_pool
 from timm.models import create_model
 from timm.utils import AverageMeter, setup_default_logging, set_jit_fuser, ParseKwargs
@@ -197,6 +197,9 @@ def main():
     if args.num_classes is None:
         assert hasattr(model, 'num_classes'), 'Model must have `num_classes` attr if not set on cmd line/config.'
         args.num_classes = model.num_classes
+    # Preserve metadata before TorchScript/compile/DataParallel wrappers, which do
+    # not consistently forward custom model attributes such as pretrained_cfg.
+    pretrained_cfg = dict(getattr(model, 'pretrained_cfg', {}) or {})
 
     _logger.info(
         f'Model {args.model} created, param count: {sum([m.numel() for m in model.parameters()])}')
@@ -247,10 +250,10 @@ def main():
     )
 
     to_label = None
-    if args.label_type in ('name', 'description', 'detail'):
+    if args.label_type in ('name', 'description', 'detail', 'detailed'):
         dataset_info = None
-        label_names = model.pretrained_cfg.get('label_names', None)
-        label_descriptions = model.pretrained_cfg.get('label_descriptions', None)
+        label_names = pretrained_cfg.get('label_names', None)
+        label_descriptions = pretrained_cfg.get('label_descriptions', None)
         if label_names is not None:
             # custom labels pushed with the model (e.g. fine-tuned on a non-ImageNet dataset)
             dataset_info = CustomDatasetInfo(
@@ -258,19 +261,24 @@ def main():
                 label_descriptions=label_descriptions,
             )
         else:
-            imagenet_subset = infer_imagenet_subset(model)
+            imagenet_subset = infer_imagenet_subset({'num_classes': args.num_classes})
             if imagenet_subset is not None:
                 dataset_info = ImageNetInfo(imagenet_subset)
             else:
                 _logger.error("Cannot deduce ImageNet subset from model, no labelling will be performed.")
         if dataset_info is not None:
-            if args.label_type == 'name':
-                to_label = lambda x: dataset_info.index_to_label_name(x)
-            elif args.label_type == 'detail':
-                to_label = lambda x: dataset_info.index_to_description(x, detailed=True)
-            else:
-                to_label = lambda x: dataset_info.index_to_description(x)
-            to_label = np.vectorize(to_label)
+            to_label = DatasetInfoLabelMapper(dataset_info, label_type=args.label_type)
+            if args.num_classes:
+                coverage = to_label.coverage(args.num_classes)
+                if coverage.missing:
+                    _logger.warning(
+                        f'Label mapping covers {coverage.mapped} of {args.num_classes} classifier outputs; '
+                        'unmapped predictions will use <unmapped:INDEX>.')
+                if coverage.extra:
+                    _logger.warning(
+                        f'Label mapping contains {coverage.extra} indices outside the classifier output range; '
+                        'those labels will be ignored.')
+            to_label = np.vectorize(to_label, otypes=[object])
 
     top_k = min(args.topk, args.num_classes)
     batch_time = AverageMeter()

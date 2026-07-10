@@ -13,7 +13,7 @@ import torch
 from torch import Tensor
 from torch.optim.optimizer import Optimizer
 
-from ._helpers import _check_capturable_devices, _get_value, _init_scalar, _stack_if_compiling
+from ._helpers import _check_capturable_devices, _get_value, _init_scalar
 from ._types import ParamsT
 
 
@@ -425,7 +425,7 @@ def _multi_tensor_adamw(
         bias_correction1 = [1 - beta1 ** _get_value(step) for step in state_steps]
         bias_correction2 = [1 - beta2 ** _get_value(step) for step in state_steps]
 
-        step_size = _stack_if_compiling([(lr / bc) * -1 for bc in bias_correction1])
+        step_size = [(lr / bc) * -1 for bc in bias_correction1]
 
         bias_correction2_sqrt = [bc ** 0.5 for bc in bias_correction2]
 
@@ -450,4 +450,8 @@ def _multi_tensor_adamw(
             torch._foreach_div_(masks, mask_scale)
             exp_avgs = torch._foreach_mul(exp_avgs, masks)
 
-        torch._foreach_addcdiv_(params, exp_avgs, denom, step_size)
+        # Fold the step sizes into the denominator. _foreach_div_ accepts the list
+        # of scalar tensors produced under torch.compile, while the ScalarList
+        # overload of _foreach_addcdiv_ does not.
+        torch._foreach_div_(denom, step_size)
+        torch._foreach_addcdiv_(params, exp_avgs, denom)

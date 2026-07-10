@@ -4,7 +4,7 @@ from .config import resolve_data_config, resolve_model_data_config
 from .constants import *
 from .dataset import ImageDataset, IterableImageDataset, AugMixDataset
 from .dataset_factory import create_dataset
-from .dataset_info import DatasetInfo, CustomDatasetInfo
+from .dataset_info import CustomDatasetInfo, DatasetInfo, DatasetInfoLabelMapper, LabelMappingCoverage
 from .imagenet_info import ImageNetInfo, infer_imagenet_subset
 from .loader import create_loader
 from .mixup import Mixup, FastCollateMixup

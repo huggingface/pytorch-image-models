@@ -386,6 +386,33 @@ def test_adam(optimizer):
     _test_model(optimizer, dict(lr=5e-2))
 
 
+@pytest.mark.skipif(not hasattr(torch, 'compile'), reason='requires torch.compile')
+@pytest.mark.parametrize('optimizer_name', ['adamwlegacy', 'nadamw'])
+@pytest.mark.parametrize('foreach', [None, False, True])
+def test_compiled_foreach_adam_optimizers(optimizer_name, foreach):
+    from timm.optim.adamw import AdamWLegacy
+    from timm.optim.nadamw import NAdamW
+
+    optimizer_cls = AdamWLegacy if optimizer_name == 'adamwlegacy' else NAdamW
+    param = Parameter(torch.ones(4))
+    reference_param = Parameter(param.detach().clone())
+    optimizer = optimizer_cls([param], lr=1e-3, foreach=foreach)
+    reference_optimizer = optimizer_cls([reference_param], lr=1e-3, foreach=False)
+    compiled_step = torch.compile(optimizer.step, backend='eager')
+
+    before = param.detach().clone()
+    for _ in range(2):
+        param.grad = torch.ones_like(param)
+        reference_param.grad = torch.ones_like(reference_param)
+        compiled_step()
+        reference_optimizer.step()
+
+    assert torch.isfinite(param).all()
+    assert not torch.equal(param, before)
+    torch.testing.assert_close(param, reference_param)
+    assert optimizer.state[param]['step'] == 2
+
+
 @pytest.mark.parametrize('optimizer',  ['kron'])
 def test_kron(optimizer):
     _test_rosenbrock(
@@ -400,6 +427,31 @@ def test_muon(optimizer):
         lambda params: create_optimizer_v2(params, optimizer, lr=1e-2)
     )
     _test_model(optimizer, dict(lr=1e-2))
+
+
+@pytest.mark.skipif(not hasattr(torch, 'compile'), reason='requires torch.compile')
+@pytest.mark.parametrize('nesterov', [False, True])
+def test_compiled_muon_fallback(nesterov):
+    from timm.optim.muon import Muon
+
+    # A 1-D parameter is routed through Muon's AdamW/NAdamW fallback.
+    param = Parameter(torch.ones(4))
+    reference_param = Parameter(param.detach().clone())
+    optimizer = Muon([param], lr=1e-3, nesterov=nesterov)
+    reference_optimizer = Muon([reference_param], lr=1e-3, nesterov=nesterov)
+    compiled_step = torch.compile(optimizer.step, backend='eager')
+
+    before = param.detach().clone()
+    for _ in range(2):
+        param.grad = torch.ones_like(param)
+        reference_param.grad = torch.ones_like(reference_param)
+        compiled_step()
+        reference_optimizer.step()
+
+    assert torch.isfinite(param).all()
+    assert not torch.equal(param, before)
+    torch.testing.assert_close(param, reference_param)
+    assert optimizer.state[param]['step'] == 2
 
 
 @pytest.mark.parametrize('optimizer',  ['adamuon', 'nadamuon'])
@@ -709,4 +761,3 @@ def test_csgdw(optimizer):
         lambda params: create_optimizer_v2(params, optimizer, lr=5e-4)
     )
     _test_model(optimizer, dict(lr=5e-4))
-
