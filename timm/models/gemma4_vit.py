@@ -910,7 +910,8 @@ class Gemma4VitEncoder(nn.Module):
             stop_early: bool = False,
             output_fmt: str = 'NCHW',
             intermediates_only: bool = False,
-    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+            output_dict: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]], Dict[str, Any]]:
         """Forward features returning intermediates.
 
         Args:
@@ -922,6 +923,10 @@ class Gemma4VitEncoder(nn.Module):
             stop_early: Stop iterating after last needed intermediate.
             output_fmt: Output format ('NCHW' or 'NLC'). NCHW requires a fixed full grid.
             intermediates_only: Only return intermediate features.
+            output_dict: Return a dict matching the NaFlexVit intermediates contract:
+                'image_intermediates' (+ 'image_features' unless ``intermediates_only``) and
+                'patch_valid' aligned with the token sequence (all-True for dense image input;
+                gemma4 has no patch dropout, so it always equals the input validity).
         """
         assert output_fmt in ('NCHW', 'NLC')
         reshape = output_fmt == 'NCHW'
@@ -958,6 +963,13 @@ class Gemma4VitEncoder(nn.Module):
             pW = int(position_ids[..., 0].max().item()) + 1
             pH = int(position_ids[..., 1].max().item()) + 1
             intermediates = [y.reshape(B, pH, pW, -1).permute(0, 3, 1, 2).contiguous() for y in intermediates]
+
+        if output_dict:
+            result_dict: Dict[str, Any] = {'image_intermediates': intermediates}
+            if not intermediates_only:
+                result_dict['image_features'] = x
+            result_dict['patch_valid'] = ~padding_positions
+            return result_dict
 
         if intermediates_only:
             return intermediates
