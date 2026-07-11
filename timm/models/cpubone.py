@@ -168,7 +168,7 @@ class MBConv(nn.Module):
             stride: int = 1,
             mid_channels: Optional[int] = None,
             expand_ratio: float = 6,
-            grouping: int = 1,
+            expand_groups: int = 1,
             use_bias: Tuple[bool, bool, bool] = (False, False, False),
             norm_layer: Tuple[Optional[Type[nn.Module]], ...] = (nn.BatchNorm2d, nn.BatchNorm2d, nn.BatchNorm2d),
             act_layer: Tuple[Optional[Type[nn.Module]], ...] = (nn.ReLU6, nn.ReLU6, None),
@@ -182,7 +182,7 @@ class MBConv(nn.Module):
             mid_channels,
             1,
             stride=1,
-            groups=grouping,
+            groups=expand_groups,
             norm_layer=norm_layer[0],
             act_layer=act_layer[0],
             use_bias=use_bias[0],
@@ -225,7 +225,7 @@ class FusedMBConv(nn.Module):
             stride: int = 1,
             mid_channels: Optional[int] = None,
             expand_ratio: float = 6,
-            groups: int = 1,
+            expand_groups: int = 1,
             use_bias: Tuple[bool, bool] = (False, False),
             norm_layer: Tuple[Optional[Type[nn.Module]], ...] = (nn.BatchNorm2d, nn.BatchNorm2d),
             act_layer: Tuple[Optional[Type[nn.Module]], ...] = (nn.ReLU6, None),
@@ -238,7 +238,7 @@ class FusedMBConv(nn.Module):
             mid_channels,
             kernel_size,
             stride,
-            groups=groups,
+            groups=expand_groups,
             use_bias=use_bias[0],
             norm_layer=norm_layer[0],
             act_layer=act_layer[0],
@@ -267,9 +267,9 @@ class ConvAttention(nn.Module):
             head_dim_mul: float = 1.0,
             att_stride: int = 4,
             att_kernel: int = 7,
-            fuseconv: bool = False,
-            smallkernel: bool = False,
-            lose_transpose: bool = False,
+            fuse_out_proj: bool = False,
+            small_kernels: bool = False,
+            upsample_mode: str = 'transpose',
     ):
         super().__init__()
         self.num_heads = int(max(1, (input_dim * head_dim_mul) // 30))
@@ -281,7 +281,7 @@ class ConvAttention(nn.Module):
         self.conv_proj = ConvLayer(
             input_dim,
             input_dim,
-            kernel_size=2 if smallkernel else att_kernel,
+            kernel_size=2 if small_kernels else att_kernel,
             stride=att_stride,
             groups=input_dim,
             norm_layer=nn.BatchNorm2d,
@@ -292,14 +292,12 @@ class ConvAttention(nn.Module):
         self.o_proj_inpdim = self.head_dim * self.num_heads
         self.o_proj = nn.Conv2d(self.o_proj_inpdim, input_dim, kernel_size=1, stride=1, padding=0)
 
-        # NOTE the att_stride == 1 case replaces the module created just before; the redundant first init is
-        # kept so the RNG stream matches the original implementation's parameter initialization exactly
         self.upsampling = nn.ConvTranspose2d(
             input_dim, input_dim, kernel_size=att_stride * 2, stride=att_stride, padding=att_stride // 2, groups=input_dim)
         if att_stride == 1:
             self.upsampling = nn.ConvTranspose2d(input_dim, input_dim, kernel_size=3, stride=1, padding=1, groups=input_dim)
 
-        if fuseconv:
+        if fuse_out_proj:
             self.o_proj = nn.Identity()
             if att_stride == 1:
                 self.upsampling = nn.ConvTranspose2d(self.o_proj_inpdim, input_dim, kernel_size=3, stride=1, padding=1)
@@ -307,9 +305,9 @@ class ConvAttention(nn.Module):
                 self.upsampling = nn.ConvTranspose2d(
                     self.o_proj_inpdim, input_dim, kernel_size=att_stride * 2, stride=att_stride, padding=att_stride // 2)
 
-        if lose_transpose:
+        if upsample_mode == 'nearest':
             upsampling = [nn.Upsample(scale_factor=att_stride, mode="nearest") if att_stride > 1 else nn.Identity()]
-            if fuseconv:
+            if fuse_out_proj:
                 upsampling = [nn.Conv2d(self.o_proj_inpdim, input_dim, kernel_size=1, stride=1, padding=0)] + upsampling
             self.upsampling = nn.Sequential(*upsampling)
 
@@ -340,12 +338,12 @@ class CPUBoneBlock(nn.Module):
             expand_ratio: float = 4,
             norm_layer: Type[nn.Module] = nn.BatchNorm2d,
             act_layer: Type[nn.Module] = nn.Hardswish,
-            fuseconv: bool = False,
-            grouping: int = 1,
+            fused_conv: bool = False,
+            expand_groups: int = 1,
             att_stride: int = 1,
-            mlpexpans: int = 4,
-            smallkernel: bool = False,
-            lose_transpose: bool = False,
+            mlp_ratio: int = 4,
+            small_kernels: bool = False,
+            attn_upsample: str = 'transpose',
             drop_path: float = 0.,
     ):
         super().__init__()
@@ -356,29 +354,29 @@ class CPUBoneBlock(nn.Module):
             att_stride=att_stride,
             att_kernel=att_kernel,
             head_dim_mul=0.5,
-            fuseconv=fuseconv,
-            smallkernel=smallkernel,
-            lose_transpose=lose_transpose,
+            fuse_out_proj=fused_conv,
+            small_kernels=small_kernels,
+            upsample_mode=attn_upsample,
         )
 
         context_module = ResidualBlock(nn.Sequential(nn.GroupNorm(1, in_channels), block), nn.Identity(), drop_path)
         mlp = nn.Sequential(
             nn.GroupNorm(1, in_channels),
-            nn.Conv2d(in_channels, in_channels * mlpexpans, kernel_size=1),
+            nn.Conv2d(in_channels, in_channels * mlp_ratio, kernel_size=1),
             nn.GELU(),
-            nn.Conv2d(in_channels * mlpexpans, in_channels, kernel_size=1),
+            nn.Conv2d(in_channels * mlp_ratio, in_channels, kernel_size=1),
             nn.Dropout(p=0.1),
         )
         context_module = nn.Sequential(context_module, ResidualBlock(mlp, nn.Identity(), drop_path))
 
-        if fuseconv and in_channels < 256:
+        if fused_conv and in_channels < 256:
             local_module = FusedMBConv(
                 in_channels=in_channels,
                 out_channels=in_channels,
                 expand_ratio=expand_ratio,
                 use_bias=(True, False),
-                kernel_size=2 if smallkernel else 3,
-                groups=grouping,
+                kernel_size=2 if small_kernels else 3,
+                expand_groups=expand_groups,
                 norm_layer=(norm_layer, norm_layer),
                 act_layer=(act_layer, None),
             )
@@ -387,9 +385,9 @@ class CPUBoneBlock(nn.Module):
                 in_channels=in_channels,
                 out_channels=in_channels,
                 expand_ratio=expand_ratio,
-                grouping=grouping,
+                expand_groups=expand_groups,
                 use_bias=(True, True, False),
-                kernel_size=2 if smallkernel else 3,
+                kernel_size=2 if small_kernels else 3,
                 norm_layer=(None, None, norm_layer),
                 act_layer=(act_layer, act_layer, None),
             )
@@ -453,16 +451,55 @@ class CPUBone(nn.Module):
             expand_ratio: float = 4,
             norm_layer: LayerType = nn.BatchNorm2d,
             act_layer: LayerType = nn.Hardswish,
-            fastit: bool = False,
-            huge_model: bool = False,
-            bigit: bool = False,
-            grouping: int = 1,
-            smallk_only_lasts: bool = False,
-            lose_transpose: bool = False,
-            just_unfused: bool = False,
+            fused_conv: bool = False,
+            fused_downsample: bool = False,
+            attn_mlp_ratio: int = 2,
+            stem_expand_ratio: float = 2,
+            downsample_expand_ratios: Optional[Tuple[float, ...]] = None,
+            expand_groups: int = 1,
+            small_kernels: bool = False,
+            attn_upsample: str = 'transpose',
     ) -> None:
+        """
+        Args:
+            width_list: Channel width of the stem and each of the four stages.
+            depth_list: Number of blocks in the stem and each of the four stages.
+            in_chans: Number of input image channels.
+            num_classes: Number of classifier output classes.
+            global_pool: Global pooling type, only 'avg' is supported.
+            head_widths: Hidden widths of the classification head (in_conv, pre_classifier).
+            drop_rate: Classifier dropout rate.
+            drop_path_rate: Stochastic depth rate.
+            expand_ratio: Default expand ratio of MBConv / FusedMBConv blocks.
+            norm_layer: Normalization layer.
+            act_layer: Activation layer.
+            fused_conv: Use FusedMBConv instead of MBConv in the stem, conv stages, and block local
+                branches; also folds the attention output projection into its upsampling layer.
+            fused_downsample: Use FusedMBConv for the downsample blocks of the attention stages.
+            attn_mlp_ratio: MLP expansion ratio in the attention (CPUBoneBlock) stages.
+            stem_expand_ratio: Expand ratio of the stem blocks.
+            downsample_expand_ratios: Per-stage expand ratios of the four stride-2 downsample
+                blocks, None uses `expand_ratio` everywhere.
+            expand_groups: Groups of the expand conv in MBConv / FusedMBConv blocks.
+            small_kernels: Use 2x2 kernels in the attention stages (attention conv_proj and the
+                local conv branch).
+            attn_upsample: Upsampling mode after strided attention, 'transpose' (learned
+                ConvTranspose2d) or 'nearest' (parameter-free nearest-neighbor).
+
+        The ablation flags of the original implementation map onto these args as follows:
+        `fastit=True` → `fused_conv=True, fused_downsample=True, attn_mlp_ratio=4` (adding
+        `just_unfused=True` cancels only `fused_conv`); `bigit=True` →
+        `downsample_expand_ratios=(6, 6, 6, 6)`; `huge_model=True` → `stem_expand_ratio=4,
+        downsample_expand_ratios=(6, 6, 6, expand_ratio)`; `grouping` → `expand_groups`;
+        `smallk_only_lasts` → `small_kernels`; `lose_transpose=True` → `attn_upsample='nearest'`.
+        """
         super().__init__()
         assert global_pool == "avg", "CPUBone only supports average pooling"
+        assert attn_upsample in ('transpose', 'nearest')
+        num_stages = len(width_list) - 1
+        if downsample_expand_ratios is None:
+            downsample_expand_ratios = (expand_ratio,) * num_stages
+        assert len(downsample_expand_ratios) == num_stages
         self.num_classes = num_classes
         self.num_features = width_list[-1]
         self.head_hidden_size = head_widths[-1]
@@ -471,13 +508,14 @@ class CPUBone(nn.Module):
         self.expand_ratio = expand_ratio
         self.norm_layer = get_norm_layer(norm_layer)
         self.act_layer = get_act_layer(act_layer)
-        self.fuseconv = fastit and not just_unfused
-        self.fastit = fastit
-        self.huge_model = huge_model
-        self.bigit = bigit
-        self.grouping = grouping
-        self.smallk_only_lasts = smallk_only_lasts
-        self.lose_transpose = lose_transpose
+        self.fused_conv = fused_conv
+        self.fused_downsample = fused_downsample
+        self.attn_mlp_ratio = attn_mlp_ratio
+        self.stem_expand_ratio = stem_expand_ratio
+        self.downsample_expand_ratios = tuple(downsample_expand_ratios)
+        self.expand_groups = expand_groups
+        self.small_kernels = small_kernels
+        self.attn_upsample = attn_upsample
 
         # stochastic depth: linear ramp of drop rates across all blocks (downsample blocks have no
         # shortcut and ignore theirs)
@@ -495,7 +533,7 @@ class CPUBone(nn.Module):
             if stage_num >= 3:
                 blocks, in_channels = self._build_attention_stage(in_channels, width, depth, stage_num, stage_dpr)
             else:
-                blocks, in_channels = self._build_conv_stage(in_channels, width, depth, stage_dpr)
+                blocks, in_channels = self._build_conv_stage(in_channels, width, depth, stage_num, stage_dpr)
             stages.append(nn.Sequential(*blocks))
             self.feature_info.append(
                 dict(num_chs=in_channels, reduction=2 ** (stage_num + 1), module=f"stages.{stage_num - 1}"))
@@ -534,9 +572,9 @@ class CPUBone(nn.Module):
                 in_channels=in_channels,
                 out_channels=in_channels,
                 stride=1,
-                expand_ratio=4 if self.huge_model else 2,
-                fusedmbconv=self.fuseconv,
-                grouping=self.grouping,
+                expand_ratio=self.stem_expand_ratio,
+                fusedmbconv=self.fused_conv,
+                expand_groups=self.expand_groups,
                 norm_layer=self.norm_layer,
                 act_layer=self.act_layer,
             )
@@ -548,6 +586,7 @@ class CPUBone(nn.Module):
             in_channels: int,
             width: int,
             depth: int,
+            stage_num: int,
             dpr: List[float],
     ) -> Tuple[List[nn.Module], int]:
         """Stages 1-2: `depth` plain conv blocks, downsampling (stride 2) on the first one."""
@@ -558,9 +597,9 @@ class CPUBone(nn.Module):
                 in_channels=in_channels,
                 out_channels=width,
                 stride=stride,
-                expand_ratio=6 if stride == 2 and (self.bigit or self.huge_model) else self.expand_ratio,
-                fusedmbconv=self.fuseconv,
-                grouping=self.grouping,
+                expand_ratio=self.downsample_expand_ratios[stage_num - 1] if stride == 2 else self.expand_ratio,
+                fusedmbconv=self.fused_conv,
+                expand_groups=self.expand_groups,
                 norm_layer=self.norm_layer,
                 act_layer=self.act_layer,
             )
@@ -581,9 +620,9 @@ class CPUBone(nn.Module):
             in_channels=in_channels,
             out_channels=width,
             stride=2,
-            expand_ratio=6 if self.bigit or (self.huge_model and stage_num < 4) else self.expand_ratio,
-            fusedmbconv=self.fastit,
-            grouping=self.grouping,
+            expand_ratio=self.downsample_expand_ratios[stage_num - 1],
+            fusedmbconv=self.fused_downsample,
+            expand_groups=self.expand_groups,
             norm_layer=self.norm_layer,
             act_layer=self.act_layer,
         )
@@ -596,12 +635,12 @@ class CPUBone(nn.Module):
                     expand_ratio=self.expand_ratio,
                     norm_layer=self.norm_layer,
                     act_layer=self.act_layer,
-                    fuseconv=self.fuseconv,
-                    grouping=self.grouping,
+                    fused_conv=self.fused_conv,
+                    expand_groups=self.expand_groups,
                     att_stride=2 if stage_num == 3 else 1,
-                    mlpexpans=4 if self.fastit else 2,
-                    smallkernel=self.smallk_only_lasts,
-                    lose_transpose=self.lose_transpose,
+                    mlp_ratio=self.attn_mlp_ratio,
+                    small_kernels=self.small_kernels,
+                    attn_upsample=self.attn_upsample,
                     drop_path=dpr[i],
                 )
             )
@@ -616,7 +655,7 @@ class CPUBone(nn.Module):
             norm_layer: Type[nn.Module],
             act_layer: Type[nn.Module],
             fusedmbconv: bool = False,
-            grouping: int = 1,
+            expand_groups: int = 1,
             kernel_size: int = 3,
     ) -> nn.Module:
         if fusedmbconv:
@@ -627,7 +666,7 @@ class CPUBone(nn.Module):
                 expand_ratio=expand_ratio,
                 use_bias=(False, False),
                 kernel_size=kernel_size,
-                groups=grouping,
+                expand_groups=expand_groups,
                 norm_layer=(norm_layer, norm_layer),
                 act_layer=(act_layer, None),
             )
@@ -638,7 +677,7 @@ class CPUBone(nn.Module):
                 stride=stride,
                 expand_ratio=expand_ratio,
                 kernel_size=kernel_size,
-                grouping=grouping,
+                expand_groups=expand_groups,
                 use_bias=(False, False, False),
                 norm_layer=(None, None, norm_layer),
                 act_layer=(act_layer, act_layer, None),
