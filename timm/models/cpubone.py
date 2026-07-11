@@ -14,7 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import LayerType, get_act_layer, get_norm_layer
+from timm.layers import DropPath, LayerType, calculate_drop_path_rates, get_act_layer, get_norm_layer
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_module
@@ -89,15 +89,17 @@ class ResidualBlock(nn.Module):
             self,
             main: nn.Module,
             shortcut: Optional[nn.Module] = None,
+            drop_path: float = 0.,
     ):
         super().__init__()
         self.main = main
         self.shortcut = shortcut
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.shortcut is None:
             return self.main(x)
-        return self.main(x) + self.shortcut(x)
+        return self.drop_path(self.main(x)) + self.shortcut(x)
 
 
 class ConvLayer(nn.Module):
@@ -344,6 +346,7 @@ class CPUBoneBlock(nn.Module):
             mlpexpans: int = 4,
             smallkernel: bool = False,
             lose_transpose: bool = False,
+            drop_path: float = 0.,
     ):
         super().__init__()
         att_kernel = 5 if att_stride > 1 else 3
@@ -358,7 +361,7 @@ class CPUBoneBlock(nn.Module):
             lose_transpose=lose_transpose,
         )
 
-        context_module = ResidualBlock(nn.Sequential(nn.GroupNorm(1, in_channels), block), nn.Identity())
+        context_module = ResidualBlock(nn.Sequential(nn.GroupNorm(1, in_channels), block), nn.Identity(), drop_path)
         mlp = nn.Sequential(
             nn.GroupNorm(1, in_channels),
             nn.Conv2d(in_channels, in_channels * mlpexpans, kernel_size=1),
@@ -366,7 +369,7 @@ class CPUBoneBlock(nn.Module):
             nn.Conv2d(in_channels * mlpexpans, in_channels, kernel_size=1),
             nn.Dropout(p=0.1),
         )
-        context_module = nn.Sequential(context_module, ResidualBlock(mlp, nn.Identity()))
+        context_module = nn.Sequential(context_module, ResidualBlock(mlp, nn.Identity(), drop_path))
 
         if fuseconv and in_channels < 256:
             local_module = FusedMBConv(
@@ -391,7 +394,7 @@ class CPUBoneBlock(nn.Module):
                 act_layer=(act_layer, act_layer, None),
             )
 
-        self.total = nn.Sequential(context_module, ResidualBlock(local_module, nn.Identity()))
+        self.total = nn.Sequential(context_module, ResidualBlock(local_module, nn.Identity(), drop_path))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.total(x)
@@ -446,6 +449,7 @@ class CPUBone(nn.Module):
             global_pool: str = "avg",
             head_widths: Tuple[int, int] = (1536, 1600),
             drop_rate: float = 0.0,
+            drop_path_rate: float = 0.0,
             expand_ratio: float = 4,
             norm_layer: LayerType = nn.BatchNorm2d,
             act_layer: LayerType = nn.Hardswish,
@@ -475,16 +479,23 @@ class CPUBone(nn.Module):
         self.smallk_only_lasts = smallk_only_lasts
         self.lose_transpose = lose_transpose
 
-        self.stem, in_channels = self._build_stem(in_chans, width_list[0], depth_list[0])
+        # stochastic depth: linear ramp of drop rates across all blocks (downsample blocks have no
+        # shortcut and ignore theirs)
+        dpr = calculate_drop_path_rates(drop_path_rate, sum(depth_list))
+
+        self.stem, in_channels = self._build_stem(in_chans, width_list[0], depth_list[0], dpr[:depth_list[0]])
+        block_idx = depth_list[0]
 
         # stages 1-4: early stages use plain conv blocks, later stages add attention
         stages = []
         self.feature_info = []
         for stage_num, (width, depth) in enumerate(zip(width_list[1:], depth_list[1:]), start=1):
+            stage_dpr = dpr[block_idx:block_idx + depth]
+            block_idx += depth
             if stage_num >= 3:
-                blocks, in_channels = self._build_attention_stage(in_channels, width, depth, stage_num)
+                blocks, in_channels = self._build_attention_stage(in_channels, width, depth, stage_num, stage_dpr)
             else:
-                blocks, in_channels = self._build_conv_stage(in_channels, width, depth)
+                blocks, in_channels = self._build_conv_stage(in_channels, width, depth, stage_dpr)
             stages.append(nn.Sequential(*blocks))
             self.feature_info.append(
                 dict(num_chs=in_channels, reduction=2 ** (stage_num + 1), module=f"stages.{stage_num - 1}"))
@@ -499,7 +510,13 @@ class CPUBone(nn.Module):
             act_layer=self.act_layer,
         )
 
-    def _build_stem(self, in_channels: int, stem_width: int, depth: int) -> Tuple[nn.Sequential, int]:
+    def _build_stem(
+            self,
+            in_channels: int,
+            stem_width: int,
+            depth: int,
+            dpr: List[float],
+    ) -> Tuple[nn.Sequential, int]:
         """Stem: downsample by 2, then `depth` local blocks at the stem width."""
         blocks = [
             ConvLayer(
@@ -512,7 +529,7 @@ class CPUBone(nn.Module):
             )
         ]
         in_channels = stem_width
-        for _ in range(depth):
+        for i in range(depth):
             block = self.build_local_block(
                 in_channels=in_channels,
                 out_channels=in_channels,
@@ -523,10 +540,16 @@ class CPUBone(nn.Module):
                 norm_layer=self.norm_layer,
                 act_layer=self.act_layer,
             )
-            blocks.append(ResidualBlock(block, nn.Identity()))
+            blocks.append(ResidualBlock(block, nn.Identity(), dpr[i]))
         return nn.Sequential(*blocks), in_channels
 
-    def _build_conv_stage(self, in_channels: int, width: int, depth: int) -> Tuple[List[nn.Module], int]:
+    def _build_conv_stage(
+            self,
+            in_channels: int,
+            width: int,
+            depth: int,
+            dpr: List[float],
+    ) -> Tuple[List[nn.Module], int]:
         """Stages 1-2: `depth` plain conv blocks, downsampling (stride 2) on the first one."""
         blocks = []
         for i in range(depth):
@@ -541,7 +564,7 @@ class CPUBone(nn.Module):
                 norm_layer=self.norm_layer,
                 act_layer=self.act_layer,
             )
-            blocks.append(ResidualBlock(block, nn.Identity() if stride == 1 else None))
+            blocks.append(ResidualBlock(block, nn.Identity() if stride == 1 else None, dpr[i]))
             in_channels = width
         return blocks, in_channels
 
@@ -551,6 +574,7 @@ class CPUBone(nn.Module):
             width: int,
             depth: int,
             stage_num: int,
+            dpr: List[float],
     ) -> Tuple[List[nn.Module], int]:
         """Stages 3-4: one downsampling conv block, followed by `depth` CPUBoneBlocks (attention + local conv)."""
         downsample = self.build_local_block(
@@ -565,7 +589,7 @@ class CPUBone(nn.Module):
         )
         in_channels = width
         blocks = [ResidualBlock(downsample, None)]
-        for _ in range(depth):
+        for i in range(depth):
             blocks.append(
                 CPUBoneBlock(
                     in_channels=in_channels,
@@ -578,6 +602,7 @@ class CPUBone(nn.Module):
                     mlpexpans=4 if self.fastit else 2,
                     smallkernel=self.smallk_only_lasts,
                     lose_transpose=self.lose_transpose,
+                    drop_path=dpr[i],
                 )
             )
         return blocks, in_channels
