@@ -25,7 +25,9 @@ def test_backbone_equal():
         out_lay = out[key]
         out_lay_orig = out_orig[key]
         print(key, out_lay.shape, out_lay_orig.shape)
-        assert torch.equal(out_lay, out_lay_orig), f"Equality test failed in output '{key}'"
+        # allclose instead of equal: F.scaled_dot_product_attention uses fused kernels whose
+        # float accumulation order differs from the original manual implementation (~1e-5 max diff)
+        assert torch.allclose(out_lay, out_lay_orig, atol=1e-4), f"Equality test failed in output '{key}'"
 
 
 def test_create_model():

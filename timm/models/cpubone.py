@@ -7,7 +7,6 @@ Conference on Computer Vision and Pattern Recognition (CVPR), 2025
 Adapted from the original implementation (see `cpubone_original.py`) to idiomatic timm code.
 Remaining cleanup steps are tracked in `TODO_cpubone.md` at the repository root.
 """
-import math
 from typing import Any, Dict, List, Optional, Tuple, Type
 
 import torch
@@ -24,12 +23,18 @@ __all__ = ['CPUBoneBackbone', 'CPUBoneCls']
 
 
 def remap_legacy_state_dict(state_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
-    """Remap keys from older checkpoint formats to the current model layout."""
+    """Remap keys from original CPUBone checkpoints to the current model layout."""
     remapped = {}
     for k, v in state_dict.items():
         # conv_proj was nn.Sequential([conv, bn]) → now ConvLayer with .conv / .norm
         k = k.replace(".conv_proj.0.", ".conv_proj.conv.")
         k = k.replace(".conv_proj.1.", ".conv_proj.norm.")
+        # head was OpSequential([ConvLayer, AdaptiveAvgPool2d, LinearLayer, LinearLayer]) → named children
+        k = k.replace("head.op_list.0.", "head.in_conv.")
+        k = k.replace("head.op_list.2.", "head.pre_classifier.")
+        k = k.replace("head.op_list.3.", "head.classifier.")
+        # input_stem / stages were OpSequential (module list under .op_list) → plain nn.Sequential
+        k = k.replace(".op_list.", ".")
         remapped[k] = v
     return remapped
 
@@ -243,18 +248,6 @@ class FusedMBConv(nn.Module):
         return x
 
 
-class SDALayer(nn.Module):
-    """Scaled dot-product attention."""
-
-    def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
-        d_k = q.size()[-1]
-        attn_logits = torch.matmul(q, k.transpose(-2, -1))
-        attn_logits = attn_logits / math.sqrt(d_k)
-        attention = F.softmax(attn_logits, dim=-1)
-        values = torch.matmul(attention, v)
-        return values
-
-
 @register_notrace_module  # forward() reshapes based on runtime tensor shapes, not FX-traceable
 class ConvAttention(nn.Module):
     def __init__(
@@ -284,7 +277,6 @@ class ConvAttention(nn.Module):
             act_layer=None,
         )
         self.pwise = nn.Sequential(nn.Conv2d(input_dim, total_dim, kernel_size=1, stride=1, padding=0, bias=False))
-        self.sda = SDALayer()
 
         self.o_proj_inpdim = self.head_dim * self.num_heads
         self.o_proj = nn.Conv2d(self.o_proj_inpdim, input_dim, kernel_size=1, stride=1, padding=0)
@@ -321,7 +313,7 @@ class ConvAttention(nn.Module):
         qkv = qkv.permute(0, 1, 3, 2)  # [N, Head, SeqLen, Dims]
         q, k, v = qkv.chunk(3, dim=3)
 
-        values = self.sda(q, k, v)
+        values = F.scaled_dot_product_attention(q, k, v)
         o = self.o_proj(values.permute(0, 1, 3, 2).reshape(N, self.o_proj_inpdim, h, w))
 
         o = self.upsampling(o)
