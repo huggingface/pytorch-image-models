@@ -26,7 +26,7 @@ def remap_legacy_state_dict(state_dict: Dict[str, torch.Tensor]) -> Dict[str, to
     """Remap keys from original CPUBone checkpoints to the current model layout."""
     remapped = {}
     for k, v in state_dict.items():
-        # conv_proj was nn.Sequential([conv, bn]) → now ConvLayer with .conv / .norm
+        # conv_proj was nn.Sequential([conv, bn]) → now ConvLayer with .conv / .bn
         k = k.replace(".conv_proj.0.", ".conv_proj.conv.")
         k = k.replace(".conv_proj.1.", ".conv_proj.norm.")
         # head was OpSequential([ConvLayer, AdaptiveAvgPool2d, LinearLayer, LinearLayer]) → named children
@@ -96,13 +96,19 @@ class ResidualBlock(nn.Module):
 
 
 class ConvLayer(nn.Module):
+    """Conv + optional norm + optional act.
+
+    NOTE deliberately not timm's ConvNormAct: CPUBone needs activation-without-norm and an
+    asymmetric left/top pad for even kernels at stride 1, both of which ConvNormAct can only
+    express by subverting its module layout (e.g. an act module in the `bn` slot).
+    """
+
     def __init__(
             self,
             in_channels: int,
             out_channels: int,
             kernel_size: int = 3,
             stride: int = 1,
-            dilation: int = 1,
             groups: int = 1,
             use_bias: bool = False,
             norm_layer: Optional[Type[nn.Module]] = nn.BatchNorm2d,
@@ -117,10 +123,9 @@ class ConvLayer(nn.Module):
                 nn.Conv2d(
                     in_channels,
                     out_channels,
-                    kernel_size=(kernel_size, kernel_size),
-                    stride=(stride, stride),
+                    kernel_size=kernel_size,
+                    stride=stride,
                     padding=0,
-                    dilation=(dilation, dilation),
                     groups=groups,
                     bias=use_bias,
                 ),
@@ -129,10 +134,9 @@ class ConvLayer(nn.Module):
             self.conv = nn.Conv2d(
                 in_channels,
                 out_channels,
-                kernel_size=(kernel_size, kernel_size),
-                stride=(stride, stride),
+                kernel_size=kernel_size,
+                stride=stride,
                 padding=padding,
-                dilation=(dilation, dilation),
                 groups=groups,
                 bias=use_bias,
             )
