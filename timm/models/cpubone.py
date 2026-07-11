@@ -31,6 +31,8 @@ def remap_legacy_state_dict(state_dict: Dict[str, torch.Tensor]) -> Dict[str, to
         # conv_proj was nn.Sequential([conv, bn]) → now ConvLayer with .conv / .bn
         k = k.replace(".conv_proj.0.", ".conv_proj.conv.")
         k = k.replace(".conv_proj.1.", ".conv_proj.norm.")
+        # pwise was a single-element nn.Sequential → now a plain nn.Conv2d
+        k = k.replace(".pwise.0.", ".pwise.")
         # head was OpSequential([ConvLayer, AdaptiveAvgPool2d, LinearLayer, LinearLayer]) → named children
         k = k.replace("head.op_list.0.", "head.in_conv.")
         k = k.replace("head.op_list.2.", "head.pre_classifier.")
@@ -259,7 +261,9 @@ class FusedMBConv(nn.Module):
         return x
 
 
-@register_notrace_module  # forward() reshapes based on runtime tensor shapes, not FX-traceable
+# kept as an FX leaf: the shape-dependent reshape/crop in forward() traces fine on recent torch,
+# but leaf status keeps older-torch compatibility, matching other timm attention modules
+@register_notrace_module
 class ConvAttention(nn.Module):
     def __init__(
             self,
@@ -287,7 +291,7 @@ class ConvAttention(nn.Module):
             norm_layer=nn.BatchNorm2d,
             act_layer=None,
         )
-        self.pwise = nn.Sequential(nn.Conv2d(input_dim, total_dim, kernel_size=1, stride=1, padding=0, bias=False))
+        self.pwise = nn.Conv2d(input_dim, total_dim, kernel_size=1, stride=1, padding=0, bias=False)
 
         self.o_proj_inpdim = self.head_dim * self.num_heads
         self.o_proj = nn.Conv2d(self.o_proj_inpdim, input_dim, kernel_size=1, stride=1, padding=0)
@@ -312,12 +316,12 @@ class ConvAttention(nn.Module):
             self.upsampling = nn.Sequential(*upsampling)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        N, C, H, W = x.size()
+        H, W = x.shape[-2:]
 
         xout = self.conv_proj(x)
         xout = self.pwise(xout)
 
-        N, c, h, w = xout.size()
+        N, _, h, w = xout.size()
         qkv = xout.reshape(N, self.num_heads, self.num_keys * self.head_dim, h * w)
         qkv = qkv.permute(0, 1, 3, 2)  # [N, Head, SeqLen, Dims]
         q, k, v = qkv.chunk(3, dim=3)
@@ -326,7 +330,8 @@ class ConvAttention(nn.Module):
         o = self.o_proj(values.permute(0, 1, 3, 2).reshape(N, self.o_proj_inpdim, h, w))
 
         o = self.upsampling(o)
-        return o[:N, :C, :H, :W]
+        # upsampling overshoots when H/W aren't divisible by att_stride: crop back to the input size
+        return o[..., :H, :W]
 
 
 class CPUBoneBlock(nn.Module):
