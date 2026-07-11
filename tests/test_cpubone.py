@@ -3,23 +3,34 @@ import torch
 
 import timm
 from timm.models.cpubone_original import CPUBoneBackbone as CPUBoneBackboneOrig
-from timm.models.cpubone import CPUBoneBackbone
+from timm.models.cpubone import CPUBone
 
 
 def test_backbone_equal():
     torch.manual_seed(42)
-    backbone = CPUBoneBackbone([16, 32, 64, 128, 256], [0, 1, 1, 3, 4])
+    # stem/stages are created first and in the same order as the original backbone,
+    # so their weights match the seeded original even though a head is created afterwards
+    model = CPUBone([16, 32, 64, 128, 256], [0, 1, 1, 3, 4])
     torch.manual_seed(42)
     backbone_orig = CPUBoneBackboneOrig([16, 32, 64, 128, 256], [0, 1, 1, 3, 4])
 
     torch.manual_seed(42)
     x = torch.randn(1, 3, 224, 224)
+
+    # reconstruct the original per-stage output dict by walking stem/stages
     torch.manual_seed(42)
-    out = backbone(x)
+    out = {}
+    feat = model.stem(x)
+    out["stage0"] = feat
+    num_stages = len(model.stages)
+    for stage_num, stage in enumerate(model.stages, start=1):
+        feat = stage(feat)
+        key = "stage_final" if stage_num == num_stages else f"stage{stage_num}"
+        out[key] = feat
+
     torch.manual_seed(42)
     out_orig = backbone_orig(x)
 
-    print(type(backbone), type(backbone_orig))
     print(out.keys(), out_orig.keys())
     for key in out.keys():
         out_lay = out[key]

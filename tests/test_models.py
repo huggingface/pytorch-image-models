@@ -57,7 +57,7 @@ FEAT_INTER_FILTERS = [
     'tiny_vit', 'vovnet', 'tresnet', 'rexnet', 'resnetv2', 'repghost', 'repvit', 'pvt_v2', 'nextvit', 'nest',
     'mambaout', 'inception_next', 'inception_v4', 'hgnet', 'gcvit', 'focalnet', 'efficientformer_v2', 'edgenext',
     'davit', 'rdnet', 'convnext', 'pit', 'starnet', 'shvit', 'fasternet', 'swiftformer', 'ghostnet', 'naflexvit',
-    'csatv2'
+    'csatv2', 'cpubone'
 ]
 
 # transformer / hybrid models don't support full set of spatial / feature APIs and/or have spatial output.
@@ -244,7 +244,7 @@ def test_model_backward(model_name, batch_size):
 
 # models with extra conv/linear layers after pooling
 EARLY_POOL_MODELS = (
-    timm.models.CPUBoneCls,
+    timm.models.CPUBone,
     timm.models.EfficientVit,
     timm.models.EfficientVitLarge,
     timm.models.FasterNet,

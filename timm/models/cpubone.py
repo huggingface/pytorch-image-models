@@ -7,7 +7,7 @@ Conference on Computer Vision and Pattern Recognition (CVPR), 2025
 Adapted from the original implementation (see `cpubone_original.py`) to idiomatic timm code.
 Remaining cleanup steps are tracked in `TODO_cpubone.md` at the repository root.
 """
-from typing import Any, Dict, List, Optional, Tuple, Type
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -16,10 +16,12 @@ import torch.nn.functional as F
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import LayerType, get_act_layer, get_norm_layer
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._features_fx import register_notrace_module
+from ._manipulate import checkpoint_seq
 from ._registry import register_model, generate_default_cfgs
 
-__all__ = ['CPUBoneBackbone', 'CPUBoneCls']
+__all__ = ['CPUBone']
 
 
 def remap_legacy_state_dict(state_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
@@ -33,6 +35,9 @@ def remap_legacy_state_dict(state_dict: Dict[str, torch.Tensor]) -> Dict[str, to
         k = k.replace("head.op_list.0.", "head.in_conv.")
         k = k.replace("head.op_list.2.", "head.pre_classifier.")
         k = k.replace("head.op_list.3.", "head.classifier.")
+        # backbone was a submodule → stem / stages are now top-level children
+        k = k.replace("backbone.input_stem.", "stem.")
+        k = k.replace("backbone.stages.", "stages.")
         # input_stem / stages were OpSequential (module list under .op_list) → plain nn.Sequential
         k = k.replace(".op_list.", ".")
         remapped[k] = v
@@ -431,12 +436,16 @@ class ClsHead(nn.Module):
         return self.classifier(x)
 
 
-class CPUBoneBackbone(nn.Module):
+class CPUBone(nn.Module):
     def __init__(
             self,
             width_list: List[int],
             depth_list: List[int],
-            in_channels: int = 3,
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            global_pool: str = "avg",
+            head_widths: Tuple[int, int] = (1536, 1600),
+            drop_rate: float = 0.0,
             expand_ratio: float = 4,
             norm_layer: LayerType = nn.BatchNorm2d,
             act_layer: LayerType = nn.Hardswish,
@@ -449,6 +458,12 @@ class CPUBoneBackbone(nn.Module):
             just_unfused: bool = False,
     ) -> None:
         super().__init__()
+        assert global_pool == "avg", "CPUBone only supports average pooling"
+        self.num_classes = num_classes
+        self.num_features = width_list[-1]
+        self.head_hidden_size = head_widths[-1]
+        self.grad_checkpointing = False
+
         self.expand_ratio = expand_ratio
         self.norm_layer = get_norm_layer(norm_layer)
         self.act_layer = get_act_layer(act_layer)
@@ -460,16 +475,29 @@ class CPUBoneBackbone(nn.Module):
         self.smallk_only_lasts = smallk_only_lasts
         self.lose_transpose = lose_transpose
 
-        self.input_stem, in_channels = self._build_stem(in_channels, width_list[0], depth_list[0])
+        self.stem, in_channels = self._build_stem(in_chans, width_list[0], depth_list[0])
 
         # stages 1-4: early stages use plain conv blocks, later stages add attention
-        self.stages = nn.ModuleList()
+        stages = []
+        self.feature_info = []
         for stage_num, (width, depth) in enumerate(zip(width_list[1:], depth_list[1:]), start=1):
             if stage_num >= 3:
                 blocks, in_channels = self._build_attention_stage(in_channels, width, depth, stage_num)
             else:
                 blocks, in_channels = self._build_conv_stage(in_channels, width, depth)
-            self.stages.append(nn.Sequential(*blocks))
+            stages.append(nn.Sequential(*blocks))
+            self.feature_info.append(
+                dict(num_chs=in_channels, reduction=2 ** (stage_num + 1), module=f"stages.{stage_num - 1}"))
+        self.stages = nn.Sequential(*stages)
+
+        self.head = ClsHead(
+            in_channels=width_list[-1],
+            width_list=list(head_widths),
+            num_classes=num_classes,
+            dropout=drop_rate,
+            norm_layer=self.norm_layer,
+            act_layer=self.act_layer,
+        )
 
     def _build_stem(self, in_channels: int, stem_width: int, depth: int) -> Tuple[nn.Sequential, int]:
         """Stem: downsample by 2, then `depth` local blocks at the stem width."""
@@ -592,81 +620,16 @@ class CPUBoneBackbone(nn.Module):
             )
         return block
 
-    def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
-        x = self.input_stem(x)
-        output_dict = {"stage0": x}
-        num_stages = len(self.stages)
-        for stage_num, stage in enumerate(self.stages, start=1):
-            x = stage(x)
-            key = "stage_final" if stage_num == num_stages else f"stage{stage_num}"
-            output_dict[key] = x
-        return output_dict
-
-
-class CPUBoneCls(nn.Module):
-    def __init__(
-            self,
-            width_list: List[int],
-            depth_list: List[int],
-            in_chans: int = 3,
-            num_classes: int = 1000,
-            global_pool: str = "avg",
-            head_widths: Tuple[int, int] = (1536, 1600),
-            drop_rate: float = 0.0,
-            expand_ratio: float = 4,
-            norm_layer: LayerType = nn.BatchNorm2d,
-            act_layer: LayerType = nn.Hardswish,
-            fastit: bool = False,
-            huge_model: bool = False,
-            bigit: bool = False,
-            grouping: int = 1,
-            smallk_only_lasts: bool = False,
-            lose_transpose: bool = False,
-            just_unfused: bool = False,
-    ) -> None:
-        super().__init__()
-        assert global_pool == "avg", "CPUBone only supports average pooling"
-        norm_layer = get_norm_layer(norm_layer)
-        act_layer = get_act_layer(act_layer)
-        self.num_classes = num_classes
-        self.num_features = width_list[-1]
-        self.head_hidden_size = head_widths[-1]
-
-        self.backbone = CPUBoneBackbone(
-            width_list=width_list,
-            depth_list=depth_list,
-            in_channels=in_chans,
-            expand_ratio=expand_ratio,
-            norm_layer=norm_layer,
-            act_layer=act_layer,
-            fastit=fastit,
-            huge_model=huge_model,
-            bigit=bigit,
-            grouping=grouping,
-            smallk_only_lasts=smallk_only_lasts,
-            lose_transpose=lose_transpose,
-            just_unfused=just_unfused,
-        )
-        self.head = ClsHead(
-            in_channels=width_list[-1],
-            width_list=list(head_widths),
-            num_classes=num_classes,
-            dropout=drop_rate,
-            norm_layer=norm_layer,
-            act_layer=act_layer,
-        )
-        self.feature_info = [dict(num_chs=width_list[0], reduction=2, module="backbone.input_stem")]
-        self.feature_info += [
-            dict(num_chs=width, reduction=2 ** (i + 2), module=f"backbone.stages.{i}")
-            for i, width in enumerate(width_list[1:])
-        ]
-
     @torch.jit.ignore
     def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
         return dict(
-            stem=r'^backbone\.input_stem',
-            blocks=r'^backbone\.stages\.(\d+)',
+            stem=r'^stem',
+            blocks=r'^stages\.(\d+)',
         )
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable: bool = True):
+        self.grad_checkpointing = enable
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
@@ -678,8 +641,67 @@ class CPUBoneCls(nn.Module):
             assert global_pool == "avg", "CPUBone only supports average pooling"
         self.head.reset(num_classes)
 
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
+            norm: Apply norm layer to compatible intermediates (no-op, CPUBone has no final norm)
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.stages), indices)
+
+        x = self.stem(x)
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            stages = self.stages
+        else:
+            stages = self.stages[:max_index + 1]
+        for feat_idx, stage in enumerate(stages):
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint_seq(stage, x)
+            else:
+                x = stage(x)
+            if feat_idx in take_indices:
+                intermediates.append(x)
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ):
+        """Prune layers not required for specified intermediates."""
+        take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        self.stages = self.stages[:max_index + 1]
+        if prune_head:
+            self.reset_classifier(0)
+        return take_indices
+
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
-        return self.backbone(x)["stage_final"]
+        x = self.stem(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.stages, x)
+        else:
+            x = self.stages(x)
+        return x
 
     def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
         return self.head(x, pre_logits=pre_logits)
@@ -705,7 +727,7 @@ def _cfg(url: str = "", **kwargs: Any) -> Dict[str, Any]:
         "interpolation": "bicubic",
         "mean": IMAGENET_DEFAULT_MEAN,
         "std": IMAGENET_DEFAULT_STD,
-        "first_conv": "backbone.input_stem.0.conv",
+        "first_conv": "stem.0.conv",
         "classifier": "head.classifier.linear",
         **kwargs,
     }
@@ -725,73 +747,73 @@ default_cfgs = generate_default_cfgs({
 })
 
 
-def _create_cpubone(variant: str, pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
+def _create_cpubone(variant: str, pretrained: bool = False, **kwargs: Any) -> CPUBone:
     model = build_model_with_cfg(
-        CPUBoneCls,
+        CPUBone,
         variant,
         pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
-        feature_cfg=dict(feature_cls="hook"),
+        feature_cfg=dict(out_indices=(0, 1, 2, 3), flatten_sequential=True),
         **kwargs,
     )
     return model
 
 
 @register_model
-def cpubone_nano(pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
+def cpubone_nano(pretrained: bool = False, **kwargs: Any) -> CPUBone:
     model_args = dict(width_list=[12, 24, 48, 96, 192], depth_list=[0, 1, 1, 1, 2])
     return _create_cpubone("cpubone_nano", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def cpubone_t0(pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
+def cpubone_t0(pretrained: bool = False, **kwargs: Any) -> CPUBone:
     model_args = dict(width_list=[12, 24, 48, 96, 192], depth_list=[0, 1, 1, 1, 3])
     return _create_cpubone("cpubone_t0", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def cpubone_s0(pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
+def cpubone_s0(pretrained: bool = False, **kwargs: Any) -> CPUBone:
     model_args = dict(width_list=[12, 24, 48, 96, 192], depth_list=[0, 1, 1, 2, 3])
     return _create_cpubone("cpubone_s0", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def cpubone_s1(pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
+def cpubone_s1(pretrained: bool = False, **kwargs: Any) -> CPUBone:
     model_args = dict(width_list=[14, 28, 56, 112, 224], depth_list=[0, 1, 1, 2, 3])
     return _create_cpubone("cpubone_s1", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def cpubone_b0(pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
+def cpubone_b0(pretrained: bool = False, **kwargs: Any) -> CPUBone:
     model_args = dict(width_list=[16, 32, 64, 128, 256], depth_list=[0, 1, 1, 3, 4])
     return _create_cpubone("cpubone_b0", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def cpubone_b1(pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
+def cpubone_b1(pretrained: bool = False, **kwargs: Any) -> CPUBone:
     model_args = dict(width_list=[16, 32, 64, 128, 256], depth_list=[0, 1, 1, 5, 5])
     return _create_cpubone("cpubone_b1", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def cpubone_b15(pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
+def cpubone_b15(pretrained: bool = False, **kwargs: Any) -> CPUBone:
     model_args = dict(width_list=[20, 40, 80, 160, 320], depth_list=[0, 1, 1, 6, 6])
     return _create_cpubone("cpubone_b15", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def cpubone_b2(pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
+def cpubone_b2(pretrained: bool = False, **kwargs: Any) -> CPUBone:
     model_args = dict(width_list=[24, 48, 96, 192, 384], depth_list=[0, 1, 1, 6, 6])
     return _create_cpubone("cpubone_b2", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def cpubone_b25(pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
+def cpubone_b25(pretrained: bool = False, **kwargs: Any) -> CPUBone:
     model_args = dict(width_list=[24, 48, 96, 192, 384], depth_list=[0, 2, 3, 6, 6])
     return _create_cpubone("cpubone_b25", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def cpubone_b3(pretrained: bool = False, **kwargs: Any) -> CPUBoneCls:
+def cpubone_b3(pretrained: bool = False, **kwargs: Any) -> CPUBone:
     model_args = dict(width_list=[32, 64, 128, 256, 512], depth_list=[1, 2, 3, 6, 6])
     return _create_cpubone("cpubone_b3", pretrained=pretrained, **dict(model_args, **kwargs))
