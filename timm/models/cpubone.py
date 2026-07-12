@@ -803,16 +803,11 @@ def _cfg(url: str = "", **kwargs: Any) -> Dict[str, Any]:
 
 
 default_cfgs = generate_default_cfgs({
-    "cpubone_nano.untrained": _cfg(),
-    "cpubone_t0.untrained": _cfg(),
-    "cpubone_s0.untrained": _cfg(),
-    "cpubone_s1.untrained": _cfg(),
-    "cpubone_b0.untrained": _cfg(),
-    "cpubone_b1.untrained": _cfg(),
-    "cpubone_b15.untrained": _cfg(),
-    "cpubone_b2.untrained": _cfg(),
-    "cpubone_b25.untrained": _cfg(),
-    "cpubone_b3.untrained": _cfg(),
+    "cpubone_nano.in1k": _cfg(hf_hub_id="Kaeruu/CPUBone", hf_hub_filename="cpubone_nano.safetensors"),
+    "cpubone_b0.in1k": _cfg(hf_hub_id="Kaeruu/CPUBone", hf_hub_filename="cpubone_b0.safetensors"),
+    "cpubone_b1.in1k": _cfg(hf_hub_id="Kaeruu/CPUBone", hf_hub_filename="cpubone_b1.safetensors"),
+    "cpubone_b2.in1k": _cfg(hf_hub_id="Kaeruu/CPUBone", hf_hub_filename="cpubone_b2.safetensors"),
+    "cpubone_b3.in1k": _cfg(hf_hub_id="Kaeruu/CPUBone", hf_hub_filename="cpubone_b3.safetensors"),
 })
 
 
@@ -828,61 +823,86 @@ def _create_cpubone(variant: str, pretrained: bool = False, **kwargs: Any) -> CP
     return model
 
 
+# Variant flags below were decoded from the weight shapes of the released checkpoints (see the
+# CPUBone.__init__ docstring for the mapping from the original ablation flags). All released
+# checkpoints use the fastit/grouping=2/smallk_only_lasts/lose_transpose combination, i.e.
+# fused_conv, fused_downsample, attn_mlp_ratio=4, expand_groups=2, small_kernels, 'nearest'.
+
 @register_model
 def cpubone_nano(pretrained: bool = False, **kwargs: Any) -> CPUBone:
-    model_args = dict(width_list=[12, 24, 48, 96, 192], depth_list=[0, 1, 1, 1, 2])
+    model_args = dict(
+        width_list=[12, 24, 48, 96, 192],
+        depth_list=[0, 1, 1, 1, 2],
+        fused_conv=True,
+        fused_downsample=True,
+        attn_mlp_ratio=4,
+        expand_groups=2,
+        small_kernels=True,
+        attn_upsample="nearest",
+    )
     return _create_cpubone("cpubone_nano", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def cpubone_t0(pretrained: bool = False, **kwargs: Any) -> CPUBone:
-    model_args = dict(width_list=[12, 24, 48, 96, 192], depth_list=[0, 1, 1, 1, 3])
-    return _create_cpubone("cpubone_t0", pretrained=pretrained, **dict(model_args, **kwargs))
-
-
-@register_model
-def cpubone_s0(pretrained: bool = False, **kwargs: Any) -> CPUBone:
-    model_args = dict(width_list=[12, 24, 48, 96, 192], depth_list=[0, 1, 1, 2, 3])
-    return _create_cpubone("cpubone_s0", pretrained=pretrained, **dict(model_args, **kwargs))
-
-
-@register_model
-def cpubone_s1(pretrained: bool = False, **kwargs: Any) -> CPUBone:
-    model_args = dict(width_list=[14, 28, 56, 112, 224], depth_list=[0, 1, 1, 2, 3])
-    return _create_cpubone("cpubone_s1", pretrained=pretrained, **dict(model_args, **kwargs))
-
-
-@register_model
 def cpubone_b0(pretrained: bool = False, **kwargs: Any) -> CPUBone:
-    model_args = dict(width_list=[16, 32, 64, 128, 256], depth_list=[0, 1, 1, 3, 4])
+    model_args = dict(
+        width_list=[16, 32, 64, 128, 256],
+        depth_list=[0, 1, 1, 3, 4],
+        fused_conv=True,
+        fused_downsample=True,
+        attn_mlp_ratio=4,
+        expand_groups=2,
+        small_kernels=True,
+        attn_upsample="nearest",
+    )
     return _create_cpubone("cpubone_b0", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def cpubone_b1(pretrained: bool = False, **kwargs: Any) -> CPUBone:
-    model_args = dict(width_list=[16, 32, 64, 128, 256], depth_list=[0, 1, 1, 5, 5])
+    model_args = dict(
+        width_list=[16, 32, 64, 128, 256],
+        depth_list=[0, 1, 1, 5, 5],
+        fused_conv=True,
+        fused_downsample=True,
+        attn_mlp_ratio=4,
+        downsample_expand_ratios=(6, 6, 6, 6),
+        expand_groups=2,
+        small_kernels=True,
+        attn_upsample="nearest",
+    )
     return _create_cpubone("cpubone_b1", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def cpubone_b15(pretrained: bool = False, **kwargs: Any) -> CPUBone:
-    model_args = dict(width_list=[20, 40, 80, 160, 320], depth_list=[0, 1, 1, 6, 6])
-    return _create_cpubone("cpubone_b15", pretrained=pretrained, **dict(model_args, **kwargs))
-
-
-@register_model
 def cpubone_b2(pretrained: bool = False, **kwargs: Any) -> CPUBone:
-    model_args = dict(width_list=[24, 48, 96, 192, 384], depth_list=[0, 1, 1, 6, 6])
+    model_args = dict(
+        width_list=[24, 48, 96, 192, 384],
+        depth_list=[0, 1, 1, 6, 6],
+        head_widths=(2304, 2560),
+        fused_conv=True,
+        fused_downsample=True,
+        attn_mlp_ratio=4,
+        downsample_expand_ratios=(6, 6, 6, 6),
+        expand_groups=2,
+        small_kernels=True,
+        attn_upsample="nearest",
+    )
     return _create_cpubone("cpubone_b2", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def cpubone_b25(pretrained: bool = False, **kwargs: Any) -> CPUBone:
-    model_args = dict(width_list=[24, 48, 96, 192, 384], depth_list=[0, 2, 3, 6, 6])
-    return _create_cpubone("cpubone_b25", pretrained=pretrained, **dict(model_args, **kwargs))
-
-
-@register_model
 def cpubone_b3(pretrained: bool = False, **kwargs: Any) -> CPUBone:
-    model_args = dict(width_list=[32, 64, 128, 256, 512], depth_list=[1, 2, 3, 6, 6])
+    model_args = dict(
+        width_list=[32, 64, 128, 256, 512],
+        depth_list=[1, 2, 3, 6, 6],
+        fused_conv=True,
+        fused_downsample=True,
+        attn_mlp_ratio=4,
+        stem_expand_ratio=4,
+        downsample_expand_ratios=(6, 6, 6, 6),
+        expand_groups=2,
+        small_kernels=True,
+        attn_upsample="nearest",
+    )
     return _create_cpubone("cpubone_b3", pretrained=pretrained, **dict(model_args, **kwargs))
