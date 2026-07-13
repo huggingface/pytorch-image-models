@@ -799,6 +799,73 @@ def test_naflexvit_forward_intermediates_dict_input():
     with pytest.raises(ValueError, match='patch dropout'):
         model_pd.forward_intermediates(batch, output_fmt='NLC')
 
+
+@pytest.mark.base
+def test_naflexvit_key_only_attn_mask_is_opt_in_and_post_patch_dropout():
+    batch_size, num_patches = 2, 8
+    patches = torch.randn(batch_size, num_patches, 16 * 16 * 3)
+    coord = torch.zeros(batch_size, num_patches, 2, dtype=torch.long)
+    valid = torch.tensor([
+        [True, True, True, True, True, False, False, False],
+        [True, True, True, True, True, True, False, False],
+    ])
+
+    default_model = create_model(
+        'naflexvit_base_patch16_gap', embed_dim=32, depth=1, num_heads=2)
+    default_embeds = default_model._forward_embeds(patches, coord, valid, attn_mask=None)
+    default_seq_len = default_embeds['patches'].shape[1]
+    assert default_model.use_key_only_attn_mask is False
+    assert default_embeds['attn_mask'].shape == (batch_size, 1, default_seq_len, default_seq_len)
+
+    compact_model = create_model(
+        'naflexvit_base_patch16_gap', embed_dim=32, depth=1, num_heads=2,
+        patch_drop_rate=0.5, use_key_only_attn_mask=True)
+    compact_model.train()
+    compact_embeds = compact_model._forward_embeds(patches, coord, valid, attn_mask=None)
+    compact_seq_len = compact_embeds['patches'].shape[1]
+    assert compact_seq_len < default_seq_len
+    assert compact_embeds['attn_mask'].shape == (batch_size, 1, 1, compact_seq_len)
+
+    expected_valid = compact_embeds['patch_valid']
+    prefix_valid = torch.ones(batch_size, compact_model.num_prefix_tokens, dtype=torch.bool)
+    expected_valid = torch.cat([prefix_valid, expected_valid], dim=1)
+    expected_masked = ~expected_valid[:, None, None, :]
+    mask = compact_embeds['attn_mask']
+    assert torch.equal(mask == torch.finfo(mask.dtype).min, expected_masked)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('global_pool', ['avg', 'token', 'map'])
+def test_naflexvit_key_only_attn_mask_output_parity(global_pool):
+    common_kwargs = dict(
+        embed_dim=32,
+        depth=2,
+        num_heads=2,
+        global_pool=global_pool,
+        class_token=global_pool == 'token',
+        reg_tokens=0,
+        num_classes=7,
+    )
+    full_model = create_model('naflexvit_base_patch16_gap', **common_kwargs)
+    compact_model = create_model(
+        'naflexvit_base_patch16_gap', use_key_only_attn_mask=True, **common_kwargs)
+    compact_model.load_state_dict(full_model.state_dict())
+    full_model.eval()
+    compact_model.eval()
+
+    num_patches = 8
+    patches = torch.randn(2, num_patches, 16 * 16 * 3)
+    coord = torch.zeros(2, num_patches, 2, dtype=torch.long)
+    valid = torch.tensor([
+        [True, True, True, True, True, False, False, False],
+        [True, True, True, True, True, True, True, False],
+    ])
+    with torch.no_grad():
+        full_out = full_model(patches, patch_coord=coord, patch_valid=valid)
+        compact_out = compact_model(patches, patch_coord=coord, patch_valid=valid)
+
+    assert torch.equal(full_out, compact_out)
+
 def test_gemma4_forward_intermediates_dict_output():
     """gemma4_vit dict-output intermediates match the NaFlexVit contract (API symmetry):
     'image_intermediates' / 'image_features' / 'patch_valid' aligned with the token sequence."""
