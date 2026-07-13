@@ -77,6 +77,7 @@ class NaFlexVitCfg:
     proj_bias: bool = True
     attn_drop_rate: float = 0.0
     scale_attn_inner_norm: bool = False  # Apply scaling norm to attn context
+    use_key_only_attn_mask: bool = False  # Use [B, 1, 1, N] key-only mask for self-attention
 
     # Regularization
     init_values: Optional[float] = None  # Layer-scale init values (layer-scale enabled if not None)
@@ -1176,6 +1177,7 @@ class NaFlexVit(nn.Module):
         self.num_reg_tokens = cfg.reg_tokens
         self.has_class_token = cfg.class_token
         self.pool_include_prefix = cfg.pool_include_prefix
+        self.use_key_only_attn_mask = cfg.use_key_only_attn_mask
         self.grad_checkpointing = False
 
         # Initialize embedding module (includes patch, position embedding, and class/reg tokens)
@@ -1573,6 +1575,8 @@ class NaFlexVit(nn.Module):
             attn_mask = create_attention_mask(
                 patch_valid,
                 num_prefix_tokens=self.num_prefix_tokens,
+                symmetric=not self.use_key_only_attn_mask,
+                q_len=1 if self.use_key_only_attn_mask else None,
                 dtype=x.dtype
             )
 
