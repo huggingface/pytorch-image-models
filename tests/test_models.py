@@ -763,6 +763,120 @@ if 'GITHUB_ACTIONS' not in os.environ:
             assert tensor.shape[0] == batch_size
             assert not torch.isnan(tensor).any(), 'Output included NaNs'
 
+def _create_naflex_pos_embed_test_module(ar_preserving):
+    from timm.models.naflexvit import NaFlexEmbeds
+
+    return NaFlexEmbeds(
+        patch_size=2,
+        in_chans=3,
+        embed_dim=8,
+        proj_type='linear',
+        class_token=False,
+        pos_embed='learned',
+        pos_embed_grid_size=(5, 7),
+        pos_embed_ar_preserving=ar_preserving,
+        pos_embed_use_grid_sample=True,
+    )
+
+
+def _create_naflex_pos_embed_test_inputs():
+    patch_coord = torch.zeros(2, 12, 2, dtype=torch.long)
+    patch_coord[0, :6] = torch.cartesian_prod(torch.arange(2), torch.arange(3))
+    patch_coord[1] = torch.cartesian_prod(torch.arange(3), torch.arange(4))
+    patch_valid = torch.zeros(2, 12, dtype=torch.bool)
+    patch_valid[0, :6] = True
+    patch_valid[1] = True
+    patches = torch.randn(2, 12, 2 * 2 * 3)
+    return patches, patch_coord, patch_valid
+
+
+def _naflex_dense_grid_sample_reference(module, x, patch_coord):
+    """Previous dense-grid implementation used as a numerical and gradient reference."""
+    batch_size, _, channels = x.shape
+    shapes = patch_coord.amax(dim=1) + 1
+    if module.pos_embed_ar_preserving:
+        sample_lengths = shapes.amax(dim=1)
+        grid_height = grid_width = int(sample_lengths.amax())
+        scale_x = scale_y = sample_lengths.amax() / sample_lengths
+    else:
+        grid_height, grid_width = (int(v) for v in shapes.amax(dim=0))
+        scale_y = shapes[:, 0].amax() / shapes[:, 0]
+        scale_x = shapes[:, 1].amax() / shapes[:, 1]
+
+    theta = torch.zeros(batch_size, 2, 3, device=x.device, dtype=torch.float32)
+    theta[:, 0, 0] = scale_x
+    theta[:, 1, 1] = scale_y
+    theta[:, 0, 2] = scale_x - 1
+    theta[:, 1, 2] = scale_y - 1
+    grid = torch.nn.functional.affine_grid(
+        theta,
+        (batch_size, channels, grid_height, grid_width),
+        align_corners=False,
+    )
+    pos_embed = torch.nn.functional.grid_sample(
+        module.pos_embed.permute(0, 3, 1, 2).expand(batch_size, -1, -1, -1).float(),
+        grid,
+        mode=module.pos_embed_interp_mode,
+        align_corners=False,
+        padding_mode='border',
+    ).to(dtype=x.dtype)
+    batch_indices = torch.arange(batch_size, device=x.device, dtype=torch.long).unsqueeze(1)
+    return x + pos_embed[batch_indices, :, patch_coord[..., 0], patch_coord[..., 1]]
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('ar_preserving', [False, True])
+def test_naflexvit_direct_grid_sample_parity(ar_preserving):
+    module = _create_naflex_pos_embed_test_module(ar_preserving)
+    _, patch_coord, _ = _create_naflex_pos_embed_test_inputs()
+    x_actual = torch.randn(2, 12, 8, requires_grad=True)
+    x_reference = x_actual.detach().clone().requires_grad_()
+
+    actual = x_actual + 0.0  # make non-leaf for the in-place embedding method
+    module._apply_learned_naflex_pos_embed_grid_sample(actual, patch_coord)
+    reference = _naflex_dense_grid_sample_reference(module, x_reference, patch_coord)
+
+    torch.testing.assert_close(actual, reference, rtol=1e-5, atol=1e-6)
+    actual_grads = torch.autograd.grad(actual.square().mean(), (x_actual, module.pos_embed))
+    reference_grads = torch.autograd.grad(reference.square().mean(), (x_reference, module.pos_embed))
+    for actual_grad, reference_grad in zip(actual_grads, reference_grads):
+        torch.testing.assert_close(actual_grad, reference_grad, rtol=1e-5, atol=1e-6)
+
+
+@pytest.mark.base
+@pytest.mark.skipif(not hasattr(torch, 'compile'), reason='requires torch.compile')
+@pytest.mark.parametrize('ar_preserving', [False, True])
+def test_naflexvit_direct_grid_sample_fullgraph(ar_preserving):
+    module = _create_naflex_pos_embed_test_module(ar_preserving).eval()
+    inputs = _create_naflex_pos_embed_test_inputs()
+
+    with torch.inference_mode():
+        expected = module(*inputs)
+        actual = torch.compile(module, backend='eager', fullgraph=True)(*inputs)
+
+    torch.testing.assert_close(actual[0], expected[0])
+    assert actual[1] == expected[1]
+
+
+@pytest.mark.base
+@pytest.mark.skipif(
+    not hasattr(torch, 'export') or not hasattr(torch.export, 'export'),
+    reason='requires torch.export.export',
+)
+@pytest.mark.parametrize('ar_preserving', [False, True])
+def test_naflexvit_direct_grid_sample_export(ar_preserving):
+    module = _create_naflex_pos_embed_test_module(ar_preserving).eval()
+    inputs = _create_naflex_pos_embed_test_inputs()
+
+    with torch.inference_mode():
+        expected = module(*inputs)
+        exported = torch.export.export(module, inputs).module()
+        actual = exported(*inputs)
+
+    torch.testing.assert_close(actual[0], expected[0])
+    assert actual[1] == expected[1]
+
+
 def test_naflexvit_forward_intermediates_dict_input():
     """NaFlex (pre-patchified dict) inputs through forward_intermediates: NLC-only, final-feature
     parity with forward_features, patch_valid surfaced for downstream masking/scatter."""
