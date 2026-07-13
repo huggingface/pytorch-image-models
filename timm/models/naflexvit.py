@@ -212,6 +212,18 @@ def calculate_naflex_grid_sizes(_coord: torch.Tensor):
     return [(int(h.item()), int(w.item())) for h, w in zip(max_y, max_x)]
 
 
+def _normalize_naflex_grid_sample_coords(
+        patch_coord: torch.Tensor,
+        ar_preserving: bool = False,
+) -> torch.Tensor:
+    """Normalize NaFlex patch coordinates for ``grid_sample`` with ``align_corners=False``."""
+    shapes = patch_coord.amax(dim=1) + 1
+    if ar_preserving:
+        shapes = shapes.amax(dim=1, keepdim=True).expand_as(shapes)
+
+    return (2.0 * patch_coord.to(dtype=torch.float32) + 1.0) / shapes[:, None, :] - 1.0
+
+
 class NaFlexRopeIterator:
     """Iterator for generating batched ROPE embeddings for mixed mode with multiple grid sizes."""
 
@@ -630,7 +642,6 @@ class NaFlexEmbeds(nn.Module):
                 pos_embed_flat[:, :seq_len].expand(len(batch_indices), -1, -1)
             )
 
-    @disable_compiler
     def _apply_learned_naflex_pos_embed_grid_sample(
             self,
             x: torch.Tensor,
@@ -638,44 +649,28 @@ class NaFlexEmbeds(nn.Module):
     ) -> None:
         """Apply learned position embeddings to NaFlex batch using grid_sample.
 
-        Uses F.grid_sample for efficient interpolation of learned 2D position embeddings
-        based on patch coordinates. Based on proposal by https://github.com/stas-sl
+        Directly samples the learned 2D position embeddings at each patch coordinate,
+        avoiding a dense grid sized by the largest height and width in the batch.
+        Based on proposal by https://github.com/stas-sl
 
         Args:
             x: Input tensor to add position embeddings to [B, N, C]
             patch_coord: Patch coordinates [B, N, 2] with (y, x) values
         """
-        device = x.device
-        B, N, C = x.shape
-        shapes = patch_coord.max(dim=1).values + 1  # (B, 2) containing [h_i, w_i]
-
-        if self.pos_embed_ar_preserving:
-            L_i = shapes.amax(dim=1)  # (B,) max(h_i, w_i)
-            L_global = L_i.amax()
-            grid_size_y = grid_size_x = L_global
-            scale_x = scale_y = L_global / L_i  # uniform zoom (B,)
-        else:
-            grid_size_y, grid_size_x = shapes.amax(dim=0)  # (2,)
-            scale_y = grid_size_y / shapes[:, 0]  # vertical zoom (B,)
-            scale_x = grid_size_x / shapes[:, 1]  # horizontal zoom (B,)
-
-        theta = torch.zeros(B, 2, 3, device=device, dtype=torch.float32)
-        theta[:, 0, 0] = scale_x
-        theta[:, 1, 1] = scale_y
-        theta[:, 0, 2] = scale_x - 1  # translate x
-        theta[:, 1, 2] = scale_y - 1  # translate y
-
-        grid = F.affine_grid(theta, (B, C, grid_size_y, grid_size_x), align_corners=False)
+        B = x.shape[0]
+        grid = _normalize_naflex_grid_sample_coords(
+            patch_coord,
+            ar_preserving=self.pos_embed_ar_preserving,
+        ).flip(-1).unsqueeze(2)  # (B, N, 1, 2), grid_sample coordinate order is (x, y)
         pos_embed = F.grid_sample(
             self.pos_embed.permute(0, 3, 1, 2).expand(B, -1, -1, -1).float(),
             grid,
             mode=self.pos_embed_interp_mode,
             align_corners=False,
             padding_mode='border',
-        ).to(dtype=x.dtype)  # (B, C, H_out, W_out)
+        ).to(dtype=x.dtype)  # (B, C, N, 1)
 
-        bi = torch.arange(B, device=device, dtype=torch.long).unsqueeze(1)
-        x += pos_embed[bi, :, patch_coord[..., 0], patch_coord[..., 1]]  # NOTE leave as '+='
+        x += pos_embed.squeeze(-1).transpose(1, 2)  # NOTE leave as '+='
 
     def _apply_learned_pos_embed(
             self,
