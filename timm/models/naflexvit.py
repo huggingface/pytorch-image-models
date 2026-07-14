@@ -20,7 +20,7 @@ import logging
 import math
 from dataclasses import dataclass, fields, replace
 from functools import partial
-from typing import Callable, Dict, List, Optional, Set, Tuple, Type, Union, Any
+from typing import Callable, Dict, Iterable, List, Optional, Set, Tuple, Type, Union, Any
 
 import torch
 import torch.nn as nn
@@ -494,9 +494,16 @@ class NaFlexEmbeds(nn.Module):
                 interpolation=pos_embed_interp_mode,
                 antialias=True,
                 channels_last=channels_last,
+                device=device,
             )
         else:
             self.patch_interpolator = None
+
+        self.supports_patch_interpolation = bool(
+            self.is_linear
+            and self.patch_interpolator is not None
+            and self.norm_input is None
+        )
 
         # Create normalization layer after the projection
         assert not (proj_norm_layer is True and norm_layer is None), \
@@ -543,6 +550,16 @@ class NaFlexEmbeds(nn.Module):
             nn.init.normal_(self.pos_embed_y, std=.02)
         if self.pos_embed_x is not None:
             nn.init.normal_(self.pos_embed_x, std=.02)
+
+    @torch.jit.ignore
+    def prewarm_patch_interpolator(
+            self,
+            patch_sizes: Iterable[Union[int, Tuple[int, int]]],
+    ) -> None:
+        """Precompute patch interpolation matrices on the projection device."""
+        if not self.supports_patch_interpolation:
+            raise RuntimeError('Patch interpolation is not supported by this embedding configuration.')
+        self.patch_interpolator.prewarm(patch_sizes, device=self.proj.weight.device)
 
     def feature_info(self, location) -> Dict[str, Any]:
         """Get feature information for feature extraction.
@@ -1198,6 +1215,7 @@ class NaFlexVit(nn.Module):
             channels_last=getattr(cfg, 'patchify_channels_last', True),
             **dd,
         )
+        self.supports_patch_interpolation = self.embeds.supports_patch_interpolation
         self.norm_pre = norm_layer(cfg.embed_dim, **dd) if cfg.pre_norm else nn.Identity()
 
         # ROPE position embeddings at model level
@@ -1398,6 +1416,14 @@ class NaFlexVit(nn.Module):
     def get_patch_size(self) -> Tuple[int, int]:
         """Return the 2-tuple patch size. For NaFlex dataloader / transform wiring."""
         return self.embeds.patch_size
+
+    @torch.jit.ignore
+    def prewarm_patch_interpolator(
+            self,
+            patch_sizes: Iterable[Union[int, Tuple[int, int]]],
+    ) -> None:
+        """Precompute patch interpolation matrices before captured execution."""
+        self.embeds.prewarm_patch_interpolator(patch_sizes)
 
     @torch.jit.ignore
     def group_matcher(self, coarse: bool = False) -> Dict:
