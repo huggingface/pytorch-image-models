@@ -915,6 +915,39 @@ def test_naflexvit_forward_intermediates_dict_input():
 
 
 @pytest.mark.base
+def test_naflexvit_patch_interpolation_capability():
+    common_kwargs = dict(embed_dim=32, depth=1, num_heads=2)
+    fixed_model = create_model('naflexvit_base_patch16_gap', **common_kwargs)
+    variable_model = create_model(
+        'naflexvit_base_patch16_gap',
+        enable_patch_interpolator=True,
+        **common_kwargs,
+    )
+    conv_model = create_model(
+        'naflexvit_base_patch16_gap',
+        enable_patch_interpolator=True,
+        embed_proj_type='conv',
+        **common_kwargs,
+    )
+
+    assert not fixed_model.supports_patch_interpolation
+    assert variable_model.supports_patch_interpolation
+    assert not conv_model.supports_patch_interpolation
+    with pytest.raises(RuntimeError, match='not supported'):
+        fixed_model.prewarm_patch_interpolator([(8, 8)])
+
+    variable_model.prewarm_patch_interpolator([(8, 8)])
+    assert not any('pinv_' in name for name in variable_model.state_dict())
+
+    patches = torch.randn(1, 4, 8, 8, 3)
+    patch_coord = torch.tensor([[[0, 0], [0, 1], [1, 0], [1, 1]]])
+    patch_valid = torch.ones(1, 4, dtype=torch.bool)
+    output = variable_model(patches, patch_coord=patch_coord, patch_valid=patch_valid)
+    output.sum().backward()
+    assert variable_model.embeds.proj.weight.grad is not None
+
+
+@pytest.mark.base
 def test_naflexvit_key_only_attn_mask_is_opt_in_and_post_patch_dropout():
     batch_size, num_patches = 2, 8
     patches = torch.randn(batch_size, num_patches, 16 * 16 * 3)

@@ -285,6 +285,7 @@ def transforms_imagenet_eval(
         max_seq_len: int = 576,  # 24x24 for 16x16 patch
         patchify: bool = False,
         patchify_channels_last: bool = True,
+        patchify_flatten: bool = True,
 ):
     """ ImageNet-oriented image transform for evaluation and inference.
 
@@ -302,6 +303,9 @@ def transforms_imagenet_eval(
         patch_size: Patch size for NaFlex mode.
         max_seq_len: Max sequence length for NaFlex mode.
         patchify: Patchify the output instead of relying on prefetcher
+        patchify_channels_last: Use channels-last layout within each patch.
+        patchify_flatten: Flatten each patch into a vector. Disable for variable
+            patch-size interpolation, which requires spatial patch dimensions.
 
     Returns:
         Composed transform pipeline
@@ -371,7 +375,11 @@ def transforms_imagenet_eval(
         ]
 
     if patchify:
-        tfl += [Patchify(patch_size=patch_size, channels_last=patchify_channels_last)]
+        tfl += [Patchify(
+            patch_size=patch_size,
+            flatten_patches=patchify_flatten,
+            channels_last=patchify_channels_last,
+        )]
 
     return transforms.Compose(tfl)
 
@@ -409,6 +417,7 @@ def create_transform(
         max_seq_len: int = 576,  # 24x24 for 16x16 patch
         patchify: bool = False,
         patchify_channels_last: bool = True,
+        patchify_flatten: bool = True,
 ):
     """
 
@@ -441,6 +450,8 @@ def create_transform(
         use_prefetcher: Pre-fetcher enabled. Do not convert image to tensor or normalize.
         normalize: Normalization tensor output w/ provided mean/std (if prefetcher not used).
         separate: Output transforms in 3-stage tuple.
+        patchify_flatten: Flatten eval patches into vectors. Disable when the
+            model needs their spatial dimensions for patch-size interpolation.
 
     Returns:
         Composed transforms or tuple thereof
@@ -515,6 +526,7 @@ def create_transform(
                 max_seq_len=max_seq_len,
                 patchify=patchify,
                 patchify_channels_last=patchify_channels_last,
+                patchify_flatten=patchify_flatten,
             )
 
     return transform
