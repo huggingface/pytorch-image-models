@@ -23,6 +23,14 @@ from ._registry import register_model, generate_default_cfgs
 __all__ = ['CPUBone']
 
 
+_LOCAL_MBCONV_NORM_MODES = {
+    # mode: (expand, depthwise, project)
+    'proj': (False, False, True),
+    'depth_proj': (False, True, True),
+    'all': (True, True, True),
+}
+
+
 def remap_legacy_state_dict(state_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
     """Remap keys from original CPUBone checkpoints to the current model layout."""
     remapped = {}
@@ -369,8 +377,14 @@ class CPUBoneBlock(nn.Module):
             small_kernels: bool = False,
             attn_upsample: str = 'transpose',
             drop_path: float = 0.,
+            local_mbconv_norm: str = 'proj',
     ):
         super().__init__()
+        if local_mbconv_norm not in _LOCAL_MBCONV_NORM_MODES:
+            raise ValueError(
+                f'Invalid local_mbconv_norm={local_mbconv_norm!r}; '
+                f'expected one of {tuple(_LOCAL_MBCONV_NORM_MODES)}.'
+            )
         att_kernel = 5 if att_stride > 1 else 3
 
         block = ConvAttention(
@@ -405,14 +419,18 @@ class CPUBoneBlock(nn.Module):
                 act_layer=(act_layer, None),
             )
         else:
+            norm_mask = _LOCAL_MBCONV_NORM_MODES[local_mbconv_norm]
+            local_norms = tuple(norm_layer if enabled else None for enabled in norm_mask)
+            # A convolution bias is redundant whenever normalization follows it.
+            local_biases = tuple(not enabled for enabled in norm_mask)
             local_module = MBConv(
                 in_channels=in_channels,
                 out_channels=in_channels,
                 expand_ratio=expand_ratio,
                 expand_groups=expand_groups,
-                use_bias=(True, True, False),
+                use_bias=local_biases,
                 kernel_size=2 if small_kernels else 3,
-                norm_layer=(None, None, norm_layer),
+                norm_layer=local_norms,
                 act_layer=(act_layer, act_layer, None),
             )
 
@@ -496,6 +514,7 @@ class CPUBone(nn.Module):
             expand_groups: int = 1,
             small_kernels: bool = False,
             attn_upsample: str = 'transpose',
+            local_mbconv_norm: str = 'proj',
     ) -> None:
         """
         Args:
@@ -522,6 +541,9 @@ class CPUBone(nn.Module):
                 local conv branch).
             attn_upsample: Upsampling mode after strided attention, 'transpose' (learned
                 ConvTranspose2d) or 'nearest' (parameter-free nearest-neighbor).
+            local_mbconv_norm: Normalization placement in unfused CPUBoneBlock local MBConvs;
+                one of 'proj', 'depth_proj', or 'all'. Convolution biases are disabled wherever
+                normalization is enabled.
 
         The ablation flags of the original implementation map onto these args as follows:
         `fastit=True` → `fused_conv=True, fused_downsample=True, attn_mlp_ratio=4` (adding
@@ -533,6 +555,11 @@ class CPUBone(nn.Module):
         super().__init__()
         assert global_pool in ("", "avg"), "CPUBone only supports average or disabled pooling"
         assert attn_upsample in ('transpose', 'nearest')
+        if local_mbconv_norm not in _LOCAL_MBCONV_NORM_MODES:
+            raise ValueError(
+                f'Invalid local_mbconv_norm={local_mbconv_norm!r}; '
+                f'expected one of {tuple(_LOCAL_MBCONV_NORM_MODES)}.'
+            )
         num_stages = len(width_list) - 1
         if downsample_expand_ratios is None:
             downsample_expand_ratios = (expand_ratio,) * num_stages
@@ -554,6 +581,7 @@ class CPUBone(nn.Module):
         self.expand_groups = expand_groups
         self.small_kernels = small_kernels
         self.attn_upsample = attn_upsample
+        self.local_mbconv_norm = local_mbconv_norm
 
         # stochastic depth: linear ramp of drop rates across all blocks (downsample blocks have no
         # shortcut and ignore theirs)
@@ -681,6 +709,7 @@ class CPUBone(nn.Module):
                     small_kernels=self.small_kernels,
                     attn_upsample=self.attn_upsample,
                     drop_path=dpr[i],
+                    local_mbconv_norm=self.local_mbconv_norm,
                 )
             )
         return blocks, in_channels
@@ -842,6 +871,8 @@ default_cfgs = generate_default_cfgs({
     "cpubone_nano.in1k": _cfg(hf_hub_id="Kaeruu/CPUBone", hf_hub_filename="cpubone_nano.safetensors"),
     "cpubone_b0.in1k": _cfg(hf_hub_id="Kaeruu/CPUBone", hf_hub_filename="cpubone_b0.safetensors"),
     "cpubone_b1.in1k": _cfg(hf_hub_id="Kaeruu/CPUBone", hf_hub_filename="cpubone_b1.safetensors"),
+    "cpubone_b1_dwnorm.untrained": _cfg(),
+    "cpubone_b1_allnorm.untrained": _cfg(),
     "cpubone_b2.in1k": _cfg(hf_hub_id="Kaeruu/CPUBone", hf_hub_filename="cpubone_b2.safetensors"),
     "cpubone_b3.in1k": _cfg(hf_hub_id="Kaeruu/CPUBone", hf_hub_filename="cpubone_b3.safetensors"),
 })
@@ -894,9 +925,8 @@ def cpubone_b0(pretrained: bool = False, **kwargs: Any) -> CPUBone:
     return _create_cpubone("cpubone_b0", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
-@register_model
-def cpubone_b1(pretrained: bool = False, **kwargs: Any) -> CPUBone:
-    model_args = dict(
+def _cpubone_b1_args(local_mbconv_norm: str = 'proj') -> Dict[str, Any]:
+    return dict(
         width_list=[16, 32, 64, 128, 256],
         depth_list=[0, 1, 1, 5, 5],
         fused_conv=True,
@@ -906,8 +936,26 @@ def cpubone_b1(pretrained: bool = False, **kwargs: Any) -> CPUBone:
         expand_groups=2,
         small_kernels=True,
         attn_upsample="nearest",
+        local_mbconv_norm=local_mbconv_norm,
     )
+
+
+@register_model
+def cpubone_b1(pretrained: bool = False, **kwargs: Any) -> CPUBone:
+    model_args = _cpubone_b1_args()
     return _create_cpubone("cpubone_b1", pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def cpubone_b1_dwnorm(pretrained: bool = False, **kwargs: Any) -> CPUBone:
+    model_args = _cpubone_b1_args(local_mbconv_norm='depth_proj')
+    return _create_cpubone("cpubone_b1_dwnorm", pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def cpubone_b1_allnorm(pretrained: bool = False, **kwargs: Any) -> CPUBone:
+    model_args = _cpubone_b1_args(local_mbconv_norm='all')
+    return _create_cpubone("cpubone_b1_allnorm", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
