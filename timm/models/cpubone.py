@@ -2,19 +2,18 @@
 
 CPUBone: Efficient Vision Backbone Design for Devices with Low Parallelization Capabilities
 Moritz Nottebaum, Matteo Dunnhofer, Christian Micheloni
-Conference on Computer Vision and Pattern Recognition (CVPR), 2025
+Conference on Computer Vision and Pattern Recognition (CVPR) Findings, 2026
 
-Adapted from the original implementation (see `cpubone_original.py`) to idiomatic timm code.
-Remaining cleanup steps are tracked in `TODO_cpubone.md` at the repository root.
+Adapted from the original implementation at https://github.com/altair199797/CPUBone.
 """
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Dict, Final, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, LayerType, calculate_drop_path_rates, get_act_layer, get_norm_layer
+from timm.layers import DropPath, LayerType, calculate_drop_path_rates, get_act_layer, get_norm_layer, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_module
@@ -265,6 +264,8 @@ class FusedMBConv(nn.Module):
 # but leaf status keeps older-torch compatibility, matching other timm attention modules
 @register_notrace_module
 class ConvAttention(nn.Module):
+    fused_attn: Final[bool]
+
     def __init__(
             self,
             input_dim: int,
@@ -279,6 +280,10 @@ class ConvAttention(nn.Module):
         self.num_heads = int(max(1, (input_dim * head_dim_mul) // 30))
         self.head_dim = int((input_dim // self.num_heads) * head_dim_mul)
         self.num_keys = 3
+        self.scale = self.head_dim ** -0.5
+        self.att_stride = att_stride
+        self.small_kernels = small_kernels
+        self.fused_attn = use_fused_attn()
 
         total_dim = int(self.head_dim * self.num_heads * self.num_keys)
 
@@ -318,6 +323,14 @@ class ConvAttention(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         H, W = x.shape[-2:]
 
+        # The reduced 2x2 projection rounds odd spatial dimensions down, while the residual branch
+        # retains them. Pad only that projection to make the subsequent upsample large enough to crop.
+        if self.small_kernels and self.att_stride > 1:
+            pad_h = (-H) % self.att_stride
+            pad_w = (-W) % self.att_stride
+            if pad_h or pad_w:
+                x = F.pad(x, (0, pad_w, 0, pad_h))
+
         xout = self.conv_proj(x)
         xout = self.pwise(xout)
 
@@ -326,11 +339,17 @@ class ConvAttention(nn.Module):
         qkv = qkv.permute(0, 1, 3, 2)  # [N, Head, SeqLen, Dims]
         q, k, v = qkv.chunk(3, dim=3)
 
-        values = F.scaled_dot_product_attention(q, k, v)
+        if self.fused_attn:
+            values = F.scaled_dot_product_attention(q, k, v)
+        else:
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)
+            attn = attn.softmax(dim=-1)
+            values = attn @ v
         o = self.o_proj(values.permute(0, 1, 3, 2).reshape(N, self.o_proj_inpdim, h, w))
 
         o = self.upsampling(o)
-        # upsampling overshoots when H/W aren't divisible by att_stride: crop back to the input size
+        # Upsampling can overshoot after same-padding or the odd-size projection pad above.
         return o[..., :H, :W]
 
 
@@ -409,24 +428,32 @@ class ClsHead(nn.Module):
             in_channels: int,
             width_list: List[int],
             num_classes: int = 1000,
+            global_pool: str = "avg",
             dropout: float = 0.0,
             norm_layer: Type[nn.Module] = nn.BatchNorm2d,
             act_layer: Type[nn.Module] = nn.Hardswish,
     ):
         super().__init__()
+        assert global_pool in ("", "avg"), "CPUBone only supports average or disabled pooling"
         self.num_features = width_list[-1]
         self.dropout = dropout
+        self.pool_type = global_pool
 
         self.in_conv = ConvLayer(in_channels, width_list[0], 1, norm_layer=norm_layer, act_layer=act_layer)
-        self.global_pool = nn.AdaptiveAvgPool2d(output_size=1)
-        self.flatten = nn.Flatten(1)
+        self.global_pool = nn.AdaptiveAvgPool2d(output_size=1) if global_pool else nn.Identity()
+        self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
         self.pre_classifier = LinearLayer(
             width_list[0], width_list[1], False, norm_layer=nn.LayerNorm, act_layer=act_layer)
         self.classifier = (
             LinearLayer(width_list[1], num_classes, True, dropout) if num_classes > 0 else nn.Identity()
         )
 
-    def reset(self, num_classes: int):
+    def reset(self, num_classes: int, global_pool: Optional[str] = None):
+        if global_pool is not None:
+            assert global_pool in ("", "avg"), "CPUBone only supports average or disabled pooling"
+            self.pool_type = global_pool
+            self.global_pool = nn.AdaptiveAvgPool2d(output_size=1) if global_pool else nn.Identity()
+            self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
         if num_classes > 0:
             self.classifier = LinearLayer(self.num_features, num_classes, True, self.dropout)
         else:
@@ -436,10 +463,15 @@ class ClsHead(nn.Module):
         x = self.in_conv(x)
         x = self.global_pool(x)
         x = self.flatten(x)
+        if not self.pool_type:
+            # Keep the pretrained Linear/LayerNorm parameter shapes while applying them channel-wise.
+            x = x.permute(0, 2, 3, 1)
         x = self.pre_classifier(x)
-        if pre_logits:
-            return x
-        return self.classifier(x)
+        if not pre_logits:
+            x = self.classifier(x)
+        if not self.pool_type:
+            x = x.permute(0, 3, 1, 2).contiguous()
+        return x
 
 
 class CPUBone(nn.Module):
@@ -471,7 +503,7 @@ class CPUBone(nn.Module):
             depth_list: Number of blocks in the stem and each of the four stages.
             in_chans: Number of input image channels.
             num_classes: Number of classifier output classes.
-            global_pool: Global pooling type, only 'avg' is supported.
+            global_pool: Global pooling type, either 'avg' or '' to disable pooling.
             head_widths: Hidden widths of the classification head (in_conv, pre_classifier).
             drop_rate: Classifier dropout rate.
             drop_path_rate: Stochastic depth rate.
@@ -499,7 +531,7 @@ class CPUBone(nn.Module):
         `smallk_only_lasts` → `small_kernels`; `lose_transpose=True` → `attn_upsample='nearest'`.
         """
         super().__init__()
-        assert global_pool == "avg", "CPUBone only supports average pooling"
+        assert global_pool in ("", "avg"), "CPUBone only supports average or disabled pooling"
         assert attn_upsample in ('transpose', 'nearest')
         num_stages = len(width_list) - 1
         if downsample_expand_ratios is None:
@@ -508,6 +540,7 @@ class CPUBone(nn.Module):
         self.num_classes = num_classes
         self.num_features = width_list[-1]
         self.head_hidden_size = head_widths[-1]
+        self.global_pool = global_pool
         self.grad_checkpointing = False
 
         self.expand_ratio = expand_ratio
@@ -548,6 +581,7 @@ class CPUBone(nn.Module):
             in_channels=width_list[-1],
             width_list=list(head_widths),
             num_classes=num_classes,
+            global_pool=global_pool,
             dropout=drop_rate,
             norm_layer=self.norm_layer,
             act_layer=self.act_layer,
@@ -705,10 +739,12 @@ class CPUBone(nn.Module):
         return self.head.classifier
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        if global_pool is not None:
+            assert global_pool in ("", "avg"), "CPUBone only supports average or disabled pooling"
         self.num_classes = num_classes
         if global_pool is not None:
-            assert global_pool == "avg", "CPUBone only supports average pooling"
-        self.head.reset(num_classes)
+            self.global_pool = global_pool
+        self.head.reset(num_classes, global_pool)
 
     def forward_intermediates(
             self,

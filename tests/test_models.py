@@ -244,7 +244,6 @@ def test_model_backward(model_name, batch_size):
 
 # models with extra conv/linear layers after pooling
 EARLY_POOL_MODELS = (
-    timm.models.CPUBone,
     timm.models.EfficientVit,
     timm.models.EfficientVitLarge,
     timm.models.FasterNet,
