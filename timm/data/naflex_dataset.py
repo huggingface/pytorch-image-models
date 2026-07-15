@@ -24,6 +24,7 @@ from torch.utils.data import Dataset, IterableDataset, DataLoader
 from PIL import Image
 
 from .naflex_transforms import Patchify
+from .readers.shared_count import SharedCount
 from timm.layers import to_2tuple
 
 
@@ -261,7 +262,7 @@ class NaFlexMapDatasetWrapper(IterableDataset):
         self.distributed = distributed
         self.rank = rank if distributed else 0
         self.world_size = world_size if distributed else 1
-        self.epoch = epoch
+        self.shared_epoch = SharedCount(epoch)
         self.batch_divisor = batch_divisor
 
         # Resolve patch size configuration
@@ -302,11 +303,6 @@ class NaFlexMapDatasetWrapper(IterableDataset):
         self._num_batches_per_rank: int = 0
         self._padded_samples_per_rank: int = 0
         self._create_canonical_schedule() # Calculate schedule based on padded size
-
-        # Per-Epoch State
-        # Stores (seq_len, list_of_indices) for the current epoch, specific to this rank
-        self._epoch_batches: List[Tuple[int, List[int]]] = []
-        self._prepare_epoch_batches(self.epoch)  # setup for initial epoch
 
     def _create_canonical_schedule(self):
         """
@@ -394,14 +390,17 @@ class NaFlexMapDatasetWrapper(IterableDataset):
         print(f"Rank {self.rank}: Created canonical schedule with {self._num_batches_per_rank} batches for {self._padded_samples_per_rank} samples/rank.")
 
 
-    def _prepare_epoch_batches(self, epoch: int):
+    def _prepare_epoch_batches(self, epoch: int) -> List[Tuple[int, int, List[int]]]:
         """
         Prepares the batches for the current epoch by:
         1. Shuffling the full dataset indices (using epoch seed).
         2. Applying padding if in distributed mode.
         3. Selecting indices for the current rank.
         4. Shuffling the *order* of the canonical batch schedule (using epoch seed).
-        5. Assigning the rank's indices to the shuffled batches.
+        5. Assigning the rank's indices and patch-size choices to the shuffled batches.
+
+        Returns:
+            A process-local batch schedule as ``(seq_len, patch_idx, indices)`` tuples.
         """
         g = torch.Generator()
         g.manual_seed(self.seed + epoch) # Epoch-specific seed for shuffling
@@ -454,8 +453,9 @@ class NaFlexMapDatasetWrapper(IterableDataset):
         else:
             shuffled_schedule = list(self._canonical_batch_schedule) # Keep original order
 
-        # 5. Assign indices to the shuffled batches
-        self._epoch_batches = []
+        # 5. Assign indices and patch-size choices to the shuffled batches
+        epoch_batches = []
+        patch_size_probs = torch.tensor(self.patch_size_probs)
         idx_pos = 0
         scheduled_samples_count = 0
         for seq_len, bs in shuffled_schedule:
@@ -468,7 +468,10 @@ class NaFlexMapDatasetWrapper(IterableDataset):
                  break # Stop if no more indices or batch size is zero
 
             batch_indices = indices_this_rank[idx_pos : idx_pos + actual_bs]
-            self._epoch_batches.append((seq_len, batch_indices))
+            patch_idx = 0
+            if self.variable_patch_size:
+                patch_idx = torch.multinomial(patch_size_probs, 1, generator=g).item()
+            epoch_batches.append((seq_len, patch_idx, batch_indices))
             idx_pos += actual_bs
             scheduled_samples_count += actual_bs
 
@@ -479,28 +482,26 @@ class NaFlexMapDatasetWrapper(IterableDataset):
                 f"but expected {effective_samples_this_rank} effective samples this epoch. "
                 f"Indices remaining: {effective_samples_this_rank - scheduled_samples_count}."
              )
+        return epoch_batches
 
     def set_epoch(self, epoch: int) -> None:
-        """Updates the epoch, regenerating the epoch-specific batches.
+        """Set the multiprocessing-safe epoch read by DataLoader workers.
 
         Args:
             epoch: New epoch number.
         """
-        # Only regenerate if the epoch actually changes
-        if epoch != self.epoch:
-            self.epoch = epoch
-            self._prepare_epoch_batches(epoch)
+        self.shared_epoch.value = epoch
 
     def __len__(self) -> int:
-        """Returns the number of batches per worker for the current epoch.
+        """Return the number of batches for this rank.
 
         Returns:
-            Number of batches this worker will process.
+            Number of batches collectively processed by this rank's workers.
         """
         return self._num_batches_per_rank
 
     def __iter__(self) -> Iterator[Tuple[Dict[str, torch.Tensor], torch.Tensor]]:
-        """Iterates through pre-calculated batches for the current epoch.
+        """Prepare and iterate this worker's batches for the shared epoch.
 
         Yields:
             Tuple of (input_dict, targets) for each batch.
@@ -509,18 +510,12 @@ class NaFlexMapDatasetWrapper(IterableDataset):
         num_workers = worker_info.num_workers if worker_info else 1
         worker_id = worker_info.id if worker_info else 0
 
-        # Distribute pre-calculated batches among workers for this rank
-        # Each worker processes a slice of the batches prepared in _prepare_epoch_batches
-        batches_for_worker = self._epoch_batches[worker_id::num_workers]
-        for seq_len, indices in batches_for_worker:
+        # Snapshot the shared epoch once, then build process-local derived state.
+        epoch = self.shared_epoch.value
+        batches_for_worker = self._prepare_epoch_batches(epoch)[worker_id::num_workers]
+        for seq_len, patch_idx, indices in batches_for_worker:
             if not indices: # Skip if a batch ended up with no indices (shouldn't happen often)
                  continue
-
-            # Select patch size for this batch
-            patch_idx = 0
-            if self.variable_patch_size:
-                # Use torch multinomial for weighted random choice
-                patch_idx = torch.multinomial(torch.tensor(self.patch_size_probs), 1).item()
 
             # Get the pre-initialized transform and patchifier using patch_idx
             transform_key = (seq_len, patch_idx)

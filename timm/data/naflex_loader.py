@@ -208,6 +208,11 @@ class NaFlexPrefetchLoader:
         return self.loader.sampler
 
     @property
+    def batch_sampler(self):
+        """Get batch sampler from underlying loader."""
+        return self.loader.batch_sampler
+
+    @property
     def dataset(self):
         """Get dataset from underlying loader.
 
