@@ -13,7 +13,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, LayerType, calculate_drop_path_rates, get_act_layer, get_norm_layer, use_fused_attn
+from timm.layers import DropPath, GroupNorm1, LayerType, calculate_drop_path_rates, get_act_layer, get_norm_layer, \
+    use_fused_attn
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_module
@@ -29,6 +30,18 @@ _LOCAL_MBCONV_NORM_MODES = {
     'depth_proj': (False, True, True),
     'all': (True, True, True),
 }
+
+
+def _check_local_mbconv_norm(local_mbconv_norm: str) -> None:
+    if local_mbconv_norm not in _LOCAL_MBCONV_NORM_MODES:
+        raise ValueError(
+            f'Invalid local_mbconv_norm={local_mbconv_norm!r}; '
+            f'expected one of {tuple(_LOCAL_MBCONV_NORM_MODES)}.'
+        )
+
+
+def _check_global_pool(global_pool: str) -> None:
+    assert global_pool in ("", "avg"), "CPUBone only supports average or disabled pooling"
 
 
 def remap_legacy_state_dict(state_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
@@ -307,26 +320,33 @@ class ConvAttention(nn.Module):
         self.pwise = nn.Conv2d(input_dim, total_dim, kernel_size=1, stride=1, padding=0, bias=False)
 
         self.o_proj_inpdim = self.head_dim * self.num_heads
-        self.o_proj = nn.Conv2d(self.o_proj_inpdim, input_dim, kernel_size=1, stride=1, padding=0)
-
-        self.upsampling = nn.ConvTranspose2d(
-            input_dim, input_dim, kernel_size=att_stride * 2, stride=att_stride, padding=att_stride // 2, groups=input_dim)
-        if att_stride == 1:
-            self.upsampling = nn.ConvTranspose2d(input_dim, input_dim, kernel_size=3, stride=1, padding=1, groups=input_dim)
-
+        # With fuse_out_proj the output projection is folded into the upsampling module below, which
+        # then maps o_proj_inpdim -> input_dim instead of being a depthwise / parameter-free upsample.
         if fuse_out_proj:
             self.o_proj = nn.Identity()
-            if att_stride == 1:
-                self.upsampling = nn.ConvTranspose2d(self.o_proj_inpdim, input_dim, kernel_size=3, stride=1, padding=1)
-            else:
-                self.upsampling = nn.ConvTranspose2d(
-                    self.o_proj_inpdim, input_dim, kernel_size=att_stride * 2, stride=att_stride, padding=att_stride // 2)
+        else:
+            self.o_proj = nn.Conv2d(self.o_proj_inpdim, input_dim, kernel_size=1, stride=1, padding=0)
 
         if upsample_mode == 'nearest':
             upsampling = [nn.Upsample(scale_factor=att_stride, mode="nearest") if att_stride > 1 else nn.Identity()]
             if fuse_out_proj:
                 upsampling = [nn.Conv2d(self.o_proj_inpdim, input_dim, kernel_size=1, stride=1, padding=0)] + upsampling
             self.upsampling = nn.Sequential(*upsampling)
+        elif fuse_out_proj:
+            if att_stride == 1:
+                self.upsampling = nn.ConvTranspose2d(self.o_proj_inpdim, input_dim, kernel_size=3, stride=1, padding=1)
+            else:
+                self.upsampling = nn.ConvTranspose2d(
+                    self.o_proj_inpdim, input_dim,
+                    kernel_size=att_stride * 2, stride=att_stride, padding=att_stride // 2)
+        else:
+            if att_stride == 1:
+                self.upsampling = nn.ConvTranspose2d(
+                    input_dim, input_dim, kernel_size=3, stride=1, padding=1, groups=input_dim)
+            else:
+                self.upsampling = nn.ConvTranspose2d(
+                    input_dim, input_dim,
+                    kernel_size=att_stride * 2, stride=att_stride, padding=att_stride // 2, groups=input_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         H, W = x.shape[-2:]
@@ -376,15 +396,12 @@ class CPUBoneBlock(nn.Module):
             mlp_ratio: int = 4,
             small_kernels: bool = False,
             attn_upsample: str = 'transpose',
+            proj_drop: float = 0.1,
             drop_path: float = 0.,
             local_mbconv_norm: str = 'proj',
     ):
         super().__init__()
-        if local_mbconv_norm not in _LOCAL_MBCONV_NORM_MODES:
-            raise ValueError(
-                f'Invalid local_mbconv_norm={local_mbconv_norm!r}; '
-                f'expected one of {tuple(_LOCAL_MBCONV_NORM_MODES)}.'
-            )
+        _check_local_mbconv_norm(local_mbconv_norm)
         att_kernel = 5 if att_stride > 1 else 3
 
         block = ConvAttention(
@@ -397,13 +414,13 @@ class CPUBoneBlock(nn.Module):
             upsample_mode=attn_upsample,
         )
 
-        context_module = ResidualBlock(nn.Sequential(nn.GroupNorm(1, in_channels), block), nn.Identity(), drop_path)
+        context_module = ResidualBlock(nn.Sequential(GroupNorm1(in_channels), block), nn.Identity(), drop_path)
         mlp = nn.Sequential(
-            nn.GroupNorm(1, in_channels),
+            GroupNorm1(in_channels),
             nn.Conv2d(in_channels, in_channels * mlp_ratio, kernel_size=1),
             nn.GELU(),
             nn.Conv2d(in_channels * mlp_ratio, in_channels, kernel_size=1),
-            nn.Dropout(p=0.1),
+            nn.Dropout(p=proj_drop),
         )
         context_module = nn.Sequential(context_module, ResidualBlock(mlp, nn.Identity(), drop_path))
 
@@ -452,7 +469,7 @@ class ClsHead(nn.Module):
             act_layer: Type[nn.Module] = nn.Hardswish,
     ):
         super().__init__()
-        assert global_pool in ("", "avg"), "CPUBone only supports average or disabled pooling"
+        _check_global_pool(global_pool)
         self.num_features = width_list[-1]
         self.dropout = dropout
         self.pool_type = global_pool
@@ -468,7 +485,7 @@ class ClsHead(nn.Module):
 
     def reset(self, num_classes: int, global_pool: Optional[str] = None):
         if global_pool is not None:
-            assert global_pool in ("", "avg"), "CPUBone only supports average or disabled pooling"
+            _check_global_pool(global_pool)
             self.pool_type = global_pool
             self.global_pool = nn.AdaptiveAvgPool2d(output_size=1) if global_pool else nn.Identity()
             self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
@@ -502,6 +519,7 @@ class CPUBone(nn.Module):
             global_pool: str = "avg",
             head_widths: Tuple[int, int] = (1536, 1600),
             drop_rate: float = 0.0,
+            proj_drop_rate: float = 0.1,
             drop_path_rate: float = 0.0,
             expand_ratio: float = 4,
             norm_layer: LayerType = nn.BatchNorm2d,
@@ -525,6 +543,8 @@ class CPUBone(nn.Module):
             global_pool: Global pooling type, either 'avg' or '' to disable pooling.
             head_widths: Hidden widths of the classification head (in_conv, pre_classifier).
             drop_rate: Classifier dropout rate.
+            proj_drop_rate: Dropout rate at the end of the attention-stage (CPUBoneBlock) MLPs, the
+                0.1 default matches the original implementation's fixed dropout.
             drop_path_rate: Stochastic depth rate.
             expand_ratio: Default expand ratio of MBConv / FusedMBConv blocks.
             norm_layer: Normalization layer.
@@ -553,13 +573,9 @@ class CPUBone(nn.Module):
         `smallk_only_lasts` → `small_kernels`; `lose_transpose=True` → `attn_upsample='nearest'`.
         """
         super().__init__()
-        assert global_pool in ("", "avg"), "CPUBone only supports average or disabled pooling"
+        _check_global_pool(global_pool)
         assert attn_upsample in ('transpose', 'nearest')
-        if local_mbconv_norm not in _LOCAL_MBCONV_NORM_MODES:
-            raise ValueError(
-                f'Invalid local_mbconv_norm={local_mbconv_norm!r}; '
-                f'expected one of {tuple(_LOCAL_MBCONV_NORM_MODES)}.'
-            )
+        _check_local_mbconv_norm(local_mbconv_norm)
         num_stages = len(width_list) - 1
         if downsample_expand_ratios is None:
             downsample_expand_ratios = (expand_ratio,) * num_stages
@@ -576,6 +592,7 @@ class CPUBone(nn.Module):
         self.fused_conv = fused_conv
         self.fused_downsample = fused_downsample
         self.attn_mlp_ratio = attn_mlp_ratio
+        self.proj_drop_rate = proj_drop_rate
         self.stem_expand_ratio = stem_expand_ratio
         self.downsample_expand_ratios = tuple(downsample_expand_ratios)
         self.expand_groups = expand_groups
@@ -708,6 +725,7 @@ class CPUBone(nn.Module):
                     mlp_ratio=self.attn_mlp_ratio,
                     small_kernels=self.small_kernels,
                     attn_upsample=self.attn_upsample,
+                    proj_drop=self.proj_drop_rate,
                     drop_path=dpr[i],
                     local_mbconv_norm=self.local_mbconv_norm,
                 )
@@ -769,10 +787,9 @@ class CPUBone(nn.Module):
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         if global_pool is not None:
-            assert global_pool in ("", "avg"), "CPUBone only supports average or disabled pooling"
-        self.num_classes = num_classes
-        if global_pool is not None:
+            _check_global_pool(global_pool)
             self.global_pool = global_pool
+        self.num_classes = num_classes
         self.head.reset(num_classes, global_pool)
 
     def forward_intermediates(
@@ -874,6 +891,8 @@ default_cfgs = generate_default_cfgs({
     "cpubone_b1_dwnorm.untrained": _cfg(),
     "cpubone_b1_allnorm.untrained": _cfg(),
     "cpubone_b2.in1k": _cfg(hf_hub_id="Kaeruu/CPUBone", hf_hub_filename="cpubone_b2.safetensors"),
+    "cpubone_b2_dwnorm.untrained": _cfg(),
+    "cpubone_b2_allnorm.untrained": _cfg(),
     "cpubone_b3.in1k": _cfg(hf_hub_id="Kaeruu/CPUBone", hf_hub_filename="cpubone_b3.safetensors"),
 })
 
@@ -958,9 +977,8 @@ def cpubone_b1_allnorm(pretrained: bool = False, **kwargs: Any) -> CPUBone:
     return _create_cpubone("cpubone_b1_allnorm", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
-@register_model
-def cpubone_b2(pretrained: bool = False, **kwargs: Any) -> CPUBone:
-    model_args = dict(
+def _cpubone_b2_args(local_mbconv_norm: str = 'proj') -> Dict[str, Any]:
+    return dict(
         width_list=[24, 48, 96, 192, 384],
         depth_list=[0, 1, 1, 6, 6],
         head_widths=(2304, 2560),
@@ -971,8 +989,26 @@ def cpubone_b2(pretrained: bool = False, **kwargs: Any) -> CPUBone:
         expand_groups=2,
         small_kernels=True,
         attn_upsample="nearest",
+        local_mbconv_norm=local_mbconv_norm,
     )
+
+
+@register_model
+def cpubone_b2(pretrained: bool = False, **kwargs: Any) -> CPUBone:
+    model_args = _cpubone_b2_args()
     return _create_cpubone("cpubone_b2", pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def cpubone_b2_dwnorm(pretrained: bool = False, **kwargs: Any) -> CPUBone:
+    model_args = _cpubone_b2_args(local_mbconv_norm='depth_proj')
+    return _create_cpubone("cpubone_b2_dwnorm", pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def cpubone_b2_allnorm(pretrained: bool = False, **kwargs: Any) -> CPUBone:
+    model_args = _cpubone_b2_args(local_mbconv_norm='all')
+    return _create_cpubone("cpubone_b2_allnorm", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
