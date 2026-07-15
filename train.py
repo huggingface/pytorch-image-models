@@ -401,6 +401,24 @@ group.add_argument('--wandb-tags', default=[], type=str, nargs='+',
 group.add_argument('--wandb-resume-id', default='', type=str, metavar='ID',
                    help='If resuming a run, the id of the run in wandb')
 
+# Scheduled resolution loader arguments
+group.add_argument('--train-img-sizes', type=int, nargs='+', default=None,
+                   help='Per-batch square image sizes for scheduled resolution training')
+group.add_argument('--train-batch-sizes', type=int, nargs='+', default=None,
+                   help='Batch size for each --train-img-sizes choice (default: --batch-size for every choice)')
+group.add_argument('--train-size-probs', type=float, nargs='+', default=None,
+                   help='Base sampling weights for --train-img-sizes (default: uniform)')
+group.add_argument('--train-size-schedule', type=str, default='constant', choices=('constant', 'progressive'),
+                   help='Resolution choice schedule; progressive moves from the first size to the last')
+group.add_argument('--train-size-schedule-spread', type=float, default=0.65,
+                   help='Progressive schedule spread in resolution-choice index units (default: 0.65)')
+group.add_argument('--train-size-random-mix', type=float, default=0.1,
+                   help='Fraction of uniform random choices mixed into a progressive schedule (default: 0.1)')
+group.add_argument('--train-batches-per-epoch', '--train-steps-per-epoch', type=int, default=None,
+                   help='Fixed loader batches (before gradient accumulation) per epoch; inferred if unspecified')
+group.add_argument('--variable-batch-loss-scale', default='none', type=str, choices=('none', 'sqrt', 'linear'),
+                   help='Scale gradients relative to --batch-size when scheduled batch sizes vary')
+
 # NaFlex scheduled loader arguments
 group.add_argument('--naflex-loader', action='store_true', default=False,
                    help='Use NaFlex loader (Requires NaFlex compatible model)')
@@ -412,7 +430,7 @@ group.add_argument('--naflex-patch-sizes', type=int, nargs='+', default=None,
                    help='List of patch sizes for variable patch size training (e.g., 8 12 16 24 32)')
 group.add_argument('--naflex-patch-size-probs', type=float, nargs='+', default=None,
                    help='Probabilities for each patch size (must sum to 1.0, uniform if not specified)')
-group.add_argument('--naflex-loss-scale', default='linear', type=str,
+group.add_argument('--naflex-loss-scale', default='linear', type=str, choices=('none', 'sqrt', 'linear'),
                    help='Scale loss (gradient) by batch_size ("none", "sqrt", or "linear")')
 group.add_argument('--naflex-patchify-channels-first', action='store_true', default=False,
                    help='Emit NaFlex patches in C-P-P (channels-first) flat layout instead of the default '
@@ -457,6 +475,15 @@ def _parse_args():
     return args, args_text
 
 
+def _set_loader_epoch(loader, epoch: int) -> None:
+    if hasattr(loader.dataset, 'set_epoch'):
+        loader.dataset.set_epoch(epoch)
+    if hasattr(loader.batch_sampler, 'set_epoch'):
+        loader.batch_sampler.set_epoch(epoch)
+    elif hasattr(loader.sampler, 'set_epoch'):
+        loader.sampler.set_epoch(epoch)
+
+
 def main():
     utils.setup_default_logging()
     args, args_text = _parse_args()
@@ -471,6 +498,46 @@ def main():
 
     args.prefetcher = not args.no_prefetcher
     args.grad_accum_steps = max(1, args.grad_accum_steps)
+    if args.naflex_loader and args.train_img_sizes is not None:
+        parser.error('--naflex-loader and --train-img-sizes are alternative loader modes.')
+    if args.naflex_loader and args.use_multi_epochs_loader:
+        parser.error('--use-multi-epochs-loader is not supported with --naflex-loader.')
+    if args.train_img_sizes is not None and args.use_multi_epochs_loader:
+        parser.error('--use-multi-epochs-loader is not supported with --train-img-sizes.')
+    if args.train_img_sizes is None:
+        if (
+                args.train_batch_sizes is not None
+                or args.train_size_probs is not None
+                or args.train_size_schedule != 'constant'
+                or args.train_batches_per_epoch is not None
+        ):
+            parser.error('--train-img-sizes is required with scheduled resolution loader options.')
+    else:
+        if any(size <= 0 for size in args.train_img_sizes):
+            parser.error('--train-img-sizes values must be positive.')
+        if args.train_batch_sizes is not None:
+            if len(args.train_batch_sizes) != len(args.train_img_sizes):
+                parser.error('--train-batch-sizes must have the same length as --train-img-sizes.')
+            if any(batch_size <= 0 for batch_size in args.train_batch_sizes):
+                parser.error('--train-batch-sizes values must be positive.')
+        if args.train_size_probs is not None:
+            if len(args.train_size_probs) != len(args.train_img_sizes):
+                parser.error('--train-size-probs must have the same length as --train-img-sizes.')
+            probs = torch.tensor(args.train_size_probs)
+            if not torch.isfinite(probs).all() or (probs < 0).any() or probs.sum() <= 0:
+                parser.error('--train-size-probs must be finite, non-negative, and have a positive sum.')
+        if args.aug_splits > 0:
+            parser.error('Augmentation splits are not supported with scheduled resolution training.')
+        if args.train_size_schedule == 'progressive' and len(args.train_img_sizes) < 2:
+            parser.error('Progressive resolution training requires at least two --train-img-sizes values.')
+        if args.train_size_schedule == 'progressive' and args.epochs <= 0:
+            parser.error('--epochs must be positive for progressive resolution training.')
+        if args.train_size_schedule_spread < 0:
+            parser.error('--train-size-schedule-spread must be non-negative.')
+        if not 0 <= args.train_size_random_mix <= 1:
+            parser.error('--train-size-random-mix must be between 0 and 1.')
+        if args.train_batches_per_epoch is not None and args.train_batches_per_epoch <= 0:
+            parser.error('--train-batches-per-epoch must be positive.')
     device = utils.init_distributed_device(args)
     if args.distributed:
         _logger.info(
@@ -720,6 +787,7 @@ def main():
         )
 
     naflex_mode = False
+    scheduled_batch_mode = args.train_img_sizes is not None
     if args.naflex_loader:
         if utils.is_primary(args):
             _logger.info('Using NaFlex loader')
@@ -769,6 +837,16 @@ def main():
             **train_loader_kwargs,
         )
     else:
+        if scheduled_batch_mode and utils.is_primary(args):
+            scheduled_batch_sizes = args.train_batch_sizes or [args.batch_size] * len(args.train_img_sizes)
+            _logger.info(
+                f'Using scheduled training resolutions {args.train_img_sizes} with batch sizes '
+                f'{scheduled_batch_sizes}.')
+            if args.train_size_schedule == 'progressive':
+                _logger.info(
+                    f'Using progressive resolution schedule over {args.epochs} epochs with '
+                    f'spread={args.train_size_schedule_spread} and random_mix={args.train_size_random_mix}.')
+
         # setup mixup / cutmix
         collate_fn = None
         if mixup_active:
@@ -786,11 +864,25 @@ def main():
         loader_train = create_loader(
             dataset_train,
             input_size=data_config['input_size'],
+            input_size_choices=args.train_img_sizes,
+            batch_size_choices=args.train_batch_sizes,
+            batch_choice_weights=args.train_size_probs,
+            batch_choice_seed=args.seed,
+            batch_choice_schedule=args.train_size_schedule,
+            batch_schedule_epochs=args.epochs if args.train_size_schedule == 'progressive' else None,
+            batch_schedule_spread=args.train_size_schedule_spread,
+            batch_schedule_random_mix=args.train_size_random_mix,
+            num_batches=args.train_batches_per_epoch,
             collate_fn=collate_fn,
             use_multi_epochs_loader=args.use_multi_epochs_loader,
             **common_loader_kwargs,
             **train_loader_kwargs,
         )
+        if scheduled_batch_mode and utils.is_primary(args):
+            scheduled_sampler = loader_train.batch_sampler
+            _logger.info(
+                f'Scheduled loader has {len(scheduled_sampler)} batches/epoch using '
+                f'policy-average batch size {scheduled_sampler.average_batch_size:.2f}.')
 
     loader_eval = None
     if args.val_split:
@@ -1050,10 +1142,7 @@ def main():
     results = []
     try:
         for epoch in range(start_epoch, num_epochs):
-            if hasattr(dataset_train, 'set_epoch'):
-                dataset_train.set_epoch(epoch)
-            elif args.distributed and hasattr(loader_train.sampler, 'set_epoch'):
-                loader_train.sampler.set_epoch(epoch)
+            _set_loader_epoch(loader_train, epoch)
 
             train_metrics = train_one_epoch(
                 epoch,
@@ -1072,6 +1161,7 @@ def main():
                 mixup_fn=mixup_fn,
                 num_updates_total=num_epochs * updates_per_epoch,
                 naflex_mode=naflex_mode,
+                scheduled_batch_mode=scheduled_batch_mode,
             )
 
             if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
@@ -1190,6 +1280,7 @@ def train_one_epoch(
         mixup_fn=None,
         num_updates_total=None,
         naflex_mode=False,
+        scheduled_batch_mode=False,
 ):
     if args.mixup_off_epoch and epoch >= args.mixup_off_epoch:
         if args.prefetcher and loader.mixup_enabled:
@@ -1271,16 +1362,21 @@ def train_one_epoch(
         if naflex_mode:
             assert isinstance(input, dict)
             batch_size = input['patches'].shape[0]
+        else:
+            batch_size = input.shape[0]
 
-            # scale gradient vs the minimum batch size (for max seq len)
-            if not args.naflex_loss_scale or args.naflex_loss_scale == 'none':
+        if naflex_mode or scheduled_batch_mode:
+            loss_scale_mode = args.naflex_loss_scale if naflex_mode else args.variable_batch_loss_scale
+            if not loss_scale_mode or loss_scale_mode == 'none':
                 local_scale = 1.0
             else:
-                local_scale = (batch_size / args.batch_size)
-                if local_scale == 'sqrt':
+                local_scale = batch_size / args.batch_size
+                if loss_scale_mode == 'sqrt':
                     local_scale = local_scale ** 0.5
+                elif loss_scale_mode != 'linear':
+                    raise ValueError(f'Invalid variable batch loss scale mode: {loss_scale_mode}')
 
-            if args.distributed:
+            if naflex_mode and args.distributed:
                 # scale gradient btw distributed ranks, each one can have different batch size
                 global_batch_size = utils.reduce_tensor(
                     torch.tensor(batch_size, device=device, dtype=torch.float32),
@@ -1290,6 +1386,8 @@ def train_one_epoch(
             else:
                 dist_scale = None
                 global_batch_size = batch_size
+                if args.distributed:
+                    global_batch_size *= args.world_size
 
             if has_no_sync and not need_update:
                 with task.no_sync():
@@ -1305,7 +1403,7 @@ def train_one_epoch(
                     scaled_loss *= dist_scale
                 _backward(scaled_loss)
         else:
-            global_batch_size = batch_size = input.shape[0]
+            global_batch_size = batch_size
             if args.distributed:
                 global_batch_size *= args.world_size
 
