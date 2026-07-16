@@ -27,7 +27,8 @@ class ScheduledBatchSampler(Sampler[List[Tuple[Any, int]]]):
     Args:
         sampler: Base sample-index sampler.
         batch_sizes: Batch size corresponding to each transform choice.
-        choice_weights: Base sampling weights for the choices.
+        choice_weights: Base sampling weights for the choices. A zero weight
+            excludes that choice from all schedules.
         seed: Seed shared by schedule creation and shuffling.
         drop_last: Drop an undersized tail in sample-budget mode.
         shuffle_schedule: Shuffle batch order within each epoch.
@@ -38,8 +39,8 @@ class ScheduledBatchSampler(Sampler[List[Tuple[Any, int]]]):
             from the first choice to the last.
         schedule_spread: Progressive probability-window standard deviation in
             choice-index units. Zero selects only the nearest choice.
-        schedule_random_mix: Fraction of uniform exploration mixed into the
-            progressive choice probabilities.
+        schedule_random_mix: Fraction of uniform exploration over active
+            choices mixed into the progressive choice probabilities.
     """
 
     def __init__(
@@ -58,6 +59,8 @@ class ScheduledBatchSampler(Sampler[List[Tuple[Any, int]]]):
     ) -> None:
         if not hasattr(sampler, '__len__'):
             raise TypeError('ScheduledBatchSampler requires a sampler with a length.')
+        if len(sampler) <= 0:
+            raise ValueError('ScheduledBatchSampler requires a non-empty sampler.')
         if not batch_sizes:
             raise ValueError('batch_sizes must contain at least one value.')
         if any(int(batch_size) != batch_size or batch_size <= 0 for batch_size in batch_sizes):
@@ -77,6 +80,11 @@ class ScheduledBatchSampler(Sampler[List[Tuple[Any, int]]]):
         self.sampler = sampler
         self.batch_sizes = tuple(int(batch_size) for batch_size in batch_sizes)
         self.choice_weights = self._normalize_choice_weights(choice_weights)
+        self._active_choices = tuple(
+            choice_index
+            for choice_index, choice_weight in enumerate(self.choice_weights)
+            if choice_weight > 0
+        )
         self.seed = seed
         self.drop_last = drop_last
         self.shuffle_schedule = shuffle_schedule
@@ -89,16 +97,20 @@ class ScheduledBatchSampler(Sampler[List[Tuple[Any, int]]]):
         if choice_schedule == 'progressive' and num_batches is None:
             num_batches = self._infer_num_batches()
         self.num_batches = int(num_batches) if num_batches is not None else None
-        self._sample_budget_schedule: Tuple[Tuple[int, int], ...] = (
-            self._create_sample_budget_schedule() if self.num_batches is None else ()
-        )
+        self._sample_budget_schedule: Tuple[Tuple[int, int], ...] = ()
+        if self.num_batches is None:
+            self._sample_budget_schedule = self._create_sample_budget_schedule()
+            if not self._sample_budget_schedule:
+                raise ValueError(
+                    'No full scheduled batch fits the sampler; reduce the batch sizes.'
+                )
 
     def _normalize_choice_weights(
             self,
             choice_weights: Optional[Sequence[float]],
     ) -> torch.Tensor:
         if choice_weights is None:
-            return torch.full((len(self.batch_sizes),), 1. / len(self.batch_sizes), dtype=torch.float64)
+            return torch.full((len(self.batch_sizes),), 1.0 / len(self.batch_sizes), dtype=torch.float64)
         if len(choice_weights) != len(self.batch_sizes):
             raise ValueError('choice_weights and batch_sizes must have the same length.')
 
@@ -123,9 +135,9 @@ class ScheduledBatchSampler(Sampler[List[Tuple[Any, int]]]):
             return self.choice_weights
 
         if self.schedule_epochs == 1:
-            progress = 1.
+            progress = 1.0
         else:
-            progress = min(max(epoch / (self.schedule_epochs - 1), 0.), 1.)
+            progress = min(max(epoch / (self.schedule_epochs - 1), 0.0), 1.0)
         choice_positions = torch.arange(len(self.batch_sizes), dtype=torch.float64)
         center = progress * (len(self.batch_sizes) - 1)
 
@@ -138,24 +150,25 @@ class ScheduledBatchSampler(Sampler[List[Tuple[Any, int]]]):
             )
         curriculum_weights *= self.choice_weights
         if curriculum_weights.sum() <= 0:
-            curriculum_weights = self.choice_weights.clone()
+            nearest_active = min(self._active_choices, key=lambda index: abs(index - center))
+            curriculum_weights = torch.zeros_like(self.choice_weights)
+            curriculum_weights[nearest_active] = 1.0
         else:
             curriculum_weights /= curriculum_weights.sum()
 
         if self.schedule_random_mix:
-            random_weights = torch.full_like(curriculum_weights, 1. / len(curriculum_weights))
+            random_weights = (self.choice_weights > 0).to(curriculum_weights.dtype)
+            random_weights /= random_weights.sum()
             curriculum_weights = (
-                (1. - self.schedule_random_mix) * curriculum_weights
-                + self.schedule_random_mix * random_weights
-            )
+                1.0 - self.schedule_random_mix
+            ) * curriculum_weights + self.schedule_random_mix * random_weights
         return curriculum_weights / curriculum_weights.sum()
 
     def _calculate_average_batch_size(self) -> float:
         batch_sizes = torch.tensor(self.batch_sizes, dtype=torch.float64)
         if self.choice_schedule == 'progressive':
             expected_batch_sizes = [
-                torch.dot(self.choice_weights_for_epoch(epoch), batch_sizes)
-                for epoch in range(self.schedule_epochs)
+                torch.dot(self.choice_weights_for_epoch(epoch), batch_sizes) for epoch in range(self.schedule_epochs)
             ]
             return float(torch.stack(expected_batch_sizes).mean().item())
         return float(torch.dot(self.choice_weights, batch_sizes).item())
@@ -164,11 +177,17 @@ class ScheduledBatchSampler(Sampler[List[Tuple[Any, int]]]):
         if len(set(self.batch_sizes)) == 1:
             batch_size = self.batch_sizes[0]
             if self.drop_last:
-                return len(self.sampler) // batch_size
-            return math.ceil(len(self.sampler) / batch_size)
-        if self.drop_last:
-            return int(len(self.sampler) / self.average_batch_size)
-        return math.ceil(len(self.sampler) / self.average_batch_size)
+                num_batches = len(self.sampler) // batch_size
+            else:
+                num_batches = math.ceil(len(self.sampler) / batch_size)
+        else:
+            if self.drop_last:
+                num_batches = int(len(self.sampler) / self.average_batch_size)
+            else:
+                num_batches = math.ceil(len(self.sampler) / self.average_batch_size)
+        if num_batches < 1:
+            raise ValueError('No full scheduled batch fits the sampler; reduce the batch sizes.')
+        return num_batches
 
     def _sample_choice(
             self,
@@ -183,22 +202,19 @@ class ScheduledBatchSampler(Sampler[List[Tuple[Any, int]]]):
         valid_choices = tuple(valid_choices)
         weights = choice_weights[list(valid_choices)]
         if weights.sum() <= 0:
-            # A zero-weight choice may still be needed to consume the tail of an epoch.
-            weights = torch.ones_like(weights)
+            raise RuntimeError('No positive-weight scheduled choice is available for this batch.')
         sampled_index = int(torch.multinomial(weights, 1, generator=generator).item())
         return valid_choices[sampled_index]
 
     def _create_sample_budget_schedule(self) -> Tuple[Tuple[int, int], ...]:
         generator = torch.Generator().manual_seed(self.seed)
         remaining = len(self.sampler)
-        min_batch_size = min(self.batch_sizes)
+        min_batch_size = min(self.batch_sizes[index] for index in self._active_choices)
         schedule = []
 
         while remaining >= min_batch_size:
             valid_choices = [
-                choice_index
-                for choice_index, batch_size in enumerate(self.batch_sizes)
-                if batch_size <= remaining
+                choice_index for choice_index in self._active_choices if self.batch_sizes[choice_index] <= remaining
             ]
             choice_index = self._sample_choice(generator, valid_choices)
             batch_size = self.batch_sizes[choice_index]

@@ -512,7 +512,13 @@ class NaFlexMapDatasetWrapper(IterableDataset):
 
         # Snapshot the shared epoch once, then build process-local derived state.
         epoch = self.shared_epoch.value
-        batches_for_worker = self._prepare_epoch_batches(epoch)[worker_id::num_workers]
+        if worker_id == 0:
+            epoch_batches = self._prepare_epoch_batches(epoch)
+        else:
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                epoch_batches = self._prepare_epoch_batches(epoch)
+        batches_for_worker = epoch_batches[worker_id::num_workers]
         for seq_len, patch_idx, indices in batches_for_worker:
             if not indices: # Skip if a batch ended up with no indices (shouldn't happen often)
                  continue

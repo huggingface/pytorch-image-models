@@ -302,7 +302,8 @@ def create_loader(
         batch_choice_schedule: Choice schedule mode, either ``constant`` or ``progressive``.
         batch_schedule_epochs: Number of epochs over which a progressive schedule moves through its choices.
         batch_schedule_spread: Standard deviation of the progressive choice window, in choice-index units.
-        batch_schedule_random_mix: Fraction of uniform random exploration in a progressive schedule.
+        batch_schedule_random_mix: Fraction of uniform random exploration over nonzero-weight choices in a
+            progressive schedule.
         num_batches: Fixed number of loader batches per epoch. Inferred from the schedule-average batch size
             for progressive schedules when not specified.
 
@@ -387,7 +388,11 @@ def create_loader(
         if (
                 batch_size_choices is not None
                 or batch_choice_weights is not None
+                or batch_choice_seed != 0
                 or batch_choice_schedule != 'constant'
+                or batch_schedule_epochs is not None
+                or batch_schedule_spread != 0.65
+                or batch_schedule_random_mix != 0.1
                 or num_batches is not None
         ):
             raise ValueError('input_size_choices must be specified when using scheduled batch options.')

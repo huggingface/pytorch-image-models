@@ -9,7 +9,6 @@ from timm.data import FastCollateMixup, ScheduledBatchSampler, ScheduledTransfor
 
 
 class _ImageDataset(Dataset):
-
     def __init__(self, length=64, image_size=48):
         self.length = length
         self.image_size = image_size
@@ -55,7 +54,6 @@ def test_scheduled_batch_sampler_stable_epoch_length_and_composition():
 
 def test_sample_budget_schedule_is_created_once_and_cached():
     class TrackingScheduledBatchSampler(ScheduledBatchSampler):
-
         def __init__(self, *args, **kwargs):
             self.schedule_create_count = 0
             super().__init__(*args, **kwargs)
@@ -73,6 +71,60 @@ def test_sample_budget_schedule_is_created_once_and_cached():
     assert batch_sampler.schedule_create_count == 1
     assert len(batch_sampler) == len(batch_sampler) == len(list(batch_sampler))
     assert batch_sampler.schedule_create_count == 1
+
+
+def test_zero_weight_choices_are_excluded_from_progressive_random_mix_and_sample_budget():
+    progressive_sampler = ScheduledBatchSampler(
+        SequentialSampler(range(64)),
+        batch_sizes=(16, 8, 4),
+        choice_weights=(1, 0, 0),
+        choice_schedule='progressive',
+        schedule_epochs=3,
+        schedule_random_mix=0.1,
+    )
+
+    for epoch in range(3):
+        assert progressive_sampler.choice_weights_for_epoch(epoch)[1:].tolist() == [0, 0]
+
+    snap_sampler = ScheduledBatchSampler(
+        SequentialSampler(range(64)),
+        batch_sizes=(16, 12, 8, 4),
+        choice_weights=(1, 0, 0, 1),
+        choice_schedule='progressive',
+        schedule_epochs=4,
+        schedule_spread=0,
+        schedule_random_mix=0,
+    )
+    assert snap_sampler.choice_weights_for_epoch(1).tolist() == [1, 0, 0, 0]
+    assert snap_sampler.choice_weights_for_epoch(2).tolist() == [0, 0, 0, 1]
+
+    sample_budget_sampler = ScheduledBatchSampler(
+        SequentialSampler(range(12)),
+        batch_sizes=(8, 4),
+        choice_weights=(1, 0),
+    )
+    batches = list(sample_budget_sampler)
+    assert _batch_signature(batches) == [(0, 8)]
+
+
+def test_progressive_schedule_rejects_when_no_full_batch_fits():
+    with pytest.raises(ValueError, match='No full scheduled batch'):
+        ScheduledBatchSampler(
+            SequentialSampler(range(3)),
+            batch_sizes=(8, 4),
+            choice_schedule='progressive',
+            schedule_epochs=3,
+        )
+
+
+def test_sample_budget_schedule_rejects_when_no_full_batch_fits():
+    with pytest.raises(ValueError, match='No full scheduled batch'):
+        ScheduledBatchSampler(SequentialSampler(range(3)), batch_sizes=(8, 4))
+
+
+def test_scheduled_batch_sampler_rejects_empty_sampler():
+    with pytest.raises(ValueError, match='non-empty sampler'):
+        ScheduledBatchSampler(SequentialSampler(range(0)), batch_sizes=(8, 4))
 
 
 def test_scheduled_batch_sampler_distributed_shapes_match():
@@ -123,13 +175,13 @@ def test_progressive_schedule_moves_choices_and_preserves_constant_batch_budget(
     assert [index for batch in epoch_0 for index, _ in batch] == list(range(1000))
     assert [index for batch in epoch_4 for index, _ in batch] == list(range(1000))
     assert sum(choice for choice, _ in _batch_signature(epoch_0)) < sum(
-        choice for choice, _ in _batch_signature(epoch_4)
+        choice
+        for choice, _ in _batch_signature(epoch_4)
     )
 
 
 def test_progressive_schedule_is_created_when_iteration_starts():
     class TrackingScheduledBatchSampler(ScheduledBatchSampler):
-
         def __init__(self, *args, **kwargs):
             self.created_epochs = []
             super().__init__(*args, **kwargs)
@@ -168,10 +220,12 @@ def test_progressive_schedule_infers_policy_average_batch_budget_and_cycles_indi
         schedule_random_mix=0.1,
     )
     batch_sizes = torch.tensor(batch_sampler.batch_sizes, dtype=torch.float64)
-    expected_average = torch.stack([
-        torch.dot(batch_sampler.choice_weights_for_epoch(epoch), batch_sizes)
-        for epoch in range(5)
-    ]).mean().item()
+    expected_average = (
+        torch
+        .stack([torch.dot(batch_sampler.choice_weights_for_epoch(epoch), batch_sizes) for epoch in range(5)])
+        .mean()
+        .item()
+    )
 
     assert batch_sampler.average_batch_size == pytest.approx(expected_average)
     assert len(batch_sampler) == int(len(sampler) / expected_average)
@@ -179,8 +233,8 @@ def test_progressive_schedule_infers_policy_average_batch_budget_and_cycles_indi
     epoch_0 = list(batch_sampler)
     epoch_0_indices = [index for batch in epoch_0 for index, _ in batch]
     assert len(epoch_0_indices) > len(sampler)
-    assert epoch_0_indices[:len(sampler)] == list(range(len(sampler)))
-    assert epoch_0_indices[len(sampler):] == list(range(len(epoch_0_indices) - len(sampler)))
+    assert epoch_0_indices[: len(sampler)] == list(range(len(sampler)))
+    assert epoch_0_indices[len(sampler) :] == list(range(len(epoch_0_indices) - len(sampler)))
 
     batch_sampler.set_epoch(4)
     epoch_4 = list(batch_sampler)
@@ -190,10 +244,7 @@ def test_progressive_schedule_infers_policy_average_batch_budget_and_cycles_indi
 
 def test_progressive_schedule_distributed_shapes_match_and_advance():
     dataset = list(range(96))
-    samplers = [
-        DistributedSampler(dataset, num_replicas=2, rank=rank, shuffle=True, seed=11)
-        for rank in range(2)
-    ]
+    samplers = [DistributedSampler(dataset, num_replicas=2, rank=rank, shuffle=True, seed=11) for rank in range(2)]
     batch_samplers = [
         ScheduledBatchSampler(
             sampler,
@@ -220,16 +271,12 @@ def test_progressive_schedule_distributed_shapes_match_and_advance():
     for rank_batches in (*epoch_0, *epoch_2):
         assert len(rank_batches) == 8
     for rank_epochs in (epoch_0, epoch_2):
-        rank_indices = [
-            {index for batch in rank_batches for index, _ in batch}
-            for rank_batches in rank_epochs
-        ]
+        rank_indices = [{index for batch in rank_batches for index, _ in batch} for rank_batches in rank_epochs]
         assert rank_indices[0].isdisjoint(rank_indices[1])
 
 
 def test_scheduled_transform_dataset_preserves_sample_fields():
     class ExtraFieldDataset(Dataset):
-
         def __getitem__(self, index):
             return index, index + 1, f'sample-{index}'
 
@@ -346,6 +393,30 @@ def test_create_loader_rejects_scheduled_resolutions_with_multi_epochs_loader():
             use_multi_epochs_loader=True,
             num_workers=0,
             persistent_workers=False,
+        )
+
+
+@pytest.mark.parametrize(
+    'scheduled_option',
+    (
+        {'batch_choice_seed': 7},
+        {'batch_schedule_epochs': 3},
+        {'batch_schedule_spread': 0.5},
+        {'batch_schedule_random_mix': 0.2},
+    ),
+)
+def test_create_loader_rejects_scheduled_options_without_input_size_choices(scheduled_option):
+    with pytest.raises(ValueError, match='input_size_choices'):
+        create_loader(
+            _ImageDataset(length=32),
+            input_size=(3, 32, 32),
+            batch_size=4,
+            is_training=True,
+            no_aug=True,
+            use_prefetcher=False,
+            num_workers=0,
+            persistent_workers=False,
+            **scheduled_option,
         )
 
 
