@@ -70,6 +70,8 @@ class ScheduledBatchSampler(Sampler[List[Tuple[Any, int]]]):
         if choice_schedule not in ('constant', 'progressive'):
             raise ValueError("choice_schedule must be 'constant' or 'progressive'.")
         if choice_schedule == 'progressive':
+            if len(batch_sizes) < 2:
+                raise ValueError('A progressive schedule requires at least two choices.')
             if schedule_epochs is None or int(schedule_epochs) != schedule_epochs or schedule_epochs <= 0:
                 raise ValueError('schedule_epochs must be a positive integer for a progressive schedule.')
             if schedule_spread < 0:

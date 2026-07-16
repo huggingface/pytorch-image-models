@@ -86,6 +86,16 @@ def test_constant_schedule_ignores_progressive_only_options():
     assert len(batch_sampler) > 0
 
 
+def test_progressive_schedule_requires_multiple_choices():
+    with pytest.raises(ValueError, match='at least two'):
+        ScheduledBatchSampler(
+            SequentialSampler(range(32)),
+            batch_sizes=(8,),
+            choice_schedule='progressive',
+            schedule_epochs=3,
+        )
+
+
 def test_zero_weight_choices_are_excluded_from_progressive_random_mix_and_sample_budget():
     progressive_sampler = ScheduledBatchSampler(
         SequentialSampler(range(64)),
@@ -341,6 +351,22 @@ def test_create_loader_scheduled_resolutions_default_to_batch_size():
     )
 
     assert all(images.shape[0] == 4 for images, _ in loader)
+
+
+@pytest.mark.parametrize('invalid_size', (0, (16, 0), (3, 16, 0)))
+def test_create_loader_rejects_nonpositive_scheduled_dimensions(invalid_size):
+    with pytest.raises(ValueError, match='dimensions must be positive'):
+        create_loader(
+            _ImageDataset(),
+            input_size=(3, 32, 32),
+            batch_size=4,
+            input_size_choices=(invalid_size, 16),
+            is_training=True,
+            no_aug=True,
+            use_prefetcher=False,
+            num_workers=0,
+            persistent_workers=False,
+        )
 
 
 def test_create_loader_progressive_resolutions_keep_default_batch_and_sample_counts():
