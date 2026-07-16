@@ -73,6 +73,19 @@ def test_sample_budget_schedule_is_created_once_and_cached():
     assert batch_sampler.schedule_create_count == 1
 
 
+def test_constant_schedule_ignores_progressive_only_options():
+    batch_sampler = ScheduledBatchSampler(
+        SequentialSampler(range(32)),
+        batch_sizes=(8, 4),
+        choice_schedule='constant',
+        schedule_epochs=0,
+        schedule_spread=-1,
+        schedule_random_mix=2,
+    )
+
+    assert len(batch_sampler) > 0
+
+
 def test_zero_weight_choices_are_excluded_from_progressive_random_mix_and_sample_budget():
     progressive_sampler = ScheduledBatchSampler(
         SequentialSampler(range(64)),
@@ -405,19 +418,20 @@ def test_create_loader_rejects_scheduled_resolutions_with_multi_epochs_loader():
         {'batch_schedule_random_mix': 0.2},
     ),
 )
-def test_create_loader_rejects_scheduled_options_without_input_size_choices(scheduled_option):
-    with pytest.raises(ValueError, match='input_size_choices'):
-        create_loader(
-            _ImageDataset(length=32),
-            input_size=(3, 32, 32),
-            batch_size=4,
-            is_training=True,
-            no_aug=True,
-            use_prefetcher=False,
-            num_workers=0,
-            persistent_workers=False,
-            **scheduled_option,
-        )
+def test_create_loader_ignores_scheduled_options_without_input_size_choices(scheduled_option):
+    loader = create_loader(
+        _ImageDataset(length=32),
+        input_size=(3, 32, 32),
+        batch_size=4,
+        is_training=True,
+        no_aug=True,
+        use_prefetcher=False,
+        num_workers=0,
+        persistent_workers=False,
+        **scheduled_option,
+    )
+
+    assert loader.batch_size == 4
 
 
 def test_create_loader_standard_batching_path_is_unchanged():
