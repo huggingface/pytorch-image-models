@@ -69,13 +69,13 @@ class ScheduledBatchSampler(Sampler[List[Tuple[Any, int]]]):
             raise ValueError('num_batches must be a positive integer when specified.')
         if choice_schedule not in ('constant', 'progressive'):
             raise ValueError("choice_schedule must be 'constant' or 'progressive'.")
-        if schedule_spread < 0:
-            raise ValueError('schedule_spread must be non-negative.')
-        if not 0 <= schedule_random_mix <= 1:
-            raise ValueError('schedule_random_mix must be between 0 and 1.')
         if choice_schedule == 'progressive':
             if schedule_epochs is None or int(schedule_epochs) != schedule_epochs or schedule_epochs <= 0:
                 raise ValueError('schedule_epochs must be a positive integer for a progressive schedule.')
+            if schedule_spread < 0:
+                raise ValueError('schedule_spread must be non-negative.')
+            if not 0 <= schedule_random_mix <= 1:
+                raise ValueError('schedule_random_mix must be between 0 and 1.')
 
         self.sampler = sampler
         self.batch_sizes = tuple(int(batch_size) for batch_size in batch_sizes)

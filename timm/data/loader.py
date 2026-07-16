@@ -385,17 +385,6 @@ def create_loader(
         dataset.transform = None
         dataset = ScheduledTransformDataset(dataset, transforms)
     else:
-        if (
-                batch_size_choices is not None
-                or batch_choice_weights is not None
-                or batch_choice_seed != 0
-                or batch_choice_schedule != 'constant'
-                or batch_schedule_epochs is not None
-                or batch_schedule_spread != 0.65
-                or batch_schedule_random_mix != 0.1
-                or num_batches is not None
-        ):
-            raise ValueError('input_size_choices must be specified when using scheduled batch options.')
         dataset.transform = create_transform(input_size, **transform_kwargs)
 
     if isinstance(dataset, IterableImageDataset):

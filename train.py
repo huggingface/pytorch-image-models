@@ -504,22 +504,7 @@ def main():
         parser.error('--use-multi-epochs-loader is not supported with --naflex-loader.')
     if args.train_img_sizes is not None and args.use_multi_epochs_loader:
         parser.error('--use-multi-epochs-loader is not supported with --train-img-sizes.')
-    if args.train_size_schedule_spread < 0:
-        parser.error('--train-size-schedule-spread must be non-negative.')
-    if not 0 <= args.train_size_random_mix <= 1:
-        parser.error('--train-size-random-mix must be between 0 and 1.')
-    if args.train_img_sizes is None:
-        if (
-                args.train_batch_sizes is not None
-                or args.train_size_probs is not None
-                or args.train_size_schedule != 'constant'
-                or args.train_size_schedule_spread != 0.65
-                or args.train_size_random_mix != 0.1
-                or args.train_batches_per_epoch is not None
-                or args.variable_batch_loss_scale != 'none'
-        ):
-            parser.error('--train-img-sizes is required with scheduled resolution loader options.')
-    else:
+    if args.train_img_sizes is not None:
         if any(size <= 0 for size in args.train_img_sizes):
             parser.error('--train-img-sizes values must be positive.')
         if args.train_batch_sizes is not None:
@@ -535,10 +520,15 @@ def main():
                 parser.error('--train-size-probs must be finite, non-negative, and have a positive sum.')
         if args.aug_splits > 0:
             parser.error('Augmentation splits are not supported with scheduled resolution training.')
-        if args.train_size_schedule == 'progressive' and len(args.train_img_sizes) < 2:
-            parser.error('Progressive resolution training requires at least two --train-img-sizes values.')
-        if args.train_size_schedule == 'progressive' and args.epochs <= 0:
-            parser.error('--epochs must be positive for progressive resolution training.')
+        if args.train_size_schedule == 'progressive':
+            if len(args.train_img_sizes) < 2:
+                parser.error('Progressive resolution training requires at least two --train-img-sizes values.')
+            if args.epochs <= 0:
+                parser.error('--epochs must be positive for progressive resolution training.')
+            if args.train_size_schedule_spread < 0:
+                parser.error('--train-size-schedule-spread must be non-negative.')
+            if not 0 <= args.train_size_random_mix <= 1:
+                parser.error('--train-size-random-mix must be between 0 and 1.')
         if args.train_batches_per_epoch is not None and args.train_batches_per_epoch <= 0:
             parser.error('--train-batches-per-epoch must be positive.')
     device = utils.init_distributed_device(args)
@@ -847,7 +837,7 @@ def main():
             input_size_choices=args.train_img_sizes,
             batch_size_choices=args.train_batch_sizes,
             batch_choice_weights=args.train_size_probs,
-            batch_choice_seed=args.seed if scheduled_batch_mode else 0,
+            batch_choice_seed=args.seed,
             batch_choice_schedule=args.train_size_schedule,
             batch_schedule_epochs=args.epochs if args.train_size_schedule == 'progressive' else None,
             batch_schedule_spread=args.train_size_schedule_spread,
