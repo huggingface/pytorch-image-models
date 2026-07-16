@@ -502,35 +502,6 @@ def main():
         parser.error('--naflex-loader and --train-img-sizes are alternative loader modes.')
     if args.naflex_loader and args.use_multi_epochs_loader:
         parser.error('--use-multi-epochs-loader is not supported with --naflex-loader.')
-    if args.train_img_sizes is not None and args.use_multi_epochs_loader:
-        parser.error('--use-multi-epochs-loader is not supported with --train-img-sizes.')
-    if args.train_img_sizes is not None:
-        if any(size <= 0 for size in args.train_img_sizes):
-            parser.error('--train-img-sizes values must be positive.')
-        if args.train_batch_sizes is not None:
-            if len(args.train_batch_sizes) != len(args.train_img_sizes):
-                parser.error('--train-batch-sizes must have the same length as --train-img-sizes.')
-            if any(batch_size <= 0 for batch_size in args.train_batch_sizes):
-                parser.error('--train-batch-sizes values must be positive.')
-        if args.train_size_probs is not None:
-            if len(args.train_size_probs) != len(args.train_img_sizes):
-                parser.error('--train-size-probs must have the same length as --train-img-sizes.')
-            probs = torch.tensor(args.train_size_probs)
-            if not torch.isfinite(probs).all() or (probs < 0).any() or probs.sum() <= 0:
-                parser.error('--train-size-probs must be finite, non-negative, and have a positive sum.')
-        if args.aug_splits > 0:
-            parser.error('Augmentation splits are not supported with scheduled resolution training.')
-        if args.train_size_schedule == 'progressive':
-            if len(args.train_img_sizes) < 2:
-                parser.error('Progressive resolution training requires at least two --train-img-sizes values.')
-            if args.epochs <= 0:
-                parser.error('--epochs must be positive for progressive resolution training.')
-            if args.train_size_schedule_spread < 0:
-                parser.error('--train-size-schedule-spread must be non-negative.')
-            if not 0 <= args.train_size_random_mix <= 1:
-                parser.error('--train-size-random-mix must be between 0 and 1.')
-        if args.train_batches_per_epoch is not None and args.train_batches_per_epoch <= 0:
-            parser.error('--train-batches-per-epoch must be positive.')
     device = utils.init_distributed_device(args)
     if args.distributed:
         _logger.info(

@@ -372,6 +372,8 @@ def create_loader(
                     raise ValueError('All scheduled input sizes must use the same number of channels.')
             else:
                 raise ValueError('Scheduled input sizes must be scalars, HW tuples, or CHW tuples.')
+            if any(dimension <= 0 for dimension in size):
+                raise ValueError('All scheduled input size dimensions must be positive.')
             resolved_input_sizes.append(size)
 
         if batch_size_choices is None:
