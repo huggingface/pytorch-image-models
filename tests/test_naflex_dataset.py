@@ -1,3 +1,6 @@
+import warnings
+from types import SimpleNamespace
+
 import torch
 from torch.utils.data import DataLoader, Dataset
 
@@ -5,7 +8,6 @@ from timm.data import NaFlexMapDatasetWrapper
 
 
 class _TensorImageDataset(Dataset):
-
     def __init__(self, length=32):
         self.length = length
 
@@ -68,19 +70,29 @@ def test_naflex_persistent_workers_read_shared_epoch():
         dataset.set_epoch(1)
         epoch_1_indices = _loader_indices(loader)
 
-        expected_epoch_0 = [
-            index
-            for _, _, indices in dataset._prepare_epoch_batches(0)
-            for index in indices
-        ]
-        expected_epoch_1 = [
-            index
-            for _, _, indices in dataset._prepare_epoch_batches(1)
-            for index in indices
-        ]
+        expected_epoch_0 = [index for _, _, indices in dataset._prepare_epoch_batches(0) for index in indices]
+        expected_epoch_1 = [index for _, _, indices in dataset._prepare_epoch_batches(1) for index in indices]
         assert epoch_0_indices == expected_epoch_0
         assert epoch_1_indices == expected_epoch_1
         assert epoch_1_indices != epoch_0_indices
     finally:
         if loader._iterator is not None:
             loader._iterator._shutdown_workers()
+
+
+def test_naflex_epoch_prep_warnings_only_emitted_by_worker_zero(monkeypatch):
+    dataset = _create_naflex_dataset()
+
+    def prepare(_epoch):
+        warnings.warn('epoch prep mismatch')
+        return []
+
+    dataset._prepare_epoch_batches = prepare
+
+    for worker_id, expected_warnings in ((0, 1), (1, 0)):
+        worker_info = SimpleNamespace(id=worker_id, num_workers=2)
+        monkeypatch.setattr(torch.utils.data, 'get_worker_info', lambda: worker_info)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            list(dataset)
+        assert len(caught) == expected_warnings
