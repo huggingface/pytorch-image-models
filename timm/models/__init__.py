@@ -27,6 +27,7 @@ from .focalnet import *
 from .gcvit import *
 from .gemma4_vit import *
 from .ghostnet import *
+from .gmnet import *
 from .hardcorenas import *
 from .hgnet import *
 from .hiera import *
