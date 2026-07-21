@@ -26,7 +26,7 @@ def parse_model_name(model_name: str) -> Tuple[Optional[str], str]:
         # FIXME may use fragment as revision, currently `@` in URI path
         return parsed.scheme, parsed.path
     elif parsed.scheme == 'local-dir':
-        return parsed.scheme, parsed.path + parsed.fragment
+        return parsed.scheme, model_name[len('local-dir:'):]
     else:
         model_name = os.path.split(parsed.path)[-1]
         return None, model_name
