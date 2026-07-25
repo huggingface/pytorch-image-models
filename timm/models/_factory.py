@@ -1,7 +1,6 @@
-import os
+import re
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
-from urllib.parse import urlsplit
 
 from torch import nn
 
@@ -14,22 +13,60 @@ from ._registry import is_model, model_entrypoint, split_model_name_tag
 
 __all__ = ['parse_model_name', 'safe_model_name', 'create_model']
 
+# Model sources that may be specified as a URI-like scheme prefix on model names.
+_MODEL_SOURCES = ('hf-hub', 'local-dir')
+# Deprecated source aliases, mapped to their current equivalent.
+_MODEL_SOURCE_ALIASES = {'hf_hub': 'hf-hub'}
+# A source prefix, requires 2+ chars so single letter Windows drive specifiers (C:\...) are not matched.
+_SOURCE_PREFIX_PATTERN = re.compile(r'[a-zA-Z][a-zA-Z0-9+.\-_]+')
+# Characters that never appear in a timm registry model name, both platforms' separators + drive/scheme colon.
+_PATH_CHARS = ('/', '\\', ':')
+
 
 def parse_model_name(model_name: str) -> Tuple[Optional[str], str]:
-    """Parse source and name from potentially prefixed model name."""
-    if model_name.startswith('hf_hub'):
-        # NOTE for backwards compat, deprecate hf_hub use
-        model_name = model_name.replace('hf_hub', 'hf-hub')
-    parsed = urlsplit(model_name)
-    assert parsed.scheme in ('', 'hf-hub', 'local-dir')
-    if parsed.scheme == 'hf-hub':
-        # FIXME may use fragment as revision, currently `@` in URI path
-        return parsed.scheme, parsed.path
-    elif parsed.scheme == 'local-dir':
-        return parsed.scheme, parsed.path
-    else:
-        model_name = os.path.split(parsed.path)[-1]
+    """Parse source and name from potentially prefixed model name.
+
+    Everything after a recognized source prefix is treated as an opaque identifier (a Hugging Face
+    Hub repo id or a local filesystem path). It is deliberately not URL parsed, so Windows drive
+    letters, UNC paths, and paths containing characters such as '#', '?' or '@' pass through as-is.
+
+    Args:
+        model_name: Model name, optionally prefixed with a source, e.g. ``hf-hub:timm/resnet18.a1_in1k``
+            or ``local-dir:/path/to/model_folder``.
+
+    Returns:
+        Tuple of (source, model_id). Source is None for plain (timm registry) model names.
+
+    Raises:
+        ValueError: If a source prefix is present but unknown, or has an empty model id. Also if no prefix
+            is present but the name looks like a path or Hub repo id, as falling back to a registry model
+            of the same basename would silently load different weights (or drop the repo owner).
+    """
+    source, sep, model_id = model_name.partition(':')
+    if not sep or not _SOURCE_PREFIX_PATTERN.fullmatch(source):
+        # no source prefix, must name a model in the timm registry
+        if any(c in model_name for c in _PATH_CHARS):
+            # a Hub repo id and a relative folder are not distinguishable here, so name both sources
+            raise ValueError(
+                f"Model name '{model_name}' has no source prefix but looks like a Hugging Face Hub repo id"
+                f" or a local path. Use 'hf-hub:{model_name}' to load from the Hub"
+                f" or 'local-dir:{model_name}' to load from a local folder."
+            )
         return None, model_name
+
+    source = source.lower()
+    # NOTE for backwards compat, deprecated hf_hub use
+    source = _MODEL_SOURCE_ALIASES.get(source, source)
+    if source not in _MODEL_SOURCES:
+        raise ValueError(
+            f"Unknown model source '{source}' in model name '{model_name}',"
+            f" valid sources: {', '.join(_MODEL_SOURCES)}."
+        )
+    if not model_id:
+        raise ValueError(f"Model name '{model_name}' has no model id / path after the '{source}:' prefix.")
+
+    # FIXME may use fragment as revision, currently `@` in URI path
+    return source, model_id
 
 
 def safe_model_name(model_name: str, remove_source: bool = True) -> str:

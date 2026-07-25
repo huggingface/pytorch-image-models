@@ -262,28 +262,33 @@ _PREFERRED_FILES = (
 )
 _EXT_PRIORITY = ('.safetensors', '.pth', '.pth.tar', '.bin')
 
+
 def load_state_dict_from_path(
-        path: str,
+        path: Union[str, Path],
         weights_only: bool = True,
 ):
+    path = Path(path)
     found_file = None
     for fname in _PREFERRED_FILES:
         p = path / fname
         if p.exists():
-            logging.info(f"Found preferred checkpoint: {p.name}")
+            _logger.info(f"Found preferred checkpoint: {p.name}")
             found_file = p
             break
 
-    # fallback: first match per‑extension class
-    for ext in _EXT_PRIORITY:
-        files = sorted(path.glob(f"*{ext}"))
-        if files:
-            if len(files) > 1:
-                logging.warning(
-                    f"Multiple {ext} checkpoints in {path}: {names}. "
-                    f"Using '{files[0].name}'."
-                )
-            found_file = files[0]
+    if found_file is None:
+        # fallback: first match per‑extension class, in extension priority order
+        for ext in _EXT_PRIORITY:
+            files = sorted(path.glob(f"*{ext}"))
+            if files:
+                if len(files) > 1:
+                    names = [f.name for f in files]
+                    _logger.warning(
+                        f"Multiple {ext} checkpoints in {path}: {names}. "
+                        f"Using '{files[0].name}'."
+                    )
+                found_file = files[0]
+                break
 
     if not found_file:
         raise RuntimeError(f"No suitable checkpoints found in {path}.")
