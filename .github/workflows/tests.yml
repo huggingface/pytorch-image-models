@@ -24,6 +24,10 @@ jobs:
             torch: {base: '1.13.0', vision: '0.14.0'}
     runs-on: ${{ matrix.os }}
 
+    permissions:
+      contents: read
+      id-token: write  # mint an OIDC token to exchange for a short-lived HF Hub token
+
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
     - name: Set up Python ${{ matrix.python }}
@@ -53,6 +57,22 @@ jobs:
     - name: Force old numpy for old torch
       if: ${{ matrix.torch.base == '1.13.0' }}
       run: pip install --upgrade 'numpy<2.0'
+    - name: Cache HF hub downloads
+      if: contains(matrix.testmarker, 'base')  # only test_model_inference downloads weights
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/huggingface/hub
+        key: hf-hub-${{ matrix.python }}-${{ matrix.torch.base }}-${{ github.run_id }}
+        restore-keys: hf-hub-${{ matrix.python }}-${{ matrix.torch.base }}-
+    - name: Authenticate to HF hub (Trusted Publishers / OIDC)
+      # Authenticated requests get per-user hub rate limits instead of the shared per-IP anonymous
+      # pool that runners exhaust. GitHub only injects the id-token vars when the job has
+      # `id-token: write`, which PRs from forks never get -- and huggingface_hub raises rather than
+      # falling back when HF_OIDC_RESOURCE is set but no token can be minted.
+      run: |
+        if [ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ]; then
+          echo "HF_OIDC_RESOURCE=rwightman" >> "$GITHUB_ENV"
+        fi
     - name: Run tests on Windows
       if: startsWith(matrix.os, 'windows')
       env:
