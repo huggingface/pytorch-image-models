@@ -136,21 +136,21 @@ def _get_input_size(model=None, model_name='', target=None):
 def test_model_inference(model_name, batch_size):
     """Run a single forward pass with each model"""
     from PIL import Image
-    from huggingface_hub import snapshot_download
-    import tempfile
+    from huggingface_hub import hf_hub_download
     import safetensors
 
     model = create_model(model_name, pretrained=True)
     model.eval()
     pp = timm.data.create_transform(**timm.data.resolve_data_config(model=model))
 
-    with tempfile.TemporaryDirectory()  as temp_dir:
-        snapshot_download(
-            repo_id='timm/' + model_name, repo_type='model', local_dir=temp_dir, allow_patterns='test/*'
-        )
-        rand_tensors = safetensors.torch.load_file(os.path.join(temp_dir, 'test', 'rand_tensors.safetensors'))
-        owl_tensors = safetensors.torch.load_file(os.path.join(temp_dir, 'test', 'owl_tensors.safetensors'))
-        test_owl = Image.open(os.path.join(temp_dir, 'test', 'test_owl.jpg'))
+    # fetch files individually instead of snapshot_download, it needs a repo_info() call to list
+    # them and those are rate limited far more aggressively than the file downloads themselves
+    def _hub_file(filename):
+        return hf_hub_download(repo_id='timm/' + model_name, filename='test/' + filename)
+
+    rand_tensors = safetensors.torch.load_file(_hub_file('rand_tensors.safetensors'))
+    owl_tensors = safetensors.torch.load_file(_hub_file('owl_tensors.safetensors'))
+    test_owl = Image.open(_hub_file('test_owl.jpg'))
 
     with torch.inference_mode():
         rand_output = model(rand_tensors['input'])
