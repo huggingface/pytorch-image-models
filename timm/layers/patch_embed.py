@@ -411,7 +411,10 @@ class PatchEmbedResamplerFixedOrigSize(nn.Module):
         # Cached tensors are not registered buffers. Drop them when the module
         # moves device or dtype so stale allocations cannot be retained.
         self._pinv_cache_map.clear()
-        return super()._apply(fn, recurse=recurse)
+        # Accept recurse for newer PyTorch callers, but do not forward it since
+        # older supported PyTorch versions do not have that Module._apply arg.
+        # This module has no children, so recurse does not affect its behavior.
+        return super()._apply(fn)
 
     def prewarm(
             self,
