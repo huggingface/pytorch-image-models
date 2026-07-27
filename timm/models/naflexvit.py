@@ -556,7 +556,14 @@ class NaFlexEmbeds(nn.Module):
             self,
             patch_sizes: Iterable[Union[int, Tuple[int, int]]],
     ) -> None:
-        """Precompute patch interpolation matrices on the projection device."""
+        """Precompute patch interpolation matrices on the projection device.
+
+        The cache is cleared by any subsequent ``.to()`` / dtype conversion of the model,
+        so prewarm after the model has been moved to its execution device.
+
+        Args:
+            patch_sizes: Iterable of target patch sizes to precompute.
+        """
         if not self.supports_patch_interpolation:
             raise RuntimeError('Patch interpolation is not supported by this embedding configuration.')
         self.patch_interpolator.prewarm(patch_sizes, device=self.proj.weight.device)
@@ -1422,7 +1429,19 @@ class NaFlexVit(nn.Module):
             self,
             patch_sizes: Iterable[Union[int, Tuple[int, int]]],
     ) -> None:
-        """Precompute patch interpolation matrices before captured execution."""
+        """Precompute patch interpolation matrices before captured execution.
+
+        Useful before ``torch.compile`` so the first forward at a non-base patch size
+        does not build a cache entry inside the captured graph. The cache is cleared by
+        any subsequent ``.to()`` / dtype conversion, so prewarm after moving the model
+        to its execution device.
+
+        Args:
+            patch_sizes: Iterable of target patch sizes to precompute.
+
+        Raises:
+            RuntimeError: If this model's embedding config does not support patch interpolation.
+        """
         self.embeds.prewarm_patch_interpolator(patch_sizes)
 
     @torch.jit.ignore
