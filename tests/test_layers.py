@@ -106,6 +106,18 @@ def test_patch_embed_interpolator_prewarm_supports_fullgraph_compile():
 
     torch.testing.assert_close(actual, expected)
 
+
+def test_patch_embed_interpolator_apply_accepts_recurse():
+    # `_apply` is overridden to drop the cache, it must keep nn.Module's (fn, recurse) signature
+    # so `to_empty()` and other direct `_apply` callers work on the resampler submodule.
+    interpolator = PatchEmbedInterpolator((4, 4), in_chans=3, embed_dim=8)
+    interpolator.prewarm([(2, 2)])
+    assert (2, 2) in interpolator.resampler._pinv_cache_map
+
+    interpolator.resampler.to_empty(device='cpu')
+    assert not interpolator.resampler._pinv_cache_map
+
+
 class MLP(nn.Module):
     def __init__(self, act_layer="relu", inplace=True):
         super(MLP, self).__init__()

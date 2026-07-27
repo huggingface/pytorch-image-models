@@ -450,6 +450,8 @@ def create_transform(
         use_prefetcher: Pre-fetcher enabled. Do not convert image to tensor or normalize.
         normalize: Normalization tensor output w/ provided mean/std (if prefetcher not used).
         separate: Output transforms in 3-stage tuple.
+        patchify: Patchify the output instead of relying on prefetcher.
+        patchify_channels_last: Use channels-last layout within each patch.
         patchify_flatten: Flatten eval patches into vectors. Disable when the
             model needs their spatial dimensions for patch-size interpolation.
 

@@ -402,11 +402,11 @@ class PatchEmbedResamplerFixedOrigSize(nn.Module):
 
         return pinv_matrix
 
-    def _apply(self, fn):
+    def _apply(self, fn, recurse: bool = True):
         # Cached tensors are not registered buffers. Drop them when the module
         # moves device or dtype so stale allocations cannot be retained.
         self._pinv_cache_map.clear()
-        return super()._apply(fn)
+        return super()._apply(fn, recurse=recurse)
 
     def prewarm(
             self,
@@ -417,6 +417,9 @@ class PatchEmbedResamplerFixedOrigSize(nn.Module):
 
         Prewarming is useful before ``torch.compile`` or other captured execution,
         where creating a new cache entry during the first forward is undesirable.
+
+        The cache is cleared by any ``.to()`` / ``.cuda()`` / dtype conversion of this
+        module, so prewarm after the model has been moved to its execution device.
 
         Args:
             new_sizes: Iterable of target patch sizes.
@@ -513,7 +516,16 @@ class PatchEmbedInterpolator(nn.Module):
             target_patch_sizes: Iterable[Union[int, Tuple[int, int]]],
             device: Optional[Union[str, torch.device]] = None,
     ) -> None:
-        """Precompute interpolation matrices for target patch sizes."""
+        """Precompute interpolation matrices for target patch sizes.
+
+        The cache is cleared by any ``.to()`` / ``.cuda()`` / dtype conversion of this
+        module, so prewarm after the model has been moved to its execution device.
+
+        Args:
+            target_patch_sizes: Iterable of target patch sizes.
+            device: Device on which to build the cache. Defaults to this module's
+                current device.
+        """
         self.resampler.prewarm(target_patch_sizes, device=device)
 
     def resample_linear_weight(
