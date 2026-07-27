@@ -364,8 +364,13 @@ class PatchEmbedResamplerFixedOrigSize(nn.Module):
         self.interpolation = interpolation
         self.antialias = antialias
         # Runtime-only cache. Keep matrices out of module buffers so DDP does
-        # not broadcast derived data on every forward.
-        self._pinv_cache_map: Dict[Tuple[int, int], torch.Tensor] = {}
+        # not broadcast derived data on every forward. DataParallel replicas
+        # shallow-share regular Python attributes, so include device and dtype
+        # in the key to retain each replica's matrix independently.
+        self._pinv_cache_map: Dict[
+            Tuple[Tuple[int, int], torch.device, torch.dtype],
+            torch.Tensor,
+        ] = {}
         # Tracks the module device before any matrices have been cached. The
         # anchor and cached matrices are derived state and do not belong in a
         # checkpoint.
@@ -381,11 +386,11 @@ class PatchEmbedResamplerFixedOrigSize(nn.Module):
             device: torch.device,
             dtype: torch.dtype = DTYPE_INTERMEDIATE
     ) -> torch.Tensor:
-        """Retrieves the cached pinv matrix or computes and caches it for the given new_size."""
-        pinv_matrix = self._pinv_cache_map.get(new_size)
+        """Retrieves or computes the cached pinv matrix for a target size, device, and dtype."""
+        cache_key = (new_size, device, dtype)
+        pinv_matrix = self._pinv_cache_map.get(cache_key)
         if pinv_matrix is not None:
-            if pinv_matrix.device == device and pinv_matrix.dtype == dtype:
-                return pinv_matrix
+            return pinv_matrix
 
         # Calculate the matrix if not cached or needs update
         # Always cache a regular float32 tensor so it remains usable if an
@@ -398,7 +403,7 @@ class PatchEmbedResamplerFixedOrigSize(nn.Module):
             )
             pinv_matrix = torch.linalg.pinv(resize_mat)  # Calculates the pseudoinverse matrix used for resampling
 
-        self._pinv_cache_map[new_size] = pinv_matrix
+        self._pinv_cache_map[cache_key] = pinv_matrix
 
         return pinv_matrix
 
@@ -426,7 +431,12 @@ class PatchEmbedResamplerFixedOrigSize(nn.Module):
             device: Device on which to build the cache. Defaults to this module's
                 current device.
         """
-        device = torch.device(device) if device is not None else self._cache_device_anchor.device
+        if device is not None:
+            # Resolve index-less or aliased devices (for example ``cuda`` or ``cpu:0``)
+            # to the concrete device reported by tensors used during forward.
+            device = torch.empty(0, device=torch.device(device)).device
+        else:
+            device = self._cache_device_anchor.device
         for new_size in new_sizes:
             new_size = to_2tuple(new_size)
             if new_size != self.orig_size:
