@@ -1,12 +1,16 @@
+import logging
 import os
 import pkgutil
 from copy import deepcopy
 
+import torch
 from torch import nn as nn
 
 from timm.layers import Conv2dSame, BatchNormAct2d, Linear
 
 __all__ = ['extract_layer', 'set_layer', 'adapt_model_from_string', 'adapt_model_from_file']
+
+_logger = logging.getLogger(__name__)
 
 
 def extract_layer(model, layer):
@@ -159,7 +163,86 @@ def adapt_model_from_string(parent_module, model_string):
     new_module.eval()
     parent_module.eval()
 
+    # Rebuilding the layers above changes their output channel counts, but any
+    # feature-extraction metadata (`feature_info`) still carries the original,
+    # unpruned channel counts. Recompute it from the pruned modules so that
+    # `feature_info.channels()` and `features_only=True` report correct values.
+    _adapt_feature_info(new_module)
+
     return new_module
+
+
+def _adapt_feature_info(module):
+    """Recompute a pruned model's ``feature_info`` channel counts in-place.
+
+    ``adapt_model_from_string`` rebuilds Conv/BN/Linear layers with pruned
+    dimensions but does not touch ``feature_info``, which is populated at
+    original build time with the unpruned channel counts. This runs a single
+    dry-run forward with hooks on the feature modules to read their true output
+    channel counts and writes them back. Any failure leaves ``feature_info``
+    untouched; pruning itself is unaffected.
+    """
+    feature_info = getattr(module, 'feature_info', None)
+    if not feature_info:
+        return
+
+    # `feature_info` is either a plain list of dicts (during model init) or a
+    # `FeatureInfo` wrapper; in both cases we want the underlying list of dicts.
+    info_dicts = feature_info.info if hasattr(feature_info, 'info') else feature_info
+    if not isinstance(info_dicts, (list, tuple)):
+        return
+
+    captured = {}
+    handles = []
+
+    def _make_hook(idx):
+        def _hook(_mod, _inp, out):
+            if isinstance(out, torch.Tensor) and out.ndim >= 2:
+                captured[idx] = out.shape[1]
+        return _hook
+
+    was_training = module.training
+    try:
+        for idx, info in enumerate(info_dicts):
+            layer_name = info.get('module', '') if isinstance(info, dict) else ''
+            if not layer_name:
+                continue
+            target = extract_layer(module, layer_name)
+            if isinstance(target, nn.Module):
+                handles.append(target.register_forward_hook(_make_hook(idx)))
+        if not handles:
+            return
+
+        param = next(module.parameters(), None)
+        if param is None:
+            return
+
+        # Input channels must match the (possibly pruned / in_chans-adjusted)
+        # stem; spatial size comes from the model config when available.
+        in_chans = 3
+        for m in module.modules():
+            if isinstance(m, nn.Conv2d):
+                in_chans = m.in_channels
+                break
+        input_size = (in_chans, 224, 224)
+        cfg = getattr(module, 'pretrained_cfg', None) or getattr(module, 'default_cfg', None)
+        if isinstance(cfg, dict) and cfg.get('input_size'):
+            input_size = (in_chans,) + tuple(cfg['input_size'][1:])
+
+        module.eval()
+        with torch.no_grad():
+            module(torch.zeros(1, *input_size, device=param.device, dtype=param.dtype))
+    except Exception as e:  # noqa: BLE001 - metadata recompute must never break model construction
+        _logger.warning('Could not recompute pruned feature_info channels: %s', e)
+        return
+    finally:
+        for h in handles:
+            h.remove()
+        module.train(was_training)
+
+    for idx, num_chs in captured.items():
+        if isinstance(info_dicts[idx], dict):
+            info_dicts[idx]['num_chs'] = num_chs
 
 
 def adapt_model_from_file(parent_module, model_variant):

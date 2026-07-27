@@ -446,9 +446,7 @@ def test_model_forward_torchscript(model_name, batch_size):
     assert not torch.isnan(outputs).any(), 'Output included NaNs'
 
 
-EXCLUDE_FEAT_FILTERS = [
-    '*pruned*',  # hopefully fix at some point
-] + NON_STD_FILTERS
+EXCLUDE_FEAT_FILTERS = NON_STD_FILTERS[:]
 if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
     # GitHub Linux runner is slower and hits memory limits sooner than MacOS, exclude bigger models
     EXCLUDE_FEAT_FILTERS += ['*resnext101_32x32d', '*resnext101_32x16d']
@@ -487,7 +485,7 @@ def test_model_forward_features(model_name, batch_size):
 
 @pytest.mark.features
 @pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models(module=FEAT_INTER_FILTERS, exclude_filters=EXCLUDE_FILTERS + ['*pruned*']))
+@pytest.mark.parametrize('model_name', list_models(module=FEAT_INTER_FILTERS, exclude_filters=EXCLUDE_FILTERS))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward_intermediates_features(model_name, batch_size):
     """Run a single forward pass with each model in feature extraction mode"""
@@ -518,7 +516,7 @@ def test_model_forward_intermediates_features(model_name, batch_size):
 
 @pytest.mark.features
 @pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models(module=FEAT_INTER_FILTERS, exclude_filters=EXCLUDE_FILTERS + ['*pruned*']))
+@pytest.mark.parametrize('model_name', list_models(module=FEAT_INTER_FILTERS, exclude_filters=EXCLUDE_FILTERS))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward_intermediates(model_name, batch_size):
     """Run a single forward pass with each model in feature extraction mode"""
