@@ -46,7 +46,7 @@ def test_patch_embed_interpolator_reuses_nonpersistent_cache(monkeypatch):
     torch.testing.assert_close(actual_conv_weight, expected_conv_weight)
     first.sum().backward()
     assert linear_weight.grad is not None
-    assert (2, 2) in interpolator.resampler._pinv_cache_map
+    assert any(key[0] == (2, 2) for key in interpolator.resampler._pinv_cache_map)
     assert not any(name.endswith('pinv_2x2') for name, _ in interpolator.named_buffers())
     assert not any('pinv_' in name for name in interpolator.state_dict())
     interpolator.to(dtype=torch.float16)
@@ -67,7 +67,8 @@ def test_patch_embed_interpolator_cache_survives_autocast(monkeypatch):
     with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
         first = interpolator.resample_linear_weight(weight, (2, 2))
 
-    cached_matrix = interpolator.resampler._pinv_cache_map[(2, 2)]
+    cache_key = ((2, 2), weight.device, torch.float32)
+    cached_matrix = interpolator.resampler._pinv_cache_map[cache_key]
     assert cached_matrix.dtype == torch.float32
 
     def unexpected_pinv(*args, **kwargs):
@@ -107,12 +108,61 @@ def test_patch_embed_interpolator_prewarm_supports_fullgraph_compile():
     torch.testing.assert_close(actual, expected)
 
 
+def test_patch_embed_interpolator_cache_keeps_per_device_entries_for_replicas(monkeypatch):
+    interpolator = PatchEmbedInterpolator((4, 4), in_chans=3, embed_dim=8)
+    resampler = interpolator.resampler
+    replica = resampler._replicate_for_data_parallel()
+    assert replica._pinv_cache_map is resampler._pinv_cache_map
+
+    class FakeMatrix:
+        def __init__(self, device, dtype):
+            self.device = device
+            self.dtype = dtype
+
+    def fake_compute_resize_matrix(old_size, new_size, interpolation, antialias, device, dtype):
+        return FakeMatrix(device, dtype)
+
+    pinv_calls = 0
+
+    def fake_pinv(matrix):
+        nonlocal pinv_calls
+        pinv_calls += 1
+        return matrix
+
+    monkeypatch.setattr('timm.layers.patch_embed._compute_resize_matrix', fake_compute_resize_matrix)
+    monkeypatch.setattr(torch.linalg, 'pinv', fake_pinv)
+
+    new_size = (2, 2)
+    device_0 = torch.device('cuda:0')
+    device_1 = torch.device('cuda:1')
+    matrix_0 = resampler._get_or_create_pinv_matrix(new_size, device_0)
+    matrix_1 = replica._get_or_create_pinv_matrix(new_size, device_1)
+
+    assert pinv_calls == 2
+    assert len(resampler._pinv_cache_map) == 2
+    assert resampler._get_or_create_pinv_matrix(new_size, device_0) is matrix_0
+    assert replica._get_or_create_pinv_matrix(new_size, device_1) is matrix_1
+    assert pinv_calls == 2
+
+
+def test_patch_embed_interpolator_prewarm_normalizes_device_alias(monkeypatch):
+    interpolator = PatchEmbedInterpolator((4, 4), in_chans=3, embed_dim=8)
+    interpolator.prewarm([(2, 2)], device='cpu:0')
+
+    def unexpected_pinv(*args, **kwargs):
+        raise AssertionError('normalized prewarm cache entry was not reused')
+
+    monkeypatch.setattr(torch.linalg, 'pinv', unexpected_pinv)
+    weight = torch.randn(8, 4 * 4 * 3)
+    interpolator.resample_linear_weight(weight, (2, 2))
+
+
 def test_patch_embed_interpolator_apply_accepts_recurse():
     # `_apply` is overridden to drop the cache, it must keep nn.Module's (fn, recurse) signature
     # so `to_empty()` and other direct `_apply` callers work on the resampler submodule.
     interpolator = PatchEmbedInterpolator((4, 4), in_chans=3, embed_dim=8)
     interpolator.prewarm([(2, 2)])
-    assert (2, 2) in interpolator.resampler._pinv_cache_map
+    assert any(key[0] == (2, 2) for key in interpolator.resampler._pinv_cache_map)
 
     interpolator.resampler.to_empty(device='cpu')
     assert not interpolator.resampler._pinv_cache_map
