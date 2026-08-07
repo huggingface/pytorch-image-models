@@ -5,6 +5,8 @@ Moritz Nottebaum, Matteo Dunnhofer, Christian Micheloni
 Conference on Computer Vision and Pattern Recognition (CVPR) Findings, 2026
 
 Adapted from the original implementation at https://github.com/altair199797/CPUBone.
+
+Special thanks to Simon Kundrat for initiating integration of CPUBone into the library. Most of the content was done by him.
 """
 from typing import Any, Dict, Final, List, Optional, Tuple, Type, Union
 
