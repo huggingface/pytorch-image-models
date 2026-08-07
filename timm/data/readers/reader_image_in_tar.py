@@ -149,8 +149,6 @@ def extract_tarinfos(
         added = 0
         for s in info['samples']:
             label = _label_from_paths(info['path'], os.path.dirname(s.path))
-            if not build_class_map and label not in class_name_to_idx:
-                continue
             samples.append((s, fn, info['ti']))
             labels.append(label)
             added += 1
@@ -178,7 +176,7 @@ def extract_tarinfos(
         class_name_to_idx = {c: idx for idx, c in enumerate(sorted_labels)}
 
     _logger.info(f'Mapping targets and sorting samples.')
-    samples_and_targets = [(s, class_name_to_idx[l]) for s, l in zip(samples, labels) if l in class_name_to_idx]
+    samples_and_targets = [(s, class_name_to_idx.get(l, None)) for s, l in zip(samples, labels)]
     if sort:
         samples_and_targets = sorted(samples_and_targets, key=lambda k: natural_key(k[0][0].path))
     samples, targets = zip(*samples_and_targets)
