@@ -864,8 +864,22 @@ class CPUBone(nn.Module):
 
 
 def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: nn.Module) -> Dict[str, torch.Tensor]:
-    state_dict = state_dict.get("state_dict", state_dict)
-    return remap_legacy_state_dict(state_dict)
+    if "ema" in state_dict and state_dict["ema"] is not None:
+        state_dict = next(iter(state_dict["ema"].values()))
+    else:
+        state_dict = state_dict.get("state_dict", state_dict)
+    sd = remap_legacy_state_dict(state_dict)
+    if getattr(model, 'local_mbconv_norm', None) == 'all':
+        bias_keys = [k for k in sd if k.endswith((
+            '.inverted_conv.conv.bias', '.depth_conv.conv.bias',
+            '.inverted_conv.conv.1.bias', '.depth_conv.conv.1.bias',
+        ))]
+        for k in bias_keys:
+            norm_key = k.replace('.conv.1.bias', '.norm.running_mean').replace('.conv.bias', '.norm.running_mean')
+            if norm_key in sd:
+                sd[norm_key] = sd[norm_key] - sd[k]
+            del sd[k]
+    return sd
 
 
 def _cfg(url: str = "", **kwargs: Any) -> Dict[str, Any]:
@@ -885,15 +899,13 @@ def _cfg(url: str = "", **kwargs: Any) -> Dict[str, Any]:
 
 
 default_cfgs = generate_default_cfgs({
-    "cpubone_nano.in1k": _cfg(hf_hub_id="Kaeruu/CPUBone", hf_hub_filename="cpubone_nano.safetensors"),
-    "cpubone_b0.in1k": _cfg(hf_hub_id="Kaeruu/CPUBone", hf_hub_filename="cpubone_b0.safetensors"),
-    "cpubone_b1.in1k": _cfg(hf_hub_id="Kaeruu/CPUBone", hf_hub_filename="cpubone_b1.safetensors"),
-    "cpubone_b1_dwnorm.untrained": _cfg(),
-    "cpubone_b1_allnorm.untrained": _cfg(),
-    "cpubone_b2.in1k": _cfg(hf_hub_id="Kaeruu/CPUBone", hf_hub_filename="cpubone_b2.safetensors"),
-    "cpubone_b2_dwnorm.untrained": _cfg(),
-    "cpubone_b2_allnorm.untrained": _cfg(),
-    "cpubone_b3.in1k": _cfg(hf_hub_id="Kaeruu/CPUBone", hf_hub_filename="cpubone_b3.safetensors"),
+    "cpubone_nano.in1k": _cfg(hf_hub_id="NottebaumMoritz/CPUBone", hf_hub_filename="cpubone_nano.safetensors"),
+    "cpubone_t0.in1k": _cfg(hf_hub_id="NottebaumMoritz/CPUBone", hf_hub_filename="cpubone_t0.safetensors"),
+    "cpubone_s0.in1k": _cfg(hf_hub_id="NottebaumMoritz/CPUBone", hf_hub_filename="cpubone_s0.safetensors"),
+    "cpubone_b3.in1k": _cfg(hf_hub_id="NottebaumMoritz/CPUBone", hf_hub_filename="cpubone_b3.safetensors"),
+    "cpubone_b0_bfrobust.in1k": _cfg(hf_hub_id="NottebaumMoritz/CPUBone", hf_hub_filename="cpubone_b0_bfrobust.safetensors"),
+    "cpubone_b1_bfrobust.in1k": _cfg(hf_hub_id="NottebaumMoritz/CPUBone", hf_hub_filename="cpubone_b1_bfrobust.safetensors"),
+    "cpubone_b2_bfrobust.in1k": _cfg(hf_hub_id="NottebaumMoritz/CPUBone", hf_hub_filename="cpubone_b2_bfrobust.safetensors"),
 })
 
 
@@ -930,7 +942,37 @@ def cpubone_nano(pretrained: bool = False, **kwargs: Any) -> CPUBone:
 
 
 @register_model
-def cpubone_b0(pretrained: bool = False, **kwargs: Any) -> CPUBone:
+def cpubone_t0(pretrained: bool = False, **kwargs: Any) -> CPUBone:
+    model_args = dict(
+        width_list=[12, 24, 48, 96, 192],
+        depth_list=[0, 1, 1, 2, 3],
+        fused_conv=True,
+        fused_downsample=True,
+        attn_mlp_ratio=4,
+        expand_groups=2,
+        small_kernels=True,
+        attn_upsample="nearest",
+    )
+    return _create_cpubone("cpubone_t0", pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def cpubone_s0(pretrained: bool = False, **kwargs: Any) -> CPUBone:
+    model_args = dict(
+        width_list=[14, 28, 56, 112, 224],
+        depth_list=[0, 1, 1, 2, 3],
+        fused_conv=True,
+        fused_downsample=True,
+        attn_mlp_ratio=4,
+        expand_groups=2,
+        small_kernels=True,
+        attn_upsample="nearest",
+    )
+    return _create_cpubone("cpubone_s0", pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def cpubone_b0_bfrobust(pretrained: bool = False, **kwargs: Any) -> CPUBone:
     model_args = dict(
         width_list=[16, 32, 64, 128, 256],
         depth_list=[0, 1, 1, 3, 4],
@@ -940,12 +982,14 @@ def cpubone_b0(pretrained: bool = False, **kwargs: Any) -> CPUBone:
         expand_groups=2,
         small_kernels=True,
         attn_upsample="nearest",
+        local_mbconv_norm='all',
     )
-    return _create_cpubone("cpubone_b0", pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_cpubone("cpubone_b0_bfrobust", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
-def _cpubone_b1_args(local_mbconv_norm: str = 'proj') -> Dict[str, Any]:
-    return dict(
+@register_model
+def cpubone_b1_bfrobust(pretrained: bool = False, **kwargs: Any) -> CPUBone:
+    model_args = dict(
         width_list=[16, 32, 64, 128, 256],
         depth_list=[0, 1, 1, 5, 5],
         fused_conv=True,
@@ -955,31 +999,16 @@ def _cpubone_b1_args(local_mbconv_norm: str = 'proj') -> Dict[str, Any]:
         expand_groups=2,
         small_kernels=True,
         attn_upsample="nearest",
-        local_mbconv_norm=local_mbconv_norm,
+        local_mbconv_norm='all',
     )
+    return _create_cpubone("cpubone_b1_bfrobust", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
-@register_model
-def cpubone_b1(pretrained: bool = False, **kwargs: Any) -> CPUBone:
-    model_args = _cpubone_b1_args()
-    return _create_cpubone("cpubone_b1", pretrained=pretrained, **dict(model_args, **kwargs))
-
-
-@register_model
-def cpubone_b1_dwnorm(pretrained: bool = False, **kwargs: Any) -> CPUBone:
-    model_args = _cpubone_b1_args(local_mbconv_norm='depth_proj')
-    return _create_cpubone("cpubone_b1_dwnorm", pretrained=pretrained, **dict(model_args, **kwargs))
-
-
-@register_model
-def cpubone_b1_allnorm(pretrained: bool = False, **kwargs: Any) -> CPUBone:
-    model_args = _cpubone_b1_args(local_mbconv_norm='all')
-    return _create_cpubone("cpubone_b1_allnorm", pretrained=pretrained, **dict(model_args, **kwargs))
-
-
-def _cpubone_b2_args(local_mbconv_norm: str = 'proj') -> Dict[str, Any]:
+def _cpubone_b2_bfrobust_args() -> Dict[str, Any]:
+    # B2 backbone from the CPUBone paper (width_list [20,40,80,160,320], referred to as 'b15'
+    # in the original training codebase), retrained with full_norm (all MBConv norms enabled).
     return dict(
-        width_list=[24, 48, 96, 192, 384],
+        width_list=[20, 40, 80, 160, 320],
         depth_list=[0, 1, 1, 6, 6],
         head_widths=(2304, 2560),
         fused_conv=True,
@@ -989,26 +1018,15 @@ def _cpubone_b2_args(local_mbconv_norm: str = 'proj') -> Dict[str, Any]:
         expand_groups=2,
         small_kernels=True,
         attn_upsample="nearest",
-        local_mbconv_norm=local_mbconv_norm,
+        drop_path_rate=0.1,
+        local_mbconv_norm='all',
     )
 
 
 @register_model
-def cpubone_b2(pretrained: bool = False, **kwargs: Any) -> CPUBone:
-    model_args = _cpubone_b2_args()
-    return _create_cpubone("cpubone_b2", pretrained=pretrained, **dict(model_args, **kwargs))
-
-
-@register_model
-def cpubone_b2_dwnorm(pretrained: bool = False, **kwargs: Any) -> CPUBone:
-    model_args = _cpubone_b2_args(local_mbconv_norm='depth_proj')
-    return _create_cpubone("cpubone_b2_dwnorm", pretrained=pretrained, **dict(model_args, **kwargs))
-
-
-@register_model
-def cpubone_b2_allnorm(pretrained: bool = False, **kwargs: Any) -> CPUBone:
-    model_args = _cpubone_b2_args(local_mbconv_norm='all')
-    return _create_cpubone("cpubone_b2_allnorm", pretrained=pretrained, **dict(model_args, **kwargs))
+def cpubone_b2_bfrobust(pretrained: bool = False, **kwargs: Any) -> CPUBone:
+    model_args = _cpubone_b2_bfrobust_args()
+    return _create_cpubone("cpubone_b2_bfrobust", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
