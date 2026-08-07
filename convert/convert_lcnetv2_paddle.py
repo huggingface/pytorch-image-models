@@ -40,13 +40,13 @@ def convert_state_dict(paddle_state_dict: Dict[str, Any], dropout_prob: float = 
     for k, v in paddle_state_dict.items():
         # the released checkpoints carry the re-parameterized depthwise conv alongside the branches it was
         # folded from, timm keeps the branches and folds on demand via timm.utils.reparameterize_model()
-        if re.fullmatch(r'(.*)\.dw_conv\.(weight|bias)', k) and f'{k.rsplit(".", 2)[0]}.dw_conv_list.0.conv.weight' \
-                in paddle_state_dict:
+        repped = re.fullmatch(r'(.*)\.dw_conv\.(?:weight|bias)', k)
+        if repped and f'{repped.group(1)}.dw_conv_list.0.conv.weight' in paddle_state_dict:
             continue
 
         v = torch.from_numpy(v)
         if k == 'fc.weight':
-            v = v.transpose(0, 1)  # paddle Linear weights are [in_features, out_features]
+            v = v.transpose(0, 1).contiguous()  # paddle Linear weights are [in_features, out_features]
         elif k == 'last_conv.weight':
             # Paddle applies dropout with mode='downscale_in_infer', which scales the pre-logits features by
             # (1 - p) at inference. The 1x1 conv is bias free and followed by ReLU, so folding the scale into

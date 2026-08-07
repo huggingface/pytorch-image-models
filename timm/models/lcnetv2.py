@@ -447,7 +447,7 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
     return {
         'url': url,
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
-        'crop_pct': 0.875, 'interpolation': 'bilinear',
+        'crop_pct': 0.875, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'stem.0.conv', 'classifier': 'classifier',
         'origin_url': 'https://github.com/PaddlePaddle/PaddleClas',
