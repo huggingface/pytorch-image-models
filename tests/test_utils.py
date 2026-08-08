@@ -198,3 +198,34 @@ def test_freeze_unfreeze_string_input():
     _freeze_unfreeze(model, 'layer1', mode='unfreeze')
     assert model.layer1[0].conv1.weight.requires_grad == True
 
+
+def test_update_summary(tmp_path):
+    from timm.utils.summary import update_summary, get_outdir
+    import csv
+
+    summary_file = tmp_path / "summary.csv"
+    train_metrics = {"loss": 0.5, "acc": 80.0}
+    eval_metrics = {"loss": 0.4, "acc": 85.0}
+
+    # Test writing summary to CSV
+    update_summary(
+        epoch=1,
+        train_metrics=train_metrics,
+        eval_metrics=eval_metrics,
+        filename=str(summary_file),
+        lr=0.01,
+        write_header=True,
+        log_wandb=False,
+        log_comet=False,
+    )
+
+    assert summary_file.exists()
+    with open(summary_file, mode='r') as f:
+        reader = list(csv.DictReader(f))
+        assert len(reader) == 1
+        assert reader[0]['epoch'] == '1'
+        assert float(reader[0]['train_loss']) == 0.5
+        assert float(reader[0]['eval_acc']) == 85.0
+        assert float(reader[0]['lr']) == 0.01
+
+
