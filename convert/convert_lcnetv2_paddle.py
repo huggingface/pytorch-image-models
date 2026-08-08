@@ -11,6 +11,7 @@ import argparse
 import re
 from typing import Any, Dict
 
+import numpy as np
 import torch
 
 import timm
@@ -36,6 +37,11 @@ def _remap_key(k: str) -> str:
 
 
 def convert_state_dict(paddle_state_dict: Dict[str, Any], dropout_prob: float = 0.2) -> Dict[str, torch.Tensor]:
+    # Paddle keeps the dropout probability as a float32 attribute, so the constant it multiplies by at
+    # inference is float32(1 - p). Rounding it here keeps the fold below exact for float32 checkpoints
+    # (where torch would round the scalar anyway) and for float64 ones alike.
+    keep_prob = float(np.float32(1. - dropout_prob))
+
     out_dict = {}
     for k, v in paddle_state_dict.items():
         # the released checkpoints carry the re-parameterized depthwise conv alongside the branches it was
@@ -51,7 +57,7 @@ def convert_state_dict(paddle_state_dict: Dict[str, Any], dropout_prob: float = 
             # Paddle applies dropout with mode='downscale_in_infer', which scales the pre-logits features by
             # (1 - p) at inference. The 1x1 conv is bias free and followed by ReLU, so folding the scale into
             # its weights is exact and lets timm keep a standard nn.Dropout / F.dropout head.
-            v = v * (1. - dropout_prob)
+            v = v * keep_prob
 
         out_dict[_remap_key(k)] = v
     return out_dict
