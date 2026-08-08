@@ -6,9 +6,18 @@ import csv
 import os
 from collections import OrderedDict
 try: 
-    import wandb
+    import wandb  # type: ignore
+    has_wandb = True
 except ImportError:
-    pass
+    has_wandb = False
+    wandb = None
+
+try:
+    import comet_ml  # type: ignore
+    has_comet = True
+except ImportError:
+    has_comet = False
+    comet_ml = None
 
 
 def get_outdir(path, *paths, inc=False):
@@ -35,6 +44,7 @@ def update_summary(
         lr=None,
         write_header=False,
         log_wandb=False,
+        log_comet=False,
 ):
     rowd = OrderedDict(epoch=epoch)
     rowd.update([('train_' + k, v) for k, v in train_metrics.items()])
@@ -42,10 +52,15 @@ def update_summary(
         rowd.update([('eval_' + k, v) for k, v in eval_metrics.items()])
     if lr is not None:
         rowd['lr'] = lr
-    if log_wandb:
+    if log_wandb and has_wandb:
         wandb.log(rowd)
+    if log_comet and has_comet:
+        experiment = comet_ml.get_global_experiment()
+        if experiment is not None:
+            experiment.log_metrics(rowd, step=epoch)
     with open(filename, mode='a') as cf:
         dw = csv.DictWriter(cf, fieldnames=rowd.keys())
         if write_header:  # first iteration (epoch == 1 can't be used)
             dw.writeheader()
         dw.writerow(rowd)
+

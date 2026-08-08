@@ -32,7 +32,7 @@ def extract_tarinfo(tarfile, class_to_idx=None, sort=True):
         unique_labels = set(labels)
         sorted_labels = list(sorted(unique_labels, key=natural_key))
         class_to_idx = {c: idx for idx, c in enumerate(sorted_labels)}
-    tarinfo_and_targets = [(f, class_to_idx[l]) for f, l in zip(files, labels) if l in class_to_idx]
+    tarinfo_and_targets = [(f, class_to_idx.get(l, None)) for f, l in zip(files, labels)]
     if sort:
         tarinfo_and_targets = sorted(tarinfo_and_targets, key=lambda k: natural_key(k[0].path))
     return tarinfo_and_targets, class_to_idx
