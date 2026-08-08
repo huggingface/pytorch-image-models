@@ -220,6 +220,17 @@ def load_state_dict_from_hf(
     assert has_hf_hub(True)
     hf_model_id, hf_revision = hf_split(model_id)
 
+    # Load directly via safetensors if that's what the filename specifies
+    if filename.endswith(".safetensors"):
+        assert _has_safetensors, "`pip install safetensors` to use .safetensors"
+        cached_safe_file = hf_hub_download(
+            repo_id=hf_model_id,
+            filename=filename,
+            revision=hf_revision,
+            cache_dir=cache_dir,
+        )
+        return safetensors.torch.load_file(cached_safe_file, device="cpu")
+
     # Look for .safetensors alternatives and load from it if it exists
     if _has_safetensors:
         for safe_filename in _get_safe_alternatives(filename):
