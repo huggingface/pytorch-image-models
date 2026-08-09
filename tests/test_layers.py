@@ -9,6 +9,7 @@ from timm.layers import (
     create_act_layer,
     get_act_fn,
     get_act_layer,
+    resample_abs_pos_embed,
     resample_patch_embed,
     set_layer_config,
 )
@@ -20,6 +21,30 @@ torch_backend = os.environ.get('TORCH_BACKEND')
 if torch_backend is not None:
     importlib.import_module(torch_backend)
 torch_device = os.environ.get('TORCH_DEVICE', 'cpu')
+
+
+def test_resample_abs_pos_embed_same_token_count_different_grid():
+    old_size = (2, 8)
+    new_size = (4, 4)
+    prefix = torch.tensor([[[-1.0]]])
+    spatial = torch.arange(16.0).reshape(1, -1, 1)
+    pos_embed = torch.cat((prefix, spatial), dim=1)
+
+    actual = resample_abs_pos_embed(
+        pos_embed,
+        new_size=new_size,
+        old_size=old_size,
+        num_prefix_tokens=1,
+    )
+    expected_spatial = torch.nn.functional.interpolate(
+        spatial.reshape(1, *old_size, 1).permute(0, 3, 1, 2),
+        size=new_size,
+        mode='bicubic',
+        antialias=True,
+    ).permute(0, 2, 3, 1).reshape(1, -1, 1)
+    expected = torch.cat((prefix, expected_spatial), dim=1)
+
+    torch.testing.assert_close(actual, expected)
 
 
 def test_patch_embed_interpolator_reuses_nonpersistent_cache(monkeypatch):
