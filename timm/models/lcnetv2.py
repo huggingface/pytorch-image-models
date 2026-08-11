@@ -458,8 +458,8 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
 
 default_cfgs = generate_default_cfgs({
     'lcnetv2_small.paddle_in1k': _cfg(hf_hub_id='timm/'),
-    'lcnetv2_base.paddle_in1k': _cfg(hf_hub_id='timm/'),
     'lcnetv2_base.ssld_in1k': _cfg(hf_hub_id='timm/'),
+    'lcnetv2_base.paddle_in1k': _cfg(hf_hub_id='timm/'),
     'lcnetv2_large.paddle_in1k': _cfg(hf_hub_id='timm/'),
 })
 
