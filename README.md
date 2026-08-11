@@ -13,8 +13,10 @@
 ## What's New
 
 ## August 11, 2026
-* Add model defs and pretrained weights for [CPUBone](https://github.com/altair199797/CPUBone), an efficient vision backbone for devices with low parallelization capabilities.
-* Add S/B/L/G model defs and pretrained weights for [LingBot-Vision](https://arxiv.org/abs/2607.05247).
+* Add model defs and pretrained weights for
+  * [CPUBone](https://github.com/altair199797/CPUBone), an efficient vision backbone for devices with low parallelization capabilities.
+  * [PP-LCNetV2](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.6/docs/en/models/PP-LCNetV2_en.md).
+  * [LingBot-Vision](https://arxiv.org/abs/2607.05247).
 * Add per-batch image and batch size scheduling for non-NaFlex training, including progressive small-to-large resolution schedules.
 * Improve NaFlexViT with key-only attention masks, compile-friendly and memory-efficient position sampling, and cached variable-patch interpolation.
 * Improve model factory path and checkpoint handling; fix equal-token positional embedding resampling.
