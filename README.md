@@ -12,6 +12,13 @@
 
 ## What's New
 
+## August 11, 2026
+* Add model defs and pretrained weights for [CPUBone](https://github.com/altair199797/CPUBone), an efficient vision backbone for devices with low parallelization capabilities.
+* Add S/B/L/G model defs and pretrained weights for [LingBot-Vision](https://arxiv.org/abs/2607.05247).
+* Add per-batch image and batch size scheduling for non-NaFlex training, including progressive small-to-large resolution schedules.
+* Improve NaFlexViT with key-only attention masks, compile-friendly and memory-efficient position sampling, and cached variable-patch interpolation.
+* Improve model factory path and checkpoint handling; fix equal-token positional embedding resampling.
+
 ## July 10, 2026
 * Improve optimizer `torch.compile` and tensor learning-rate support.
 * Extend NaFlexViT patch-layout (for NaFlex-CLAP), and `forward_intermediates` (NaFlex dict input) support.
@@ -271,7 +278,6 @@ All model architecture families include variants with pretrained weights. There 
 * Aggregating Nested Transformers - https://arxiv.org/abs/2105.12723
 * BEiT - https://arxiv.org/abs/2106.08254
 * BEiT-V2 - https://arxiv.org/abs/2208.06366
-* BEiT3 - https://arxiv.org/abs/2208.10442
 * Big Transfer ResNetV2 (BiT) - https://arxiv.org/abs/1912.11370
 * Bottleneck Transformers - https://arxiv.org/abs/2101.11605
 * CaiT (Class-Attention in Image Transformers) - https://arxiv.org/abs/2103.17239
@@ -280,7 +286,12 @@ All model architecture families include variants with pretrained weights. There 
 * ConvNeXt - https://arxiv.org/abs/2201.03545
 * ConvNeXt-V2 - http://arxiv.org/abs/2301.00808
 * ConViT (Soft Convolutional Inductive Biases Vision Transformers)- https://arxiv.org/abs/2103.10697
+* ConvMixer - https://arxiv.org/abs/2201.09792
+* CPUBone - https://arxiv.org/abs/2603.26425
+* CrossViT - https://arxiv.org/abs/2103.14899
+* CSATv2 - https://huggingface.co/Hyunil/CSATv2
 * CspNet (Cross-Stage Partial Networks) - https://arxiv.org/abs/1911.11929
+* DaViT (Dual Attention Vision Transformer) - https://arxiv.org/abs/2204.03645
 * DeiT - https://arxiv.org/abs/2012.12877
 * DeiT-III - https://arxiv.org/pdf/2204.07118.pdf
 * DenseNet - https://arxiv.org/abs/1608.06993
@@ -303,13 +314,20 @@ All model architecture families include variants with pretrained weights. There 
     * TinyNet - https://arxiv.org/abs/2010.14819
 * EfficientViT (MIT) - https://arxiv.org/abs/2205.14756
 * EfficientViT (MSRA) - https://arxiv.org/abs/2305.07027
-* EVA - https://arxiv.org/abs/2211.07636
-* EVA-02 - https://arxiv.org/abs/2303.11331
+* EVA (RoPE ViT family)
+    * EVA - https://arxiv.org/abs/2211.07636
+    * EVA-02 - https://arxiv.org/abs/2303.11331
+    * EVA-CLIP - https://arxiv.org/abs/2303.15389
+    * DINOv3 - https://arxiv.org/abs/2508.10104
+    * Efficient Universal Perception Encoder (EUPE) - https://arxiv.org/abs/2603.22387
+    * LingBot-Vision - https://arxiv.org/abs/2607.05247
+    * Perception Encoder (PE) - https://arxiv.org/abs/2504.13181
+    * RoPE-ViT - https://arxiv.org/abs/2403.13298
 * FasterNet - https://arxiv.org/abs/2303.03667
 * FastViT - https://arxiv.org/abs/2303.14189
-* FlexiViT - https://arxiv.org/abs/2212.08013
 * FocalNet (Focal Modulation Networks) - https://arxiv.org/abs/2203.11926
 * GCViT (Global Context Vision Transformer) - https://arxiv.org/abs/2206.09959
+* Gemma4 ViT encoder - https://arxiv.org/abs/2607.02770
 * GhostNet - https://arxiv.org/abs/1911.11907
 * GhostNet-V2 - https://arxiv.org/abs/2211.12905
 * GhostNet-V3 - https://arxiv.org/abs/2404.11202
@@ -317,6 +335,9 @@ All model architecture families include variants with pretrained weights. There 
 * GPU-Efficient Networks - https://arxiv.org/abs/2006.14090
 * Halo Nets - https://arxiv.org/abs/2103.12731
 * HGNet / HGNet-V2 - TBD
+* Hiera (family)
+    * Hiera - https://arxiv.org/abs/2306.00989
+    * SAM 2 / 2.1 Hiera image encoders - https://arxiv.org/abs/2408.00714
 * HRNet - https://arxiv.org/abs/1908.07919
 * InceptionNeXt - https://arxiv.org/abs/2303.16900
 * Inception-V3 - https://arxiv.org/abs/1512.00567
@@ -333,16 +354,20 @@ All model architecture families include variants with pretrained weights. There 
   * HardCoRe-NAS - https://arxiv.org/abs/2102.11646
   * LCNet - https://arxiv.org/abs/2109.15099
 * MobileNetV4 - https://arxiv.org/abs/2404.10518
+* MobileNetV5 (Gemma 3n vision encoder) - https://ai.google.dev/gemma/docs/gemma-3n
 * MobileOne - https://arxiv.org/abs/2206.04040
 * MobileViT - https://arxiv.org/abs/2110.02178
 * MobileViT-V2 - https://arxiv.org/abs/2206.02680
 * MViT-V2 (Improved Multiscale Vision Transformer) - https://arxiv.org/abs/2112.01526
+* NaFlexViT (NaViT / FlexiViT family)
+    * NaViT - https://arxiv.org/abs/2307.06304
+    * FlexiViT - https://arxiv.org/abs/2212.08013
+    * SigLIP 2 NaFlex image encoders - https://arxiv.org/abs/2502.14786
 * NASNet-A - https://arxiv.org/abs/1707.07012
 * NesT - https://arxiv.org/abs/2105.12723
 * Next-ViT - https://arxiv.org/abs/2207.05501
 * NFNet-F - https://arxiv.org/abs/2102.06171
 * NF-RegNet / NF-ResNet - https://arxiv.org/abs/2101.08692
-* PE (Perception Encoder) - https://arxiv.org/abs/2504.13181
 * PNasNet - https://arxiv.org/abs/1712.00559
 * PoolFormer (MetaFormer) - https://arxiv.org/abs/2111.11418
 * Pooling-based Vision Transformer (PiT) - https://arxiv.org/abs/2103.16302
@@ -366,13 +391,10 @@ All model architecture families include variants with pretrained weights. There 
 * Res2Net - https://arxiv.org/abs/1904.01169
 * ResNeSt - https://arxiv.org/abs/2004.08955
 * ReXNet - https://arxiv.org/abs/2007.00992
-* ROPE-ViT - https://arxiv.org/abs/2403.13298
 * SelecSLS - https://arxiv.org/abs/1907.00837
 * Selective Kernel Networks - https://arxiv.org/abs/1903.06586
 * Sequencer2D - https://arxiv.org/abs/2205.01972
 * SHViT - https://arxiv.org/abs/2401.16456
-* SigLIP (image encoder) - https://arxiv.org/abs/2303.15343
-* SigLIP 2 (image encoder) - https://arxiv.org/abs/2502.14786
 * StarNet - https://arxiv.org/abs/2403.19967
 * SwiftFormer - https://arxiv.org/pdf/2303.15446
 * Swin S3 (AutoFormerV2) - https://arxiv.org/abs/2111.14725
@@ -384,8 +406,25 @@ All model architecture families include variants with pretrained weights. There 
 * Twins (Spatial Attention in Vision Transformers) - https://arxiv.org/pdf/2104.13840.pdf
 * VGG - https://arxiv.org/abs/1409.1556
 * Visformer - https://arxiv.org/abs/2104.12533
-* Vision Transformer - https://arxiv.org/abs/2010.11929
+* Vision Transformer (family)
+    * Vision Transformer (ViT) - https://arxiv.org/abs/2010.11929
+    * AIMv2 - https://arxiv.org/abs/2411.14402
+    * AugReg (How to train your ViT?) - https://arxiv.org/abs/2106.10270
+    * BEiT3 - https://arxiv.org/abs/2208.10442
+    * CLIP image encoders - https://arxiv.org/abs/2103.00020
+    * DINO - https://arxiv.org/abs/2104.14294
+    * DINOv2 / Vision Transformers Need Registers - https://arxiv.org/abs/2304.07193, https://arxiv.org/abs/2309.16588
+    * FlexiViT - https://arxiv.org/abs/2212.08013
+    * I-JEPA - https://arxiv.org/abs/2301.08243
+    * InternViT (InternVL vision encoder) - https://arxiv.org/abs/2312.14238
+    * MAE - https://arxiv.org/abs/2111.06377
+    * Sharpness-Aware Minimization (SAM) ViT weights - https://arxiv.org/abs/2106.01548
+    * Scaling Vision Transformers - https://arxiv.org/abs/2106.04560
+    * SigLIP image encoders - https://arxiv.org/abs/2303.15343
+    * SigLIP 2 image encoders - https://arxiv.org/abs/2502.14786
+    * TIPSv2 - https://arxiv.org/abs/2604.12012
 * ViTamin - https://arxiv.org/abs/2404.02132
+* Segment Anything (SAM) ViT image encoders - https://arxiv.org/abs/2304.02643
 * VOLO (Vision Outlooker) - https://arxiv.org/abs/2106.13112
 * VovNet V2 and V1 - https://arxiv.org/abs/1911.06667
 * Xception - https://arxiv.org/abs/1610.02357
