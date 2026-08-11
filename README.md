@@ -343,6 +343,7 @@ All model architecture families include variants with pretrained weights. There 
 * Inception-V3 - https://arxiv.org/abs/1512.00567
 * Inception-ResNet-V2 and Inception-V4 - https://arxiv.org/abs/1602.07261
 * Lambda Networks - https://arxiv.org/abs/2102.08602
+* LCNet-V2 - TBD
 * LeViT (Vision Transformer in ConvNet's Clothing) - https://arxiv.org/abs/2104.01136
 * MambaOut - https://arxiv.org/abs/2405.07992
 * MaxViT (Multi-Axis Vision Transformer) - https://arxiv.org/abs/2204.01697

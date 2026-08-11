@@ -37,6 +37,7 @@ from .inception_next import *
 from .inception_resnet_v2 import *
 from .inception_v3 import *
 from .inception_v4 import *
+from .lcnetv2 import *
 from .levit import *
 from .maxxvit import *
 from .mambaout import *
