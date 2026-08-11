@@ -1412,9 +1412,7 @@ def _eupe_cfg(url: str = '', **kwargs) -> Dict[str, Any]:
 def _lingbot_cfg(url: str = '', **kwargs) -> Dict[str, Any]:
     """Generate default configuration for LingBot-Vision models.
 
-    Note: Original LingBot-Vision uses CLS-token pooling for representations. timm defaults to avg
-    pooling for the Eva architecture. Pass global_pool='token' at model creation to match
-    upstream behavior, which may be preferred for tasks like retrieval and few-shot classification.
+    LingBot-Vision uses CLS-token pooling for representations, which the model entrypoints use by default.
 
     Args:
         url: Model weights URL.
@@ -1846,8 +1844,6 @@ default_cfgs = generate_default_cfgs({
 
     # LingBot-Vision weights are released under Apache-2.0, please see
     # https://github.com/robbyant/lingbot-vision/blob/main/LICENSE
-    # NOTE: Original LingBot-Vision uses CLS-token pooling (global_pool='token') which may be better
-    # for some tasks. Default here is avg pooling inherited from the Eva base class.
     'vit_small_patch16_lingbot.robbyant': _lingbot_cfg(
         hf_hub_id='belfner/vit_small_patch16_lingbot.robbyant',
     ),
@@ -3151,7 +3147,7 @@ def vit_7b_patch16_dinov3(pretrained: bool = False, **kwargs) -> Eva:
 @register_model
 def vit_small_patch16_lingbot(pretrained: bool = False, **kwargs) -> Eva:
     """LingBot-Vision S/16 https://arxiv.org/abs/2607.05247
-    NOTE: Pass global_pool='token' to use CLS-token pooling (matches upstream LingBot-Vision).
+    Uses CLS-token pooling by default to match upstream LingBot-Vision.
     """
     model_args = dict(
         patch_size=16,
@@ -3160,7 +3156,7 @@ def vit_small_patch16_lingbot(pretrained: bool = False, **kwargs) -> Eva:
         depth=12,
         num_heads=6,
         qkv_bias=True,
-        # global_pool='token',  # upstream uses CLS token; default here is 'avg', pass via kwargs or --gp
+        global_pool='token',
         init_values=1.0e-05, # layer-scale
         rope_type='dinov3',
         rope_temperature=100,
@@ -3179,7 +3175,7 @@ def vit_small_patch16_lingbot(pretrained: bool = False, **kwargs) -> Eva:
 @register_model
 def vit_base_patch16_lingbot(pretrained: bool = False, **kwargs) -> Eva:
     """LingBot-Vision B/16 https://arxiv.org/abs/2607.05247
-    NOTE: Pass global_pool='token' to use CLS-token pooling (matches upstream LingBot-Vision).
+    Uses CLS-token pooling by default to match upstream LingBot-Vision.
     """
     model_args = dict(
         patch_size=16,
@@ -3188,7 +3184,7 @@ def vit_base_patch16_lingbot(pretrained: bool = False, **kwargs) -> Eva:
         depth=12,
         num_heads=12,
         qkv_bias=True,
-        # global_pool='token',  # upstream uses CLS token; default here is 'avg', pass via kwargs or --gp
+        global_pool='token',
         init_values=1.0e-05, # layer-scale
         rope_type='dinov3',
         rope_temperature=100,
@@ -3207,7 +3203,7 @@ def vit_base_patch16_lingbot(pretrained: bool = False, **kwargs) -> Eva:
 @register_model
 def vit_large_patch16_lingbot(pretrained: bool = False, **kwargs) -> Eva:
     """LingBot-Vision L/16 https://arxiv.org/abs/2607.05247
-    NOTE: Pass global_pool='token' to use CLS-token pooling (matches upstream LingBot-Vision).
+    Uses CLS-token pooling by default to match upstream LingBot-Vision.
     """
     model_args = dict(
         patch_size=16,
@@ -3216,7 +3212,7 @@ def vit_large_patch16_lingbot(pretrained: bool = False, **kwargs) -> Eva:
         depth=24,
         num_heads=16,
         qkv_bias=True,
-        # global_pool='token',  # upstream uses CLS token; default here is 'avg', pass via kwargs or --gp
+        global_pool='token',
         init_values=1.0e-05, # layer-scale
         rope_type='dinov3',
         rope_temperature=100,
@@ -3235,7 +3231,7 @@ def vit_large_patch16_lingbot(pretrained: bool = False, **kwargs) -> Eva:
 @register_model
 def vit_giant_patch16_lingbot(pretrained: bool = False, **kwargs) -> Eva:
     """LingBot-Vision G/16 https://arxiv.org/abs/2607.05247
-    NOTE: Pass global_pool='token' to use CLS-token pooling (matches upstream LingBot-Vision).
+    Uses CLS-token pooling by default to match upstream LingBot-Vision.
     """
     model_args = dict(
         patch_size=16,
@@ -3244,7 +3240,7 @@ def vit_giant_patch16_lingbot(pretrained: bool = False, **kwargs) -> Eva:
         depth=40,
         num_heads=24,
         qkv_bias=False,
-        # global_pool='token',  # upstream uses CLS token; default here is 'avg', pass via kwargs or --gp
+        global_pool='token',
         mlp_ratio=4 * 2 / 3,
         init_values=1.0e-5, # layer-scale
         rope_type='dinov3',
