@@ -69,7 +69,9 @@ def mix_batch_variable_size(
     order = sorted(range(len(imgs)), key=lambda i: imgs[i].shape[2] / imgs[i].shape[1])
     if local_shuffle > 1:
         for start in range(0, len(order), local_shuffle):
-            random.shuffle(order[start:start + local_shuffle])
+            window = order[start:start + local_shuffle]
+            random.shuffle(window)
+            order[start:start + local_shuffle] = window
 
     pair_to: Dict[int, int] = {}
     for a, b in zip(order[::2], order[1::2]):
@@ -190,6 +192,7 @@ class NaFlexMixup:
             prob: float = 1.0,
             local_shuffle: int = 4,
             label_smoothing: float = 0.0,
+            mixup_off_epoch: int = 0,
     ) -> None:
         """Configure the augmentation.
 
@@ -200,7 +203,8 @@ class NaFlexMixup:
             switch_prob: Probability of selecting CutMix when both modes are enabled.
             prob: Probability of applying any mixing per batch.
             local_shuffle: Window size used to shuffle images after aspect sorting so pairings vary between epochs.
-            smoothing: Label‑smoothing value. 0 disables smoothing.
+            label_smoothing: Label‑smoothing value. 0 disables smoothing.
+            mixup_off_epoch: Disable mixing at this epoch and later. Zero keeps mixing enabled.
         """
         self.num_classes = num_classes
         self.mixup_alpha = mixup_alpha
@@ -209,6 +213,13 @@ class NaFlexMixup:
         self.prob = prob
         self.local_shuffle = local_shuffle
         self.smoothing = label_smoothing
+        self.mixup_off_epoch = mixup_off_epoch
+        self.mixup_enabled = True
+        self.set_epoch(0)
+
+    def set_epoch(self, epoch: int) -> None:
+        """Update the mixup state for the given epoch."""
+        self.mixup_enabled = not self.mixup_off_epoch or epoch < self.mixup_off_epoch
 
     def __call__(
             self,
@@ -228,7 +239,7 @@ class NaFlexMixup:
         if not isinstance(targets, torch.Tensor):
             targets = torch.tensor(targets)
 
-        if random.random() > self.prob:
+        if not self.mixup_enabled or random.random() > self.prob:
             targets = smoothed_sparse_target(targets, num_classes=self.num_classes, smoothing=self.smoothing)
             return imgs, targets.unbind(0)
 

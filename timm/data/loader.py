@@ -291,7 +291,7 @@ def create_loader(
         device: Device to transfer inputs and targets to.
         use_prefetcher: Use efficient pre-fetcher to load samples onto device.
         use_multi_epochs_loader:
-        persistent_workers: Enable persistent worker processes.
+        persistent_workers: Enable persistent worker processes when ``num_workers`` is greater than zero.
         worker_seeding: Control worker random seeding at init.
         tf_preprocessing: Use TF 1.0 inference preprocessing for testing model ports.
         input_size_choices: Per-batch input size choices for scheduled resolution training.
@@ -423,7 +423,7 @@ def create_loader(
         collate_fn=collate_fn,
         pin_memory=pin_memory,
         worker_init_fn=partial(_worker_init, worker_seeding=worker_seeding),
-        persistent_workers=persistent_workers
+        persistent_workers=persistent_workers and num_workers > 0,
     )
     if scheduled_batching:
         loader_args['batch_sampler'] = ScheduledBatchSampler(

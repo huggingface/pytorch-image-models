@@ -512,6 +512,8 @@ class NaFlexMapDatasetWrapper(IterableDataset):
 
         # Snapshot the shared epoch once, then build process-local derived state.
         epoch = self.shared_epoch.value
+        if self.mixup_fn is not None and hasattr(self.mixup_fn, 'set_epoch'):
+            self.mixup_fn.set_epoch(epoch)
         if worker_id == 0:
             epoch_batches = self._prepare_epoch_batches(epoch)
         else:

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from timm.data import NaFlexMapDatasetWrapper
+from timm.data import NaFlexMapDatasetWrapper, NaFlexMixup
 
 
 class _TensorImageDataset(Dataset):
@@ -18,7 +18,7 @@ class _TensorImageDataset(Dataset):
         return self.length
 
 
-def _create_naflex_dataset(epoch=0):
+def _create_naflex_dataset(epoch=0, mixup_fn=None):
     return NaFlexMapDatasetWrapper(
         _TensorImageDataset(),
         patch_size=1,
@@ -27,11 +27,16 @@ def _create_naflex_dataset(epoch=0):
         seed=17,
         epoch=epoch,
         batch_divisor=1,
+        mixup_fn=mixup_fn,
     )
 
 
 def _loader_indices(loader):
     return [index for _, targets in loader for index in targets.tolist()]
+
+
+def _loader_targets(loader):
+    return torch.cat([targets for _, targets in loader])
 
 
 def test_naflex_epoch_batches_are_prepared_when_iteration_starts():
@@ -75,6 +80,35 @@ def test_naflex_persistent_workers_read_shared_epoch():
         assert epoch_0_indices == expected_epoch_0
         assert epoch_1_indices == expected_epoch_1
         assert epoch_1_indices != epoch_0_indices
+    finally:
+        if loader._iterator is not None:
+            loader._iterator._shutdown_workers()
+
+
+def test_naflex_persistent_workers_disable_mixup_at_configured_epoch():
+    mixup = NaFlexMixup(
+        num_classes=32,
+        mixup_alpha=1.0,
+        cutmix_alpha=0.0,
+        label_smoothing=0.0,
+        mixup_off_epoch=1,
+    )
+    dataset = _create_naflex_dataset(mixup_fn=mixup)
+    loader = DataLoader(
+        dataset,
+        batch_size=None,
+        num_workers=2,
+        persistent_workers=True,
+    )
+
+    try:
+        mixed_targets = _loader_targets(loader)
+        dataset.set_epoch(1)
+        unmixed_targets = _loader_targets(loader)
+
+        assert torch.any((mixed_targets > 0) & (mixed_targets < 1))
+        assert torch.all((unmixed_targets == 0) | (unmixed_targets == 1))
+        torch.testing.assert_close(unmixed_targets.sum(dim=1), torch.ones(len(unmixed_targets)))
     finally:
         if loader._iterator is not None:
             loader._iterator._shutdown_workers()
