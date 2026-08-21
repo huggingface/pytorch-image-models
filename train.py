@@ -376,6 +376,12 @@ group.add_argument('--checkpoint-hist', type=int, default=10, metavar='N',
                    help='number of checkpoints to keep (default: 10)')
 group.add_argument('-j', '--workers', type=int, default=4, metavar='N',
                    help='how many training processes to use (default: 4)')
+persistent_workers_group = group.add_mutually_exclusive_group()
+persistent_workers_group.add_argument('--persistent-workers', dest='persistent_workers', action='store_true',
+                                      help='keep data-loader workers alive between epochs when --workers > 0 (default: enabled)')
+persistent_workers_group.add_argument('--no-persistent-workers', dest='persistent_workers', action='store_false',
+                                      help='restart data-loader worker processes after each epoch')
+group.set_defaults(persistent_workers=True)
 group.add_argument('--save-images', action='store_true', default=False,
                    help='save images of input batches every log interval for debugging')
 group.add_argument('--pin-mem', action='store_true', default=False,
@@ -694,6 +700,7 @@ def main():
         device=device,
         distributed=args.distributed,
         use_prefetcher=args.prefetcher,
+        persistent_workers=args.persistent_workers,
     )
 
     train_loader_kwargs = dict(
@@ -725,6 +732,18 @@ def main():
     mixup_args = {}
     mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
     if mixup_active:
+        if (
+                args.mixup_off_epoch
+                and not args.naflex_loader
+                and args.prefetcher
+                and args.workers > 0
+                and (args.persistent_workers or args.use_multi_epochs_loader)
+                and utils.is_primary(args)
+        ):
+            _logger.warning(
+                '--mixup-off-epoch does not propagate to long-lived data-loader workers when the prefetcher is enabled; '
+                'use --no-persistent-workers without --use-multi-epochs-loader to disable Mixup/CutMix at the requested epoch.'
+            )
         mixup_args = dict(
             mixup_alpha=args.mixup,
             cutmix_alpha=args.cutmix,
@@ -749,7 +768,7 @@ def main():
             from timm.data import NaFlexMixup
             mixup_args.pop('mode')  # not supported
             mixup_args.pop('cutmix_minmax')  # not supported
-            naflex_mixup_fn = NaFlexMixup(**mixup_args)
+            naflex_mixup_fn = NaFlexMixup(**mixup_args, mixup_off_epoch=args.mixup_off_epoch)
 
         # Check if we have model's patch size for NaFlex mode
         if model_patch_size is None:
@@ -1249,7 +1268,7 @@ def train_one_epoch(
         batch_size_reference=None,
 ):
     if args.mixup_off_epoch and epoch >= args.mixup_off_epoch:
-        if args.prefetcher and loader.mixup_enabled:
+        if args.prefetcher and getattr(loader, 'mixup_enabled', False):
             loader.mixup_enabled = False
         elif mixup_fn is not None:
             mixup_fn.mixup_enabled = False

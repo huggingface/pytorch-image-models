@@ -489,8 +489,8 @@ def rand_bbox(size: Tuple[int, ...], lam: float, scale: int = 1) -> Tuple[int, i
 
     bbx1 = torch.clamp(cx - cut_w // 2, 0, W)
     bby1 = torch.clamp(cy - cut_h // 2, 0, H)
-    bbx2 = torch.clamp(cx + cut_w // 2, 0, W)
-    bby2 = torch.clamp(cy + cut_h // 2, 0, H)
+    bbx2 = torch.clamp(cx + (cut_w + 1) // 2, 0, W)
+    bby2 = torch.clamp(cy + (cut_h + 1) // 2, 0, H)
 
     return bbx1.item(), bby1.item(), bbx2.item(), bby2.item()
 
