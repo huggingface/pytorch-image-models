@@ -731,20 +731,19 @@ def main():
     mixup_fn = None
     mixup_args = {}
     mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
-    if (
-            mixup_active
-            and args.mixup_off_epoch
-            and not args.naflex_loader
-            and args.prefetcher
-            and args.workers > 0
-            and (args.persistent_workers or args.use_multi_epochs_loader)
-            and utils.is_primary(args)
-    ):
-        _logger.warning(
-            '--mixup-off-epoch does not propagate to long-lived data-loader workers when the prefetcher is enabled; '
-            'use --no-persistent-workers without --use-multi-epochs-loader to disable Mixup/CutMix at the requested epoch.'
-        )
     if mixup_active:
+        if (
+                args.mixup_off_epoch
+                and not args.naflex_loader
+                and args.prefetcher
+                and args.workers > 0
+                and (args.persistent_workers or args.use_multi_epochs_loader)
+                and utils.is_primary(args)
+        ):
+            _logger.warning(
+                '--mixup-off-epoch does not propagate to long-lived data-loader workers when the prefetcher is enabled; '
+                'use --no-persistent-workers without --use-multi-epochs-loader to disable Mixup/CutMix at the requested epoch.'
+            )
         mixup_args = dict(
             mixup_alpha=args.mixup,
             cutmix_alpha=args.cutmix,
