@@ -92,6 +92,15 @@ def adapt_model_from_string(parent_module, model_string):
     dtype = next(parent_module.parameters()).dtype
     dd = {'device': device, 'dtype': dtype}
 
+    first_convs = ()
+    pretrained_cfg = getattr(parent_module, 'pretrained_cfg', None) or getattr(parent_module, 'default_cfg', None) or {}
+    if 'first_conv' in pretrained_cfg:
+        first_convs = pretrained_cfg['first_conv']
+        if isinstance(first_convs, str):
+            first_convs = (first_convs,)
+        else:
+            first_convs = tuple(first_convs)
+
     new_module = deepcopy(parent_module)
     for n, m in parent_module.named_modules():
         old_module = extract_layer(parent_module, n)
@@ -101,7 +110,7 @@ def adapt_model_from_string(parent_module, model_string):
             else:
                 conv = nn.Conv2d
             s = state_dict[n + '.weight']
-            in_channels = s[1]
+            in_channels = old_module.in_channels if n in first_convs else s[1]
             out_channels = s[0]
             g = 1
             if old_module.groups > 1:

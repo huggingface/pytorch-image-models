@@ -50,6 +50,12 @@ except ImportError:
     has_wandb = False
 
 try:
+    import comet_ml
+    has_comet = True
+except ImportError:
+    has_comet = False
+
+try:
     from functorch.compile import memory_efficient_fusion
     has_functorch = True
 except ImportError as e:
@@ -392,6 +398,12 @@ group.add_argument('--wandb-tags', default=[], type=str, nargs='+',
                    help='wandb tags')
 group.add_argument('--wandb-resume-id', default='', type=str, metavar='ID',
                    help='If resuming a run, the id of the run in wandb')
+group.add_argument('--log-comet', action='store_true', default=False,
+                   help='log training and validation metrics to comet_ml')
+group.add_argument('--comet-project', default=None, type=str,
+                   help='comet project name')
+group.add_argument('--comet-tags', default=[], type=str, nargs='+',
+                   help='comet tags')
 
 # NaFlex scheduled loader arguments
 group.add_argument('--naflex-loader', action='store_true', default=False,
@@ -919,6 +931,20 @@ def main():
                     "You've requested to log metrics to wandb but package not found. "
                     "Metrics not being logged to wandb, try `pip install wandb`")
 
+        if args.log_comet:
+            if has_comet:
+                experiment = comet_ml.Experiment(
+                    project_name=args.comet_project,
+                )
+                experiment.set_name(exp_name)
+                experiment.log_parameters(args)
+                if args.comet_tags:
+                    experiment.add_tags(args.comet_tags)
+            else:
+                _logger.warning(
+                    "You've requested to log metrics to comet_ml but package not found. "
+                    "Metrics not being logged to comet_ml, try `pip install comet_ml`")
+
     # setup learning rate schedule and starting epoch
     updates_per_epoch = (len(loader_train) + args.grad_accum_steps - 1) // args.grad_accum_steps
     lr_scheduler, num_epochs = create_scheduler_v2(
@@ -1030,6 +1056,7 @@ def main():
                     lr=sum(lrs) / len(lrs),
                     write_header=best_metric is None,
                     log_wandb=args.log_wandb and has_wandb,
+                    log_comet=args.log_comet and has_comet,
                 )
 
             if eval_metrics is not None:
