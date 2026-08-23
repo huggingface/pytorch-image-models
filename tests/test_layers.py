@@ -29,14 +29,13 @@ def test_fast_rms_norm2d_returns_apex_result(monkeypatch):
     weight = torch.tensor([0.5, 1.5, 3.0])
     normalized_shape = [3]
     eps = 1e-5
-    expected = fast_norm.rms_norm2d(x, normalized_shape, weight, eps)
+    expected = torch.tensor([[[[10.0]], [[20.0]], [[30.0]]]])
 
     monkeypatch.setattr(fast_norm, 'has_apex_rmsnorm', True)
     monkeypatch.setattr(
         fast_norm,
         'fused_rms_norm_affine',
-        lambda x, weight, normalized_shape, eps:
-            torch.nn.functional.rms_norm(x, normalized_shape, weight, eps),
+        lambda x, weight, normalized_shape, eps: expected.permute(0, 2, 3, 1),
         raising=False,
     )
 
