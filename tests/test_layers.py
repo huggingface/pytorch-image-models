@@ -2,6 +2,7 @@ import pytest
 import torch
 import torch.nn as nn
 
+import timm.layers.fast_norm as fast_norm
 from timm.layers import (
     Attention2d,
     MultiQueryAttentionV2,
@@ -21,6 +22,27 @@ torch_backend = os.environ.get('TORCH_BACKEND')
 if torch_backend is not None:
     importlib.import_module(torch_backend)
 torch_device = os.environ.get('TORCH_DEVICE', 'cpu')
+
+
+def test_fast_rms_norm2d_returns_apex_result(monkeypatch):
+    x = torch.tensor([[[[1.0]], [[2.0]], [[4.0]]]])
+    weight = torch.tensor([0.5, 1.5, 3.0])
+    normalized_shape = [3]
+    eps = 1e-5
+    expected = fast_norm.rms_norm2d(x, normalized_shape, weight, eps)
+
+    monkeypatch.setattr(fast_norm, 'has_apex_rmsnorm', True)
+    monkeypatch.setattr(
+        fast_norm,
+        'fused_rms_norm_affine',
+        lambda x, weight, normalized_shape, eps:
+            torch.nn.functional.rms_norm(x, normalized_shape, weight, eps),
+        raising=False,
+    )
+
+    actual = fast_norm.fast_rms_norm2d(x, normalized_shape, weight, eps)
+
+    torch.testing.assert_close(actual, expected)
 
 
 def test_resample_abs_pos_embed_same_token_count_different_grid():

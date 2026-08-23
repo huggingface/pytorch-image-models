@@ -202,6 +202,7 @@ def fast_rms_norm2d(
         else:
             x = fused_rms_norm_affine(x, weight, normalized_shape, eps)
         x = x.permute(0, 3, 1, 2)
+        return x
 
     if is_autocast_enabled(x.device.type):
         # normally native AMP casts norm inputs to float32 and leaves the output as float32
