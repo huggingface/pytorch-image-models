@@ -5,7 +5,10 @@ import torch.nn as nn
 import timm.layers.fast_norm as fast_norm
 from timm.layers import (
     Attention2d,
+    ClassifierHead,
+    ClNormMlpClassifierHead,
     MultiQueryAttentionV2,
+    NormMlpClassifierHead,
     PatchEmbedInterpolator,
     create_act_layer,
     get_act_fn,
@@ -42,6 +45,22 @@ def test_fast_rms_norm2d_returns_apex_result(monkeypatch):
     actual = fast_norm.fast_rms_norm2d(x, normalized_shape, weight, eps)
 
     torch.testing.assert_close(actual, expected)
+
+
+@pytest.mark.parametrize(
+    'head_cls,head_kwargs,input_shape,pool_type',
+    [
+        (ClassifierHead, {}, (2, 4, 3, 3), 'avgmax'),
+        (NormMlpClassifierHead, {'hidden_size': 3}, (2, 4, 3, 3), ''),
+        (ClNormMlpClassifierHead, {'hidden_size': 3}, (2, 3, 3, 4), 'avgmax'),
+    ],
+)
+def test_classifier_head_reset_preserves_dtype(head_cls, head_kwargs, input_shape, pool_type):
+    head = head_cls(4, 3, **head_kwargs).to(dtype=torch.float64)
+    head.reset(2, pool_type)
+
+    assert all(parameter.dtype == torch.float64 for parameter in head.parameters())
+    assert head(torch.randn(input_shape, dtype=torch.float64)).dtype == torch.float64
 
 
 def test_resample_abs_pos_embed_same_token_count_different_grid():
