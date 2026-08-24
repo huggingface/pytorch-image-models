@@ -411,9 +411,8 @@ if 'GITHUB_ACTIONS' not in os.environ:
     @pytest.mark.parametrize('batch_size', [1])
     def test_model_load_pretrained(model_name, batch_size):
         """Create that pretrained weights load, verify support for in_chans != 3 while doing so."""
-        in_chans = 3 if 'pruned' in model_name else 1  # pruning not currently supported with in_chans change
-        create_model(model_name, pretrained=True, in_chans=in_chans, num_classes=5)
-        create_model(model_name, pretrained=True, in_chans=in_chans, num_classes=0)
+        create_model(model_name, pretrained=True, in_chans=1, num_classes=5)
+        create_model(model_name, pretrained=True, in_chans=1, num_classes=0)
 
     @pytest.mark.timeout(240)
     @pytest.mark.parametrize('model_name', list_models(pretrained=True, exclude_filters=NON_STD_FILTERS))
@@ -421,6 +420,19 @@ if 'GITHUB_ACTIONS' not in os.environ:
     def test_model_features_pretrained(model_name, batch_size):
         """Create that pretrained weights load when features_only==True."""
         create_model(model_name, pretrained=True, features_only=True)
+
+
+@pytest.mark.parametrize(
+    'model_name',
+    ['efficientnet_b1_pruned', 'efficientnet_b2_pruned', 'efficientnet_b3_pruned'],
+)
+def test_pruned_efficientnet_in_chans(model_name):
+    model = create_model(model_name, pretrained=False, in_chans=1)
+    model.eval()
+
+    assert model.conv_stem.in_channels == 1
+    with torch.no_grad():
+        assert model(torch.randn(1, 1, 32, 32)).shape == (1, 1000)
 
 
 @pytest.mark.torchscript
