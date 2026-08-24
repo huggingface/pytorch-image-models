@@ -109,3 +109,37 @@ def test_resume_checkpoint_weights_only_false_allows_custom_globals(tmp_path):
     assert resume_epoch == 4
     assert torch.equal(dst_model.weight, src_model.weight)
     assert torch.equal(dst_model.bias, src_model.bias)
+
+
+def test_naflexvit_load_pretrained_torch_checkpoint(tmp_path):
+    import timm
+
+    src_model = timm.create_model('naflexvit_base_patch16_gap', embed_dim=64, depth=2, num_heads=2, num_classes=10)
+    checkpoint_path = tmp_path / 'naflex_ckpt.pth'
+    torch.save(src_model.state_dict(), checkpoint_path)
+
+    dst_model = timm.create_model('naflexvit_base_patch16_gap', embed_dim=64, depth=2, num_heads=2, num_classes=10)
+    dst_model.load_pretrained(str(checkpoint_path))
+    for k, v in src_model.state_dict().items():
+        assert torch.equal(dst_model.state_dict()[k], v), k
+
+
+def test_naflexvit_load_pretrained_train_checkpoint(tmp_path):
+    import timm
+
+    src_model = timm.create_model('naflexvit_base_patch16_gap', embed_dim=64, depth=2, num_heads=2, num_classes=10)
+    checkpoint_path = tmp_path / 'naflex_train_ckpt.pth'
+    torch.save({'state_dict': src_model.state_dict(), 'epoch': 1}, checkpoint_path)
+
+    dst_model = timm.create_model('naflexvit_base_patch16_gap', embed_dim=64, depth=2, num_heads=2, num_classes=10)
+    dst_model.load_pretrained(str(checkpoint_path))
+    for k, v in src_model.state_dict().items():
+        assert torch.equal(dst_model.state_dict()[k], v), k
+
+
+def test_naflexvit_load_pretrained_npz_unsupported(tmp_path):
+    import timm
+
+    model = timm.create_model('naflexvit_base_patch16_gap', embed_dim=64, depth=2, num_heads=2, num_classes=10)
+    with pytest.raises(NotImplementedError):
+        model.load_pretrained(str(tmp_path / 'weights.npz'))

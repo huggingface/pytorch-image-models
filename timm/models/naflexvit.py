@@ -1382,30 +1382,26 @@ class NaFlexVit(nn.Module):
 
     @torch.jit.ignore()
     def load_pretrained(self, checkpoint_path: str, prefix: str = '') -> None:
-        # Custom loading for the new model structure
-        from .vision_transformer import _load_weights as _orig_load_weights
+        """Load weights from a torch checkpoint, remapping original ViT keys to the NaFlexVit structure.
+
+        Args:
+            checkpoint_path: Path to a torch checkpoint (.npz JAX checkpoints are not supported).
+            prefix: Optional prefix to strip from checkpoint keys before remapping.
+        """
         from ._helpers import _torch_load
 
-        def _load_weights_adapter(model, checkpoint_path, prefix=''):
-            """Adapter function to handle the different model structure"""
-            state_dict = _torch_load(checkpoint_path, map_location='cpu', weights_only=True)
-            if isinstance(state_dict, dict) and 'state_dict' in state_dict:
-                state_dict = state_dict['state_dict']
+        if checkpoint_path.endswith('.npz') or checkpoint_path.endswith('.npy'):
+            raise NotImplementedError(
+                'Loading .npz / .npy (JAX) checkpoints is not currently supported for NaFlexVit, '
+                'please convert to a torch checkpoint first.'
+            )
 
-            # Map original keys to new structure
-            for k in list(state_dict.keys()):
-                if k.startswith('cls_token'):
-                    state_dict['embeds.' + k] = state_dict.pop(k)
-                elif k.startswith('reg_token'):
-                    state_dict['embeds.' + k] = state_dict.pop(k)
-                elif k.startswith('pos_embed'):
-                    state_dict['embeds.' + k] = state_dict.pop(k)
-                elif k.startswith('patch_embed'):
-                    state_dict['embeds.' + k[12:]] = state_dict.pop(k)
-
-            return _orig_load_weights(model, state_dict, prefix)
-
-        _load_weights_adapter(self, checkpoint_path, prefix)
+        state_dict = _torch_load(checkpoint_path, map_location='cpu', weights_only=True)
+        if isinstance(state_dict, dict) and 'state_dict' in state_dict:
+            state_dict = state_dict['state_dict']
+        if prefix:
+            state_dict = {k[len(prefix):]: v for k, v in state_dict.items() if k.startswith(prefix)}
+        self.load_state_dict(checkpoint_filter_fn(state_dict, self))
 
     @torch.jit.ignore
     def no_weight_decay(self) -> Set:
