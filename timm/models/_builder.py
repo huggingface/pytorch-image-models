@@ -106,10 +106,12 @@ def load_custom_pretrained(
         load_fn: Optional[Callable] = None,
         cache_dir: Optional[Union[str, Path]] = None,
 ) -> None:
-    """Loads a custom (read non .pth) weight file
+    """Load a model-specific, non-native weight file.
 
-    Downloads checkpoint file into cache-dir like torch.hub based loaders, but calls
-    a passed in custom load fun, or the `load_pretrained` model member fn.
+    Downloads the checkpoint into the cache like the torch.hub-based loaders, then
+    calls a supplied custom loader or the model's ``load_pretrained`` method. This
+    path is intended for foreign formats such as original JAX/Flax ``.npz`` files;
+    native PyTorch state dictionaries use the generic loading path below.
 
     If the object is already present in `model_dir`, it's deserialized and returned.
     The default value of `model_dir` is ``<hub_dir>/checkpoints`` where

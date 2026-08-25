@@ -645,7 +645,11 @@ class ResNetV2(nn.Module):
 
     @torch.jit.ignore()
     def load_pretrained(self, checkpoint_path: str, prefix: str = 'resnet/') -> None:
-        """Load pretrained weights."""
+        """Load model-specific weights from an original NumPy checkpoint.
+
+        This helper handles the foreign ``.npz`` checkpoint layout. Native
+        PyTorch state dictionaries use the generic factory/checkpoint loaders.
+        """
         _load_weights(self, checkpoint_path, prefix)
 
     @torch.jit.ignore
