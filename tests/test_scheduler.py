@@ -252,6 +252,32 @@ class TestStepScheduler:
 class TestMultiStepScheduler:
     """Test MultiStepLRScheduler specific behavior."""
 
+    def test_multistep_decay_boundary(self):
+        """The decay happens at the milestone epoch, not the one before it."""
+        base_lr = 0.1
+        decay_rate = 0.5
+
+        optimizer = _create_optimizer(lr=base_lr)
+        scheduler = MultiStepLRScheduler(
+            optimizer,
+            decay_t=[10, 20],
+            decay_rate=decay_rate,
+        )
+
+        # the epoch before the milestone still runs at the undecayed rate
+        scheduler.step(9)
+        assert optimizer.param_groups[0]['lr'] == pytest.approx(base_lr, rel=1e-5)
+
+        # the milestone epoch itself is the first decayed one
+        scheduler.step(10)
+        assert optimizer.param_groups[0]['lr'] == pytest.approx(base_lr * decay_rate, rel=1e-5)
+
+        scheduler.step(19)
+        assert optimizer.param_groups[0]['lr'] == pytest.approx(base_lr * decay_rate, rel=1e-5)
+
+        scheduler.step(20)
+        assert optimizer.param_groups[0]['lr'] == pytest.approx(base_lr * decay_rate**2, rel=1e-5)
+
     def test_multistep_decay(self):
         """Test decay at specified milestones."""
         base_lr = 0.1
