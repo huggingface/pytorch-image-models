@@ -6,7 +6,7 @@ import argparse
 import logging
 import os
 import pickle
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable, Dict, Optional, Sequence, Union
 
 import torch
 
@@ -67,6 +67,45 @@ def _torch_load(
             "No automatic unsafe pickle fallback is performed. "
             "If this checkpoint is trusted, retry with weights_only=False."
         ) from e
+
+
+def _load_npz_checkpoint(
+        checkpoint_path: str,
+        *,
+        required_any: Sequence[str],
+        load_fn: Optional[Callable] = None,
+        context: str = 'load_pretrained()',
+):
+    """Open a JAX/Flax NumPy archive and verify a supported layout anchor."""
+    import numpy as np
+
+    load_fn = load_fn or np.load
+    try:
+        weights = load_fn(checkpoint_path, allow_pickle=False)
+    except FileNotFoundError:
+        raise
+    except (EOFError, OSError, TypeError, ValueError) as e:
+        raise ValueError(
+            f'{context} expected an original JAX/Flax NumPy .npz checkpoint, but could not read '
+            f'{checkpoint_path!r}. Native PyTorch and safetensors weights must use the factory/checkpoint loader.'
+        ) from e
+
+    if not isinstance(weights, np.lib.npyio.NpzFile):
+        if hasattr(weights, 'close'):
+            weights.close()
+        raise ValueError(
+            f'{context} expected a keyed JAX/Flax NumPy .npz checkpoint, but {checkpoint_path!r} is not an '
+            f'.npz archive. Native PyTorch and safetensors weights must use the factory/checkpoint loader.'
+        )
+
+    if required_any and not any(key in weights.files for key in required_any):
+        weights.close()
+        raise ValueError(
+            f'{context} did not find a supported JAX/Flax parameter layout in {checkpoint_path!r}. '
+            f'Native PyTorch and safetensors weights must use the factory/checkpoint loader.'
+        )
+
+    return weights
 
 
 def _remove_prefix(text: str, prefix: str) -> str:

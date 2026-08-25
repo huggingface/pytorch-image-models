@@ -243,6 +243,35 @@ def test_naflexvit_load_pretrained_big_vision_npz(tmp_path, conv_patch_embed):
     assert torch.isfinite(output).all()
 
 
+@pytest.mark.parametrize('checkpoint_type', ['pth', 'safetensors', 'unrelated_npz'])
+def test_naflexvit_load_pretrained_rejects_unsupported_checkpoint(tmp_path, checkpoint_type):
+    model = _create_tiny_naflexvit()
+    if checkpoint_type == 'pth':
+        checkpoint_path = tmp_path / 'native.pth'
+        torch.save(model.state_dict(), checkpoint_path)
+    elif checkpoint_type == 'safetensors':
+        checkpoint_path = tmp_path / 'native.safetensors'
+        checkpoint_path.write_bytes((2).to_bytes(8, byteorder='little') + b'{}')
+    else:
+        checkpoint_path = tmp_path / 'unrelated.npz'
+        np.savez(checkpoint_path, unrelated=np.ones(1, dtype=np.float32))
+
+    with pytest.raises(ValueError, match=r'JAX/Flax.*factory/checkpoint loader'):
+        model.load_pretrained(str(checkpoint_path))
+
+
+def test_naflexvit_load_pretrained_disallows_pickled_arrays(tmp_path):
+    checkpoint_path = tmp_path / 'object_array.npz'
+    np.savez(
+        checkpoint_path,
+        **{'params/img/embedding/kernel': np.array([{'unsafe': True}], dtype=object)},
+    )
+    model = _create_tiny_naflexvit()
+
+    with pytest.raises(ValueError, match='allow_pickle=False'):
+        model.load_pretrained(str(checkpoint_path))
+
+
 def test_naflexvit_native_checkpoint_uses_factory_loader(tmp_path):
     src_model = _create_tiny_naflexvit()
     checkpoint_path = tmp_path / 'naflex_native.pth'

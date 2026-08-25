@@ -41,6 +41,7 @@ from timm.layers import GroupNormAct, BatchNormAct2d, EvoNorm2dS0, FilterRespons
     DropPath, calculate_drop_path_rates, AvgPool2dSame, create_pool2d, StdConv2d, create_conv2d, get_act_layer, get_norm_act_layer, make_divisible
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
+from ._helpers import _load_npz_checkpoint
 from ._manipulate import checkpoint_seq, named_apply, adapt_input_conv
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 
@@ -822,15 +823,17 @@ def _init_weights(module: nn.Module, name: str = '', zero_init_last: bool = True
 
 @torch.no_grad()
 def _load_weights(model: nn.Module, checkpoint_path: str, prefix: str = 'resnet/'):
-    import numpy as np
-
     def t2p(conv_weights):
         """Possibly convert HWIO to OIHW."""
         if conv_weights.ndim == 4:
             conv_weights = conv_weights.transpose([3, 2, 0, 1])
         return torch.from_numpy(conv_weights)
 
-    weights = np.load(checkpoint_path)
+    weights = _load_npz_checkpoint(
+        checkpoint_path,
+        required_any=(f'{prefix}root_block/standardized_conv2d/kernel',),
+        context=f'{type(model).__name__}.load_pretrained()',
+    )
     stem_conv_w = adapt_input_conv(
         model.stem.conv.weight.shape[1], t2p(weights[f'{prefix}root_block/standardized_conv2d/kernel']))
     model.stem.conv.weight.copy_(stem_conv_w)

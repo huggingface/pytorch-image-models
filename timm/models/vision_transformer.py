@@ -74,6 +74,7 @@ from timm.layers import (
 )
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
+from ._helpers import _load_npz_checkpoint
 from ._manipulate import named_apply, checkpoint, checkpoint_seq, adapt_input_conv
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 
@@ -1451,10 +1452,21 @@ def _load_weights(model: nn.Module, checkpoint_path: str, prefix: str = '', load
         _w = torch.from_numpy(_w)
         return _w
 
-    if load_bfloat16:
-        w = jnp.load(checkpoint_path)
+    if prefix:
+        required_any = (f'{prefix}embedding/kernel',)
     else:
-        w = np.load(checkpoint_path)
+        required_any = (
+            'embedding/kernel',
+            'opt/target/embedding/kernel',
+            'params/embedding/kernel',
+            'params/img/embedding/kernel',
+        )
+    w = _load_npz_checkpoint(
+        checkpoint_path,
+        required_any=required_any,
+        load_fn=jnp.load if load_bfloat16 else np.load,
+        context=f'{type(model).__name__}.load_pretrained()',
+    )
 
     interpolation = 'bilinear'
     antialias = False
