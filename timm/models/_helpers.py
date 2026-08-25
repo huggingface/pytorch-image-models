@@ -145,6 +145,10 @@ def load_checkpoint(
 ) -> Any:
     """Load checkpoint into model.
 
+    Native PyTorch checkpoints are loaded as state dictionaries. NumPy
+    ``.npz``/``.npy`` checkpoints are foreign, model-specific formats and are
+    delegated to the model's ``load_pretrained`` helper.
+
     Args:
         model: Model to load checkpoint into.
         checkpoint_path: Path to checkpoint file.

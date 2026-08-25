@@ -63,6 +63,7 @@ from timm.layers import (
     lecun_normal_,
     resample_patch_embed,
     resample_abs_pos_embed,
+    resample_abs_pos_embed_nhwc,
     use_fused_attn,
     get_act_layer,
     get_norm_layer,
@@ -947,11 +948,14 @@ class VisionTransformer(nn.Module):
 
     @torch.jit.ignore()
     def load_pretrained(self, checkpoint_path: str, prefix: str = '') -> None:
-        """Load pretrained weights.
+        """Load model-specific weights from an original JAX/Flax NumPy checkpoint.
+
+        This helper handles foreign ``.npz`` checkpoint layouts. Native PyTorch
+        state dictionaries are loaded by the generic factory/checkpoint helpers.
 
         Args:
-            checkpoint_path: Path to checkpoint.
-            prefix: Prefix for state dict keys.
+            checkpoint_path: Path to a NumPy checkpoint.
+            prefix: Prefix for parameter names in the checkpoint.
         """
         _load_weights(self, checkpoint_path, prefix)
 
@@ -1419,9 +1423,8 @@ def resize_pos_embed(
 
 
 @torch.no_grad()
-def _load_weights(model: VisionTransformer, checkpoint_path: str, prefix: str = '', load_bfloat16: bool = False) -> None:
-    """ Load weights from .npz checkpoints for official Google Brain Flax implementation
-    """
+def _load_weights(model: nn.Module, checkpoint_path: str, prefix: str = '', load_bfloat16: bool = False) -> None:
+    """Load weights from official Google JAX/Flax ``.npz`` checkpoints."""
     import numpy as np
     if load_bfloat16:
         import jax.numpy as jnp
@@ -1455,71 +1458,178 @@ def _load_weights(model: VisionTransformer, checkpoint_path: str, prefix: str = 
 
     interpolation = 'bilinear'
     antialias = False
-    big_vision = False
     if not prefix:
         if 'opt/target/embedding/kernel' in w:
             prefix = 'opt/target/'
         elif 'params/embedding/kernel' in w:
             prefix = 'params/'
-            big_vision = True
         elif 'params/img/embedding/kernel' in w:
             prefix = 'params/img/'
-            big_vision = True
+    big_vision = (
+        prefix.startswith('params/') or
+        f'{prefix}pos_embedding' in w or
+        f'{prefix}Transformer/encoderblock/LayerNorm_0/scale' in w
+    )
+    is_naflex = hasattr(model, 'embeds') and hasattr(model.embeds, 'proj')
 
-    if hasattr(model.patch_embed, 'backbone'):
-        # hybrid
-        backbone = model.patch_embed.backbone
-        stem_only = not hasattr(backbone, 'stem')
-        stem = backbone if stem_only else backbone.stem
-        stem.conv.weight.copy_(adapt_input_conv(stem.conv.weight.shape[1], _n2p(w[f'{prefix}conv_root/kernel'])))
-        stem.norm.weight.copy_(_n2p(w[f'{prefix}gn_root/scale']))
-        stem.norm.bias.copy_(_n2p(w[f'{prefix}gn_root/bias']))
-        if not stem_only:
-            for i, stage in enumerate(backbone.stages):
-                for j, block in enumerate(stage.blocks):
-                    bp = f'{prefix}block{i + 1}/unit{j + 1}/'
-                    for r in range(3):
-                        getattr(block, f'conv{r + 1}').weight.copy_(_n2p(w[f'{bp}conv{r + 1}/kernel']))
-                        getattr(block, f'norm{r + 1}').weight.copy_(_n2p(w[f'{bp}gn{r + 1}/scale']))
-                        getattr(block, f'norm{r + 1}').bias.copy_(_n2p(w[f'{bp}gn{r + 1}/bias']))
-                    if block.downsample is not None:
-                        block.downsample.conv.weight.copy_(_n2p(w[f'{bp}conv_proj/kernel']))
-                        block.downsample.norm.weight.copy_(_n2p(w[f'{bp}gn_proj/scale']))
-                        block.downsample.norm.bias.copy_(_n2p(w[f'{bp}gn_proj/bias']))
-        embed_conv_w = _n2p(w[f'{prefix}embedding/kernel'])
-    else:
-        embed_conv_w = adapt_input_conv(
-            model.patch_embed.proj.weight.shape[1], _n2p(w[f'{prefix}embedding/kernel']))
-    if embed_conv_w.shape[-2:] != model.patch_embed.proj.weight.shape[-2:]:
-        embed_conv_w = resample_patch_embed(
-            embed_conv_w,
-            model.patch_embed.proj.weight.shape[-2:],
-            interpolation=interpolation,
-            antialias=antialias,
-            verbose=True,
-        )
+    if is_naflex:
+        # Big Vision NaFlex checkpoints use a Dense patch projection over flattened
+        # HWC patches, while NaFlexVit may use either Linear or Conv2d projection.
+        embeds = model.embeds
+        embed_w = _n2p(w[f'{prefix}embedding/kernel'])
+        embed_conv_w = None
+        if embed_w.ndim == 4:
+            embed_conv_w = embed_w
+        elif embed_w.ndim == 2:
+            # Recover OIHW so input-channel adaptation, patch-size resampling, and
+            # the destination patch layout can be handled consistently.
+            for checkpoint_in_chans in dict.fromkeys((3, embeds.in_chans)):
+                patch_area, remainder = divmod(embed_w.shape[1], checkpoint_in_chans)
+                patch_size = int(math.sqrt(patch_area))
+                if not remainder and patch_size * patch_size == patch_area:
+                    embed_conv_w = embed_w.reshape(
+                        embed_w.shape[0], patch_size, patch_size, checkpoint_in_chans).permute(0, 3, 1, 2)
+                    break
+        else:
+            raise ValueError(f'Unsupported patch embedding rank in {checkpoint_path}: {embed_w.ndim}')
 
-    model.patch_embed.proj.weight.copy_(embed_conv_w)
-    model.patch_embed.proj.bias.copy_(_n2p(w[f'{prefix}embedding/bias']))
-    if model.cls_token is not None:
-        model.cls_token.copy_(_n2p(w[f'{prefix}cls'], t=False))
-    if big_vision:
-        pos_embed_w = _n2p(w[f'{prefix}pos_embedding'], t=False)
+        if embed_conv_w is not None:
+            embed_conv_w = adapt_input_conv(embeds.in_chans, embed_conv_w)
+            if embed_conv_w.shape[-2:] != embeds.patch_size:
+                embed_conv_w = resample_patch_embed(
+                    embed_conv_w,
+                    embeds.patch_size,
+                    interpolation=interpolation,
+                    antialias=antialias,
+                    verbose=True,
+                )
+            if embeds.is_linear:
+                if embeds.channels_last:
+                    embed_w = embed_conv_w.permute(0, 2, 3, 1).flatten(1)
+                else:
+                    embed_w = embed_conv_w.flatten(1)
+            else:
+                embed_w = embed_conv_w
+
+        if embed_w.shape != embeds.proj.weight.shape:
+            raise ValueError(
+                f'Patch embedding shape mismatch in {checkpoint_path}: '
+                f'checkpoint={tuple(embed_w.shape)}, model={tuple(embeds.proj.weight.shape)}')
+        embeds.proj.weight.copy_(embed_w)
+        if embeds.proj.bias is not None and f'{prefix}embedding/bias' in w:
+            embeds.proj.bias.copy_(_n2p(w[f'{prefix}embedding/bias']))
+
+        if embeds.cls_token is not None and f'{prefix}cls' in w:
+            embeds.cls_token.copy_(_n2p(w[f'{prefix}cls'], t=False))
+
+        pos_embed_key = (
+            f'{prefix}pos_embedding' if big_vision
+            else f'{prefix}Transformer/posembed_input/pos_embedding')
+        if embeds.pos_embed is not None and pos_embed_key in w:
+            pos_embed_w = _n2p(w[pos_embed_key], t=False)
+            prefix_pos_embed = None
+            if pos_embed_w.ndim == 2:
+                pos_embed_w = pos_embed_w.unsqueeze(0)
+            if pos_embed_w.ndim == 3:
+                if pos_embed_w.shape[0] == 1:
+                    # Flattened NLC tables may include class/register positions.
+                    num_pos_tokens = pos_embed_w.shape[1]
+                    grid_size = int(math.sqrt(num_pos_tokens))
+                    if grid_size * grid_size != num_pos_tokens:
+                        checkpoint_prefix_tokens = (
+                            1 if f'{prefix}cls' in w else getattr(embeds, 'num_prefix_tokens', 0))
+                        num_pos_tokens -= checkpoint_prefix_tokens
+                        grid_size = int(math.sqrt(num_pos_tokens))
+                        if grid_size * grid_size != num_pos_tokens:
+                            raise ValueError(
+                                f'Cannot infer position grid from {pos_embed_w.shape[1]} tokens '
+                                f'in {checkpoint_path}')
+                        prefix_pos_embed = pos_embed_w[:, :checkpoint_prefix_tokens]
+                        pos_embed_w = pos_embed_w[:, checkpoint_prefix_tokens:]
+                    pos_embed_w = pos_embed_w.reshape(1, grid_size, grid_size, pos_embed_w.shape[-1])
+                else:
+                    # Big Vision NaFlex stores the grid directly as HWC.
+                    pos_embed_w = pos_embed_w.unsqueeze(0)
+            if pos_embed_w.ndim != 4:
+                raise ValueError(f'Unsupported position embedding shape in {checkpoint_path}: {pos_embed_w.shape}')
+
+            if prefix_pos_embed is not None:
+                prefix_index = 0
+                if embeds.cls_token is not None and prefix_pos_embed.shape[1] > prefix_index:
+                    embeds.cls_token.add_(prefix_pos_embed[:, prefix_index:prefix_index + 1])
+                    prefix_index += 1
+                if embeds.reg_token is not None and prefix_pos_embed.shape[1] > prefix_index:
+                    num_reg_tokens = min(embeds.reg_token.shape[1], prefix_pos_embed.shape[1] - prefix_index)
+                    embeds.reg_token[:, :num_reg_tokens].add_(
+                        prefix_pos_embed[:, prefix_index:prefix_index + num_reg_tokens])
+
+            if pos_embed_w.shape != embeds.pos_embed.shape:
+                pos_embed_w = resample_abs_pos_embed_nhwc(
+                    pos_embed_w,
+                    new_size=embeds.pos_embed.shape[1:3],
+                    interpolation=interpolation,
+                    antialias=antialias,
+                    verbose=True,
+                )
+            embeds.pos_embed.copy_(pos_embed_w)
     else:
-        pos_embed_w = _n2p(w[f'{prefix}Transformer/posembed_input/pos_embedding'], t=False)
-    if pos_embed_w.shape != model.pos_embed.shape:
-        num_prefix_tokens = 0 if getattr(model, 'no_embed_class', False) else getattr(model, 'num_prefix_tokens', 1)
-        pos_embed_w = resample_abs_pos_embed(  # resize pos embedding when different size from pretrained weights
-            pos_embed_w,
-            new_size=model.patch_embed.grid_size,
-            num_prefix_tokens=num_prefix_tokens,
-            interpolation=interpolation,
-            antialias=antialias,
-            verbose=True,
-        )
-    model.pos_embed.copy_(pos_embed_w)
-    model.norm.weight.copy_(_n2p(w[f'{prefix}Transformer/encoder_norm/scale']))
-    model.norm.bias.copy_(_n2p(w[f'{prefix}Transformer/encoder_norm/bias']))
+        if hasattr(model.patch_embed, 'backbone'):
+            # hybrid
+            backbone = model.patch_embed.backbone
+            stem_only = not hasattr(backbone, 'stem')
+            stem = backbone if stem_only else backbone.stem
+            stem.conv.weight.copy_(
+                adapt_input_conv(stem.conv.weight.shape[1], _n2p(w[f'{prefix}conv_root/kernel'])))
+            stem.norm.weight.copy_(_n2p(w[f'{prefix}gn_root/scale']))
+            stem.norm.bias.copy_(_n2p(w[f'{prefix}gn_root/bias']))
+            if not stem_only:
+                for i, stage in enumerate(backbone.stages):
+                    for j, block in enumerate(stage.blocks):
+                        bp = f'{prefix}block{i + 1}/unit{j + 1}/'
+                        for r in range(3):
+                            getattr(block, f'conv{r + 1}').weight.copy_(_n2p(w[f'{bp}conv{r + 1}/kernel']))
+                            getattr(block, f'norm{r + 1}').weight.copy_(_n2p(w[f'{bp}gn{r + 1}/scale']))
+                            getattr(block, f'norm{r + 1}').bias.copy_(_n2p(w[f'{bp}gn{r + 1}/bias']))
+                        if block.downsample is not None:
+                            block.downsample.conv.weight.copy_(_n2p(w[f'{bp}conv_proj/kernel']))
+                            block.downsample.norm.weight.copy_(_n2p(w[f'{bp}gn_proj/scale']))
+                            block.downsample.norm.bias.copy_(_n2p(w[f'{bp}gn_proj/bias']))
+            embed_conv_w = _n2p(w[f'{prefix}embedding/kernel'])
+        else:
+            embed_conv_w = adapt_input_conv(
+                model.patch_embed.proj.weight.shape[1], _n2p(w[f'{prefix}embedding/kernel']))
+
+        if embed_conv_w.shape[-2:] != model.patch_embed.proj.weight.shape[-2:]:
+            embed_conv_w = resample_patch_embed(
+                embed_conv_w,
+                model.patch_embed.proj.weight.shape[-2:],
+                interpolation=interpolation,
+                antialias=antialias,
+                verbose=True,
+            )
+
+        model.patch_embed.proj.weight.copy_(embed_conv_w)
+        model.patch_embed.proj.bias.copy_(_n2p(w[f'{prefix}embedding/bias']))
+        if model.cls_token is not None:
+            model.cls_token.copy_(_n2p(w[f'{prefix}cls'], t=False))
+        if big_vision:
+            pos_embed_w = _n2p(w[f'{prefix}pos_embedding'], t=False)
+        else:
+            pos_embed_w = _n2p(w[f'{prefix}Transformer/posembed_input/pos_embedding'], t=False)
+        if pos_embed_w.shape != model.pos_embed.shape:
+            num_prefix_tokens = 0 if getattr(model, 'no_embed_class', False) else getattr(model, 'num_prefix_tokens', 1)
+            pos_embed_w = resample_abs_pos_embed(  # resize pos embedding when different size from pretrained weights
+                pos_embed_w,
+                new_size=model.patch_embed.grid_size,
+                num_prefix_tokens=num_prefix_tokens,
+                interpolation=interpolation,
+                antialias=antialias,
+                verbose=True,
+            )
+        model.pos_embed.copy_(pos_embed_w)
+    if hasattr(model.norm, 'weight'):
+        model.norm.weight.copy_(_n2p(w[f'{prefix}Transformer/encoder_norm/scale']))
+        model.norm.bias.copy_(_n2p(w[f'{prefix}Transformer/encoder_norm/bias']))
     if (isinstance(model.head, nn.Linear) and
             f'{prefix}head/bias' in w and
             model.head.bias.shape[0] == w[f'{prefix}head/bias'].shape[-1]):

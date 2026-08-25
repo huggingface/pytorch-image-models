@@ -1382,30 +1382,19 @@ class NaFlexVit(nn.Module):
 
     @torch.jit.ignore()
     def load_pretrained(self, checkpoint_path: str, prefix: str = '') -> None:
-        # Custom loading for the new model structure
-        from .vision_transformer import _load_weights as _orig_load_weights
-        from ._helpers import _torch_load
+        """Load model-specific weights from an original JAX/Flax NumPy checkpoint.
 
-        def _load_weights_adapter(model, checkpoint_path, prefix=''):
-            """Adapter function to handle the different model structure"""
-            state_dict = _torch_load(checkpoint_path, map_location='cpu', weights_only=True)
-            if isinstance(state_dict, dict) and 'state_dict' in state_dict:
-                state_dict = state_dict['state_dict']
+        This helper handles foreign ``.npz`` checkpoint layouts, including the
+        Big Vision SigLIP2 NaFlex checkpoints. Native PyTorch state dictionaries
+        are loaded by the generic factory/checkpoint helpers.
 
-            # Map original keys to new structure
-            for k in list(state_dict.keys()):
-                if k.startswith('cls_token'):
-                    state_dict['embeds.' + k] = state_dict.pop(k)
-                elif k.startswith('reg_token'):
-                    state_dict['embeds.' + k] = state_dict.pop(k)
-                elif k.startswith('pos_embed'):
-                    state_dict['embeds.' + k] = state_dict.pop(k)
-                elif k.startswith('patch_embed'):
-                    state_dict['embeds.' + k[12:]] = state_dict.pop(k)
+        Args:
+            checkpoint_path: Path to a NumPy checkpoint.
+            prefix: Prefix for parameter names in the checkpoint.
+        """
+        from .vision_transformer import _load_weights
 
-            return _orig_load_weights(model, state_dict, prefix)
-
-        _load_weights_adapter(self, checkpoint_path, prefix)
+        _load_weights(self, checkpoint_path, prefix)
 
     @torch.jit.ignore
     def no_weight_decay(self) -> Set:

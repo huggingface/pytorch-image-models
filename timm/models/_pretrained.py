@@ -21,7 +21,9 @@ class PretrainedCfg:
     source: Optional[str] = None  # source of cfg / weight location used (url, file, hf-hub)
     architecture: Optional[str] = None  # architecture variant can be set when not implicit
     tag: Optional[str] = None  # pretrained tag of source
-    custom_load: bool = False  # use custom model specific model.load_pretrained() (ie for npz files)
+    # Use model.load_pretrained() for foreign/model-specific formats (typically JAX/Flax .npz).
+    # Native PyTorch checkpoints use the generic state-dict loading path.
+    custom_load: bool = False
 
     # input / data config
     input_size: Tuple[int, int, int] = (3, 224, 224)
