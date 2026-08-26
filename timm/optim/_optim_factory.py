@@ -237,7 +237,7 @@ class OptimizerRegistry:
             fallback_list: Collection[str] = (),
             fallback_no_weight_decay: bool = False,
             layer_decay: Optional[float] = None,
-            layer_decay_min_scale: Optional[float] = None,
+            layer_decay_min_scale: float = 0.0,
             layer_decay_no_opt_scale: Optional[float] = None,
             param_group_fn: Optional[Callable[[nn.Module], ParamsT]] = None,
             **kwargs: Any,

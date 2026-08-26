@@ -635,6 +635,26 @@ def test_param_groups_layer_decay_with_min():
         assert group['lr_scale'] >= 0.5
 
 
+def test_registry_create_optimizer_layer_decay_default_min_scale():
+    # The registry create_optimizer must handle layer_decay when the min scale is left at its
+    # default: it used to default layer_decay_min_scale to None, which crashed in
+    # param_groups_layer_decay's max(min_scale, ...). create_optimizer_v2 passed 0.0 and was fine.
+    from timm.optim._optim_factory import default_registry
+
+    model = torch.nn.Sequential(
+        torch.nn.Linear(10, 5),
+        torch.nn.ReLU(),
+        torch.nn.Linear(5, 2),
+    )
+    optimizer = default_registry.create_optimizer(
+        model, 'adamw', lr=1e-3, weight_decay=0.05, layer_decay=0.75,
+    )
+    assert len(optimizer.param_groups) > 0
+    for group in optimizer.param_groups:
+        assert 'lr_scale' in group
+        assert 0.0 <= group['lr_scale'] <= 1.0
+
+
 def test_param_groups_layer_decay_with_matcher():
     class ModelWithMatcher(torch.nn.Module):
         def __init__(self):
