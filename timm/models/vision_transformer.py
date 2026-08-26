@@ -1003,6 +1003,8 @@ class VisionTransformer(nn.Module):
             num_classes: Number of classes for new classifier.
             global_pool: Global pooling type.
         """
+        parameter = next(self.parameters())
+        dd = {'device': parameter.device, 'dtype': parameter.dtype}
         self.num_classes = num_classes
         if global_pool is not None:
             assert global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map', 'prr')
@@ -1013,7 +1015,7 @@ class VisionTransformer(nn.Module):
             elif global_pool in ('map', 'prr') and self.global_pool != global_pool:
                 assert False, "Cannot currently change attention pooling type in reset_classifier()."
             self.global_pool = global_pool
-        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     def set_input_size(
             self,

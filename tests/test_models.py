@@ -435,6 +435,28 @@ def test_pruned_efficientnet_in_chans(model_name):
         assert model(torch.randn(1, 1, 32, 32)).shape == (1, 1000)
 
 
+@pytest.mark.base
+@pytest.mark.parametrize('model_cls', [timm.models.VisionTransformer, timm.models.VisionTransformerDistilled])
+def test_vit_reset_classifier_preserves_dtype(model_cls):
+    model = model_cls(
+        img_size=16,
+        patch_size=8,
+        embed_dim=8,
+        depth=1,
+        num_heads=1,
+        mlp_ratio=1,
+        num_classes=3,
+    ).to(dtype=torch.float64)
+
+    model.reset_classifier(0)
+    model.reset_classifier(2)
+
+    classifier = model.get_classifier()
+    classifier = classifier if isinstance(classifier, tuple) else (classifier,)
+    assert all(parameter.dtype == torch.float64 for head in classifier for parameter in head.parameters())
+    assert model(torch.randn(1, 3, 16, 16, dtype=torch.float64)).dtype == torch.float64
+
+
 @pytest.mark.torchscript
 @pytest.mark.timeout(timeout120)
 @pytest.mark.parametrize(
