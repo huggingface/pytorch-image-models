@@ -3,6 +3,7 @@ import pytest
 import torch
 
 from timm.data import create_loader, create_naflex_loader, create_transform
+from timm.data.auto_augment import augment_and_mix_transform, rand_augment_transform
 from timm.data.mixup import rand_bbox_minmax
 
 
@@ -77,3 +78,28 @@ def test_create_naflex_loader_disables_persistent_workers_without_workers(is_tra
 
     assert loader.num_workers == 0
     assert not loader.persistent_workers
+
+
+@pytest.mark.parametrize('config_str, expected_increasing', [
+    ('rand-m9-n3', False),       # flag omitted -> default off
+    ('rand-m9-n3-inc0', False),  # documented off value
+    ('rand-m9-n3-inc1', True),   # documented on value
+])
+def test_rand_augment_inc_flag_respects_zero(config_str, expected_increasing):
+    # 'inc' is documented as integer(bool) with default 0 and must toggle the increasing-severity
+    # transform set. val is the raw config string, and bool('0') is True, so 'inc0' used to enable it.
+    transform = rand_augment_transform(config_str, hparams={})
+    uses_increasing = any('Increasing' in op.name for op in transform.ops)
+    assert uses_increasing == expected_increasing
+
+
+@pytest.mark.parametrize('config_str, expected_blended', [
+    ('augmix-m5-w4', False),     # flag omitted -> default off
+    ('augmix-m5-w4-b0', False),  # documented off value
+    ('augmix-m5-w4-b1', True),   # documented on value
+])
+def test_augmix_blended_flag_respects_zero(config_str, expected_blended):
+    # 'b' (blended) is documented as integer(bool) with default 0; bool('0') is True, so 'b0' used
+    # to select the blended code path instead of disabling it.
+    transform = augment_and_mix_transform(config_str, hparams={})
+    assert transform.blended == expected_blended
