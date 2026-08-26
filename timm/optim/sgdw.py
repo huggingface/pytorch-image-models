@@ -265,7 +265,7 @@ def _multi_tensor_sgdw(
             device_grads = torch._foreach_neg(device_grads)
 
         wd_scale = lr if max_lr is None else lr ** 2 / max_lr
-        torch._foreach_mul_(params, 1. - wd_scale * weight_decay)
+        torch._foreach_mul_(device_params, 1. - wd_scale * weight_decay)
 
         if momentum != 0:
             bufs = []

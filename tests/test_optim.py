@@ -784,3 +784,24 @@ def test_adafactor_bv_factored_row_normalization(shape):
     param = one_step(grad)
     param_t = one_step(grad.t().contiguous())
     torch.testing.assert_close(param_t, param.t())
+
+
+def test_sgdw_multi_tensor_weight_decay_matches_single_tensor():
+    # The foreach path groups params by (device, dtype) and iterates the groups. Decoupled weight
+    # decay must be applied to each group's params, otherwise params spanning more than one partition
+    # (e.g. mixed dtypes) are decayed once per partition instead of once. Compare foreach against the
+    # single-tensor reference with two dtypes so there are two partitions.
+    from timm.optim.sgdw import SGDW
+
+    def run(foreach):
+        p32 = Parameter(torch.tensor([1.0, 2.0], dtype=torch.float32))
+        p64 = Parameter(torch.tensor([1.0, 2.0], dtype=torch.float64))
+        for p in (p32, p64):
+            p.grad = torch.ones_like(p)
+        SGDW([p32, p64], lr=0.1, momentum=0.0, weight_decay=0.5, foreach=foreach).step()
+        return p32.detach().clone(), p64.detach().clone()
+
+    multi32, multi64 = run(True)
+    single32, single64 = run(False)
+    torch.testing.assert_close(multi32, single32)
+    torch.testing.assert_close(multi64, single64)
