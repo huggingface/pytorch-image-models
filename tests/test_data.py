@@ -108,3 +108,28 @@ def test_auto_augment_factory_accepts_default_none_hparams(factory, config_str, 
     # the setdefault() calls must not leak magnitude_std into the shared module-level default,
     # which would otherwise pin the value for every later call that relies on the defaults.
     assert _HPARAMS_DEFAULT == before
+
+
+@pytest.mark.parametrize('config_str, expected_increasing', [
+    ('rand-m9-n3', False),       # flag omitted -> default off
+    ('rand-m9-n3-inc0', False),  # documented off value
+    ('rand-m9-n3-inc1', True),   # documented on value
+])
+def test_rand_augment_inc_flag_respects_zero(config_str, expected_increasing):
+    # 'inc' is documented as integer(bool) with default 0 and must toggle the increasing-severity
+    # transform set. val is the raw config string, and bool('0') is True, so 'inc0' used to enable it.
+    transform = rand_augment_transform(config_str, hparams={})
+    uses_increasing = any('Increasing' in op.name for op in transform.ops)
+    assert uses_increasing == expected_increasing
+
+
+@pytest.mark.parametrize('config_str, expected_blended', [
+    ('augmix-m5-w4', False),     # flag omitted -> default off
+    ('augmix-m5-w4-b0', False),  # documented off value
+    ('augmix-m5-w4-b1', True),   # documented on value
+])
+def test_augmix_blended_flag_respects_zero(config_str, expected_blended):
+    # 'b' (blended) is documented as integer(bool) with default 0; bool('0') is True, so 'b0' used
+    # to select the blended code path instead of disabling it.
+    transform = augment_and_mix_transform(config_str, hparams={})
+    assert transform.blended == expected_blended

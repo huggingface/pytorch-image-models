@@ -821,8 +821,7 @@ def rand_augment_transform(
                 # clip magnitude between [0, mmax] instead of default [0, _LEVEL_DENOM]
                 hparams.setdefault('magnitude_max', int(val))
             elif key == 'inc':
-                if bool(val):
-                    increasing = True
+                increasing = bool(int(val))
             elif key == 'm':
                 magnitude = int(val)
             elif key == 'n':
@@ -995,7 +994,7 @@ def augment_and_mix_transform(config_str: str, hparams: Optional[Dict] = None):
         elif key == 'a':
             alpha = float(val)
         elif key == 'b':
-            blended = bool(val)
+            blended = bool(int(val))
         else:
             assert False, 'Unknown AugMix config section'
     hparams.setdefault('magnitude_std', float('inf'))  # default to uniform sampling (if not set via mstd arg)
