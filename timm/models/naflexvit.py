@@ -1555,6 +1555,7 @@ class NaFlexVit(nn.Module):
                 self.attn_pool = None  # remove attention pooling
             self.global_pool = global_pool
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head.train(self.training)
 
     def _forward_embeds(
             self,

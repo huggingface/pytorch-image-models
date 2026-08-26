@@ -361,6 +361,7 @@ class RexNet(nn.Module):
         if device is not None or dtype is not None:
             pool_type = global_pool if global_pool is not None else self.head.global_pool.pool_type
             self.head = ClassifierHead(self.num_features, num_classes, pool_type, self.drop_rate, **dd)
+            self.head.train(self.training)
         else:
             self.head.reset(num_classes, global_pool, **dd)
 

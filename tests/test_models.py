@@ -259,6 +259,7 @@ EARLY_POOL_MODELS = (
 def _assert_reset_classifier_preserves_parent_device_dtype(model):
     model.to(device='meta', dtype=torch.float64)
     expected = next(model.parameters())
+    expected_training = model.training
 
     model.reset_classifier(0)
     model.reset_classifier(2)
@@ -269,6 +270,7 @@ def _assert_reset_classifier_preserves_parent_device_dtype(model):
     assert parameters
     assert all(parameter.device == expected.device for parameter in parameters)
     assert all(parameter.dtype == expected.dtype for parameter in parameters)
+    assert all(module.training == expected_training for module in model.modules())
 
 
 @pytest.mark.cfg

@@ -641,6 +641,8 @@ class NASNetALarge(nn.Module):
         self.num_classes = num_classes
         self.global_pool, self.last_linear = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.global_pool.train(self.training)
+        self.last_linear.train(self.training)
 
     def forward_features(self, x):
         x_conv0 = self.conv0(x)

@@ -742,10 +742,13 @@ class ClassifierHead(nn.Module):
         if pool_type is not None:
             assert pool_type, 'Cannot disable pooling'
             self.global_pool = SelectAdaptivePool2d(pool_type=pool_type, flatten=True,)
+            self.global_pool.train(self.training)
         if num_classes > 0:
             self.classifier[-1] = nn.Linear(self.num_features, num_classes, bias=True, **dd)
+            self.classifier[-1].train(self.classifier.training)
         else:
             self.classifier[-1] = nn.Identity()
+            self.classifier[-1].train(self.classifier.training)
 
     def forward(self, x, pre_logits: bool = False):
         x = self.in_conv(x)

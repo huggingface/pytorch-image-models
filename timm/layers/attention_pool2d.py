@@ -128,6 +128,7 @@ class RotAttentionPool2d(nn.Module):
             self.pool_type = pool_type
         if num_classes is not None:
             self.proj = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
+            self.proj.train(self.training)
             self.out_features = num_classes if num_classes > 0 else self.embed_dim
 
     def _pool(self, x: torch.Tensor, H: int, W: int) -> torch.Tensor:
@@ -280,6 +281,7 @@ class AttentionPool2d(nn.Module):
             self.pool_type = pool_type
         if num_classes is not None:
             self.proj = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
+            self.proj.train(self.training)
             self.out_features = num_classes if num_classes > 0 else self.embed_dim
 
     def _pool(self, x: torch.Tensor, H: int, W: int) -> torch.Tensor:

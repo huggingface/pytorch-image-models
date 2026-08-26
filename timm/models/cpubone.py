@@ -500,11 +500,15 @@ class ClsHead(nn.Module):
             _check_global_pool(global_pool)
             self.pool_type = global_pool
             self.global_pool = nn.AdaptiveAvgPool2d(output_size=1) if global_pool else nn.Identity()
+            self.global_pool.train(self.training)
             self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
+            self.flatten.train(self.training)
         if num_classes > 0:
             self.classifier = LinearLayer(self.num_features, num_classes, True, self.dropout, **dd)
+            self.classifier.train(self.training)
         else:
             self.classifier = nn.Identity()
+            self.classifier.train(self.training)
 
     def forward(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
         x = self.in_conv(x)

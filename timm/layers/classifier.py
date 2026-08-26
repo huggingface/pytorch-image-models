@@ -132,7 +132,10 @@ class ClassifierHead(nn.Module):
                 input_fmt=self.input_fmt,
                 **dd,
             )
+            self.global_pool.train(self.training)
+            self.fc.train(self.training)
             self.flatten = nn.Flatten(1) if self.use_conv and pool_type else nn.Identity()
+            self.flatten.train(self.training)
         else:
             num_pooled_features = self.in_features * self.global_pool.feat_mult()
             self.fc = _create_fc(
@@ -141,6 +144,7 @@ class ClassifierHead(nn.Module):
                 use_conv=self.use_conv,
                 **dd,
             )
+            self.fc.train(self.training)
 
     def forward(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
@@ -210,7 +214,9 @@ class NormMlpClassifierHead(nn.Module):
         dd = get_device_dtype(self, device=device, dtype=dtype)
         if pool_type is not None:
             self.global_pool = SelectAdaptivePool2d(pool_type=pool_type)
+            self.global_pool.train(self.training)
             self.flatten = nn.Flatten(1) if pool_type else nn.Identity()
+            self.flatten.train(self.training)
         self.use_conv = self.global_pool.is_identity()
         linear_layer = partial(nn.Conv2d, kernel_size=1) if self.use_conv else nn.Linear
         if self.hidden_size:
@@ -221,7 +227,9 @@ class NormMlpClassifierHead(nn.Module):
                     new_fc.weight.copy_(self.pre_logits.fc.weight.reshape(new_fc.weight.shape))
                     new_fc.bias.copy_(self.pre_logits.fc.bias)
                     self.pre_logits.fc = new_fc
+                    self.pre_logits.fc.train(self.pre_logits.training)
         self.fc = linear_layer(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.fc.train(self.training)
 
     def forward(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
@@ -298,8 +306,11 @@ class ClNormMlpClassifierHead(nn.Module):
             self.pool_type = pool_type
         if reset_other:
             self.pre_logits = nn.Identity()
+            self.pre_logits.train(self.training)
             self.norm = nn.Identity()
+            self.norm.train(self.training)
         self.fc = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.fc.train(self.training)
 
     def _global_pool(self, x):
         if self.pool_type:

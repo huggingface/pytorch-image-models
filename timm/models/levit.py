@@ -784,6 +784,7 @@ class Levit(nn.Module):
             self.global_pool = global_pool
         self.head = NormLinear(
             self.num_features, num_classes, drop=self.drop_rate, **dd) if num_classes > 0 else nn.Identity()
+        self.head.train(self.training)
 
     def forward_intermediates(
             self,
@@ -891,7 +892,9 @@ class LevitDistilled(Levit):
             self.global_pool = global_pool
         self.head = NormLinear(
             self.num_features, num_classes, drop=self.drop_rate, **dd) if num_classes > 0 else nn.Identity()
+        self.head.train(self.training)
         self.head_dist = NormLinear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head_dist.train(self.training)
 
     @torch.jit.ignore
     def set_distilled_training(self, enable=True):

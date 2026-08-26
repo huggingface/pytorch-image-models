@@ -418,6 +418,7 @@ class PyramidVisionTransformerV2(nn.Module):
             assert global_pool in ('avg', '')
             self.global_pool = global_pool
         self.head = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head.train(self.training)
 
     def forward_intermediates(
             self,

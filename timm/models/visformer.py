@@ -430,6 +430,8 @@ class Visformer(nn.Module):
         self.num_classes = num_classes
         self.global_pool, self.head = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.global_pool.train(self.training)
+        self.head.train(self.training)
 
     def forward_features(self, x):
         if self.stem is not None:

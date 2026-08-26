@@ -448,6 +448,7 @@ class RepVit(nn.Module):
         if global_pool is not None:
             self.global_pool = global_pool
         self.head = RepVitClassifier(self.embed_dim[-1], num_classes, distillation, **dd)
+        self.head.train(self.training)
 
     @torch.jit.ignore
     def set_distilled_training(self, enable=True):

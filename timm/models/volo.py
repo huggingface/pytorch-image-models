@@ -949,9 +949,11 @@ class VOLO(nn.Module):
             self.global_pool = global_pool
         self.head = nn.Linear(
             self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head.train(self.training)
         if self.aux_head is not None:
             self.aux_head = nn.Linear(
                 self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
+            self.aux_head.train(self.training)
 
     def forward_tokens(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through token processing stages.

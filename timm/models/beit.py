@@ -678,6 +678,7 @@ class Beit(nn.Module):
         if global_pool is not None:
             self.global_pool = global_pool
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head.train(self.training)
 
     def forward_intermediates(
             self,

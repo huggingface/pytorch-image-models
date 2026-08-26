@@ -1141,6 +1141,7 @@ class Gemma4VitClassifier(nn.Module):
                 f"Gemma4VitClassifier global_pool must be 'avg', 'none', or '' (got {global_pool!r})"
             self.global_pool = global_pool
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head.train(self.training)
         if isinstance(self.head, nn.Linear) and self.head.bias is not None:
             nn.init.zeros_(self.head.bias)
 
