@@ -18,7 +18,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import SelectAdaptivePool2d, Linear, make_divisible
+from timm.layers import SelectAdaptivePool2d, Linear, make_divisible, get_device_dtype
 from timm.utils.model import reparameterize_model
 
 from ._builder import build_model_with_cfg
@@ -739,13 +739,14 @@ class GhostNet(nn.Module):
         return self.classifier
 
     def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
         # cannot meaningfully change pooling of efficient head after creation
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
         self.classifier = Linear(
             self.head_hidden_size, num_classes,
-            device=self.conv_head.weight.device, dtype=self.conv_head.weight.dtype
+            **dd
         ) if num_classes > 0 else nn.Identity()
 
     def forward_intermediates(

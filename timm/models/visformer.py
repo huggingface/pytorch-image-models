@@ -12,7 +12,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import to_2tuple, trunc_normal_, DropPath, calculate_drop_path_rates, PatchEmbed, LayerNorm2d, create_classifier, use_fused_attn
+from timm.layers import to_2tuple, trunc_normal_, DropPath, calculate_drop_path_rates, PatchEmbed, LayerNorm2d, create_classifier, use_fused_attn, get_device_dtype
 
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
@@ -426,11 +426,10 @@ class Visformer(nn.Module):
         return self.head
 
     def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
-        device = self.head.weight.device if hasattr(self.head, 'weight') else None
-        dtype = self.head.weight.dtype if hasattr(self.head, 'weight') else None
         self.global_pool, self.head = create_classifier(
-            self.num_features, self.num_classes, pool_type=global_pool, device=device, dtype=dtype)
+            self.num_features, self.num_classes, pool_type=global_pool, **dd)
 
     def forward_features(self, x):
         if self.stem is not None:

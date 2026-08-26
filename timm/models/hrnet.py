@@ -15,7 +15,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import create_classifier
+from timm.layers import create_classifier, get_device_dtype
 from ._builder import build_model_with_cfg, pretrained_cfg_for_features
 from ._features import FeatureInfo
 from ._registry import register_model, generate_default_cfgs
@@ -764,9 +764,10 @@ class HighResolutionNet(nn.Module):
         return self.classifier
 
     def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
         self.global_pool, self.classifier = create_classifier(
-            self.num_features, self.num_classes, pool_type=global_pool)
+            self.num_features, self.num_classes, pool_type=global_pool, **dd)
 
     def stages(self, x) -> List[torch.Tensor]:
         x = self.layer1(x)

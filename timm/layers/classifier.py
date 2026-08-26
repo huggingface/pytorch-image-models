@@ -13,6 +13,7 @@ from torch.nn import functional as F
 from .adaptive_avgmax_pool import SelectAdaptivePool2d
 from .create_act import get_act_layer
 from .create_norm import get_norm_layer
+from .helpers import get_device_dtype
 
 
 def _create_pool(
@@ -42,11 +43,6 @@ def _create_fc(num_features, num_classes, use_conv=False, device=None, dtype=Non
     else:
         fc = nn.Linear(num_features, num_classes, bias=True, device=device, dtype=dtype)
     return fc
-
-
-def _get_device_dtype(module):
-    parameter = next(module.parameters(), None)
-    return {} if parameter is None else {'device': parameter.device, 'dtype': parameter.dtype}
 
 
 def create_classifier(
@@ -119,8 +115,14 @@ class ClassifierHead(nn.Module):
         self.fc = fc
         self.flatten = nn.Flatten(1) if use_conv and pool_type else nn.Identity()
 
-    def reset(self, num_classes: int, pool_type: Optional[str] = None):
-        dd = _get_device_dtype(self)
+    def reset(
+            self,
+            num_classes: int,
+            pool_type: Optional[str] = None,
+            device=None,
+            dtype=None,
+    ):
+        dd = get_device_dtype(self, device=device, dtype=dtype)
         if pool_type is not None and pool_type != self.global_pool.pool_type:
             self.global_pool, self.fc = create_classifier(
                 self.in_features,
@@ -198,8 +200,14 @@ class NormMlpClassifierHead(nn.Module):
         self.drop = nn.Dropout(drop_rate)
         self.fc = linear_layer(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
-    def reset(self, num_classes: int, pool_type: Optional[str] = None):
-        dd = _get_device_dtype(self)
+    def reset(
+            self,
+            num_classes: int,
+            pool_type: Optional[str] = None,
+            device=None,
+            dtype=None,
+    ):
+        dd = get_device_dtype(self, device=device, dtype=dtype)
         if pool_type is not None:
             self.global_pool = SelectAdaptivePool2d(pool_type=pool_type)
             self.flatten = nn.Flatten(1) if pool_type else nn.Identity()
@@ -277,8 +285,15 @@ class ClNormMlpClassifierHead(nn.Module):
         self.drop = nn.Dropout(drop_rate)
         self.fc = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
-    def reset(self, num_classes: int, pool_type: Optional[str] = None, reset_other: bool = False):
-        dd = _get_device_dtype(self)
+    def reset(
+            self,
+            num_classes: int,
+            pool_type: Optional[str] = None,
+            reset_other: bool = False,
+            device=None,
+            dtype=None,
+    ):
+        dd = get_device_dtype(self, device=device, dtype=dtype)
         if pool_type is not None:
             self.pool_type = pool_type
         if reset_other:

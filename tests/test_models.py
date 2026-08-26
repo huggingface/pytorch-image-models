@@ -255,6 +255,22 @@ EARLY_POOL_MODELS = (
     timm.models.VGG,
 )
 
+
+def _assert_reset_classifier_preserves_parent_device_dtype(model):
+    model.to(device='meta', dtype=torch.float64)
+    expected = next(model.parameters())
+
+    model.reset_classifier(0)
+    model.reset_classifier(2)
+
+    classifier = model.get_classifier()
+    classifiers = classifier if isinstance(classifier, (tuple, list)) else (classifier,)
+    parameters = [parameter for head in classifiers for parameter in head.parameters()]
+    assert parameters
+    assert all(parameter.device == expected.device for parameter in parameters)
+    assert all(parameter.dtype == expected.dtype for parameter in parameters)
+
+
 @pytest.mark.cfg
 @pytest.mark.timeout(timeout360)
 @pytest.mark.parametrize('model_name', list_models(
@@ -333,6 +349,8 @@ def test_model_default_cfgs(model_name, batch_size):
     for fc in first_conv:
         assert fc + ".weight" in state_dict.keys(), f'{fc} not in model params'
 
+    _assert_reset_classifier_preserves_parent_device_dtype(model)
+
 
 @pytest.mark.cfg
 @pytest.mark.timeout(timeout360)
@@ -351,6 +369,7 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
 
     input_size = _get_input_size(model=model)
     if max(input_size) > 320:  # FIXME const
+        _assert_reset_classifier_preserves_parent_device_dtype(model)
         pytest.skip("Fixed input size model > limit.")
 
     input_tensor = torch.randn((batch_size, *input_size), device=torch_device)
@@ -403,6 +422,8 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
     assert isinstance(first_conv, (tuple, list))
     for fc in first_conv:
         assert fc + ".weight" in state_dict.keys(), f'{fc} not in model params'
+
+    _assert_reset_classifier_preserves_parent_device_dtype(model)
 
 
 if 'GITHUB_ACTIONS' not in os.environ:

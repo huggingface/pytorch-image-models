@@ -32,6 +32,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import (
+    get_device_dtype,
     DropPath,
     calculate_drop_path_rates,
     Mlp,
@@ -664,8 +665,9 @@ class Hiera(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, reset_other: bool = False):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool, reset_other=reset_other)
+        self.head.reset(num_classes, global_pool, reset_other=reset_other, **dd)
 
     def get_random_mask(self, x: torch.Tensor, mask_ratio: float) -> torch.Tensor:
         """

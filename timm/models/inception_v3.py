@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_STD, IMAGENET_DEFAULT_MEAN, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from timm.layers import trunc_normal_, create_classifier, Linear, ConvNormAct
+from timm.layers import trunc_normal_, create_classifier, Linear, ConvNormAct, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._builder import resolve_pretrained_cfg
 from ._manipulate import flatten_modules
@@ -386,8 +386,9 @@ class InceptionV3(nn.Module):
         return self.fc
 
     def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
+        self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool, **dd)
 
     def forward_preaux(self, x):
         x = self.Conv2d_1a_3x3(x)  # N x 32 x 149 x 149

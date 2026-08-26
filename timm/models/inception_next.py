@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import trunc_normal_, DropPath, calculate_drop_path_rates, to_2tuple, get_padding, SelectAdaptivePool2d
+from timm.layers import trunc_normal_, DropPath, calculate_drop_path_rates, to_2tuple, get_padding, SelectAdaptivePool2d, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
@@ -130,12 +130,19 @@ class MlpClassifierHead(nn.Module):
         self.fc2 = nn.Linear(hidden_features, num_classes, bias=bias, **dd)
         self.drop = nn.Dropout(drop)
 
-    def reset(self, num_classes: int, pool_type: Optional[str] = None):
+    def reset(
+            self,
+            num_classes: int,
+            pool_type: Optional[str] = None,
+            device=None,
+            dtype=None,
+    ):
+        dd = get_device_dtype(self, device=device, dtype=dtype)
         if pool_type is not None:
             assert pool_type, 'Cannot disable pooling'
             self.global_pool = SelectAdaptivePool2d(pool_type=pool_type, flatten=True)
 
-        self.fc2 = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.fc2 = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     def forward(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
@@ -357,8 +364,9 @@ class MetaNeXt(nn.Module):
         return self.head.fc2
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool)
+        self.head.reset(num_classes, global_pool, **dd)
 
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=True):

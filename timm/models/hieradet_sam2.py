@@ -9,6 +9,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import (
+    get_device_dtype,
     PatchEmbed,
     Mlp,
     DropPath,
@@ -464,8 +465,9 @@ class HieraDet(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, reset_other: bool = False):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, pool_type=global_pool, reset_other=reset_other)
+        self.head.reset(num_classes, pool_type=global_pool, reset_other=reset_other, **dd)
 
     def forward_intermediates(
             self,

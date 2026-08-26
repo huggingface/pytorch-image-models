@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from timm.layers import create_classifier, ConvNormAct
+from timm.layers import create_classifier, ConvNormAct, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._manipulate import flatten_modules
 from ._registry import register_model, generate_default_cfgs, register_model_deprecations
@@ -323,8 +323,9 @@ class InceptionResnetV2(nn.Module):
         return self.classif
 
     def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.global_pool, self.classif = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
+        self.global_pool, self.classif = create_classifier(self.num_features, self.num_classes, pool_type=global_pool, **dd)
 
     def forward_features(self, x):
         x = self.conv2d_1a(x)

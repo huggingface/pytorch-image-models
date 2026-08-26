@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, calculate_drop_path_rates, trunc_normal_, ConvMlp, get_norm_layer, get_act_layer, use_fused_attn
+from timm.layers import DropPath, calculate_drop_path_rates, trunc_normal_, ConvMlp, get_norm_layer, get_act_layer, use_fused_attn, get_device_dtype
 from timm.layers import ClassifierHead
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
@@ -619,8 +619,9 @@ class NextViT(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, pool_type=global_pool)
+        self.head.reset(num_classes, pool_type=global_pool, **dd)
 
     def forward_intermediates(
             self,

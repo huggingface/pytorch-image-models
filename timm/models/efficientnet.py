@@ -44,7 +44,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import create_conv2d, create_classifier, get_norm_act_layer, LayerType, \
-    GroupNormAct, LayerNormAct2d, EvoNorm2dS0
+    GroupNormAct, LayerNormAct2d, EvoNorm2dS0, get_device_dtype
 from ._builder import build_model_with_cfg, pretrained_cfg_for_features
 from ._efficientnet_blocks import SqueezeExcite
 from ._efficientnet_builder import BlockArgs, EfficientNetBuilder, decode_arch_def, efficientnet_init_weights, \
@@ -221,9 +221,10 @@ class EfficientNet(nn.Module):
             num_classes: Number of classes for new classifier.
             global_pool: Global pooling type.
         """
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
         self.global_pool, self.classifier = create_classifier(
-            self.num_features, self.num_classes, pool_type=global_pool)
+            self.num_features, self.num_classes, pool_type=global_pool, **dd)
 
     def forward_intermediates(
             self,

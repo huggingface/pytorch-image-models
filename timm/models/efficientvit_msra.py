@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import SqueezeExcite, SelectAdaptivePool2d, trunc_normal_, _assert
+from timm.layers import SqueezeExcite, SelectAdaptivePool2d, trunc_normal_, _assert, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint, checkpoint_seq
@@ -571,6 +571,7 @@ class EfficientVitMsra(nn.Module):
         return self.head.linear
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
             if global_pool == 'avg':
@@ -579,7 +580,7 @@ class EfficientVitMsra(nn.Module):
                 assert num_classes == 0
                 self.global_pool = nn.Identity()
         self.head = NormLinear(
-            self.num_features, num_classes, drop=self.drop_rate) if num_classes > 0 else torch.nn.Identity()
+            self.num_features, num_classes, drop=self.drop_rate, **dd) if num_classes > 0 else torch.nn.Identity()
 
     def forward_intermediates(
             self,

@@ -33,6 +33,21 @@ to_4tuple = _ntuple(4)
 to_ntuple = _ntuple
 
 
+def get_device_dtype(module, device=None, dtype=None):
+    """Resolve factory device and dtype kwargs from a parent module.
+
+    Explicit values take precedence. Missing values are inferred from the
+    module's first parameter, if it has one.
+    """
+    parameter = next(module.parameters(), None)
+    if parameter is not None:
+        if device is None:
+            device = parameter.device
+        if dtype is None:
+            dtype = parameter.dtype
+    return {'device': device, 'dtype': dtype}
+
+
 def make_divisible(v, divisor=8, min_value=None, round_limit=.9):
     """Adjust value to be divisible by a divisor, typically for channel counts.
 

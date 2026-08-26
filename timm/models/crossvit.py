@@ -27,7 +27,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, calculate_drop_path_rates, to_2tuple, trunc_normal_, _assert
+from timm.layers import DropPath, calculate_drop_path_rates, to_2tuple, trunc_normal_, _assert, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._registry import register_model, generate_default_cfgs
@@ -442,13 +442,11 @@ class CrossVit(nn.Module):
         return self.head
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
             assert global_pool in ('token', 'avg')
             self.global_pool = global_pool
-        device = self.head[0].weight.device if hasattr(self.head[0], 'weight') else None
-        dtype = self.head[0].weight.dtype if hasattr(self.head[0], 'weight') else None
-        dd = {'device': device, 'dtype': dtype}
         self.head = nn.ModuleList([
             nn.Linear(self.embed_dim[i], num_classes, **dd) if num_classes > 0 else nn.Identity()
             for i in range(self.num_branches)

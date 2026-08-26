@@ -37,7 +37,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, calculate_drop_path_rates, Mlp, ClassifierHead, to_2tuple, _assert, ndgrid
+from timm.layers import DropPath, calculate_drop_path_rates, Mlp, ClassifierHead, to_2tuple, _assert, ndgrid, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
@@ -911,8 +911,9 @@ class SwinTransformerV2Cr(nn.Module):
             num_classes (int): Number of classes to be predicted
             global_pool (str): Unused
         """
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool)
+        self.head.reset(num_classes, global_pool, **dd)
 
     def forward_intermediates(
             self,

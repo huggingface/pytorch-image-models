@@ -12,7 +12,7 @@ import torch
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import trunc_normal_, DropPath, calculate_drop_path_rates, LayerNorm, LayerScale, ClNormMlpClassifierHead, get_act_layer
+from timm.layers import trunc_normal_, DropPath, calculate_drop_path_rates, LayerNorm, LayerScale, ClNormMlpClassifierHead, get_act_layer, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
@@ -171,14 +171,22 @@ class MlpHead(nn.Module):
         self.fc = nn.Linear(self.num_features, num_classes, bias=bias, **dd) if num_classes > 0 else nn.Identity()
         self.head_dropout = nn.Dropout(drop_rate)
 
-    def reset(self, num_classes: int, pool_type: Optional[str] = None, reset_other: bool = False):
+    def reset(
+            self,
+            num_classes: int,
+            pool_type: Optional[str] = None,
+            reset_other: bool = False,
+            device=None,
+            dtype=None,
+    ):
+        dd = get_device_dtype(self, device=device, dtype=dtype)
         if pool_type is not None:
             self.pool_type = pool_type
         if reset_other:
             self.norm = nn.Identity()
             self.pre_logits = nn.Identity()
             self.num_features = self.in_features
-        self.fc = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.fc = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     def forward(self, x, pre_logits: bool = False):
         if self.pool_type == 'avg':
@@ -447,8 +455,9 @@ class MambaOut(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool)
+        self.head.reset(num_classes, global_pool, **dd)
 
     def forward_intermediates(
             self,

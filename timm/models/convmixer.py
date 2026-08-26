@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import SelectAdaptivePool2d
+from timm.layers import SelectAdaptivePool2d, get_device_dtype
 from ._registry import register_model, generate_default_cfgs
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
@@ -82,10 +82,11 @@ class ConvMixer(nn.Module):
         return self.head
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
             self.pooling = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
-        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
         x = self.stem(x)

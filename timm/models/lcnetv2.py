@@ -18,7 +18,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import ConvNormAct, SelectAdaptivePool2d, SqueezeExcite, create_act_layer, create_conv2d, \
-    make_divisible
+    make_divisible, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
@@ -344,12 +344,13 @@ class LCNetV2(nn.Module):
             device=None,
             dtype=None,
     ) -> None:
+        dd = get_device_dtype(self, device=device, dtype=dtype)
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
             self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
         self.classifier = nn.Linear(
-            self.head_hidden_size, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
+            self.head_hidden_size, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     def forward_intermediates(
             self,

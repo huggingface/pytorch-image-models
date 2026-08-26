@@ -5,14 +5,17 @@ import torch.nn as nn
 import timm.layers.fast_norm as fast_norm
 from timm.layers import (
     Attention2d,
+    AttentionPool2d,
     ClassifierHead,
     ClNormMlpClassifierHead,
     MultiQueryAttentionV2,
     NormMlpClassifierHead,
     PatchEmbedInterpolator,
+    RotAttentionPool2d,
     create_act_layer,
     get_act_fn,
     get_act_layer,
+    get_device_dtype,
     resample_abs_pos_embed,
     resample_patch_embed,
     set_layer_config,
@@ -25,6 +28,14 @@ torch_backend = os.environ.get('TORCH_BACKEND')
 if torch_backend is not None:
     importlib.import_module(torch_backend)
 torch_device = os.environ.get('TORCH_DEVICE', 'cpu')
+
+
+def test_get_device_dtype_prefers_explicit_values():
+    module = nn.Linear(2, 2).to(dtype=torch.float64)
+
+    dd = get_device_dtype(module, dtype=torch.float16)
+
+    assert dd == {'device': module.weight.device, 'dtype': torch.float16}
 
 
 def test_fast_rms_norm2d_returns_apex_result(monkeypatch):
@@ -59,8 +70,33 @@ def test_classifier_head_reset_preserves_dtype(head_cls, head_kwargs, input_shap
     head = head_cls(4, 3, **head_kwargs).to(dtype=torch.float64)
     head.reset(2, pool_type)
 
-    assert all(parameter.dtype == torch.float64 for parameter in head.parameters())
-    assert head(torch.randn(input_shape, dtype=torch.float64)).dtype == torch.float64
+    parent = nn.Module()
+    parent.register_parameter('anchor', nn.Parameter(torch.ones(1, dtype=torch.float64)))
+    parent.add_module('head', head)
+
+    parent.head.reset(0, pool_type, **get_device_dtype(parent))
+    parent.head.reset(2, pool_type, **get_device_dtype(parent))
+
+    assert all(parameter.dtype == torch.float64 for parameter in parent.head.parameters())
+    assert parent.head(torch.randn(input_shape, dtype=torch.float64)).dtype == torch.float64
+
+
+@pytest.mark.parametrize(
+    'head_cls,head_kwargs',
+    [
+        (AttentionPool2d, {'feat_size': 3}),
+        (RotAttentionPool2d, {'ref_feat_size': 3}),
+    ],
+)
+def test_attention_pool_head_reset_uses_parent_dtype(head_cls, head_kwargs):
+    parent = nn.Module()
+    parent.register_parameter('anchor', nn.Parameter(torch.ones(1, dtype=torch.float64)))
+    parent.add_module('head', head_cls(4, out_features=3, head_dim=2, **head_kwargs))
+
+    parent.head.reset(0, **get_device_dtype(parent))
+    parent.head.reset(2, **get_device_dtype(parent))
+
+    assert parent.head.proj.weight.dtype == torch.float64
 
 
 def test_resample_abs_pos_embed_same_token_count_different_grid():
