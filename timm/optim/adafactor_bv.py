@@ -258,8 +258,10 @@ def _single_tensor_adafactor(
             exp_avg_sq_r.lerp_(grad_sqr.mean(dim=dr, keepdim=True), one_minus_beta2_t)
             exp_avg_sq_c.lerp_(grad_sqr.mean(dim=dc, keepdim=True), one_minus_beta2_t)
 
-            reduce_dc = dc - 1 if dc > dr else dc
-            row_col_mean = exp_avg_sq_r.mean(dim=reduce_dc, keepdim=True)
+            # exp_avg_sq_r keeps full ndim (dr reduced with keepdim=True above), so the row mean is
+            # taken over dc directly. The big_vision/optax source removes the reduced axis instead,
+            # which is why it shifts the index by one; that shift is wrong for our keepdim layout.
+            row_col_mean = exp_avg_sq_r.mean(dim=dc, keepdim=True)
             row_factor = (exp_avg_sq_r / row_col_mean).rsqrt()
             col_factor = exp_avg_sq_c.rsqrt()
 
