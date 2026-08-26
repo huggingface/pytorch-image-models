@@ -3,6 +3,15 @@ import pytest
 import torch
 
 from timm.data import create_loader, create_naflex_loader, create_transform
+from timm.data.auto_augment import (
+    _HPARAMS_DEFAULT,
+    AugMixAugment,
+    AutoAugment,
+    RandAugment,
+    augment_and_mix_transform,
+    auto_augment_transform,
+    rand_augment_transform,
+)
 from timm.data.mixup import rand_bbox_minmax
 
 
@@ -77,3 +86,25 @@ def test_create_naflex_loader_disables_persistent_workers_without_workers(is_tra
 
     assert loader.num_workers == 0
     assert not loader.persistent_workers
+
+
+@pytest.mark.parametrize('factory, config_str, expected_type', [
+    # each config string is taken verbatim from the corresponding factory's own docstring
+    (auto_augment_transform, 'original-mstd0.5', AutoAugment),
+    (auto_augment_transform, 'original', AutoAugment),
+    (rand_augment_transform, 'rand-m9-n3-mstd0.5', RandAugment),
+    (rand_augment_transform, 'rand-m9-n3-mmax8', RandAugment),
+    (rand_augment_transform, 'rand-mstd1-tweights', RandAugment),
+    (augment_and_mix_transform, 'augmix-m5-w4-d2', AugMixAugment),
+    (augment_and_mix_transform, 'augmix', AugMixAugment),
+])
+def test_auto_augment_factory_accepts_default_none_hparams(factory, config_str, expected_type):
+    # hparams defaults to None on all three public factories, but the mstd/mmax config sections
+    # (and augmix's unconditional magnitude_std default) call hparams.setdefault(...) before it is
+    # normalized, so the documented default used to raise AttributeError on a None hparams.
+    before = dict(_HPARAMS_DEFAULT)
+    transform = factory(config_str)
+    assert isinstance(transform, expected_type)
+    # the setdefault() calls must not leak magnitude_std into the shared module-level default,
+    # which would otherwise pin the value for every later call that relies on the defaults.
+    assert _HPARAMS_DEFAULT == before
