@@ -281,6 +281,33 @@ class TestMultiStepScheduler:
         scheduler.step(31)
         assert optimizer.param_groups[0]['lr'] == pytest.approx(base_lr * decay_rate ** 3, rel=1e-5)
 
+    def test_multistep_decay_at_milestone_boundary(self):
+        """Decay must take effect AT the milestone epoch, not the epoch before it.
+
+        This matches torch.optim.lr_scheduler.MultiStepLR and timm's own StepLRScheduler, both of
+        which keep the base LR up to milestone - 1 and drop it at the milestone epoch itself.
+        """
+        base_lr = 0.1
+        decay_t = [10, 20, 30]
+        decay_rate = 0.5
+
+        optimizer = _create_optimizer(lr=base_lr)
+        scheduler = MultiStepLRScheduler(optimizer, decay_t=decay_t, decay_rate=decay_rate)
+
+        # epoch just before the first milestone: no decay yet
+        scheduler.step(9)
+        assert optimizer.param_groups[0]['lr'] == pytest.approx(base_lr, rel=1e-5)
+
+        # at the first milestone: the first decay applies
+        scheduler.step(10)
+        assert optimizer.param_groups[0]['lr'] == pytest.approx(base_lr * decay_rate, rel=1e-5)
+
+        # just before / at the second milestone
+        scheduler.step(19)
+        assert optimizer.param_groups[0]['lr'] == pytest.approx(base_lr * decay_rate, rel=1e-5)
+        scheduler.step(20)
+        assert optimizer.param_groups[0]['lr'] == pytest.approx(base_lr * decay_rate ** 2, rel=1e-5)
+
 
 class TestPolyScheduler:
     """Test PolyLRScheduler specific behavior."""
