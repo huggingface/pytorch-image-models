@@ -1648,6 +1648,8 @@ class ByobNet(nn.Module):
         Returns:
             Classifier module.
         """
+        if isinstance(self.head, (AttentionPool2d, RotAttentionPool2d)):
+            return self.head.proj
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
