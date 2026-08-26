@@ -601,6 +601,7 @@ def auto_augment_transform(config_str: str, hparams: Optional[Dict] = None):
 
         'original-mstd0.5' results in AutoAugment with original policy, magnitude_std 0.5
     """
+    hparams = hparams or dict(_HPARAMS_DEFAULT)  # copy so setdefault() below doesn't mutate the shared default
     config = config_str.split('-')
     policy_name = config[0]
     config = config[1:]
@@ -789,6 +790,7 @@ def rand_augment_transform(
         'rand-mstd1-tweights' results in mag std 1.0, weighted transforms, default mag of 10 and num_layers 2
 
     """
+    hparams = hparams or dict(_HPARAMS_DEFAULT)  # copy so setdefault() below doesn't mutate the shared default
     magnitude = _LEVEL_DENOM  # default to _LEVEL_DENOM for magnitude (currently 10)
     num_layers = 2  # default to 2 ops per image
     increasing = False
@@ -967,6 +969,7 @@ def augment_and_mix_transform(config_str: str, hparams: Optional[Dict] = None):
     Returns:
          A PyTorch compatible Transform
     """
+    hparams = hparams or dict(_HPARAMS_DEFAULT)  # copy so setdefault() below doesn't mutate the shared default
     magnitude = 3
     width = 3
     depth = -1
