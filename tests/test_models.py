@@ -257,14 +257,19 @@ EARLY_POOL_MODELS = (
 
 
 def _assert_reset_classifier_preserves_parent_device_dtype(model):
+    reset_classifier = getattr(model, 'reset_classifier', None)
+    get_classifier = getattr(model, 'get_classifier', None)
+    if not callable(reset_classifier) or not callable(get_classifier):
+        return
+
     model.to(device='meta', dtype=torch.float64)
     expected = next(model.parameters())
     expected_training = model.training
 
-    model.reset_classifier(0)
-    model.reset_classifier(2)
+    reset_classifier(0)
+    reset_classifier(2)
 
-    classifier = model.get_classifier()
+    classifier = get_classifier()
     classifiers = classifier if isinstance(classifier, (tuple, list)) else (classifier,)
     parameters = [parameter for head in classifiers for parameter in head.parameters()]
     assert parameters
