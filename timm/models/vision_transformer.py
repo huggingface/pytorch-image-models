@@ -1016,6 +1016,7 @@ class VisionTransformer(nn.Module):
                 assert False, "Cannot currently change attention pooling type in reset_classifier()."
             self.global_pool = global_pool
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head.train(self.training)
 
     def set_input_size(
             self,

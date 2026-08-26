@@ -444,9 +444,12 @@ class ClassifierHead(nn.Module):
             if not pool_type:
                 assert num_classes == 0, 'Classifier head must be removed if pooling is disabled'
             self.global_pool = SelectAdaptivePool2d(pool_type=pool_type)
+            self.global_pool.train(self.training)
             self.flatten = nn.Flatten(1) if pool_type else nn.Identity()  # don't flatten if pooling disabled
+            self.flatten.train(self.training)
 
         self.fc = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.fc.train(self.training)
 
     def forward(self, x, pre_logits: bool = False):
         x = self.global_pool(x)

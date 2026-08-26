@@ -606,6 +606,7 @@ class CoaT(nn.Module):
             assert global_pool in ('token', 'avg')
             self.global_pool = global_pool
         self.head = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head.train(self.training)
 
     def forward_features(self, x0):
         B = x0.shape[0]

@@ -451,7 +451,10 @@ class DLA(nn.Module):
         self.num_classes = num_classes
         self.global_pool, self.fc = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, use_conv=True, **dd)
+        self.global_pool.train(self.training)
+        self.fc.train(self.training)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
+        self.flatten.train(self.training)
 
     def forward_features(self, x):
         x = self.base_layer(x)

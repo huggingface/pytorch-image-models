@@ -141,8 +141,10 @@ class MlpClassifierHead(nn.Module):
         if pool_type is not None:
             assert pool_type, 'Cannot disable pooling'
             self.global_pool = SelectAdaptivePool2d(pool_type=pool_type, flatten=True)
+            self.global_pool.train(self.training)
 
         self.fc2 = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.fc2.train(self.training)
 
     def forward(self, x, pre_logits: bool = False):
         x = self.global_pool(x)

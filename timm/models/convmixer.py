@@ -86,7 +86,9 @@ class ConvMixer(nn.Module):
         self.num_classes = num_classes
         if global_pool is not None:
             self.pooling = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
+            self.pooling.train(self.training)
         self.head = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head.train(self.training)
 
     def forward_features(self, x):
         x = self.stem(x)

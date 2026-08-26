@@ -451,6 +451,7 @@ class CrossVit(nn.Module):
             nn.Linear(self.embed_dim[i], num_classes, **dd) if num_classes > 0 else nn.Identity()
             for i in range(self.num_branches)
         ])
+        self.head.train(self.training)
 
     def forward_features(self, x) -> List[torch.Tensor]:
         B = x.shape[0]

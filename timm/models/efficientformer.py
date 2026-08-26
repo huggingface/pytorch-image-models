@@ -492,7 +492,9 @@ class EfficientFormer(nn.Module):
         if global_pool is not None:
             self.global_pool = global_pool
         self.head = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head.train(self.training)
         self.head_dist = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head_dist.train(self.training)
 
     @torch.jit.ignore
     def set_distilled_training(self, enable=True):

@@ -220,6 +220,8 @@ class Xception(nn.Module):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.global_pool.train(self.training)
+        self.fc.train(self.training)
 
     def forward_features(self, x):
         x = self.conv1(x)

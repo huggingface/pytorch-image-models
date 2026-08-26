@@ -184,9 +184,12 @@ class MlpHead(nn.Module):
             self.pool_type = pool_type
         if reset_other:
             self.norm = nn.Identity()
+            self.norm.train(self.training)
             self.pre_logits = nn.Identity()
+            self.pre_logits.train(self.training)
             self.num_features = self.in_features
         self.fc = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.fc.train(self.training)
 
     def forward(self, x, pre_logits: bool = False):
         if self.pool_type == 'avg':

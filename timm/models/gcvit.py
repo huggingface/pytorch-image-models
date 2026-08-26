@@ -530,6 +530,7 @@ class GlobalContextVit(nn.Module):
         if global_pool is None:
             global_pool = self.head.global_pool.pool_type
         self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=self.drop_rate, **dd)
+        self.head.train(self.training)
 
     def forward_intermediates(
             self,

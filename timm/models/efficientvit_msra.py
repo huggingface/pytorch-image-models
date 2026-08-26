@@ -576,11 +576,14 @@ class EfficientVitMsra(nn.Module):
         if global_pool is not None:
             if global_pool == 'avg':
                 self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
+                self.global_pool.train(self.training)
             else:
                 assert num_classes == 0
                 self.global_pool = nn.Identity()
+                self.global_pool.train(self.training)
         self.head = NormLinear(
             self.num_features, num_classes, drop=self.drop_rate, **dd) if num_classes > 0 else torch.nn.Identity()
+        self.head.train(self.training)
 
     def forward_intermediates(
             self,

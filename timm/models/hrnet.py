@@ -768,6 +768,8 @@ class HighResolutionNet(nn.Module):
         self.num_classes = num_classes
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.global_pool.train(self.training)
+        self.classifier.train(self.training)
 
     def stages(self, x) -> List[torch.Tensor]:
         x = self.layer1(x)

@@ -279,8 +279,10 @@ class PoolingVisionTransformer(nn.Module):
         if global_pool is not None:
             self.global_pool = global_pool
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head.train(self.training)
         if self.head_dist is not None:
             self.head_dist = nn.Linear(self.embed_dim, self.num_classes, **dd) if num_classes > 0 else nn.Identity()
+            self.head_dist.train(self.training)
 
     def forward_intermediates(
             self,

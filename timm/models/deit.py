@@ -72,7 +72,9 @@ class VisionTransformerDistilled(VisionTransformer):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head.train(self.training)
         self.head_dist = nn.Linear(self.embed_dim, self.num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head_dist.train(self.training)
 
     @torch.jit.ignore
     def set_distilled_training(self, enable=True):

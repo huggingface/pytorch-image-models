@@ -174,6 +174,8 @@ class SelecSls(nn.Module):
             pool_type=global_pool,
             **dd,
         )
+        self.global_pool.train(self.training)
+        self.fc.train(self.training)
 
     def forward_features(self, x):
         x = self.stem(x)

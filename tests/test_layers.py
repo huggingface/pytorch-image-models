@@ -73,11 +73,13 @@ def test_classifier_head_reset_preserves_dtype(head_cls, head_kwargs, input_shap
     parent = nn.Module()
     parent.register_parameter('anchor', nn.Parameter(torch.ones(1, dtype=torch.float64)))
     parent.add_module('head', head)
+    parent.eval()
 
     parent.head.reset(0, pool_type, **get_device_dtype(parent))
     parent.head.reset(2, pool_type, **get_device_dtype(parent))
 
     assert all(parameter.dtype == torch.float64 for parameter in parent.head.parameters())
+    assert all(not module.training for module in parent.head.modules())
     assert parent.head(torch.randn(input_shape, dtype=torch.float64)).dtype == torch.float64
 
 
@@ -92,11 +94,13 @@ def test_attention_pool_head_reset_uses_parent_dtype(head_cls, head_kwargs):
     parent = nn.Module()
     parent.register_parameter('anchor', nn.Parameter(torch.ones(1, dtype=torch.float64)))
     parent.add_module('head', head_cls(4, out_features=3, head_dim=2, **head_kwargs))
+    parent.eval()
 
     parent.head.reset(0, **get_device_dtype(parent))
     parent.head.reset(2, **get_device_dtype(parent))
 
     assert parent.head.proj.weight.dtype == torch.float64
+    assert all(not module.training for module in parent.head.modules())
 
 
 def test_resample_abs_pos_embed_same_token_count_different_grid():
