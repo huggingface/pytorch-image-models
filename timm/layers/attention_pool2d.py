@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 
 from .config import use_fused_attn
-from .helpers import to_2tuple
+from .helpers import get_device_dtype, to_2tuple
 from .pos_embed import resample_abs_pos_embed
 from .pos_embed_sincos import apply_rot_embed_cat, create_rope_embed
 from .weight_init import trunc_normal_
@@ -114,13 +114,20 @@ class RotAttentionPool2d(nn.Module):
             trunc_normal_(self.qkv.weight, std=in_features ** -0.5)
             nn.init.zeros_(self.qkv.bias)
 
-    def reset(self, num_classes: Optional[int] = None, pool_type: Optional[str] = None):
+    def reset(
+            self,
+            num_classes: Optional[int] = None,
+            pool_type: Optional[str] = None,
+            device=None,
+            dtype=None,
+    ):
         # NOTE: this module is being used as a head, so need compatible reset()
+        dd = get_device_dtype(self, device=device, dtype=dtype)
         if pool_type is not None:
             assert pool_type in ('', 'token')
             self.pool_type = pool_type
         if num_classes is not None:
-            self.proj = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+            self.proj = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
             self.out_features = num_classes if num_classes > 0 else self.embed_dim
 
     def _pool(self, x: torch.Tensor, H: int, W: int) -> torch.Tensor:
@@ -259,13 +266,20 @@ class AttentionPool2d(nn.Module):
             nn.init.zeros_(self.qkv.bias)
         trunc_normal_(self.pos_embed, std=in_features ** -0.5)
 
-    def reset(self, num_classes: Optional[int] = None, pool_type: Optional[str] = None):
+    def reset(
+            self,
+            num_classes: Optional[int] = None,
+            pool_type: Optional[str] = None,
+            device=None,
+            dtype=None,
+    ):
         # NOTE: this module is being used as a head, so need compatible reset()
+        dd = get_device_dtype(self, device=device, dtype=dtype)
         if pool_type is not None:
             assert pool_type in ('', 'token')
             self.pool_type = pool_type
         if num_classes is not None:
-            self.proj = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+            self.proj = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
             self.out_features = num_classes if num_classes > 0 else self.embed_dim
 
     def _pool(self, x: torch.Tensor, H: int, W: int) -> torch.Tensor:

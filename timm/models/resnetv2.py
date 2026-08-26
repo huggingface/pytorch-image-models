@@ -38,7 +38,7 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import GroupNormAct, BatchNormAct2d, EvoNorm2dS0, FilterResponseNormTlu2d, ClassifierHead, \
-    DropPath, calculate_drop_path_rates, AvgPool2dSame, create_pool2d, StdConv2d, create_conv2d, get_act_layer, get_norm_act_layer, make_divisible
+    DropPath, calculate_drop_path_rates, AvgPool2dSame, create_pool2d, StdConv2d, create_conv2d, get_act_layer, get_norm_act_layer, make_divisible, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._helpers import _load_npz_checkpoint
@@ -683,8 +683,9 @@ class ResNetV2(nn.Module):
             num_classes: Number of classes for new classifier.
             global_pool: Global pooling type.
         """
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool)
+        self.head.reset(num_classes, global_pool, **dd)
 
     def forward_intermediates(
             self,

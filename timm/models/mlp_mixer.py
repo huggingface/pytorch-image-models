@@ -46,7 +46,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import PatchEmbed, Mlp, GluMlp, GatedMlp, DropPath, lecun_normal_, to_2tuple
+from timm.layers import PatchEmbed, Mlp, GluMlp, GatedMlp, DropPath, lecun_normal_, to_2tuple, get_device_dtype
 
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
@@ -396,12 +396,12 @@ class MlpMixer(nn.Module):
             num_classes: Number of classes for new classifier.
             global_pool: Global pooling type.
         """
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
             assert global_pool in ('', 'avg')
             self.global_pool = global_pool
-        device, dtype = self.head.weight.device, self.head.weight.dtype if hasattr(self.head, 'weight') else (None, None)
-        self.head = nn.Linear(self.embed_dim, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     def forward_intermediates(
             self,

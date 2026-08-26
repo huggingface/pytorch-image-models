@@ -27,7 +27,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, calculate_drop_path_rates, trunc_normal_, PatchEmbed, Mlp, LayerNorm, HybridEmbed
+from timm.layers import DropPath, calculate_drop_path_rates, trunc_normal_, PatchEmbed, Mlp, LayerNorm, HybridEmbed, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_module
 from ._registry import register_model, generate_default_cfgs
@@ -378,11 +378,12 @@ class ConVit(nn.Module):
         return self.head
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
             assert global_pool in ('', 'token', 'avg')
             self.global_pool = global_pool
-        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
         x = self.patch_embed(x)

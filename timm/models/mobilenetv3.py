@@ -14,7 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from timm.layers import SelectAdaptivePool2d, Linear, LayerType, PadType, create_conv2d, get_norm_act_layer
+from timm.layers import SelectAdaptivePool2d, Linear, LayerType, PadType, create_conv2d, get_norm_act_layer, get_device_dtype
 from ._builder import build_model_with_cfg, pretrained_cfg_for_features
 from ._efficientnet_blocks import SqueezeExcite
 from ._efficientnet_builder import BlockArgs, EfficientNetBuilder, decode_arch_def, efficientnet_init_weights, \
@@ -195,11 +195,12 @@ class MobileNetV3(nn.Module):
             num_classes: Number of classes for new classifier.
             global_pool: Global pooling type.
         """
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
         # NOTE: cannot meaningfully change pooling of efficient head after creation
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        self.classifier = Linear(self.head_hidden_size, num_classes) if num_classes > 0 else nn.Identity()
+        self.classifier = Linear(self.head_hidden_size, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     def forward_intermediates(
             self,

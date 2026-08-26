@@ -31,7 +31,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_STD, IMAGENET_DEFAULT_MEAN
-from timm.layers import to_ntuple, to_2tuple, get_act_layer, DropPath, trunc_normal_, ndgrid
+from timm.layers import to_ntuple, to_2tuple, get_act_layer, DropPath, trunc_normal_, ndgrid, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint, checkpoint_seq
@@ -778,11 +778,12 @@ class Levit(nn.Module):
         return self.head
 
     def reset_classifier(self, num_classes: int , global_pool: Optional[str] = None):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
         self.head = NormLinear(
-            self.num_features, num_classes, drop=self.drop_rate) if num_classes > 0 else nn.Identity()
+            self.num_features, num_classes, drop=self.drop_rate, **dd) if num_classes > 0 else nn.Identity()
 
     def forward_intermediates(
             self,
@@ -884,12 +885,13 @@ class LevitDistilled(Levit):
         return self.head, self.head_dist
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
         self.head = NormLinear(
-            self.num_features, num_classes, drop=self.drop_rate) if num_classes > 0 else nn.Identity()
-        self.head_dist = NormLinear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+            self.num_features, num_classes, drop=self.drop_rate, **dd) if num_classes > 0 else nn.Identity()
+        self.head_dist = NormLinear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     @torch.jit.ignore
     def set_distilled_training(self, enable=True):

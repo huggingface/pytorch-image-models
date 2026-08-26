@@ -12,7 +12,7 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropPath, calculate_drop_path_rates, NormMlpClassifierHead, ClassifierHead, EffectiveSEModule, \
-    make_divisible, get_act_layer, get_norm_layer
+    make_divisible, get_act_layer, get_norm_layer, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import named_apply
@@ -346,8 +346,9 @@ class RDNet(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool)
+        self.head.reset(num_classes, global_pool, **dd)
 
     def forward_intermediates(
             self,

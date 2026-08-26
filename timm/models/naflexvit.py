@@ -28,6 +28,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import (
+    get_device_dtype,
     AttentionPoolLatent,
     Mlp,
     LayerNorm,
@@ -1544,6 +1545,7 @@ class NaFlexVit(nn.Module):
             num_classes: Number of classes for new classification head
             global_pool: Optional new global pooling type
         """
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
             assert global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map')
@@ -1552,7 +1554,7 @@ class NaFlexVit(nn.Module):
             elif global_pool != 'map' and self.attn_pool is not None:
                 self.attn_pool = None  # remove attention pooling
             self.global_pool = global_pool
-        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     def _forward_embeds(
             self,

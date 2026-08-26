@@ -17,6 +17,7 @@ from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import (
+    get_device_dtype,
     DropPath,
     calculate_drop_path_rates,
     LayerNorm2d,
@@ -478,8 +479,9 @@ class EdgeNeXt(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool)
+        self.head.reset(num_classes, global_pool, **dd)
 
     def forward_intermediates(
             self,

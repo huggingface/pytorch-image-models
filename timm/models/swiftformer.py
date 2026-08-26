@@ -18,7 +18,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, Linear, LayerType, to_2tuple, trunc_normal_
+from timm.layers import DropPath, Linear, LayerType, to_2tuple, trunc_normal_, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
@@ -457,12 +457,12 @@ class SwiftFormer(nn.Module):
         return self.head, self.head_dist
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
-        device, dtype = self.head.weight.device, self.head.weight.dtype if hasattr(self.head, 'weight') else (None, None)
-        self.head = Linear(self.num_features, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
-        self.head_dist = Linear(self.num_features, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
+        self.head = Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head_dist = Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     @torch.jit.ignore
     def set_distilled_training(self, enable: bool = True):

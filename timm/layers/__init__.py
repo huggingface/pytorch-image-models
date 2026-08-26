@@ -62,7 +62,7 @@ from .format import Format, get_channel_dim, get_spatial_dim, nchw_to, nhwc_to
 from .gather_excite import GatherExcite
 from .global_context import GlobalContext
 from .grid import ndgrid, meshgrid
-from .helpers import to_ntuple, to_2tuple, to_3tuple, to_4tuple, make_divisible, extend_tuple
+from .helpers import get_device_dtype, to_ntuple, to_2tuple, to_3tuple, to_4tuple, make_divisible, extend_tuple
 from .hybrid_embed import HybridEmbed, HybridEmbedWithSize
 from .inplace_abn import InplaceAbn
 from .layer_scale import LayerScale, LayerScale2d

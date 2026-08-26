@@ -7,6 +7,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import (
+    get_device_dtype,
     SelectAdaptivePool2d,
     Linear,
     LayerType,
@@ -281,11 +282,12 @@ class MobileNetV5(nn.Module):
         return self.classifier
 
     def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
         # NOTE: cannot meaningfully change pooling of efficient head after creation
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        self.classifier = Linear(self.head_hidden_size, num_classes) if num_classes > 0 else nn.Identity()
+        self.classifier = Linear(self.head_hidden_size, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     def forward_intermediates(
             self,

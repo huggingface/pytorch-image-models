@@ -15,7 +15,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import SelectAdaptivePool2d, create_conv2d, GELUTanh
+from timm.layers import SelectAdaptivePool2d, create_conv2d, GELUTanh, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_module
@@ -731,12 +731,19 @@ class ClassifierHead(nn.Module):
             nn.Linear(widths[1], num_classes, bias=True, **dd) if num_classes > 0 else nn.Identity(),
         )
 
-    def reset(self, num_classes: int, pool_type: Optional[str] = None):
+    def reset(
+            self,
+            num_classes: int,
+            pool_type: Optional[str] = None,
+            device=None,
+            dtype=None,
+    ):
+        dd = get_device_dtype(self, device=device, dtype=dtype)
         if pool_type is not None:
             assert pool_type, 'Cannot disable pooling'
             self.global_pool = SelectAdaptivePool2d(pool_type=pool_type, flatten=True,)
         if num_classes > 0:
-            self.classifier[-1] = nn.Linear(self.num_features, num_classes, bias=True)
+            self.classifier[-1] = nn.Linear(self.num_features, num_classes, bias=True, **dd)
         else:
             self.classifier[-1] = nn.Identity()
 
@@ -833,8 +840,9 @@ class EfficientVit(nn.Module):
         return self.head.classifier[-1]
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool)
+        self.head.reset(num_classes, global_pool, **dd)
 
     def forward_intermediates(
             self,
@@ -996,8 +1004,9 @@ class EfficientVitLarge(nn.Module):
         return self.head.classifier[-1]
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool)
+        self.head.reset(num_classes, global_pool, **dd)
 
     def forward_intermediates(
             self,

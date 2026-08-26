@@ -15,7 +15,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, DEFAULT_CROP_PCT
-from timm.layers import lecun_normal_, DropPath, Mlp, PatchEmbed, ClassifierHead
+from timm.layers import lecun_normal_, DropPath, Mlp, PatchEmbed, ClassifierHead, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._manipulate import named_apply
 from ._registry import register_model, generate_default_cfgs
@@ -451,8 +451,9 @@ class Sequencer2d(nn.Module):
         return self.head
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, pool_type=global_pool)
+        self.head.reset(num_classes, pool_type=global_pool, **dd)
 
     def forward_features(self, x):
         x = self.stem(x)

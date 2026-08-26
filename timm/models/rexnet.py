@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import ClassifierHead, create_act_layer, ConvNormAct, DropPath, make_divisible, SEModule
+from timm.layers import ClassifierHead, create_act_layer, ConvNormAct, DropPath, make_divisible, SEModule, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._efficientnet_builder import efficientnet_init_weights
 from ._features import feature_take_indices
@@ -356,13 +356,13 @@ class RexNet(nn.Module):
             num_classes: Number of classes for new classifier.
             global_pool: Global pooling type.
         """
+        dd = get_device_dtype(self, device=device, dtype=dtype)
         self.num_classes = num_classes
         if device is not None or dtype is not None:
-            dd = {'device': device, 'dtype': dtype}
             pool_type = global_pool if global_pool is not None else self.head.global_pool.pool_type
             self.head = ClassifierHead(self.num_features, num_classes, pool_type, self.drop_rate, **dd)
         else:
-            self.head.reset(num_classes, global_pool)
+            self.head.reset(num_classes, global_pool, **dd)
 
     def forward_intermediates(
             self,

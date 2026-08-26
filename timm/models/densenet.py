@@ -12,7 +12,7 @@ import torch.nn.functional as F
 from torch.jit.annotations import List
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import BatchNormAct2d, get_norm_act_layer, BlurPool2d, create_classifier
+from timm.layers import BatchNormAct2d, get_norm_act_layer, BlurPool2d, create_classifier, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._manipulate import MATCH_PREV_GROUP, checkpoint
 from ._registry import register_model, generate_default_cfgs, register_model_deprecations
@@ -384,9 +384,10 @@ class DenseNet(nn.Module):
             num_classes: Number of classes for new classifier.
             global_pool: Global pooling type.
         """
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
         self.global_pool, self.classifier = create_classifier(
-            self.num_features, self.num_classes, pool_type=global_pool)
+            self.num_features, self.num_classes, pool_type=global_pool, **dd)
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through feature extraction layers."""

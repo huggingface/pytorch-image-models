@@ -20,6 +20,7 @@ from torch.jit import Final
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import (
+    get_device_dtype,
     PatchEmbed,
     Mlp,
     LayerScale,
@@ -416,7 +417,7 @@ class VisionTransformerRelPos(nn.Module):
         return self.head
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, device=None, dtype=None):
-        dd = {'device': device, 'dtype': dtype}
+        dd = get_device_dtype(self, device=device, dtype=dtype)
         self.num_classes = num_classes
         if global_pool is not None:
             assert global_pool in ('', 'avg', 'token')

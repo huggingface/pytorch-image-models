@@ -16,7 +16,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropPath, GroupNorm1, LayerType, calculate_drop_path_rates, get_act_layer, get_norm_layer, \
-    use_fused_attn
+    get_device_dtype, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_module
@@ -89,12 +89,15 @@ class LinearLayer(nn.Module):
             dropout: float = 0.,
             norm_layer: Optional[Type[nn.Module]] = None,
             act_layer: Optional[Type[nn.Module]] = None,
+            device=None,
+            dtype=None,
     ):
+        dd = {'device': device, 'dtype': dtype}
         super().__init__()
         self.dropout = nn.Dropout(dropout, inplace=False) if dropout > 0 else None
-        self.linear = nn.Linear(in_features, out_features, use_bias)
+        self.linear = nn.Linear(in_features, out_features, use_bias, **dd)
         # note: covers nn.LayerNorm, whose first arg is normalized_shape rather than num_features
-        self.norm = norm_layer(out_features) if norm_layer is not None else None
+        self.norm = norm_layer(out_features, **dd) if norm_layer is not None else None
         self.act = act_layer() if act_layer is not None else None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -485,14 +488,21 @@ class ClsHead(nn.Module):
             LinearLayer(width_list[1], num_classes, True, dropout) if num_classes > 0 else nn.Identity()
         )
 
-    def reset(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset(
+            self,
+            num_classes: int,
+            global_pool: Optional[str] = None,
+            device=None,
+            dtype=None,
+    ):
+        dd = get_device_dtype(self, device=device, dtype=dtype)
         if global_pool is not None:
             _check_global_pool(global_pool)
             self.pool_type = global_pool
             self.global_pool = nn.AdaptiveAvgPool2d(output_size=1) if global_pool else nn.Identity()
             self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
         if num_classes > 0:
-            self.classifier = LinearLayer(self.num_features, num_classes, True, self.dropout)
+            self.classifier = LinearLayer(self.num_features, num_classes, True, self.dropout, **dd)
         else:
             self.classifier = nn.Identity()
 
@@ -788,11 +798,12 @@ class CPUBone(nn.Module):
         return self.head.classifier
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        dd = get_device_dtype(self)
         if global_pool is not None:
             _check_global_pool(global_pool)
             self.global_pool = global_pool
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool)
+        self.head.reset(num_classes, global_pool, **dd)
 
     def forward_intermediates(
             self,

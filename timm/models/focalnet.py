@@ -25,6 +25,7 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import (
+    get_device_dtype,
     Mlp,
     DropPath,
     LayerNorm2d,
@@ -477,8 +478,9 @@ class FocalNet(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, pool_type=global_pool)
+        self.head.reset(num_classes, pool_type=global_pool, **dd)
 
     def forward_intermediates(
             self,

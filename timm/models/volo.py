@@ -27,7 +27,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, Mlp, to_2tuple, to_ntuple, trunc_normal_, use_fused_attn
+from timm.layers import DropPath, Mlp, to_2tuple, to_ntuple, trunc_normal_, use_fused_attn, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint
@@ -943,16 +943,15 @@ class VOLO(nn.Module):
             num_classes: Number of classes for new classifier.
             global_pool: Global pooling type.
         """
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
-        device = self.head.weight.device if hasattr(self.head, 'weight') else None
-        dtype = self.head.weight.dtype if hasattr(self.head, 'weight') else None
         self.head = nn.Linear(
-            self.num_features, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
+            self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
         if self.aux_head is not None:
             self.aux_head = nn.Linear(
-                self.num_features, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
+                self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     def forward_tokens(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through token processing stages.

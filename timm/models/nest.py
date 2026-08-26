@@ -27,6 +27,7 @@ from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import (
+    get_device_dtype,
     PatchEmbed,
     Mlp,
     DropPath,
@@ -464,9 +465,10 @@ class Nest(nn.Module):
         return self.head
 
     def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
         self.global_pool, self.head = create_classifier(
-            self.num_features, self.num_classes, pool_type=global_pool)
+            self.num_features, self.num_classes, pool_type=global_pool, **dd)
 
     def forward_intermediates(
             self,

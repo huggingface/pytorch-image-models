@@ -20,7 +20,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import create_classifier
+from timm.layers import create_classifier, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._registry import register_model, generate_default_cfgs
 
@@ -415,9 +415,10 @@ class SENet(nn.Module):
         return self.last_linear
 
     def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
         self.global_pool, self.last_linear = create_classifier(
-            self.num_features, self.num_classes, pool_type=global_pool)
+            self.num_features, self.num_classes, pool_type=global_pool, **dd)
 
     def forward_features(self, x):
         x = self.layer0(x)

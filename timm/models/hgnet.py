@@ -13,7 +13,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import SelectAdaptivePool2d, DropPath, calculate_drop_path_rates, create_conv2d
+from timm.layers import SelectAdaptivePool2d, DropPath, calculate_drop_path_rates, create_conv2d, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._registry import register_model, generate_default_cfgs
@@ -439,7 +439,7 @@ class ClassifierHead(nn.Module):
         self.fc = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     def reset(self, num_classes: int, pool_type: Optional[str] = None, device=None, dtype=None):
-        dd = {'device': device, 'dtype': dtype}
+        dd = get_device_dtype(self, device=device, dtype=dtype)
         if pool_type is not None:
             if not pool_type:
                 assert num_classes == 0, 'Classifier head must be removed if pooling is disabled'
@@ -562,8 +562,9 @@ class HighPerfGpuNet(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, device=None, dtype=None):
+        dd = get_device_dtype(self, device=device, dtype=dtype)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool, device=device, dtype=dtype)
+        self.head.reset(num_classes, global_pool, **dd)
 
     def forward_intermediates(
             self,

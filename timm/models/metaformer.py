@@ -38,6 +38,7 @@ from torch.jit import Final
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import (
+    get_device_dtype,
     trunc_normal_,
     DropPath,
     calculate_drop_path_rates,
@@ -646,7 +647,7 @@ class MetaFormer(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, device=None, dtype=None):
-        dd = {'device': device, 'dtype': dtype}
+        dd = get_device_dtype(self, device=device, dtype=dtype)
         self.num_classes = num_classes
         if global_pool is not None:
             self.head.global_pool = SelectAdaptivePool2d(pool_type=global_pool)

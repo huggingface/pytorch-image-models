@@ -17,7 +17,7 @@ import torch
 from torch import nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import resample_abs_pos_embed
+from timm.layers import resample_abs_pos_embed, get_device_dtype
 from timm.models.vision_transformer import VisionTransformer, trunc_normal_, checkpoint_filter_fn
 from ._builder import build_model_with_cfg
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
@@ -69,9 +69,10 @@ class VisionTransformerDistilled(VisionTransformer):
         return self.head, self.head_dist
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
-        self.head_dist = nn.Linear(self.embed_dim, self.num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head_dist = nn.Linear(self.embed_dim, self.num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     @torch.jit.ignore
     def set_distilled_training(self, enable=True):

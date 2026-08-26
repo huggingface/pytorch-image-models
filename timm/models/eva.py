@@ -83,6 +83,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from timm.layers import (
+    get_device_dtype,
     PatchEmbed,
     Mlp,
     GluMlp,
@@ -838,10 +839,11 @@ class Eva(nn.Module):
             num_classes: Number of output classes.
             global_pool: Global pooling type.
         """
+        dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
-        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     def set_input_size(
             self,
