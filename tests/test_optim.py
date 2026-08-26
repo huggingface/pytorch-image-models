@@ -761,3 +761,26 @@ def test_csgdw(optimizer):
         lambda params: create_optimizer_v2(params, optimizer, lr=5e-4)
     )
     _test_model(optimizer, dict(lr=5e-4))
+
+
+@pytest.mark.parametrize('shape', [(30, 20), (20, 30)])
+def test_adafactor_bv_factored_row_normalization(shape):
+    # AdafactorBigVision factorizes the second moment for 2D params, so the update must be
+    # transpose-equivariant: stepping W and W.T with transposed grads must give transposed updates.
+    # A wrong axis in the row-factor reduction silently collapsed row_factor to 1 (dropping the row
+    # normalization) for matrices whose larger dim comes first, breaking that invariance.
+    from timm.optim.adafactor_bv import AdafactorBigVision
+
+    generator = torch.Generator().manual_seed(0)
+    grad = torch.randn(shape, dtype=torch.double, generator=generator)
+
+    def one_step(g):
+        param = Parameter(torch.zeros(g.shape, dtype=torch.double))
+        opt = AdafactorBigVision([param], lr=1.0, momentum=None, eps=1e-30, weight_decay=0.0)
+        param.grad = g.clone()
+        opt.step()
+        return param.detach().clone()
+
+    param = one_step(grad)
+    param_t = one_step(grad.t().contiguous())
+    torch.testing.assert_close(param_t, param.t())
