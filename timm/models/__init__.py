@@ -39,6 +39,7 @@ from .inception_v3 import *
 from .inception_v4 import *
 from .lcnetv2 import *
 from .levit import *
+from .lowformer import *
 from .maxxvit import *
 from .mambaout import *
 from .metaformer import *
