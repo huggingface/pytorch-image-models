@@ -12,6 +12,10 @@
 
 ## What's New
 
+## August 27, 2026
+* Fix or merge a host of real but small or not commonly encountered bugs surfaced by agents
+* Release 1.0.29
+
 ## August 11, 2026
 * Add model defs and pretrained weights for
   * [CPUBone](https://github.com/altair199797/CPUBone), an efficient vision backbone for devices with low parallelization capabilities.
