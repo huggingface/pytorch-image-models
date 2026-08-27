@@ -62,15 +62,10 @@ class PlateauLRScheduler(Scheduler):
         self.restore_lr = None
 
     def state_dict(self) -> Dict[str, Any]:
-        return {
-            'best': self.lr_scheduler.best,
-            'last_epoch': self.lr_scheduler.last_epoch,
-        }
+        return self.lr_scheduler.state_dict()
 
     def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
-        self.lr_scheduler.best = state_dict['best']
-        if 'last_epoch' in state_dict:
-            self.lr_scheduler.last_epoch = state_dict['last_epoch']
+        self.lr_scheduler.load_state_dict(state_dict)
 
     # override the base class step fn completely
     def step(self, epoch: int, metric: Optional[float] = None) -> None:
