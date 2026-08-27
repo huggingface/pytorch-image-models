@@ -761,14 +761,28 @@ def _cfg(url: str = "", **kwargs: Any) -> Dict[str, Any]:
 
 
 default_cfgs = generate_default_cfgs({
-    "lowformer_b0.untrained": _cfg(),
-    "lowformer_b1.untrained": _cfg(),
-    "lowformer_b15.untrained": _cfg(),
-    "lowformer_b2.untrained": _cfg(pool_size=(28, 28)),
-    "lowformer_b3.untrained": _cfg(),
-    "lowformer_e1.untrained": _cfg(),
-    "lowformer_e2.untrained": _cfg(),
-    "lowformer_e3.untrained": _cfg(),
+    "lowformer_b0.in1k": _cfg(
+        # hf_hub_id='timm/',
+    ),
+    "lowformer_b1.in1k": _cfg(
+        # hf_hub_id='timm/',
+    ),
+    "lowformer_b15.in1k": _cfg(
+        # hf_hub_id='timm/',
+    ),
+    "lowformer_b2.untrained": _cfg(),
+    "lowformer_b3.in1k": _cfg(
+        # hf_hub_id='timm/',
+    ),
+    "lowformer_e1.in1k": _cfg(
+        # hf_hub_id='timm/',
+    ),
+    "lowformer_e2.in1k": _cfg(
+        # hf_hub_id='timm/',
+    ),
+    "lowformer_e3.in1k": _cfg(
+        # hf_hub_id='timm/',
+    ),
 })
 
 
