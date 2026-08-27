@@ -13,6 +13,7 @@
 ## What's New
 
 ## August 27, 2026
+* Add [LowFormer](https://github.com/altair199797/lowformer) model and weights
 * Fix or merge a host of real but small or not commonly encountered bugs surfaced by agents
 * Release 1.0.29
 
