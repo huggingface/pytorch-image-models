@@ -41,6 +41,7 @@ from timm.layers import (
     Linear,
     SelectAdaptivePool2d,
     calculate_drop_path_rates,
+    get_device_dtype,
     trunc_normal_,
     use_fused_attn,
 )
@@ -609,15 +610,17 @@ class LowFormer(nn.Module):
         return self.classifier
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        dd = get_device_dtype(self)
+        was_training = self.training
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
             self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
+            self.global_pool.train(was_training)
         self.classifier = Linear(
-            self.head_hidden_size, num_classes,
-            device=self.classifier.weight.device if isinstance(self.classifier, nn.Linear) else None,
-            dtype=self.classifier.weight.dtype if isinstance(self.classifier, nn.Linear) else None,
+            self.head_hidden_size, num_classes, **dd,
         ) if num_classes > 0 else nn.Identity()
+        self.classifier.train(was_training)
 
     def forward_intermediates(
             self,
