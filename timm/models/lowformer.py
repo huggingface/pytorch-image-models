@@ -812,7 +812,7 @@ def lowformer_b15(pretrained: bool = False, **kwargs: Any) -> LowFormer:
 def lowformer_b2(pretrained: bool = False, **kwargs: Any) -> LowFormer:
     """Instantiate LowFormer-B2 model variant."""
     model_args = dict(
-        width_list=[24, 48, 96, 192, 384], depth_list=[0, 0, 0, 6, 6], head_widths=(2304, 2560),
+        width_list=[24, 48, 96, 192, 384], depth_list=[0, 1, 1, 6, 6], head_widths=(2304, 2560),
         downsample_expand_ratios=(6, 6, 6, 6),
     )
     return _create_lowformer("lowformer_b2", pretrained=pretrained, **dict(model_args, **kwargs))
