@@ -400,6 +400,65 @@ class RepCPE(nn.Module):
         return self.cpe(x)
 
 
+class StageBlock(nn.Module):
+    def __init__(
+            self,
+            in_dim: int,
+            dim: int,
+            depth: int,
+            num_attn: int,
+            hdrr: int,
+            conv_ratio: int,
+            ffn_ratio: int,
+            attn_ratio: int,
+            drop_path_rates: List[float],
+            layer_scale_init_value: float,
+            act_layer: Type[nn.Module],
+            device=None,
+            dtype=None,
+    ):
+        dd = {"device": device, "dtype": dtype}
+        super().__init__()
+        self.grad_checkpointing = False
+        self.downsample = nn.Identity() if in_dim == dim else ConvNorm(in_dim, dim, 3, 2, 1, **dd)
+
+        blocks = []
+        if num_attn == 0:
+            for j in range(depth):
+                blocks.append(
+                    ConvBlock(dim, 7, conv_ratio, drop_path_rates[j], layer_scale_init_value, act_layer, **dd)
+                )
+        else:
+            num_conv = depth - num_attn * 3
+            num_prefix, num_suffix = (num_conv - 1, 1) if num_conv > 0 else (0, 0)
+            for j in range(num_prefix):
+                blocks.append(
+                    ConvBlock(dim, 7, conv_ratio, drop_path_rates[j], layer_scale_init_value, act_layer, **dd)
+                )
+            for g in range(num_attn):
+                offset = num_prefix + g * 3
+                blocks.append(RepCPE(dim, 3, **dd))
+                blocks.append(
+                    SHMABlock(dim, attn_ratio, hdrr, drop_path_rates[offset + 1], layer_scale_init_value, **dd)
+                )
+                blocks.append(
+                    FFN(dim, ffn_ratio, drop_path_rates[offset + 2], layer_scale_init_value, act_layer, **dd)
+                )
+            if num_suffix:
+                blocks.append(
+                    ConvBlock(dim, 7, conv_ratio, drop_path_rates[-1], layer_scale_init_value, act_layer, **dd)
+                )
+        self.blocks = nn.Sequential(*blocks)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.downsample(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.blocks, x)
+        else:
+            x = self.blocks(x)
+        return x
+
+
 class Stem(nn.Module):
     def __init__(
             self,
@@ -454,53 +513,35 @@ class iFormer(nn.Module):
         self.in_chans = in_chans
         self.global_pool = global_pool
         self.distillation = distillation
-        self.distilled_training = False
-        self.grad_checkpointing = False
+        if not isinstance(depths, (list, tuple)):
+            depths = (depths)  # it means the model has only one stage
+        self.num_stages = len(depths)
         self.feature_info = []
 
         self.stem = Stem(in_chans, dims[0], act_layer, **dd)
+        prev_dim = dims[0]
 
-        dpr = calculate_drop_path_rates(drop_path_rate, depths)
-        if isinstance(dpr[0], list):
-            dpr = [r for stage_rates in dpr for r in stage_rates]
+        dpr = calculate_drop_path_rates(drop_path_rate, depths, stagewise=True)
 
-        cur, stages, in_dim = 0, [], dims[0]
-        for idx, (dim, depth, num_attn, hdrr) in enumerate(
-            zip(dims, depths, attn_groups, attn_head_dim_reduction)
-        ):
-            stage_rates = dpr[cur : cur + depth]
-            cur += depth
-            stage_blocks = []
-
-            if num_attn == 0:
-                for j in range(depth):
-                    stage_blocks.append(ConvBlock(dim, 7, conv_ratio, stage_rates[j], layer_scale_init_value, act_layer, **dd))
-            else:
-                num_conv = depth - num_attn * 3
-                num_prefix, num_suffix = (num_conv - 1, 1) if num_conv > 0 else (0, 0)
-                for j in range(num_prefix):
-                    stage_blocks.append(ConvBlock(dim, 7, conv_ratio, stage_rates[j], layer_scale_init_value, act_layer, **dd))
-                for g in range(num_attn):
-                    offset = num_prefix + g * 3
-                    stage_blocks.append(RepCPE(dim, 3, **dd))
-                    stage_blocks.append(SHMABlock(dim, attn_ratio, hdrr, stage_rates[offset + 1], layer_scale_init_value, **dd))
-                    stage_blocks.append(FFN(dim, ffn_ratio, stage_rates[offset + 2], layer_scale_init_value, act_layer, **dd))
-                if num_suffix:
-                    stage_blocks.append(ConvBlock(dim, 7, conv_ratio, stage_rates[-1], layer_scale_init_value, act_layer, **dd))
-
-            if idx == 0:
-                stage = nn.Sequential(*stage_blocks)
-            else:
-                stage = nn.Sequential(ConvNorm(in_dim, dim, 3, 2, 1, **dd), *stage_blocks)
-            # downsample = nn.Identity() if idx == 0 else ConvNorm(in_dim, dim, 3, 2, 1, **dd)
-            # if isinstance(downsample, nn.Identity):
-            #     stage = nn.Sequential(*stage_blocks)
-            # else:
-            #     stage = nn.Sequential(downsample, *stage_blocks)
-
+        stages = []
+        for i in range(self.num_stages):
+            stage = StageBlock(
+                in_dim=prev_dim,
+                dim=dims[i],
+                depth=depths[i],
+                num_attn=attn_groups[i],
+                hdrr=attn_head_dim_reduction[i],
+                conv_ratio=conv_ratio,
+                ffn_ratio=ffn_ratio,
+                attn_ratio=attn_ratio,
+                drop_path_rates=dpr[i],
+                layer_scale_init_value=layer_scale_init_value,
+                act_layer=act_layer,
+                **dd,
+            )
+            prev_dim = dims[i]
             stages.append(stage)
-            self.feature_info += [dict(num_chs=dim, reduction=2 ** (idx + 2), module=f"stages.{idx}")]
-            in_dim = dim
+            self.feature_info += [dict(num_chs=dims[i], reduction=2**(i+2), module=f"stages.{i}")]
         self.stages = nn.Sequential(*stages)
 
         self.num_features = self.head_hidden_size = dims[-1]
@@ -532,7 +573,8 @@ class iFormer(nn.Module):
                 r"^stages\.(\d+)"
                 if coarse
                 else [
-                    (r"^stages\.(\d+)\.(\d+)", None),
+                    (r"^stages\.(\d+)\.downsample", (0,)),
+                    (r"^stages\.(\d+)\.blocks\.(\d+)", None),
                     (r"^head", (99999,)),
                 ]
             ),
@@ -541,7 +583,8 @@ class iFormer(nn.Module):
 
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable: bool = True):
-        self.grad_checkpointing = enable
+        for stage in self.stages:
+            stage.grad_checkpointing = enable
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
@@ -554,18 +597,17 @@ class iFormer(nn.Module):
             distillation: bool = False,
             device=None,
             dtype=None,
-    ) -> None:
+    ):
+        dd = get_device_dtype(self, device=device, dtype=dtype)
         self.num_classes = num_classes
+        self.distillation = distillation
         if global_pool is not None:
             self.global_pool = global_pool
-        self.distillation = distillation
-        dd = get_device_dtype(self, device=device, dtype=dtype)
         self.head = RepVitClassifier(self.head_hidden_size, num_classes, distillation, **dd)
         self.head.train(self.training)
 
     @torch.jit.ignore
-    def set_distilled_training(self, enable: bool = True) -> None:
-        self.distilled_training = enable
+    def set_distilled_training(self, enable: bool = True):
         self.head.distilled_training = enable
 
     def forward_intermediates(
@@ -582,7 +624,7 @@ class iFormer(nn.Module):
         Args:
             x: Input image tensor.
             indices: Take last n blocks if int, all if None, select matching indices if sequence.
-            norm: Apply norm layer to compatible intermediates (no-op, iFormer has no final norm).
+            norm: Apply norm layer to compatible intermediates.
             stop_early: Stop iterating over blocks when last desired intermediate hit.
             output_fmt: Shape of intermediate feature outputs.
             intermediates_only: Only return intermediate features.
@@ -602,10 +644,7 @@ class iFormer(nn.Module):
             stages = self.stages[: max_index + 1]
 
         for feat_idx, stage in enumerate(stages):
-            if self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint_seq(stage, x)
-            else:
-                x = stage(x)
+            x = stage(x)
             if feat_idx in take_indices:
                 intermediates.append(x)
 
@@ -638,10 +677,7 @@ class iFormer(nn.Module):
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         x = self.stem(x)
-        if self.grad_checkpointing and not torch.jit.is_scripting():
-            x = checkpoint_seq(self.stages, x)
-        else:
-            x = self.stages(x)
+        x = self.stages(x)
         return x
 
     def forward_head(
@@ -661,20 +697,20 @@ class iFormer(nn.Module):
         return x
 
     @torch.no_grad()
-    def fuse(self) -> None:
-        def _fuse(mod: nn.Module) -> None:
-            for name, child in mod.named_children():
+    def fuse(self):
+        def fuse_children(net: nn.Module):
+            for child_name, child in net.named_children():
                 if hasattr(child, "fuse"):
                     fused = child.fuse()
                     if fused is not child:
-                        setattr(mod, name, fused)
-                        _fuse(fused)
+                        setattr(net, child_name, fused)
+                        fuse_children(fused)
                     else:
-                        _fuse(child)
+                        fuse_children(child)
                 else:
-                    _fuse(child)
+                    fuse_children(child)
 
-        _fuse(self)
+        fuse_children(self)
 
 
 def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: nn.Module) -> Dict[str, torch.Tensor]:
@@ -701,14 +737,14 @@ def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: nn.Module) 
         elif key.startswith("downsample_layers.0.2.conv_pwl_bn2."):
             key = key.replace("downsample_layers.0.2.conv_pwl_bn2.", "stem.conv3.", 1)
         elif key.startswith("downsample_layers."):
-            # other downsamples: downsample_layers.{i}.0. → stages.{i}.0. (i=1,2,3)
+            # other downsamples: downsample_layers.{i}.0. → stages.{i}.downsample. (Stage convention)
             m = re.match(r"^downsample_layers\.(\d+)\.0\.(.*)", key)
             if m:
-                key = f"stages.{m.group(1)}.0.{m.group(2)}"
+                key = f"stages.{m.group(1)}.downsample.{m.group(2)}"
             else:
                 m = re.match(r"^downsample_layers\.(\d+)\.(.*)", key)
                 if m:
-                    key = f"stages.{m.group(1)}.0.{m.group(2)}"
+                    key = f"stages.{m.group(1)}.downsample.{m.group(2)}"
             # internal renames for downsample ConvNorm c/bn (keep c/bn, just mixer rename below)
             key = key.replace("token_channel_mixer", "mixer")
             key = key.replace("channel_mixer", "mixer")
@@ -716,18 +752,16 @@ def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: nn.Module) 
             out_dict[key] = value
             continue
 
-        # stages: official stages.{si}.{bi}.block.* → timm stages.{si}.{bi+offset}.*
+        # stages: official stages.{si}.{bi}.block.* → timm stages.{si}.blocks.{bi}.* (Stage convention)
         m = re.match(r"^stages\.(\d+)\.(\d+)\.block\.(.*)", key)
         if m:
             si, bi, rest = int(m.group(1)), int(m.group(2)), m.group(3)
-            offset = 0 if si == 0 else 1
-            key = f"stages.{si}.{bi + offset}.{rest}"
+            key = f"stages.{si}.blocks.{bi}.{rest}"
         elif key.startswith("stages."):
             m = re.match(r"^stages\.(\d+)\.(\d+)\.(.*)", key)
             if m:
                 si, bi, rest = int(m.group(1)), int(m.group(2)), m.group(3)
-                offset = 0 if si == 0 else 1
-                key = f"stages.{si}.{bi + offset}.{rest}"
+                key = f"stages.{si}.blocks.{bi}.{rest}"
         # internal block renames: token_channel_mixer / channel_mixer → mixer, .m. → .module.
         key = key.replace("token_channel_mixer", "mixer")
         key = key.replace("channel_mixer", "mixer")
