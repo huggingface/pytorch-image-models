@@ -33,6 +33,7 @@ from .hgnet import *
 from .hiera import *
 from .hieradet_sam2 import *
 from .hrnet import *
+from .iformer import *
 from .inception_next import *
 from .inception_resnet_v2 import *
 from .inception_v3 import *
