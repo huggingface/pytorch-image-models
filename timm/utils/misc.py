@@ -26,9 +26,9 @@ class ParseKwargs(argparse.Action):
         for value in values:
             if not value:
                 continue
-            key, value = value.split('=')
+            key, value = value.split('=', 1)
             try:
                 kw[key] = ast.literal_eval(value)
-            except ValueError:
+            except (ValueError, SyntaxError):
                 kw[key] = str(value)  # fallback to string (avoid need to escape on command line)
         setattr(namespace, self.dest, kw)
