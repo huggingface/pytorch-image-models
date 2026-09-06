@@ -134,6 +134,7 @@ class CheckpointSaver:
         if (
             len(self.checkpoint_files) < self.max_history
             or metric is None
+            or worst_file[1] is None
             or self.cmp(metric, worst_file[1])
         ):
             if len(self.checkpoint_files) >= self.max_history:
@@ -142,12 +143,16 @@ class CheckpointSaver:
             save_path = os.path.join(self.checkpoint_dir, filename)
             self._duplicate(last_save_path, save_path)
 
-            self.checkpoint_files.append((save_path, metric))
-            self.checkpoint_files = sorted(
-                self.checkpoint_files,
+            # Keep unranked checkpoints after ranked ones, newest first, so history trimming remains deterministic.
+            self.checkpoint_files.insert(0, (save_path, metric))
+            ranked_files = [checkpoint for checkpoint in self.checkpoint_files if checkpoint[1] is not None]
+            unranked_files = [checkpoint for checkpoint in self.checkpoint_files if checkpoint[1] is None]
+            ranked_files = sorted(
+                ranked_files,
                 key=lambda x: x[1],
                 reverse=not self.decreasing  # sort in descending order if a lower metric is not better
             )
+            self.checkpoint_files = ranked_files + unranked_files
 
             checkpoints_str = "Current checkpoints:\n"
             for c in self.checkpoint_files:
