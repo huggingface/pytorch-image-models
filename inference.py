@@ -204,7 +204,7 @@ def main():
     _logger.info(
         f'Model {args.model} created, param count: {sum([m.numel() for m in model.parameters()])}')
 
-    data_config = resolve_data_config(vars(args), model=model)
+    data_config = resolve_data_config(vars(args), model=model, use_test_size=not args.use_train_size)
     test_time_pool = False
     if args.test_pool:
         model, test_time_pool = apply_test_time_pool(model, data_config)
