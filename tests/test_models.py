@@ -77,14 +77,15 @@ if 'GITHUB_ACTIONS' in os.environ:
         '*efficientnet_l2*', '*resnext101_32x48d', '*in21k', '*152x4_bitm', '*101x3_bitm', '*50x3_bitm',
         '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*', '*efficientnetv2_xl*',
         '*resnetrs350*', '*resnetrs420*', 'xcit_large_24_p8*', '*huge*', '*giant*', '*gigantic*',
-        '*enormous*', 'maxvit_xlarge*', 'regnet*1280', 'regnet*2560', '*_1b_*', '*_3b_*', '*_7b_*']
-    NON_STD_EXCLUDE_FILTERS = ['*huge*', '*giant*',  '*gigantic*', '*enormous*', '*_1b_*', '*_3b_*', '*_7b_*']
+        '*enormous*', 'maxvit_xlarge*', 'regnet*1280', 'regnet*2560', '*_1b_*', '*_3b_*', '*_5b_*', '*_7b_*']
+    NON_STD_EXCLUDE_FILTERS = [
+        '*huge*', '*giant*',  '*gigantic*', '*enormous*', '*_1b_*', '*_3b_*', '*_5b_*', '*_7b_*']
 else:
-    EXCLUDE_FILTERS = ['*enormous*', '*_7b_*']
-    NON_STD_EXCLUDE_FILTERS = ['*gigantic*', '*enormous*', '*_3b_*', '*_7b_*']
+    EXCLUDE_FILTERS = ['*enormous*', '*_5b_*', '*_7b_*']
+    NON_STD_EXCLUDE_FILTERS = ['*gigantic*', '*enormous*', '*_3b_*', '*_5b_*', '*_7b_*']
 
 EXCLUDE_JIT_FILTERS = [
-    'hiera_*', '*naflex*', '*_7b_*', 'hrnet*', 'dpn*', 'densenet*', 'selecsls*',
+    'hiera_*', '*naflex*', '*_5b_*', '*_7b_*', 'hrnet*', 'dpn*', 'densenet*', 'selecsls*',
     # gemma4_vit shares NaFlex's ``Union[Tensor, Dict[str, Tensor]]`` forward signature,
     # which TorchScript cannot narrow (``Unknown type name 'dict'``).
     'gemma4_vit*',

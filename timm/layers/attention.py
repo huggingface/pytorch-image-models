@@ -152,6 +152,7 @@ class AttentionRope(nn.Module):
      * QK normalization option
      * Attention output (scale) normalization
      * Fused or unfused QKV projection support
+     * Grouped-query attention (fewer K/V heads than Q heads) via `num_kv_heads`
     """
     fused_attn: torch.jit.Final[bool]
 
@@ -172,6 +173,7 @@ class AttentionRope(nn.Module):
             proj_bias: bool = True,
             rotate_half: bool = False,
             gated: bool = False,
+            num_kv_heads: Optional[int] = None,
             device=None,
             dtype=None,
     ):
@@ -193,6 +195,9 @@ class AttentionRope(nn.Module):
             scale_norm: Enable normalization (scaling) of attention output with norm_layer
             proj_bias: Whether to use bias in the output projection
             rotate_half: Use 'half' ROPE layout instead of default 'interleaved'
+            gated: Add a sigmoid gate on the attention output (before projection)
+            num_kv_heads: Number of key/value heads for grouped-query attention. None or equal to
+                num_heads gives standard multi-head attention. Requires qkv_fused=False.
         """
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
@@ -203,23 +208,29 @@ class AttentionRope(nn.Module):
             head_dim = dim // num_heads
         if scale_norm or qk_norm:
             assert norm_layer is not None, 'norm_layer must be provided if qk_norm or scale_norm is True'
+        num_kv_heads = num_kv_heads or num_heads
+        assert num_heads % num_kv_heads == 0, 'num_heads must be divisible by num_kv_heads'
 
         self.num_heads = num_heads
+        self.num_kv_heads = num_kv_heads
+        self.num_kv_groups = num_heads // num_kv_heads
         self.head_dim = head_dim
         self.attn_dim = head_dim * num_heads
+        self.kv_dim = head_dim * num_kv_heads
         self.scale = head_dim ** -0.5
         self.num_prefix_tokens = num_prefix_tokens
         self.fused_attn = use_fused_attn()
         self.rotate_half = rotate_half
 
         if qkv_fused:
+            assert self.num_kv_groups == 1, 'fused qkv projection does not support grouped-query attention'
             self.qkv = nn.Linear(dim, self.attn_dim * 3, bias=qkv_bias, **dd)
             self.q_proj = self.k_proj = self.v_proj = None
         else:
             self.qkv = None
             self.q_proj = nn.Linear(dim, self.attn_dim, bias=qkv_bias, **dd)
-            self.k_proj = nn.Linear(dim, self.attn_dim, bias=qkv_bias, **dd)
-            self.v_proj = nn.Linear(dim, self.attn_dim, bias=qkv_bias, **dd)
+            self.k_proj = nn.Linear(dim, self.kv_dim, bias=qkv_bias, **dd)
+            self.v_proj = nn.Linear(dim, self.kv_dim, bias=qkv_bias, **dd)
 
         self.q_norm = norm_layer(head_dim, **dd) if qk_norm else nn.Identity()
         self.k_norm = norm_layer(head_dim, **dd) if qk_norm else nn.Identity()
@@ -256,8 +267,8 @@ class AttentionRope(nn.Module):
             q, k, v = qkv.unbind(0)  # B, num_heads, N, head_dim
         else:
             q = self.q_proj(x).reshape(B, N, self.num_heads, self.head_dim).transpose(1, 2)
-            k = self.k_proj(x).reshape(B, N, self.num_heads, self.head_dim).transpose(1, 2)
-            v = self.v_proj(x).reshape(B, N, self.num_heads, self.head_dim).transpose(1, 2)
+            k = self.k_proj(x).reshape(B, N, self.num_kv_heads, self.head_dim).transpose(1, 2)
+            v = self.v_proj(x).reshape(B, N, self.num_kv_heads, self.head_dim).transpose(1, 2)
 
         q, k = self.q_norm(q), self.k_norm(k)
 
@@ -266,6 +277,13 @@ class AttentionRope(nn.Module):
             half = getattr(self, 'rotate_half', False)
             q = torch.cat([q[:, :, :npt, :], apply_rot_embed_cat(q[:, :, npt:, :], rope, half=half)], dim=2).type_as(v)
             k = torch.cat([k[:, :, :npt, :], apply_rot_embed_cat(k[:, :, npt:, :], rope, half=half)], dim=2).type_as(v)
+
+        if self.num_kv_groups > 1:
+            # Expand K/V heads to match Q heads for grouped-query attention. Done after norm + rope so the
+            # (cheaper) per-kv-head ops run once. repeat_interleave keeps the group -> head mapping identical
+            # to reference impls that tile kv heads (head h uses kv head h // num_kv_groups).
+            k = k.repeat_interleave(self.num_kv_groups, dim=1)
+            v = v.repeat_interleave(self.num_kv_groups, dim=1)
 
         if self.fused_attn:
             x = F.scaled_dot_product_attention(
