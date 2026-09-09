@@ -286,7 +286,17 @@ def checkpoint_seq(
     return x
 
 
-def adapt_input_conv(in_chans: int, conv_weight: Tensor) -> Tensor:
+def adapt_input_conv(in_chans: int, conv_weight: Tensor, base_chans: int = 3) -> Tensor:
+    """Adapt first-convolution weights to a different number of input channels.
+
+    ``base_chans`` identifies the channel count used by the checkpoint.  The
+    default of three preserves the usual RGB behaviour, while allowing stems
+    trained on multispectral or other non-RGB inputs to be repeated or
+    reduced without losing their original channel grouping.
+    """
+    if base_chans < 1:
+        raise ValueError(f'base_chans must be positive, got {base_chans}.')
+
     conv_type = conv_weight.dtype
     conv_weight = conv_weight.float()  # Some weights are in torch.half, ensure it's float for sum on CPU
     if conv_weight.ndim != 4:
@@ -298,22 +308,24 @@ def adapt_input_conv(in_chans: int, conv_weight: Tensor) -> Tensor:
         )
     O, I, J, K = conv_weight.shape
     if in_chans == 1:
-        if I > 3:
-            assert conv_weight.shape[1] % 3 == 0
+        if I > base_chans:
+            assert conv_weight.shape[1] % base_chans == 0
             # For models with space2depth stems
-            conv_weight = conv_weight.reshape(O, I // 3, 3, J, K)
+            conv_weight = conv_weight.reshape(O, I // base_chans, base_chans, J, K)
             conv_weight = conv_weight.sum(dim=2, keepdim=False)
         else:
             conv_weight = conv_weight.sum(dim=1, keepdim=True)
-    elif in_chans != 3:
-        if I != 3:
+    elif in_chans != base_chans:
+        if I != base_chans:
             raise NotImplementedError('Weight format not supported by conversion.')
         else:
             # NOTE this strategy should be better than random init, but there could be other combinations of
             # the original RGB input layer weights that'd work better for specific cases.
-            repeat = int(math.ceil(in_chans / 3))
-            conv_weight = conv_weight.repeat(1, repeat, 1, 1)[:, :in_chans, :, :]
-            conv_weight *= (3 / float(in_chans))
+            repeat = int(math.ceil(in_chans / base_chans))
+            if repeat > 1:
+                conv_weight = conv_weight.repeat(1, repeat, 1, 1)
+            conv_weight = conv_weight[:, :in_chans, :, :]
+            conv_weight *= (base_chans / float(in_chans))
     conv_weight = conv_weight.to(conv_type)
     return conv_weight
 
