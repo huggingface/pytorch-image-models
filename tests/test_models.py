@@ -1054,6 +1054,55 @@ def test_naflexvit_key_only_attn_mask_output_parity(global_pool):
 
     assert torch.equal(full_out, compact_out)
 
+
+@pytest.mark.base
+@pytest.mark.parametrize('num_kv_heads', [4, 2, (4, 2, 4)])
+@pytest.mark.parametrize('attn_only_layer_scale', [False, True])
+def test_naflexvit_sapiens2_conversion(num_kv_heads, attn_only_layer_scale):
+    from timm.models.naflexvit import batch_patchify, checkpoint_filter_fn
+
+    common_kwargs = dict(
+        img_size=(32, 48), patch_size=8, embed_dim=32, depth=3, num_heads=4,
+        num_kv_heads=num_kv_heads, num_classes=0, attn_only_layer_scale=attn_only_layer_scale,
+        rope_shift_coords=0.1, rope_jitter_coords=1.1, rope_grid_offset=0.25,
+    )
+    eva = create_model('vit_base_patch16_sapiens2', use_naflex=False, **common_kwargs)
+    naflex = create_model('vit_base_patch16_sapiens2', use_naflex=True, **common_kwargs)
+    naflex.load_state_dict(checkpoint_filter_fn(eva.state_dict(), naflex), strict=True)
+
+    images = torch.randn(2, 3, 32, 48)
+    patches, grid = batch_patchify(images, (8, 8))
+    coord = torch.stack(torch.meshgrid(torch.arange(grid[0]), torch.arange(grid[1]), indexing='ij'), dim=-1)
+    coord = coord.reshape(1, -1, 2).expand(images.shape[0], -1, -1)
+    valid = torch.ones(patches.shape[:2], dtype=torch.bool)
+    # Include padding to exercise NaFlex attention masking with grouped KV heads.
+    patches = torch.nn.functional.pad(patches, (0, 0, 0, 3))
+    coord = torch.nn.functional.pad(coord, (0, 0, 0, 3))
+    valid = torch.nn.functional.pad(valid, (0, 3))
+
+    for training in (False, True):
+        eva.train(training)
+        naflex.train(training)
+        # Match train-time coordinate augmentation draws across the three input paths.
+        torch.manual_seed(123)
+        reference = eva.forward_features(images)
+        torch.manual_seed(123)
+        actual_images = naflex.forward_features(images)
+        torch.manual_seed(123)
+        actual_patches = naflex.forward_features(patches, patch_coord=coord, patch_valid=valid)['patches']
+        actual_patches = actual_patches[:, :reference.shape[1]]
+        torch.testing.assert_close(actual_images, reference, rtol=2e-5, atol=2e-6)
+        torch.testing.assert_close(actual_patches, reference, rtol=2e-5, atol=2e-6)
+
+        if training:
+            loss_weight = torch.randn_like(reference)
+            (reference * loss_weight).mean().backward()
+            (actual_patches * loss_weight).mean().backward()
+            reference_grads = checkpoint_filter_fn({k: p.grad for k, p in eva.named_parameters()}, naflex)
+            for name, parameter in naflex.named_parameters():
+                torch.testing.assert_close(parameter.grad, reference_grads[name], rtol=2e-4, atol=2e-6)
+
+
 def test_gemma4_forward_intermediates_dict_output():
     """gemma4_vit dict-output intermediates match the NaFlexVit contract (API symmetry):
     'image_intermediates' / 'image_features' / 'patch_valid' aligned with the token sequence."""

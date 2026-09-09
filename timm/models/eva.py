@@ -317,7 +317,7 @@ class EvaBlock(nn.Module):
             attn_drop: float = 0.,
             drop_path: float = 0.,
             init_values: Optional[float] = None,
-            mlp_layer_scale: bool = True,
+            attn_only_layer_scale: bool = False,
             act_layer: Callable = nn.GELU,
             norm_layer: Callable = LayerNorm,
             attn_head_dim: Optional[int] = None,
@@ -345,7 +345,7 @@ class EvaBlock(nn.Module):
             attn_drop: Dropout rate for attention matrix
             drop_path: Stochastic depth rate
             init_values: Initial value for LayerScale, None = no LayerScale
-            mlp_layer_scale: Apply LayerScale to the MLP branch too (False = attention branch only)
+            attn_only_layer_scale: Apply LayerScale to the attention branch only
             act_layer: Activation layer constructor
             norm_layer: Normalization layer constructor
             attn_head_dim: Dimension of each attention head (if None, computed as dim // num_heads)
@@ -416,7 +416,7 @@ class EvaBlock(nn.Module):
                 drop=proj_drop,
                 **dd,
             )
-        use_mlp_ls = init_values is not None and mlp_layer_scale
+        use_mlp_ls = init_values is not None and not attn_only_layer_scale
         self.gamma_2 = nn.Parameter(torch.empty(dim, **dd)) if use_mlp_ls else None
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
@@ -602,7 +602,7 @@ class Eva(nn.Module):
             drop_path_rate: float = 0.,
             norm_layer: Callable = LayerNorm,
             init_values: Optional[float] = None,
-            mlp_layer_scale: bool = True,
+            attn_only_layer_scale: bool = False,
             class_token: bool = True,
             num_reg_tokens: int = 0,
             no_embed_class: bool = False,
@@ -658,7 +658,7 @@ class Eva(nn.Module):
             drop_path_rate: Stochastic depth rate
             norm_layer: Normalization layer constructor
             init_values: Initial layer-scale values
-            mlp_layer_scale: Apply layer-scale to the MLP branch too (False = attention branch only)
+            attn_only_layer_scale: Apply layer-scale to the attention branch only
             class_token: Use class token
             num_reg_tokens: Number of additional learnable 'register' tokens to add to the sequence
             no_embed_class: Don't include position embeddings for class (or reg) tokens
@@ -780,13 +780,13 @@ class Eva(nn.Module):
         block_fn = EvaBlockPostNorm if use_post_norm else EvaBlock
         if use_post_norm:
             # these options are only implemented for the pre-norm block, fail loudly instead of ignoring them
-            assert not qk_norm and mlp_layer_scale and all(h is None for h in num_kv_heads), \
-                'qk_norm, num_kv_heads and mlp_layer_scale=False are not supported with use_post_norm'
+            assert not qk_norm and not attn_only_layer_scale and all(h is None for h in num_kv_heads), \
+                'qk_norm, num_kv_heads and attn_only_layer_scale are not supported with use_post_norm'
 
         def _block_kwargs(i: int) -> Dict[str, Any]:
             if use_post_norm:
                 return {}
-            return dict(qk_norm=qk_norm, mlp_layer_scale=mlp_layer_scale, num_kv_heads=num_kv_heads[i])
+            return dict(qk_norm=qk_norm, attn_only_layer_scale=attn_only_layer_scale, num_kv_heads=num_kv_heads[i])
 
         self.blocks = nn.ModuleList([
             block_fn(
@@ -1978,24 +1978,19 @@ default_cfgs = generate_default_cfgs({
     # Loaded straight from the original Meta checkpoints (`model.safetensors` there is the original layout,
     # remapped by checkpoint_filter_fn), so nothing is redistributed by timm.
     'vit_base_patch16_sapiens2.fb': _sapiens2_cfg(
-        hf_hub_id='facebook/sapiens2-pretrain-0.1b',
-        hf_hub_filename='model.safetensors',
+        hf_hub_id='timm/',
     ),
     'vit_large_patch16_sapiens2.fb': _sapiens2_cfg(
-        hf_hub_id='facebook/sapiens2-pretrain-0.4b',
-        hf_hub_filename='model.safetensors',
+        hf_hub_id='timm/',
     ),
     'vit_huge_patch16_sapiens2.fb': _sapiens2_cfg(
-        hf_hub_id='facebook/sapiens2-pretrain-0.8b',
-        hf_hub_filename='model.safetensors',
+        hf_hub_id='timm/',
     ),
     'vit_giant_patch16_sapiens2.fb': _sapiens2_cfg(
-        hf_hub_id='facebook/sapiens2-pretrain-1b',
-        hf_hub_filename='model.safetensors',
+        hf_hub_id='timm/',
     ),
     'vit_5b_patch16_sapiens2.fb': _sapiens2_cfg(
-        hf_hub_id='facebook/sapiens2-pretrain-5b',
-        hf_hub_filename='model.safetensors',
+        hf_hub_id='timm/',
     ),
 
 })
@@ -3435,11 +3430,11 @@ def _sapiens2_args(
         qkv_fused=False,
         qkv_bias=True,  # q, k and v all carry a bias in Sapiens2 (unlike EVA's zero k-bias)
         qk_norm=True,
-        # global_pool='token',  # upstream pools the CLS token; default here is 'avg', pass via kwargs or --gp
+        global_pool='token',
         swiglu_mlp=True,
         mlp_ratio=4.,
         init_values=1.0,  # layer-scale on the attention branch only
-        mlp_layer_scale=False,
+        attn_only_layer_scale=True,
         rope_type='dinov3',
         rope_temperature=100,
         rope_rotate_half=True,
