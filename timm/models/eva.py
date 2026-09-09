@@ -9,6 +9,7 @@ This file contains a number of ViT variants the utilise ROPE position embeddings
  * ROPE-ViT from Naver AI (https://arxiv.org/abs/2403.13298)
  * DINOv3 from META AI Research (https://arxiv.org/abs/2508.10104)
  * LingBot-Vision from Robbyant (https://arxiv.org/abs/2607.05247)
+ * Sapiens2 human-centric ViT from Meta (https://arxiv.org/abs/2604.21681)
 
 @article{EVA,
   title={EVA: Exploring the Limits of Masked Visual Representation Learning at Scale},
@@ -64,9 +65,19 @@ EVA-02: A Visual Representation for Neon Genesis - https://arxiv.org/abs/2303.11
   year={2026}
 }
 
+@article{khirodkarsapiens2,
+  title={Sapiens2},
+  author={Khirodkar, Rawal and Wen, He and Martinez, Julieta and Dong, Yuan and Su, Zhaoen and Saito, Shunsuke},
+  journal={arXiv preprint arXiv:2604.21681},
+  year={2026}
+}
+
 DINOv3 code was a modification of existing EVA model and support modules, so licensed under Apache-2.0 like timm.
 Weights from META remain under DINOv3 License (https://ai.meta.com/resources/models-and-libraries/dinov3-license/).
 LingBot-Vision code and weights are released under Apache-2.0 (https://github.com/robbyant/lingbot-vision).
+Sapiens2 support was likewise built on the existing EVA / DINOv3 modules (GQA + attn-only LayerScale added), no code
+was taken from the Meta release, so it is Apache-2.0 like timm. Weights from META remain under the Sapiens2 License
+(https://github.com/facebookresearch/sapiens2/blob/main/LICENSE.md).
 
 Modifications by / Copyright 2023 Ross Wightman, original copyrights below
 """
@@ -89,6 +100,7 @@ from timm.layers import (
     GluMlp,
     SwiGLU,
     LayerNorm,
+    RmsNorm,
     DropPath, calculate_drop_path_rates,
     PatchDropoutWithIndices,
     create_rope_embed,
@@ -299,10 +311,13 @@ class EvaBlock(nn.Module):
             attn_type: str = 'eva',
             rotate_half: bool = False,
             gated_attn: bool = False,
+            qk_norm: bool = False,
+            num_kv_heads: Optional[int] = None,
             proj_drop: float = 0.,
             attn_drop: float = 0.,
             drop_path: float = 0.,
             init_values: Optional[float] = None,
+            attn_only_layer_scale: bool = False,
             act_layer: Callable = nn.GELU,
             norm_layer: Callable = LayerNorm,
             attn_head_dim: Optional[int] = None,
@@ -323,10 +338,14 @@ class EvaBlock(nn.Module):
             scale_attn_inner: Whether to use normalization within the attention mechanism
             num_prefix_tokens: Number of tokens at the beginning of the sequence (class tokens, etc.)
             attn_type: Type of attention module to use ('eva' or 'rope')
+            qk_norm: Apply norm_layer to query and key (per head) before attention
+            num_kv_heads: Number of key/value heads for grouped-query attention (attn_type='rope' only),
+                None = same as num_heads
             proj_drop: Dropout rate for projection layers
             attn_drop: Dropout rate for attention matrix
             drop_path: Stochastic depth rate
             init_values: Initial value for LayerScale, None = no LayerScale
+            attn_only_layer_scale: Apply LayerScale to the attention branch only
             act_layer: Activation layer constructor
             norm_layer: Normalization layer constructor
             attn_head_dim: Dimension of each attention head (if None, computed as dim // num_heads)
@@ -335,7 +354,14 @@ class EvaBlock(nn.Module):
         super().__init__()
 
         self.norm1 = norm_layer(dim, **dd)
-        attn_cls = AttentionRope if attn_type == 'rope' else EvaAttention
+        attn_kwargs = {}
+        if attn_type == 'rope':
+            attn_cls = AttentionRope
+            attn_kwargs['num_kv_heads'] = num_kv_heads
+        else:
+            assert num_kv_heads is None or num_kv_heads == num_heads, \
+                'grouped-query attention (num_kv_heads) is only supported with attn_type="rope"'
+            attn_cls = EvaAttention
         self.attn = attn_cls(
             dim,
             num_heads=num_heads,
@@ -346,9 +372,11 @@ class EvaBlock(nn.Module):
             proj_drop=proj_drop,
             attn_head_dim=attn_head_dim,
             norm_layer=norm_layer,
+            qk_norm=qk_norm,
             scale_norm=scale_attn_inner,
             rotate_half=rotate_half,
             gated=gated_attn,
+            **attn_kwargs,
             **dd,
         )
         self.init_values = init_values
@@ -388,7 +416,8 @@ class EvaBlock(nn.Module):
                 drop=proj_drop,
                 **dd,
             )
-        self.gamma_2 = nn.Parameter(torch.empty(dim, **dd)) if init_values is not None else None
+        use_mlp_ls = init_values is not None and not attn_only_layer_scale
+        self.gamma_2 = nn.Parameter(torch.empty(dim, **dd)) if use_mlp_ls else None
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         # TODO: skip init when on meta device when safe to do so
@@ -398,6 +427,7 @@ class EvaBlock(nn.Module):
         """Initialize parameters."""
         if self.gamma_1 is not None:
             nn.init.constant_(self.gamma_1, self.init_values)
+        if self.gamma_2 is not None:
             nn.init.constant_(self.gamma_2, self.init_values)
 
     def forward(
@@ -407,12 +437,14 @@ class EvaBlock(nn.Module):
             attn_mask: Optional[torch.Tensor] = None,
             is_causal: bool = False,
     ) -> torch.Tensor:
-        if self.gamma_1 is None:
-            x = x + self.drop_path1(self.attn(self.norm1(x), rope=rope, attn_mask=attn_mask, is_causal=is_causal))
-            x = x + self.drop_path2(self.mlp(self.norm2(x)))
-        else:
-            x = x + self.drop_path1(self.gamma_1 * self.attn(self.norm1(x), rope=rope, attn_mask=attn_mask, is_causal=is_causal))
-            x = x + self.drop_path2(self.gamma_2 * self.mlp(self.norm2(x)))
+        x_attn = self.attn(self.norm1(x), rope=rope, attn_mask=attn_mask, is_causal=is_causal)
+        if self.gamma_1 is not None:
+            x_attn = self.gamma_1 * x_attn
+        x = x + self.drop_path1(x_attn)
+        x_mlp = self.mlp(self.norm2(x))
+        if self.gamma_2 is not None:
+            x_mlp = self.gamma_2 * x_mlp
+        x = x + self.drop_path2(x_mlp)
         return x
 
 
@@ -552,8 +584,10 @@ class Eva(nn.Module):
             embed_dim: int = 768,
             depth: int = 12,
             num_heads: int = 12,
+            num_kv_heads: Optional[Union[int, Tuple[int, ...]]] = None,
             qkv_bias: bool = True,
             qkv_fused: bool = True,
+            qk_norm: bool = False,
             mlp_ratio: float = 4.,
             swiglu_mlp: bool = False,
             swiglu_align_to: int = 0,
@@ -568,6 +602,7 @@ class Eva(nn.Module):
             drop_path_rate: float = 0.,
             norm_layer: Callable = LayerNorm,
             init_values: Optional[float] = None,
+            attn_only_layer_scale: bool = False,
             class_token: bool = True,
             num_reg_tokens: int = 0,
             no_embed_class: bool = False,
@@ -578,6 +613,9 @@ class Eva(nn.Module):
             rope_grid_indexing: str = 'ij',
             rope_temperature: float = 10000.,
             rope_rotate_half: bool = False,
+            rope_shift_coords: Optional[float] = None,
+            rope_jitter_coords: Optional[float] = None,
+            rope_rescale_coords: Optional[float] = None,
             use_post_norm: bool = False,
             use_pre_transformer_norm: bool = False,
             use_post_transformer_norm: Optional[bool] = None,
@@ -602,8 +640,11 @@ class Eva(nn.Module):
             embed_dim: Embedding dimension for tokens
             depth: Number of transformer blocks
             num_heads: Number of attention heads
+            num_kv_heads: Number of key/value heads for grouped-query attention (requires attn_type='rope' and
+                qkv_fused=False). An int applies to all blocks, a sequence gives a per-block value. None = num_heads.
             qkv_bias: Enable bias for query, key, value projections
             qkv_fused: Use a single projection for query, key, value
+            qk_norm: Apply norm_layer to query and key (per head) before attention
             mlp_ratio: Ratio of mlp hidden dim to embedding dim
             swiglu_mlp: Use SwiGLU activation in MLP
             scale_mlp: Apply scaling normalization in MLP (normformer style)
@@ -617,6 +658,7 @@ class Eva(nn.Module):
             drop_path_rate: Stochastic depth rate
             norm_layer: Normalization layer constructor
             init_values: Initial layer-scale values
+            attn_only_layer_scale: Apply layer-scale to the attention branch only
             class_token: Use class token
             num_reg_tokens: Number of additional learnable 'register' tokens to add to the sequence
             no_embed_class: Don't include position embeddings for class (or reg) tokens
@@ -627,6 +669,9 @@ class Eva(nn.Module):
             rope_grid_indexing: Indexing mode for rotary position embeddings ('ij' or 'xy')
             rope_temperature: Temperature parameter for ROPE frequency computation
             rope_rotate_half: Use half rotation layout (rotate D/2 dims), else use interleaved rotation layout
+            rope_shift_coords: Train-time RoPE coordinate shift augmentation, uniform in [-s, s] (rope_type='dinov3')
+            rope_jitter_coords: Train-time RoPE per-axis log-uniform scale augmentation in [1/J, J] (rope_type='dinov3')
+            rope_rescale_coords: Train-time RoPE shared log-uniform scale augmentation in [1/R, R] (rope_type='dinov3')
             use_post_norm: Use post-norm transformer block type
             use_pre_transformer_norm: Use normalization layer before transformer blocks
             use_post_transformer_norm: Use normalization layer after transformer blocks
@@ -712,6 +757,13 @@ class Eva(nn.Module):
                     grid_offset=rope_grid_offset,
                     ref_feat_shape=ref_feat_shape,
                 ))
+            elif rope_type == 'dinov3':
+                rope_kwargs.update(dict(
+                    grid_offset=rope_grid_offset,
+                    shift_coords=rope_shift_coords,
+                    jitter_coords=rope_jitter_coords,
+                    rescale_coords=rope_rescale_coords,
+                ))
 
             self.rope = create_rope_embed(rope_type=rope_type, **rope_kwargs)
         else:
@@ -719,8 +771,23 @@ class Eva(nn.Module):
 
         self.norm_pre = norm_layer(embed_dim, **dd) if activate_pre_norm else nn.Identity()
 
+        # per-block kv heads (grouped-query attention), None -> standard MHA in every block
+        if num_kv_heads is None or isinstance(num_kv_heads, int):
+            num_kv_heads = (num_kv_heads,) * depth
+        assert len(num_kv_heads) == depth, 'num_kv_heads sequence must have one entry per block'
+
         dpr = calculate_drop_path_rates(drop_path_rate, depth)  # stochastic depth decay rule
         block_fn = EvaBlockPostNorm if use_post_norm else EvaBlock
+        if use_post_norm:
+            # these options are only implemented for the pre-norm block, fail loudly instead of ignoring them
+            assert not qk_norm and not attn_only_layer_scale and all(h is None for h in num_kv_heads), \
+                'qk_norm, num_kv_heads and attn_only_layer_scale are not supported with use_post_norm'
+
+        def _block_kwargs(i: int) -> Dict[str, Any]:
+            if use_post_norm:
+                return {}
+            return dict(qk_norm=qk_norm, attn_only_layer_scale=attn_only_layer_scale, num_kv_heads=num_kv_heads[i])
+
         self.blocks = nn.ModuleList([
             block_fn(
                 dim=embed_dim,
@@ -740,6 +807,7 @@ class Eva(nn.Module):
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
                 init_values=init_values,
+                **_block_kwargs(i),
                 **dd,
             )
             for i in range(depth)])
@@ -1216,7 +1284,9 @@ def checkpoint_filter_fn(
     else:
         prefix = ''
 
-    dinov3_weights = 'storage_tokens' in state_dict
+    # Sapiens2 (Meta) checkpoints share the DINOv3 register naming but use their own attn / ffn / norm names
+    sapiens2_weights = 'blocks.0.attn.wq.weight' in state_dict and 'blocks.0.ffn.w12.weight' in state_dict
+    dinov3_weights = 'storage_tokens' in state_dict and not sapiens2_weights
     mim_weights = not dinov3_weights and prefix + 'mask_token' in state_dict
     no_qkv = prefix + 'blocks.0.attn.q_proj.weight' in state_dict
 
@@ -1231,7 +1301,23 @@ def checkpoint_filter_fn(
             # fixed embedding no need to load buffer from checkpoint
             continue
 
-        if dinov3_weights:
+        if sapiens2_weights:
+            if k == 'mask_token':
+                # pretrain only
+                continue
+            k = k.replace('storage_tokens', 'reg_token')
+            k = k.replace('patch_embed.projection.', 'patch_embed.proj.')
+            k = k.replace('attn.wq.', 'attn.q_proj.')
+            k = k.replace('attn.wk.', 'attn.k_proj.')
+            k = k.replace('attn.wv.', 'attn.v_proj.')
+            k = k.replace('attn.gamma.weight', 'gamma_1')  # LayerScale lives inside attn in the original, attn only
+            k = k.replace('.ffn.', '.mlp.')  # w12 / w3 remapped to fc1 / fc2 below
+            k = k.replace('.ln1.', '.norm1.')
+            k = k.replace('.ln2.', '.norm2.')
+            if k.startswith('ln1.'):
+                k = 'norm.' + k[len('ln1.'):]  # final norm
+
+        elif dinov3_weights:
             if any([k.endswith(f) for f in ['.periods', '.bias_mask', 'mask_token']]):
                 # discard unused/non-persistent/pretrain only params
                 continue
@@ -1433,6 +1519,33 @@ def _lingbot_cfg(url: str = '', **kwargs) -> Dict[str, Any]:
         'license': 'apache-2.0', 'origin_url': 'https://github.com/robbyant/lingbot-vision',
         'paper_ids': 'arXiv:2607.05247', **kwargs
     }
+
+
+def _sapiens2_cfg(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Generate default configuration for Sapiens2 models.
+
+    Sapiens2 is trained at a portrait 1024x768 (HxW) resolution with ImageNet mean/std and bilinear resize
+    (no center crop). The original uses CLS-token pooling; timm defaults to avg pooling for the Eva
+    architecture, pass global_pool='token' at model creation to match upstream.
+
+    Args:
+        url: Model weights URL.
+        **kwargs: Additional configuration parameters.
+
+    Returns:
+        Model configuration dictionary.
+    """
+    return {
+        'url': url,
+        'num_classes': 0, 'input_size': (3, 1024, 768), 'pool_size': None,
+        'crop_pct': 1.0, 'crop_mode': 'squash', 'interpolation': 'bilinear', 'fixed_input_size': False,
+        'min_input_size': (3, 256, 192),
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'patch_embed.proj', 'classifier': 'head',
+        'license': 'sapiens2-license', 'origin_url': 'https://github.com/facebookresearch/sapiens2',
+        'paper_ids': 'arXiv:2604.21681', **kwargs
+    }
+
 
 default_cfgs = generate_default_cfgs({
 
@@ -1858,6 +1971,26 @@ default_cfgs = generate_default_cfgs({
     ),
     'vit_giant_patch16_lingbot.robbyant': _lingbot_cfg(
         hf_hub_id='belfner/vit_giant_patch16_lingbot.robbyant',
+    ),
+
+    # Sapiens2 weights are under the Sapiens2 License (use restrictions, same-license redistribution), please see
+    # https://github.com/facebookresearch/sapiens2/blob/main/LICENSE.md
+    # Loaded straight from the original Meta checkpoints (`model.safetensors` there is the original layout,
+    # remapped by checkpoint_filter_fn), so nothing is redistributed by timm.
+    'vit_base_patch16_sapiens2.fb': _sapiens2_cfg(
+        hf_hub_id='timm/',
+    ),
+    'vit_large_patch16_sapiens2.fb': _sapiens2_cfg(
+        hf_hub_id='timm/',
+    ),
+    'vit_huge_patch16_sapiens2.fb': _sapiens2_cfg(
+        hf_hub_id='timm/',
+    ),
+    'vit_giant_patch16_sapiens2.fb': _sapiens2_cfg(
+        hf_hub_id='timm/',
+    ),
+    'vit_5b_patch16_sapiens2.fb': _sapiens2_cfg(
+        hf_hub_id='timm/',
     ),
 
 })
@@ -3260,4 +3393,106 @@ def vit_giant_patch16_lingbot(pretrained: bool = False, **kwargs) -> Eva:
     )
 
     model = _create_eva('vit_giant_patch16_lingbot', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+def _sapiens2_args(
+        embed_dim: int,
+        depth: int,
+        num_heads: int,
+        num_kv_heads: int,
+        num_full_attn_blocks: int = 8,
+) -> Dict[str, Any]:
+    """Shared Sapiens2 model args.
+
+    Sapiens2 uses grouped-query attention in the middle of the network only: the first and last
+    `num_full_attn_blocks` blocks keep full multi-head attention, everything in between uses `num_kv_heads`
+    key/value heads. Models with depth <= 2 * num_full_attn_blocks (0.1B) end up with no GQA blocks at all.
+
+    NOTE: the RoPE sin/cos tables are computed in float32 here (as in the transformers port). The Meta reference
+    code defaults to computing them in bfloat16; that quantizes the patch coordinates and shifts outputs by
+    ~1e-3 mean abs (0.4B, 1024x768) relative to the float32 tables. Results measured against the fp32-RoPE
+    reference agree to fp32 kernel noise (~1e-6 max abs).
+    """
+    kv_heads = tuple(
+        num_heads if (i < num_full_attn_blocks or i >= depth - num_full_attn_blocks) else num_kv_heads
+        for i in range(depth)
+    )
+    return dict(
+        img_size=(1024, 768),
+        patch_size=16,
+        dynamic_img_size=True,
+        embed_dim=embed_dim,
+        depth=depth,
+        num_heads=num_heads,
+        num_kv_heads=kv_heads,
+        attn_type='rope',
+        qkv_fused=False,
+        qkv_bias=True,  # q, k and v all carry a bias in Sapiens2 (unlike EVA's zero k-bias)
+        qk_norm=True,
+        global_pool='token',
+        swiglu_mlp=True,
+        mlp_ratio=4.,
+        init_values=1.0,  # layer-scale on the attention branch only
+        attn_only_layer_scale=True,
+        rope_type='dinov3',
+        rope_temperature=100,
+        rope_rotate_half=True,
+        rope_rescale_coords=2.0,  # train-time coordinate aug used upstream, no effect at eval
+        use_rot_pos_emb=True,
+        use_abs_pos_emb=False,
+        class_token=True,
+        num_reg_tokens=8,
+        use_fc_norm=False,
+        norm_layer=partial(RmsNorm, eps=1e-6),
+    )
+
+
+@register_model
+def vit_base_patch16_sapiens2(pretrained: bool = False, **kwargs) -> Eva:
+    """Sapiens2-0.1B (B/16) https://arxiv.org/abs/2604.21681
+    NOTE: Pass global_pool='token' to use CLS-token pooling (matches upstream Sapiens2).
+    """
+    model_args = _sapiens2_args(embed_dim=768, depth=12, num_heads=12, num_kv_heads=6)
+    model = _create_eva('vit_base_patch16_sapiens2', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_large_patch16_sapiens2(pretrained: bool = False, **kwargs) -> Eva:
+    """Sapiens2-0.4B (L/16) https://arxiv.org/abs/2604.21681
+    NOTE: Pass global_pool='token' to use CLS-token pooling (matches upstream Sapiens2).
+    """
+    model_args = _sapiens2_args(embed_dim=1024, depth=24, num_heads=16, num_kv_heads=8)
+    model = _create_eva('vit_large_patch16_sapiens2', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_huge_patch16_sapiens2(pretrained: bool = False, **kwargs) -> Eva:
+    """Sapiens2-0.8B (H/16) https://arxiv.org/abs/2604.21681
+    NOTE: Pass global_pool='token' to use CLS-token pooling (matches upstream Sapiens2).
+    """
+    model_args = _sapiens2_args(embed_dim=1280, depth=32, num_heads=16, num_kv_heads=8)
+    model = _create_eva('vit_huge_patch16_sapiens2', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_giant_patch16_sapiens2(pretrained: bool = False, **kwargs) -> Eva:
+    """Sapiens2-1B (g/16, 1536 wide x 40 deep like ViT-g) https://arxiv.org/abs/2604.21681
+    NOTE: Pass global_pool='token' to use CLS-token pooling (matches upstream Sapiens2).
+    """
+    model_args = _sapiens2_args(embed_dim=1536, depth=40, num_heads=24, num_kv_heads=12)
+    model = _create_eva('vit_giant_patch16_sapiens2', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_5b_patch16_sapiens2(pretrained: bool = False, **kwargs) -> Eva:
+    """Sapiens2-5B (2432 wide x 56 deep) https://arxiv.org/abs/2604.21681
+    NOTE: Pass global_pool='token' to use CLS-token pooling (matches upstream Sapiens2).
+    """
+    model_args = _sapiens2_args(embed_dim=2432, depth=56, num_heads=32, num_kv_heads=16)
+    model = _create_eva('vit_5b_patch16_sapiens2', pretrained=pretrained, **dict(model_args, **kwargs))
     return model

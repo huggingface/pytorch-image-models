@@ -73,6 +73,7 @@ class NaFlexVitCfg:
     scale_mlp_norm: bool = False  # Apply scaling norm to MLP
 
     # Attention parameters
+    num_kv_heads: Optional[Union[int, Tuple[int, ...]]] = None  # Scalar or per-block KV heads (attn_type='rope')
     qkv_bias: bool = True
     qk_norm: bool = False
     proj_bias: bool = True
@@ -106,6 +107,9 @@ class NaFlexVitCfg:
     rope_grid_offset: float = 0.  # Grid offset for non-pixel ROPE mode
     rope_grid_indexing: str = 'ij'  # Grid indexing mode for ROPE ('ij' or 'xy')
     rope_rotate_half: bool = False  # Use rotate_half layout for ROPE (DINOv3 and 'mrope' use True)
+    rope_shift_coords: Optional[float] = None  # DINOv3 train-time coordinate shift in [-s, s]
+    rope_jitter_coords: Optional[float] = None  # DINOv3 train-time per-axis scale in [1/J, J]
+    rope_rescale_coords: Optional[float] = None  # DINOv3 train-time shared scale in [1/R, R]
     rope_mrope_section: Optional[Tuple[int, int, int]] = None  # (T,H,W) channel split for rope_type='mrope'
 
     # Image processing
@@ -144,6 +148,7 @@ class NaFlexVitCfg:
     attn_gated: bool = False  # Apply sigmoid output gate in attention (anti attention-sink, GenLIP-style)
     swiglu_mlp: bool = False  # Use SwiGLU MLP variant
     qkv_fused: bool = True  # Whether to use fused QKV projections
+    attn_only_layer_scale: bool = False  # Apply LayerScale to the attention branch only
 
     # Variable patch size support
     enable_patch_interpolator: bool = False  # Enable dynamic patch size support
@@ -289,18 +294,20 @@ class NaFlexRopeIterator:
         return batch_embed
 
 
-def get_block_fn(cfg: NaFlexVitCfg) -> Callable:
+def get_block_fn(cfg: NaFlexVitCfg, block_idx: int = 0) -> Callable:
     """Get appropriate block function based on configuration.
 
     Returns a partially applied block constructor with EVA-specific
-    or conflicting parameters pre-configured if needed.
+    or conflicting parameters pre-configured for the given block index if needed.
     """
     # Check if we need EVA block features
     use_eva_features = (
         cfg.attn_type in ('eva', 'rope') or
         cfg.rope_type not in ('', 'none') or  # Any ROPE type requires EVA blocks
         cfg.swiglu_mlp or
-        cfg.attn_gated  # gated attention is implemented on the EVA/rope attention path
+        cfg.attn_gated or  # gated attention is implemented on the EVA/rope attention path
+        cfg.attn_only_layer_scale or
+        cfg.num_kv_heads is not None
     )
 
     if use_eva_features:
@@ -310,6 +317,9 @@ def get_block_fn(cfg: NaFlexVitCfg) -> Callable:
             attn_type = 'rope'
 
         num_prefix_tokens = (1 if cfg.class_token else 0) + cfg.reg_tokens
+        num_kv_heads = cfg.num_kv_heads
+        if num_kv_heads is not None and not isinstance(num_kv_heads, int):
+            num_kv_heads = num_kv_heads[block_idx]
         return partial(
             EvaBlock,
             attn_type=attn_type,
@@ -317,6 +327,8 @@ def get_block_fn(cfg: NaFlexVitCfg) -> Callable:
             scale_mlp=cfg.scale_mlp_norm,
             scale_attn_inner=cfg.scale_attn_inner_norm,
             qkv_fused=cfg.qkv_fused,
+            num_kv_heads=num_kv_heads,
+            attn_only_layer_scale=cfg.attn_only_layer_scale,
             num_prefix_tokens=num_prefix_tokens,
             rotate_half=cfg.rope_rotate_half or cfg.rope_type == 'mrope',  # MRoPE requires the half-rotation layout
             gated_attn=cfg.attn_gated,
@@ -1179,12 +1191,13 @@ class NaFlexVit(nn.Module):
         assert cfg.global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map')
         assert cfg.class_token or cfg.global_pool != 'token'
         assert cfg.pos_embed in ('', 'none', 'learned', 'factorized')
+        if cfg.num_kv_heads is not None and not isinstance(cfg.num_kv_heads, int):
+            assert len(cfg.num_kv_heads) == cfg.depth, 'num_kv_heads sequence must have one entry per block'
 
         # Resolve layer implementations
         norm_layer = get_norm_layer(cfg.norm_layer) or LayerNorm
         embed_norm_layer = get_norm_layer(cfg.embed_norm_layer)
         act_layer = get_act_layer(cfg.act_layer) or nn.GELU
-        block_fn = get_block_fn(cfg)
         mlp_layer = cfg.mlp_layer or Mlp   # TODO: Support configurable mlp_layer via string lookup
 
         # Store instance variables
@@ -1261,8 +1274,12 @@ class NaFlexVit(nn.Module):
                     cfg.embed_dim // cfg.num_heads,
                     temperature=cfg.rope_temperature,
                     feat_shape=None,  # Dynamic shapes for NaFlex
+                    grid_offset=cfg.rope_grid_offset,
                     grid_indexing=cfg.rope_grid_indexing,
                     rotate_half=cfg.rope_rotate_half,
+                    shift_coords=cfg.rope_shift_coords,
+                    jitter_coords=cfg.rope_jitter_coords,
+                    rescale_coords=cfg.rope_rescale_coords,
                     **dd,
                 )
                 self.rope_is_mixed = False
@@ -1292,7 +1309,7 @@ class NaFlexVit(nn.Module):
         dpr = calculate_drop_path_rates(cfg.drop_path_rate, cfg.depth)  # stochastic depth decay rule
         # Create transformer blocks
         self.blocks = nn.Sequential(*[
-            block_fn(
+            get_block_fn(cfg, i)(
                 dim=cfg.embed_dim,
                 num_heads=cfg.num_heads,
                 mlp_ratio=cfg.mlp_ratio,
