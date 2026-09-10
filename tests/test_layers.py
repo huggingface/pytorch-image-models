@@ -10,6 +10,8 @@ from timm.layers import (
     ClNormMlpClassifierHead,
     MultiQueryAttentionV2,
     NormMlpClassifierHead,
+    PatchEmbed,
+    PatchEmbedWithSize,
     PatchEmbedInterpolator,
     RotAttentionPool2d,
     create_act_layer,
@@ -419,3 +421,13 @@ def test_attn2d(bias, expand_first, head_first, attn_mask):
     o2 = attn(x, mask)
     
     assert torch.allclose(o1, o2, atol=1e-5), f"{torch.abs(o1 - o2).max()}"
+
+
+@pytest.mark.parametrize("pe_class", [PatchEmbed, PatchEmbedWithSize])
+def test_patchembed_return_view_tensor(pe_class):
+    pe = pe_class(224, 16, 3, 512)
+    x = torch.randn(1, 3, 224, 224)
+    out = pe(x)
+    if isinstance(out, tuple):
+        out = out[0]
+    assert out._base is None, f"{pe.__class__.__name__} should not return a view tensor."
