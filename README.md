@@ -12,6 +12,12 @@
 
 ## What's New
 
+## September 10, 2026
+
+* Add Qwen3-VL / Qwen3.5 / Qwen3.8 ViT classifier and encoder variants, including classifiers w/ and w/o the native spatial merger.
+* Add Sapiens2 ViTs with EVA and NaFlexViT support. Both model additions include native timm Hub weights. Thanks [Yonghye Kwon](https://github.com/developer0hye).
+* Switch default NaFlex SigLIP position interpolation, `inference.py` input-size selection, and improve `--model-kwargs` parsing.
+
 ## August 27, 2026
 * Add [LowFormer](https://github.com/altair199797/lowformer) model and weights
 * Fix or merge a host of real but small or not commonly encountered bugs surfaced by agents
