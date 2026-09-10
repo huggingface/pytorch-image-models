@@ -133,9 +133,8 @@ class CheckpointSaver:
         worst_file = self.checkpoint_files[-1] if self.checkpoint_files else None
         if (
             len(self.checkpoint_files) < self.max_history
-            or metric is None
             or worst_file[1] is None
-            or self.cmp(metric, worst_file[1])
+            or (metric is not None and self.cmp(metric, worst_file[1]))
         ):
             if len(self.checkpoint_files) >= self.max_history:
                 self._cleanup_checkpoints(1)

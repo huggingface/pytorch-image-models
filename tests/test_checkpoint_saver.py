@@ -5,7 +5,7 @@ import torch
 from timm.utils.checkpoint_saver import CheckpointSaver
 
 
-def _create_saver(checkpoint_dir: Path, max_history: int = 2) -> CheckpointSaver:
+def _create_saver(checkpoint_dir: Path, max_history: int = 2, decreasing: bool = False) -> CheckpointSaver:
     model = torch.nn.Linear(2, 1)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     return CheckpointSaver(
@@ -13,6 +13,7 @@ def _create_saver(checkpoint_dir: Path, max_history: int = 2) -> CheckpointSaver
         optimizer,
         checkpoint_dir=str(checkpoint_dir),
         max_history=max_history,
+        decreasing=decreasing,
     )
 
 
@@ -40,3 +41,19 @@ def test_save_checkpoint_replaces_unranked_history_with_ranked(tmp_path: Path):
 
     assert [metric for _, metric in saver.checkpoint_files] == [0.9, 0.8]
     assert not (tmp_path / 'checkpoint-1.pth.tar').exists()
+
+
+def test_save_checkpoint_does_not_replace_ranked_history_with_unranked(tmp_path: Path):
+    for decreasing, ranked_metrics in ((False, (0.9, 0.8)), (True, (0.1, 0.2))):
+        checkpoint_dir = tmp_path / str(decreasing)
+        checkpoint_dir.mkdir()
+        saver = _create_saver(checkpoint_dir, decreasing=decreasing)
+
+        for epoch, metric in enumerate(ranked_metrics):
+            saver.save_checkpoint(epoch, metric=metric)
+
+        assert saver.save_checkpoint(2) == (ranked_metrics[0], 0)
+        assert [metric for _, metric in saver.checkpoint_files] == list(ranked_metrics)
+        assert (checkpoint_dir / 'checkpoint-0.pth.tar').exists()
+        assert (checkpoint_dir / 'checkpoint-1.pth.tar').exists()
+        assert not (checkpoint_dir / 'checkpoint-2.pth.tar').exists()
