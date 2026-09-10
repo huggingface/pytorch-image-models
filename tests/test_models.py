@@ -57,7 +57,7 @@ FEAT_INTER_FILTERS = [
     'tiny_vit', 'vovnet', 'tresnet', 'rexnet', 'resnetv2', 'repghost', 'repvit', 'pvt_v2', 'nextvit', 'nest',
     'mambaout', 'inception_next', 'inception_v4', 'hgnet', 'gcvit', 'focalnet', 'efficientformer_v2', 'edgenext',
     'davit', 'rdnet', 'convnext', 'pit', 'starnet', 'shvit', 'fasternet', 'swiftformer', 'ghostnet', 'naflexvit',
-    'csatv2', 'cpubone', 'lcnetv2', 'lowformer'
+    'csatv2', 'cpubone', 'lcnetv2', 'lowformer', 'qwen3_vit'
 ]
 
 # transformer / hybrid models don't support full set of spatial / feature APIs and/or have spatial output.
@@ -234,9 +234,11 @@ def test_model_backward(model_name, batch_size):
     num_grad = sum([x.grad.numel() for x in model.parameters() if x.grad is not None])
 
     if encoder_only:
-        output_fmt = getattr(model, 'output_fmt', 'NCHW')
-        feat_axis = get_channel_dim(output_fmt)
-        assert outputs.shape[feat_axis] == model.num_features, f'unpooled feature dim {outputs.shape[feat_axis]} != model.num_features {model.num_features}'
+        feat_axis = getattr(model, 'feature_dim', None)
+        if feat_axis is None:
+            feat_axis = get_channel_dim(getattr(model, 'output_fmt', 'NCHW'))
+        output_features = getattr(model, 'out_features', None) or model.num_features
+        assert outputs.shape[feat_axis] == output_features, f'encoder output dim != {output_features}'
     else:
         assert outputs.shape[-1] == 42
     assert num_params == num_grad, 'Some parameters are missing gradients'
@@ -715,6 +717,11 @@ def test_model_backward_fx(model_name, batch_size):
         pytest.skip("Fixed input size model > limit.")
 
     model = create_model(model_name, pretrained=False, num_classes=42)
+    encoder_only = model.num_classes == 0
+    feat_axis = getattr(model, 'feature_dim', None) if encoder_only else -1
+    if feat_axis is None:
+        feat_axis = get_channel_dim(getattr(model, 'output_fmt', 'NCHW'))
+    output_features = (getattr(model, 'out_features', None) or model.num_features) if encoder_only else 42
     model.train()
     num_params = sum([x.numel() for x in model.parameters()])
     if 'GITHUB_ACTIONS' in os.environ and num_params > 100e6:
@@ -729,7 +736,7 @@ def test_model_backward_fx(model_name, batch_size):
         assert x.grad is not None, f'No gradient for {n}'
     num_grad = sum([x.grad.numel() for x in model.parameters() if x.grad is not None])
 
-    assert outputs.shape[-1] == 42
+    assert outputs.shape[feat_axis] == output_features
     assert num_params == num_grad, 'Some parameters are missing gradients'
     assert not torch.isnan(outputs).any(), 'Output included NaNs'
 
@@ -1126,3 +1133,50 @@ def test_gemma4_forward_intermediates_dict_output():
     assert torch.equal(out['patch_valid'], valid)
     assert torch.allclose(out['image_features'], final)
     assert len(out['image_intermediates']) == len(inter)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name,encoder_pool', [
+    ('gemma4_vit_167m', ''),
+    ('gemma4_vit_167m', 'soft'),
+    ('qwen3_vit_88m', ''),
+    ('qwen3_vit_88m_merge', 'merge'),
+])
+def test_vit_classifier_encoder_hooks(model_name, encoder_pool):
+    kwargs = dict(num_classes=5, embed_dim=32, depth=1, num_heads=2, encoder_pool=encoder_pool)
+    if model_name.startswith('gemma4'):
+        kwargs.update(head_dim=16, intermediate_size=64, position_embedding_size=16, pooling_kernel_size=2)
+    model = create_model(model_name, **kwargs).eval()
+    events = []
+    model.encoder.register_forward_pre_hook(lambda *args: events.append('encoder_pre'))
+    model.encoder.register_forward_hook(lambda *args: events.append('encoder_post'))
+    if encoder_pool == 'merge':
+        model.encoder.merger.fc2.register_forward_hook(lambda *args: events.append('fc2_post'))
+        model.encoder.merger.register_forward_hook(lambda *args: events.append('merger_post'))
+    with torch.no_grad():
+        output = model(torch.randn(2, 3, 64, 96))
+    expected_events = ['encoder_pre', 'fc2_post', 'merger_post', 'encoder_post'] if encoder_pool == 'merge' else [
+        'encoder_pre', 'encoder_post',
+    ]
+    assert events == expected_events
+    assert output.shape == (2, 5)
+
+
+@pytest.mark.base
+def test_qwen_init_weights_after_to_empty():
+    if not hasattr(torch.nn.Module, 'to_empty'):
+        pytest.skip('to_empty requires a newer PyTorch version')
+    model = create_model(
+        'qwen3_vit_88m_merge', device='meta', num_classes=5, embed_dim=32, depth=1, num_heads=4,
+        pos_embed_grid_size=4,
+    ).to_empty(device='cpu')
+    # Poison storage so missed resets cannot pass just because uninitialized values happen to be finite.
+    with torch.no_grad():
+        for tensor in list(model.parameters()) + list(model.buffers()):
+            if tensor.is_floating_point():
+                tensor.fill_(float('nan'))
+    model.init_weights()
+    for name, tensor in list(model.named_parameters()) + list(model.named_buffers()):
+        assert torch.isfinite(tensor).all(), name
+    torch.testing.assert_close(model.encoder.blocks[0].norm1.weight, torch.ones(32))
+    assert torch.isfinite(model(torch.randn(1, 3, 64, 64))).all()

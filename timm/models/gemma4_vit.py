@@ -1159,9 +1159,7 @@ class Gemma4VitClassifier(nn.Module):
               ``(B, num_soft_tokens, embed_dim)`` (with ``√D`` scale + optional
               ``std_bias/std_scale`` baked in by the encoder).
         """
-        if self.encoder_pool == 'soft':
-            return self.encoder(x, patch_coord=patch_coord, patch_valid=patch_valid)
-        return self.encoder.forward_features(x, patch_coord=patch_coord, patch_valid=patch_valid)
+        return self.encoder(x, patch_coord=patch_coord, patch_valid=patch_valid)
 
     def forward_head(
             self,
