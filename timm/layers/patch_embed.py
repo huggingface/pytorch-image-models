@@ -15,6 +15,7 @@ from typing import Callable, Dict, Iterable, List, Optional, Tuple, Union
 import torch
 from torch import nn as nn
 import torch.nn.functional as F
+from torch.distributed.fsdp import FSDPModule
 
 from .format import Format, nchw_to
 from .helpers import to_2tuple
@@ -135,10 +136,12 @@ class PatchEmbed(nn.Module):
             x = F.pad(x, (0, pad_w, 0, pad_h))
         x = self.proj(x)
         if self.flatten:
-            x = x.flatten(2).transpose(1, 2).contiguous()  # NCHW -> NLC
+            x = x.flatten(2).transpose(1, 2)  # NCHW -> NLC
         elif self.output_fmt != Format.NCHW:
             x = nchw_to(x, self.output_fmt)
         x = self.norm(x)
+        if isinstance(self, FSDPModule):
+            return x.clone()
         return x
 
 
@@ -182,10 +185,12 @@ class PatchEmbedWithSize(PatchEmbed):
         x = self.proj(x)
         feat_size = x.shape[-2:]
         if self.flatten:
-            x = x.flatten(2).transpose(1, 2).contiguous()  # NCHW -> NLC
+            x = x.flatten(2).transpose(1, 2)  # NCHW -> NLC
         elif self.output_fmt != Format.NCHW:
             x = nchw_to(x, self.output_fmt)
         x = self.norm(x)
+        if isinstance(self, FSDPModule):
+            return x.clone(), feat_size
         return x, feat_size
 
 

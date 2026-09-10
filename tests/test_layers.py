@@ -1,5 +1,7 @@
 import pytest
 import torch
+import torch.distributed as dist
+from torch.distributed.fsdp import fully_shard
 import torch.nn as nn
 
 import timm.layers.fast_norm as fast_norm
@@ -25,6 +27,7 @@ from timm.layers import (
 
 import importlib
 import os
+import tempfile
 
 torch_backend = os.environ.get('TORCH_BACKEND')
 if torch_backend is not None:
@@ -424,10 +427,21 @@ def test_attn2d(bias, expand_first, head_first, attn_mask):
 
 
 @pytest.mark.parametrize("pe_class", [PatchEmbed, PatchEmbedWithSize])
-def test_patchembed_return_view_tensor(pe_class):
+@pytest.mark.parametrize("device", [torch.device("cpu"), torch.device("cuda")])
+def test_patchembed_return_view_tensor(pe_class, device):
+    tmp_file = tempfile.NamedTemporaryFile(delete=True).name
+    dist.init_process_group(
+        backend=torch.distributed.get_default_backend_for_device(device),
+        init_method=f"file://{tmp_file}",
+        world_size=1,
+        rank=0,
+        device_id=device.index,
+    )
     pe = pe_class(224, 16, 3, 512)
-    x = torch.randn(1, 3, 224, 224)
+    fully_shard(pe)
+    x = torch.randn(1, 3, 224, 224, device=device)
     out = pe(x)
     if isinstance(out, tuple):
         out = out[0]
+    dist.destroy_process_group()
     assert out._base is None, f"{pe.__class__.__name__} should not return a view tensor."
