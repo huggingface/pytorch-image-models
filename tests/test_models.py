@@ -363,6 +363,7 @@ def test_model_default_cfgs(model_name, batch_size):
 
 
 @pytest.mark.cfg
+@pytest.mark.cfg_nonstd
 @pytest.mark.timeout(timeout360)
 @pytest.mark.parametrize('model_name', list_models(filter=NON_STD_FILTERS, exclude_filters=NON_STD_EXCLUDE_FILTERS, include_tags=True))
 @pytest.mark.parametrize('batch_size', [1])

@@ -18,7 +18,15 @@ jobs:
         os: [ubuntu-latest]
         python: ['3.10', '3.13']
         torch: [{base: '1.13.0', vision: '0.14.0'}, {base: '2.9.1', vision: '0.24.1'}]
-        testmarker: ['-k "not test_models"', '-m base', '-m cfg', '-m torchscript', '-m features', '-m fxforward', '-m fxbackward']
+        testmarker:
+          - '-k "not test_models"'
+          - '-m base'
+          - '-m "cfg and not cfg_nonstd"'
+          - '-m cfg_nonstd'
+          - '-m torchscript'
+          - '-m features'
+          - '-m fxforward'
+          - '-m fxbackward'
         exclude:
           - python: '3.13'
             torch: {base: '1.13.0', vision: '0.14.0'}

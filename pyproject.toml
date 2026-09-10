@@ -60,6 +60,7 @@ testpaths = ['tests']
 markers = [
     "base: marker for model tests using the basic setup",
     "cfg: marker for model tests checking the config",
+    "cfg_nonstd: marker for non-standard model config tests (also marked cfg)",
     "torchscript: marker for model tests using torchscript",
     "features: marker for model tests checking feature extraction",
     "fxforward: marker for model tests using torch fx (only forward)",
