@@ -345,6 +345,7 @@ def build_rotary_pos_embed(
         ref_feat_shape: Optional[List[int]] = None,
         grid_offset: float = 0.,
         grid_indexing: str = 'ij',
+        rotate_half: bool = False,
         device: Optional[torch.device] = None,
         dtype: torch.dtype = torch.float32,
 ):
@@ -361,6 +362,8 @@ def build_rotary_pos_embed(
         ref_feat_shape: Reference feature shape for resize / fine-tune.
         grid_offset: Constant offset to add to grid for non-pixel freq.
         grid_indexing: Indexing mode for meshgrid ('ij' or 'xy')
+        rotate_half: Emit the 'half' layout ([f0, f1, .., f0, f1, ..], for apply_rot_embed(half=True)) instead
+            of the default interleaved layout ([f0, f0, f1, f1, ..], for apply_rot_embed(half=False)).
         device: Output device.
         dtype: Output dtype.
 
@@ -385,8 +388,14 @@ def build_rotary_pos_embed(
     # this would be much nicer as a .numel() call to torch.Size(), but torchscript sucks
     for x in feat_shape:
         num_spatial_dim *= x
-    sin_emb = sin_emb.reshape(num_spatial_dim, -1).repeat_interleave(2, -1)
-    cos_emb = cos_emb.reshape(num_spatial_dim, -1).repeat_interleave(2, -1)
+    sin_emb = sin_emb.reshape(num_spatial_dim, -1)
+    cos_emb = cos_emb.reshape(num_spatial_dim, -1)
+    if rotate_half:
+        sin_emb = torch.cat([sin_emb, sin_emb], dim=-1)
+        cos_emb = torch.cat([cos_emb, cos_emb], dim=-1)
+    else:
+        sin_emb = sin_emb.repeat_interleave(2, -1)
+        cos_emb = cos_emb.repeat_interleave(2, -1)
     return sin_emb, cos_emb
 
 
@@ -550,6 +559,7 @@ class RotaryEmbeddingCat(nn.Module):
             ref_feat_shape: Optional[List[int]] = None,
             grid_offset: float = 0.,
             grid_indexing: str = 'ij',
+            rotate_half: bool = False,
             device=None,
             dtype=None,
     ):
@@ -563,6 +573,8 @@ class RotaryEmbeddingCat(nn.Module):
         self.ref_feat_shape = ref_feat_shape
         self.grid_offset = grid_offset
         self.grid_indexing = grid_indexing
+        # half layout ([f0..fn, f0..fn]) for apply_rot_embed_cat(half=True), else interleaved ([f0, f0, f1, f1, ..])
+        self.rotate_half = rotate_half
 
         # Track which mode we're in
         self._use_cached_embed = feat_shape is not None
@@ -622,6 +634,7 @@ class RotaryEmbeddingCat(nn.Module):
             ref_feat_shape=self.ref_feat_shape,
             grid_offset=self.grid_offset,
             grid_indexing=self.grid_indexing,
+            rotate_half=self.rotate_half,
             device=device,
             dtype=dtype,
         )
@@ -652,6 +665,7 @@ class RotaryEmbeddingCat(nn.Module):
                 ref_feat_shape=self.ref_feat_shape,
                 grid_offset=self.grid_offset,
                 grid_indexing=self.grid_indexing,
+                rotate_half=self.rotate_half,
             )
             return torch.cat(embeds, -1)
         elif self.pos_embed is not None:
@@ -696,6 +710,7 @@ class RotaryEmbeddingCat(nn.Module):
             ref_feat_shape=self.ref_feat_shape,
             grid_offset=self.grid_offset,
             grid_indexing=self.grid_indexing,
+            rotate_half=self.rotate_half,
         )
 
         # sin_emb and cos_emb are (max_h * max_w, dim//2)
@@ -715,7 +730,7 @@ class RotaryEmbeddingCat(nn.Module):
     def forward(self, x):
         # assuming channel-first tensor where spatial dim are >= 2
         pos_embed = self.get_embed(x.shape[2:])
-        return apply_rot_embed_cat(x, pos_embed)
+        return apply_rot_embed_cat(x, pos_embed, half=self.rotate_half)
 
 
 def init_random_2d_freqs(
@@ -1338,7 +1353,6 @@ def create_rope_embed(
         kwargs.pop('rotate_half', None)  # doesn't support
         return RotaryEmbedding(dim=dim // num_heads, **kwargs)
     elif rope_type == 'cat':
-        kwargs.pop('rotate_half', None)  # doesn't support
         return RotaryEmbeddingCat(dim=dim // num_heads, **kwargs)
     elif rope_type == 'mixed':
         # Mixed requires depth parameter, generates differing embeddings per layer and head
