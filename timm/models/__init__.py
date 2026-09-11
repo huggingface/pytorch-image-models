@@ -19,6 +19,7 @@ from .edgenext import *
 from .efficientformer import *
 from .efficientformer_v2 import *
 from .efficientnet import *
+from .efficientvim import *
 from .efficientvit_mit import *
 from .efficientvit_msra import *
 from .eva import *
@@ -34,6 +35,7 @@ from .hgnet import *
 from .hiera import *
 from .hieradet_sam2 import *
 from .hrnet import *
+from .iformer import *
 from .inception_next import *
 from .inception_resnet_v2 import *
 from .inception_v3 import *
