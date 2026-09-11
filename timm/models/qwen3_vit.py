@@ -519,7 +519,7 @@ class Qwen3VitClassifier(nn.Module):
         The merger, when enabled, applies only to the final features, not the intermediate maps.
         ``output_dict`` returns 'image_intermediates' and, unless ``intermediates_only``, 'image_features'.
         """
-        x, intermediates = self.encoder.forward_intermediates(
+        output = self.encoder.forward_intermediates(
             x,
             indices=indices,
             return_prefix_tokens=return_prefix_tokens,
@@ -528,6 +528,8 @@ class Qwen3VitClassifier(nn.Module):
             output_fmt=output_fmt,
             intermediates_only=False,
         )
+        assert isinstance(output, tuple)
+        x, intermediates = output
         if intermediates_only:
             return {'image_intermediates': intermediates} if output_dict else intermediates
         if self.encoder.merger is not None:
@@ -540,9 +542,20 @@ class Qwen3VitClassifier(nn.Module):
             prune_norm: bool = False,
             prune_head: bool = True,
     ) -> List[int]:
-        """Prune encoder blocks and the classifier; ``prune_norm`` has no backbone norm to remove."""
-        take_indices = self.encoder.prune_intermediate_layers(indices, prune_norm=prune_norm, prune_head=False)
+        """Prune encoder blocks and optionally the projector and classifier."""
+        take_indices = self.encoder.prune_intermediate_layers(indices, prune_norm=prune_norm, prune_head=prune_head)
         if prune_head:
+            self.encoder_pool = ''
+            self.output_fmt = 'NHWC'
+            self.num_features = self.head_hidden_size = self.encoder.num_features
+            if isinstance(self.norm, LayerNorm):
+                self.norm = LayerNorm(
+                    self.num_features,
+                    eps=self.norm.eps,
+                    affine=False,
+                    **get_device_dtype(self),
+                )
+                self.norm.train(self.training)
             self.reset_classifier(0)
         return take_indices
 
