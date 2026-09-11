@@ -128,11 +128,11 @@ def generate_regnet(
     # TODO dWr scaling?
     # depth = int(depth * (scale ** 0.1))
     # width_scale = scale ** 0.4  # dWr scale, exp 0.8 / 2, applied to both group and layer widths
-    widths_cont = torch.arange(depth, dtype=torch.float32) * width_slope + width_initial
+    widths_cont = torch.arange(depth, device='cpu', dtype=torch.float32) * width_slope + width_initial
     width_exps = torch.round(torch.log(widths_cont / width_initial) / math.log(width_mult))
     widths = torch.round((width_initial * torch.pow(width_mult, width_exps)) / quant) * quant
     num_stages, max_stage = len(torch.unique(widths)), int(width_exps.max().item()) + 1
-    groups = torch.tensor([group_size for _ in range(num_stages)], dtype=torch.int32)
+    groups = torch.tensor([group_size for _ in range(num_stages)], device='cpu', dtype=torch.int32)
     return widths.int().tolist(), num_stages, groups.tolist()
 
 
@@ -668,7 +668,7 @@ class RegNet(nn.Module):
         widths, num_stages, stage_gs = generate_regnet(cfg.wa, cfg.w0, cfg.wm, cfg.depth, cfg.group_size)
 
         # Convert to per stage format
-        stage_widths, stage_depths = torch.unique(torch.tensor(widths), return_counts=True)
+        stage_widths, stage_depths = torch.unique(torch.tensor(widths, device='cpu'), return_counts=True)
         stage_widths, stage_depths = stage_widths.tolist(), stage_depths.tolist()
         stage_br = [cfg.bottle_ratio for _ in range(num_stages)]
         stage_strides = []

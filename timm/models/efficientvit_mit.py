@@ -379,9 +379,9 @@ class LiteMLA(nn.Module):
         # lightweight global attention
         q = self.kernel_func(q)
         k = self.kernel_func(k)
-        v = F.pad(v, (0, 1), mode="constant", value=1.)
+        v = F.pad(v, (0, 1), mode="constant", value=1.0)
 
-        if not torch.jit.is_scripting():
+        if not torch.jit.is_scripting() and v.device.type != 'meta':
             with torch.autocast(device_type=v.device.type, enabled=False):
                 out = self._attn(q, k, v)
         else:

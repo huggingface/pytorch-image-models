@@ -16,8 +16,10 @@ import torch
 import platform
 import os
 import fnmatch
+from contextlib import nullcontext
 
 _IS_MAC = platform.system() == 'Darwin'
+_HAS_DEVICE_CONTEXT = hasattr(torch.device, '__enter__')
 
 try:
     from torchvision.models.feature_extraction import create_feature_extractor, get_graph_node_names, NodePathTracer
@@ -281,16 +283,26 @@ def _assert_reset_classifier_preserves_parent_device_dtype(model):
     assert all(module.training == expected_training for module in model.modules())
 
 
+@pytest.fixture
+def cfg_device():
+    # Config tests only inspect structure and shapes; retain real tensors on older torch.
+    return 'meta' if _HAS_DEVICE_CONTEXT else torch_device
+
+
 @pytest.mark.cfg
 @pytest.mark.timeout(timeout360)
-@pytest.mark.parametrize('model_name', list_models(
-    exclude_filters=EXCLUDE_FILTERS + NON_STD_FILTERS, include_tags=True))
+@pytest.mark.parametrize(
+    'model_name',
+    list_models(
+        exclude_filters=EXCLUDE_FILTERS + NON_STD_FILTERS,
+        include_tags=True,
+    ),
+)
 @pytest.mark.parametrize('batch_size', [1])
-def test_model_default_cfgs(model_name, batch_size):
-    """Run a single forward pass with each model"""
-    model = create_model(model_name, pretrained=False)
-    model.eval()
-    model.to(torch_device)
+def test_model_default_cfgs(model_name, batch_size, cfg_device):
+    """Check config metadata and feature/head shapes without allocating weights on modern torch."""
+    with torch.device(cfg_device) if _HAS_DEVICE_CONTEXT else nullcontext():
+        model = create_model(model_name, pretrained=False, device=cfg_device, dtype=torch.float32).eval()
     assert getattr(model, 'num_classes') >= 0
     assert getattr(model, 'num_features') > 0
     assert getattr(model, 'head_hidden_size') > 0
@@ -308,7 +320,7 @@ def test_model_default_cfgs(model_name, batch_size):
             not any([fnmatch.fnmatch(model_name, x) for x in EXCLUDE_FILTERS]):
         # output sizes only checked if default res <= 448 * 448 to keep resource down
         input_size = tuple([min(x, MAX_FWD_OUT_SIZE) for x in input_size])
-        input_tensor = torch.randn((batch_size, *input_size), device=torch_device)
+        input_tensor = torch.randn((batch_size, *input_size), device=cfg_device)
 
         # test forward_features (always unpooled) & forward_head w/ pre_logits
         outputs = model.forward_features(input_tensor)
@@ -321,7 +333,6 @@ def test_model_default_cfgs(model_name, batch_size):
         # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
         model.reset_classifier(0)
         assert model.num_classes == 0, f'Expected num_classes to be 0 after reset_classifier(0), but got {model.num_classes}'
-        model.to(torch_device)
         outputs = model.forward(input_tensor)
         assert len(outputs.shape) == 2
         assert outputs.shape[1] == model.head_hidden_size, f'feature dim w/ removed classifier {outputs.shape[1]} != model.head_hidden_size {model.head_hidden_size}'
@@ -330,15 +341,16 @@ def test_model_default_cfgs(model_name, batch_size):
         # test model forward after removing pooling and classifier
         if not isinstance(model, EARLY_POOL_MODELS):
             model.reset_classifier(0, '')  # reset classifier and disable global pooling
-            model.to(torch_device)
             outputs = model.forward(input_tensor)
             assert len(outputs.shape) == 4
             assert outputs.shape[spatial_axis[0]] == pool_size[0] and outputs.shape[spatial_axis[1]] == pool_size[1]
 
         # test classifier + global pool deletion via __init__
         if 'pruned' not in model_name and not isinstance(model, EARLY_POOL_MODELS):
-            model = create_model(model_name, pretrained=False, num_classes=0, global_pool='').eval()
-            model.to(torch_device)
+            # Explicit factory kwargs must also work without the device context.
+            model = create_model(
+                model_name, pretrained=False, num_classes=0, global_pool='', device=cfg_device, dtype=torch.float32,
+            ).eval()
             outputs = model.forward(input_tensor)
             assert len(outputs.shape) == 4
             assert outputs.shape[spatial_axis[0]] == pool_size[0] and outputs.shape[spatial_axis[1]] == pool_size[1]
@@ -367,11 +379,10 @@ def test_model_default_cfgs(model_name, batch_size):
 @pytest.mark.timeout(timeout360)
 @pytest.mark.parametrize('model_name', list_models(filter=NON_STD_FILTERS, exclude_filters=NON_STD_EXCLUDE_FILTERS, include_tags=True))
 @pytest.mark.parametrize('batch_size', [1])
-def test_model_default_cfgs_non_std(model_name, batch_size):
-    """Run a single forward pass with each model"""
-    model = create_model(model_name, pretrained=False)
-    model.eval()
-    model.to(torch_device)
+def test_model_default_cfgs_non_std(model_name, batch_size, cfg_device):
+    """Check non-standard model config metadata and feature/head shapes."""
+    with torch.device(cfg_device) if _HAS_DEVICE_CONTEXT else nullcontext():
+        model = create_model(model_name, pretrained=False, device=cfg_device, dtype=torch.float32).eval()
     assert getattr(model, 'num_classes') >= 0
     assert getattr(model, 'num_features') > 0
     assert getattr(model, 'head_hidden_size') > 0
@@ -383,7 +394,7 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
         _assert_reset_classifier_preserves_parent_device_dtype(model)
         pytest.skip("Fixed input size model > limit.")
 
-    input_tensor = torch.randn((batch_size, *input_size), device=torch_device)
+    input_tensor = torch.randn((batch_size, *input_size), device=cfg_device)
     feat_dim = getattr(model, 'feature_dim', None)
 
     outputs = model.forward_features(input_tensor)
@@ -400,7 +411,6 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
     # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
     model.reset_classifier(0)
     assert model.num_classes == 0, f'Expected num_classes to be 0 after reset_classifier(0), but got {model.num_classes}'
-    model.to(torch_device)
     outputs = model.forward(input_tensor)
     if isinstance(outputs,  (tuple, list)):
         outputs = outputs[0]
@@ -409,8 +419,10 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
     assert outputs.shape[feat_dim] == model.head_hidden_size, 'pooled num_features != config'
     assert outputs.shape == outputs_pre.shape
 
-    model = create_model(model_name, pretrained=False, num_classes=0).eval()
-    model.to(torch_device)
+    # Explicit factory kwargs must also work without the device context.
+    model = create_model(
+        model_name, pretrained=False, num_classes=0, device=cfg_device, dtype=torch.float32,
+    ).eval()
     outputs = model.forward(input_tensor)
     if isinstance(outputs, (tuple, list)):
         outputs = outputs[0]
