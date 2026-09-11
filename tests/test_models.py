@@ -1142,23 +1142,29 @@ def test_gemma4_forward_intermediates_dict_output():
     ('gemma4_vit_167m', 'soft'),
     ('qwen3_vit_88m', ''),
     ('qwen3_vit_88m_merge', 'merge'),
+    ('deepseek_vit_412m', ''),
+    ('deepseek_vit_412m_align', 'align'),
 ])
 def test_vit_classifier_encoder_hooks(model_name, encoder_pool):
     kwargs = dict(num_classes=5, embed_dim=32, depth=1, num_heads=2, encoder_pool=encoder_pool)
     if model_name.startswith('gemma4'):
         kwargs.update(head_dim=16, intermediate_size=64, position_embedding_size=16, pooling_kernel_size=2)
+    elif model_name.startswith('deepseek'):
+        kwargs.update(patch_size=8, out_features=48)
     model = create_model(model_name, **kwargs).eval()
     events = []
     model.encoder.register_forward_pre_hook(lambda *args: events.append('encoder_pre'))
     model.encoder.register_forward_hook(lambda *args: events.append('encoder_post'))
-    if encoder_pool == 'merge':
-        model.encoder.merger.fc2.register_forward_hook(lambda *args: events.append('fc2_post'))
-        model.encoder.merger.register_forward_hook(lambda *args: events.append('merger_post'))
+    if encoder_pool in ('merge', 'align'):
+        projector = model.encoder.merger if encoder_pool == 'merge' else model.encoder.aligner
+        projector.fc2.register_forward_hook(lambda *args: events.append('fc2_post'))
+        projector.register_forward_hook(lambda *args: events.append('projector_post'))
     with torch.no_grad():
         output = model(torch.randn(2, 3, 64, 96))
-    expected_events = ['encoder_pre', 'fc2_post', 'merger_post', 'encoder_post'] if encoder_pool == 'merge' else [
-        'encoder_pre', 'encoder_post',
-    ]
+    if encoder_pool in ('merge', 'align'):
+        expected_events = ['encoder_pre', 'fc2_post', 'projector_post', 'encoder_post']
+    else:
+        expected_events = ['encoder_pre', 'encoder_post']
     assert events == expected_events
     assert output.shape == (2, 5)
 
@@ -1166,6 +1172,7 @@ def test_vit_classifier_encoder_hooks(model_name, encoder_pool):
 @pytest.mark.base
 @pytest.mark.parametrize('model_name, kwargs', [
     ('qwen3_vit_88m_merge', dict(embed_dim=32, depth=1, num_heads=4, pos_embed_grid_size=4)),
+    ('deepseek_vit_412m_align', dict(embed_dim=32, depth=1, num_heads=4, patch_size=8, out_features=48)),
     ('iformer_t', dict(dims=(16, 24, 32, 48), depths=(1, 1, 3, 3), attn_groups=(0, 0, 1, 1),
                        layer_scale_init_value=1e-6)),
     ('efficientvim_m1_dist', dict(embed_dim=(16, 24, 32), depths=(1, 1, 1), state_dim=(4, 4, 4))),
@@ -1189,6 +1196,86 @@ def test_model_init_weights_after_to_empty(model_name, kwargs):
     if model_name.startswith('qwen'):
         torch.testing.assert_close(model.encoder.blocks[0].norm1.weight, torch.ones(32, dtype=torch.float64))
     assert torch.isfinite(model(torch.randn(1, 3, 64, 64, dtype=torch.float64))).all()
+
+
+_VIT_ENCODER_CASES = [
+    (
+        'gemma4_vit_167m',
+        'soft',
+        'pooler.',
+        dict(
+            head_dim=8,
+            intermediate_size=64,
+            position_embedding_size=16,
+            pooling_kernel_size=2,
+        ),
+    ),
+    ('qwen3_vit_88m', 'merge', 'merger.', dict(out_features=48, pos_embed_grid_size=4)),
+    ('deepseek_vit_412m', 'align', 'aligner.', dict(out_features=48)),
+]
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name, pool, pool_prefix, model_kwargs', _VIT_ENCODER_CASES)
+@pytest.mark.parametrize('use_pool', [False, True])
+def test_vit_classifier_checkpoint(model_name, pool, pool_prefix, model_kwargs, use_pool):
+    kwargs = dict(embed_dim=32, depth=2, num_heads=4, patch_size=8, **model_kwargs)
+    encoder = create_model(model_name + '_enc', global_pool=pool, **kwargs)
+    model = create_model(model_name, num_classes=5, encoder_pool=pool if use_pool else '', **kwargs)
+    filter_fn = importlib.import_module(type(model).__module__).checkpoint_filter_fn_classifier
+    # Different values, including norms, ensure missing loads cannot match default initialization.
+    with torch.no_grad():
+        for parameter in encoder.parameters():
+            parameter.uniform_(-0.5, 0.5)
+    encoder_state = encoder.state_dict()
+    state = filter_fn(encoder_state, model)
+    result = model.load_state_dict(state, strict=False)
+    assert set(result.missing_keys) == {'head.weight', 'head.bias'}
+    assert not result.unexpected_keys
+    expected = {k: v for k, v in encoder_state.items() if use_pool or not k.startswith(pool_prefix)}
+    torch.testing.assert_close(model.encoder.state_dict(), expected)
+    # Native classifier checkpoints retain encoder parameters and their separately named head.
+    torch.testing.assert_close(filter_fn(model.state_dict(), model), model.state_dict())
+    if model_name.startswith('deepseek'):
+        # DeepSeek's bare norm/head belong to the LLM when a vision namespace is present.
+        source = {k if k.startswith(pool_prefix) else f'vision.{k}': v for k, v in encoder_state.items()}
+        source.update({'norm.weight': torch.ones(64), 'head.weight': torch.ones(64, 64)})
+        state = filter_fn(source, model)
+        result = model.load_state_dict(state, strict=False)
+        assert set(result.missing_keys) == {'head.weight', 'head.bias'}
+        assert not result.unexpected_keys
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name, pool, pool_prefix, model_kwargs', _VIT_ENCODER_CASES)
+def test_vit_classifier_pruned_features(model_name, pool, pool_prefix, model_kwargs):
+    from timm.models._features import FeatureGetterNet
+
+    model = create_model(
+        model_name,
+        embed_dim=32,
+        depth=2,
+        num_heads=4,
+        patch_size=8,
+        num_classes=5,
+        encoder_pool=pool,
+        **model_kwargs,
+    ).eval()
+    x = torch.randn(2, 3, 64, 96)
+    with torch.no_grad():
+        expected = model.forward_intermediates(x, indices=[0], norm=True, intermediates_only=True)
+    getter = FeatureGetterNet(model, out_indices=[0], norm=True)
+    torch.testing.assert_close(getter(x), expected)
+    assert not any(n.startswith(pool_prefix) for n, _ in model.encoder.named_parameters())
+    assert len(model.encoder.blocks) == len(getter.feature_info.channels()) == 1
+    sum(t.square().mean() for t in getter(x)).backward()
+    for name, parameter in getter.named_parameters():
+        if parameter.requires_grad:
+            assert parameter.grad is not None, f'No gradient for {name}'
+    if not any(fnmatch.fnmatch(model_name, pattern) for pattern in EXCLUDE_JIT_FILTERS):
+        torch.testing.assert_close(torch.jit.script(getter)(x), expected)
+    model.reset_classifier(5)
+    assert model(x).shape == (2, 5)
 
 
 @pytest.mark.base

@@ -7,6 +7,7 @@ A plain pre-norm ViT with RMSNorm, fused QKV with bias, a bias-free SwiGLU MLP a
 there is no learned position embedding, so any patch grid works without resampling. Patches are
 embedded by a linear projection over flattened `14 x 14` pixel patches (loaded here as the
 equivalent Conv2d) and the encoder ends with an RMSNorm over the patch tokens.
+Set `dynamic_img_pad=True` to zero-pad arbitrary image sizes to the patch grid on the bottom/right.
 
 Classifier variants wrap the encoder with average pooling, normalization and a linear head. The
 separate `_enc` variants preserve the native VLM projector (the DeepSeek 'aligner'), which
@@ -67,9 +68,9 @@ class DeepseekVitBlock(nn.Module):
             dim: int,
             num_heads: int,
             mlp_ratio: float = 2.75,
-            proj_drop: float = 0.,
-            attn_drop: float = 0.,
-            drop_path: float = 0.,
+            proj_drop: float = 0.0,
+            attn_drop: float = 0.0,
+            drop_path: float = 0.0,
             norm_layer: Callable = RmsNormFp32,
             device=None,
             dtype=None,
@@ -89,7 +90,7 @@ class DeepseekVitBlock(nn.Module):
             proj_drop=proj_drop,
             **dd,
         )
-        self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.drop_path1 = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
         self.norm2 = norm_layer(dim, **dd)
         # packed SwiGLU: one fc1 emitting [gate, up], matching the reference `w1(x).chunk(2, -1)`
@@ -102,7 +103,7 @@ class DeepseekVitBlock(nn.Module):
             drop=proj_drop,
             **dd,
         )
-        self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.drop_path2 = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
     def forward(self, x: torch.Tensor, rope: Optional[torch.Tensor] = None) -> torch.Tensor:
         x = x + self.drop_path1(self.attn(self.norm1(x), rope=rope))
@@ -116,14 +117,9 @@ class DeepseekVitAligner(nn.Module):
     `out_features` is the source LLM hidden size. `pre_logits` returns the activated first projection,
     before the final one.
 
-    Two details are load-bearing and differ from the more common VLM patch mergers:
-
-    * The unshuffle is channel-major, `(C, kh, kw)` -- the reference builds it with `F.unfold`, whose
-      output channel order is exactly that. Merging as `(kh, kw, C)` instead (the Qwen/Gemma layout)
-      permutes `fc1`'s input while every shape still matches, so the failure is silent: no load error,
-      no exception, just a wrong projection.
-    * A patch grid that is not a multiple of `r` is zero-padded on the bottom/right rather than
-      rejected, so the encoder accepts any input size.
+    The unshuffle uses channel-major `(C, kh, kw)` order, matching the reference's `F.unfold`.
+    Qwen/Gemma's `(kh, kw, C)` order would permute the pretrained projection's inputs.
+    Patch grids are zero-padded on the bottom/right to a multiple of `r`.
     """
 
     def __init__(
@@ -138,8 +134,9 @@ class DeepseekVitAligner(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         super().__init__()
         assert out_features > 0, 'the DeepSeek aligner projects to the source LLM width, pass out_features'
+        assert downsample_ratio > 0
         self.downsample_ratio = downsample_ratio
-        self.hidden_size = dim * downsample_ratio ** 2
+        self.hidden_size = dim * downsample_ratio**2
         self.out_features = out_features
         self.fc1 = nn.Linear(self.hidden_size, out_features, **dd)
         self.act = act_layer()
@@ -188,18 +185,19 @@ class DeepseekVitEncoder(nn.Module):
             num_heads: int = 16,
             mlp_ratio: float = 2816 / 1024,
             downsample_ratio: int = 3,
-            rope_temperature: float = 10000.,
+            rope_temperature: float = 10000.0,
             norm_eps: float = 1e-6,
-            proj_drop_rate: float = 0.,
-            attn_drop_rate: float = 0.,
-            drop_path_rate: float = 0.,
+            proj_drop_rate: float = 0.0,
+            attn_drop_rate: float = 0.0,
+            drop_path_rate: float = 0.0,
+            dynamic_img_pad: bool = False,
             device=None,
             dtype=None,
     ) -> None:
         """
         Args:
-            img_size: Nominal input size, only used for the feature-info reduction / default grid. Any
-                input size divisible by `patch_size` works (RoPE only, and the projector pads).
+            img_size: Nominal input size, used for the patch embedding's default grid. Input sizes
+                must be divisible by `patch_size` unless `dynamic_img_pad` is enabled.
             patch_size: Patch size.
             in_chans: Number of input channels.
             out_features: Output width of the VLM projector (source LLM hidden size). Required when
@@ -215,6 +213,7 @@ class DeepseekVitEncoder(nn.Module):
             proj_drop_rate: Dropout on attention / MLP projections.
             attn_drop_rate: Attention dropout.
             drop_path_rate: Stochastic depth rate.
+            dynamic_img_pad: Zero-pad the bottom/right image edges to a multiple of the patch size.
         """
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
@@ -231,6 +230,7 @@ class DeepseekVitEncoder(nn.Module):
 
         norm_layer = partial(RmsNormFp32, eps=norm_eps)
         head_dim = embed_dim // num_heads
+        assert head_dim % 4 == 0, 'Axial 2D RoPE requires a head dimension divisible by four.'
 
         self.patch_embed = PatchEmbed(
             img_size=img_size,
@@ -239,10 +239,11 @@ class DeepseekVitEncoder(nn.Module):
             embed_dim=embed_dim,
             bias=True,
             strict_img_size=False,
+            dynamic_img_pad=dynamic_img_pad,
             output_fmt='NHWC',
             **dd,
         )
-        r = self.patch_embed.feat_ratio() if hasattr(self.patch_embed, 'feat_ratio') else patch_size
+        r = self.patch_embed.feat_ratio()
         # Axial 2D RoPE on integer patch coordinates, head_dim // 4 frequencies per axis laid out as
         # [h-block, w-block] and tiled for the 'half' rotation -- the DeepSeek vision RoPE layout.
         self.rope = RotaryEmbeddingCat(
@@ -383,6 +384,7 @@ class DeepseekVitEncoder(nn.Module):
         """Prune blocks, the final norm and/or the native projector for intermediate feature extraction."""
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
         self.blocks = self.blocks[:max_index + 1]  # truncate blocks
+        self.feature_info = self.feature_info[:max_index + 1]
         if prune_norm:
             self.norm = nn.Identity()
         if prune_head:
@@ -420,6 +422,7 @@ class DeepseekVitClassifier(nn.Module):
 
     `encoder_pool='align'` retains the native VLM projector before classification pooling.
     `num_classes` controls the classifier independently of `out_features`, the projector's output width.
+    `dynamic_img_pad=True` enables image padding to accept sizes not divisible by the patch size.
     """
 
     output_fmt: str = 'NHWC'
@@ -438,13 +441,14 @@ class DeepseekVitClassifier(nn.Module):
             num_heads: int = 16,
             mlp_ratio: float = 2816 / 1024,
             downsample_ratio: int = 3,
-            rope_temperature: float = 10000.,
+            rope_temperature: float = 10000.0,
             norm_eps: float = 1e-6,
             final_norm: bool = True,
-            drop_rate: float = 0.,
-            proj_drop_rate: float = 0.,
-            attn_drop_rate: float = 0.,
-            drop_path_rate: float = 0.,
+            drop_rate: float = 0.0,
+            proj_drop_rate: float = 0.0,
+            attn_drop_rate: float = 0.0,
+            drop_path_rate: float = 0.0,
+            dynamic_img_pad: bool = False,
             device=None,
             dtype=None,
     ) -> None:
@@ -471,6 +475,7 @@ class DeepseekVitClassifier(nn.Module):
             proj_drop_rate=proj_drop_rate,
             attn_drop_rate=attn_drop_rate,
             drop_path_rate=drop_path_rate,
+            dynamic_img_pad=dynamic_img_pad,
             **dd,
         )
         self.embed_dim = embed_dim
@@ -523,7 +528,7 @@ class DeepseekVitClassifier(nn.Module):
         self.head.train(self.training)
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
-        """Pre-classifier features: raw NHWC patches, or projected NLC tokens when encoder_pool='align'."""
+        """Normalized NHWC patches, or projected NLC tokens when encoder_pool='align'."""
         return self.encoder(x)
 
     def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
@@ -554,7 +559,7 @@ class DeepseekVitClassifier(nn.Module):
         applies only to the final features, not the intermediate maps. ``output_dict`` returns
         'image_intermediates' and, unless ``intermediates_only``, 'image_features'.
         """
-        x, intermediates = self.encoder.forward_intermediates(
+        output = self.encoder.forward_intermediates(
             x,
             indices=indices,
             return_prefix_tokens=return_prefix_tokens,
@@ -563,6 +568,8 @@ class DeepseekVitClassifier(nn.Module):
             output_fmt=output_fmt,
             intermediates_only=False,
         )
+        assert isinstance(output, tuple)
+        x, intermediates = output
         if intermediates_only:
             return {'image_intermediates': intermediates} if output_dict else intermediates
         if self.encoder.aligner is not None:
@@ -575,9 +582,21 @@ class DeepseekVitClassifier(nn.Module):
             prune_norm: bool = False,
             prune_head: bool = True,
     ) -> List[int]:
-        """Prune encoder blocks and the classifier."""
-        take_indices = self.encoder.prune_intermediate_layers(indices, prune_norm=prune_norm, prune_head=False)
+        """Prune encoder blocks and optionally the projector and classifier."""
+        take_indices = self.encoder.prune_intermediate_layers(indices, prune_norm=prune_norm, prune_head=prune_head)
+        self.feature_info = [dict(info, module=f'encoder.{info["module"]}') for info in self.encoder.feature_info]
         if prune_head:
+            self.encoder_pool = ''
+            self.output_fmt = 'NHWC'
+            self.num_features = self.head_hidden_size = self.encoder.num_features
+            if isinstance(self.norm, RmsNormFp32):
+                self.norm = RmsNormFp32(
+                    self.num_features,
+                    eps=self.norm.eps,
+                    affine=False,
+                    **get_device_dtype(self),
+                )
+                self.norm.train(self.training)
             self.reset_classifier(0)
         return take_indices
 
@@ -600,10 +619,10 @@ def checkpoint_filter_fn_encoder(
     out_dict = {}
     for k, v in state_dict.items():
         if k.startswith('encoder.'):  # timm classifier checkpoint
-            k = k[len('encoder.'):]
+            k = k.replace('encoder.', '', 1)
         elif from_source:
             if k.startswith('vision.'):
-                k = k[len('vision.'):]
+                k = k.replace('vision.', '', 1)
             elif not k.startswith('aligner.'):
                 continue  # LLM tensors, incl. the image_start/end/newline span embeddings
         elif not k.startswith(('patch_embed.', 'blocks.', 'norm.', 'aligner.')):
@@ -612,7 +631,8 @@ def checkpoint_filter_fn_encoder(
         if k.startswith('aligner.'):
             if model.aligner is None:
                 continue
-            out_dict['aligner.' + k[len('aligner.'):].replace('w1.', 'fc1.').replace('w2.', 'fc2.')] = v
+            k = k.replace('aligner.w1.', 'aligner.fc1.', 1).replace('aligner.w2.', 'aligner.fc2.', 1)
+            out_dict[k] = v
             continue
         if k == 'patch_embed.proj.weight' and v.ndim == 2:
             # the reference embeds patches with a Linear over the flattened (C, pH, pW) patch; that is
@@ -630,11 +650,12 @@ def checkpoint_filter_fn_classifier(
 ) -> Dict[str, torch.Tensor]:
     """Load DeepSeek vision / timm encoder weights, or round-trip a fine-tuned classifier checkpoint.
 
-    Bare `norm.` / `head.` keys are the classifier's own only when this is not a source checkpoint --
-    there they are the LLM's final norm and output head (see `checkpoint_filter_fn_encoder`).
+    Bare `norm.` / `head.` keys belong to the classifier only when the checkpoint has an `encoder.`
+    namespace. Otherwise `norm.` is the native encoder norm, or the LLM norm in a source checkpoint.
     """
     from_source = any(k.startswith('vision.') for k in state_dict)
-    local = {} if from_source else {k: v for k, v in state_dict.items() if k.startswith(('norm.', 'head.'))}
+    from_classifier = not from_source and any(k.startswith('encoder.') for k in state_dict)
+    local = {k: v for k, v in state_dict.items() if k.startswith(('norm.', 'head.'))} if from_classifier else {}
     encoder = checkpoint_filter_fn_encoder({k: v for k, v in state_dict.items() if k not in local}, model.encoder)
     return {**{f'encoder.{k}': v for k, v in encoder.items()}, **local}
 
@@ -701,7 +722,7 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
         'pool_size': None,
         'fixed_input_size': False,
         'crop_pct': 1.0,
-        'crop_mode': 'squash',
+        'crop_mode': 'border',
         'interpolation': 'bicubic',
         'mean': (0.5, 0.5, 0.5),
         'std': (0.5, 0.5, 0.5),
@@ -734,7 +755,8 @@ _SOURCE_CFGS = {
 
 default_cfgs = generate_default_cfgs({
     f'{name.split(".", 1)[0]}{suffix}.{name.split(".", 1)[1]}': dict(
-        ((k, v) for k, v in cfg.items() if k != 'out_features'),
+        ((k, v) for k, v in cfg.items() if k not in ('out_features', 'hf_hub_filename')),
+        hf_hub_id='timm/',
         first_conv='patch_embed.proj' if suffix == '_enc' else 'encoder.patch_embed.proj',
         classifier=None if suffix == '_enc' else 'head',
     )
@@ -754,7 +776,10 @@ def deepseek_vit_412m_align(pretrained: bool = False, **kwargs) -> DeepseekVitCl
     """DeepSeek vision classifier retaining the native aligner and source LLM projection."""
     model_args = dict(encoder_pool='align')
     return _create_deepseek_vit_classifier(
-        'deepseek_vit_412m_align', pretrained=pretrained, **dict(model_args, **kwargs))
+        'deepseek_vit_412m_align',
+        pretrained=pretrained,
+        **dict(model_args, **kwargs),
+    )
 
 
 @register_model
