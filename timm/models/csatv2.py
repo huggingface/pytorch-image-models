@@ -20,7 +20,18 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from timm.layers import trunc_normal_, DropPath, Mlp, LayerNorm2d, Attention, NormMlpClassifierHead, LayerScale, LayerScale2d, get_device_dtype
+from timm.layers import (
+    trunc_normal_,
+    DropPath,
+    Mlp,
+    LayerNorm2d,
+    Attention,
+    NormMlpClassifierHead,
+    LayerScale,
+    LayerScale2d,
+    get_device_dtype,
+    calculate_drop_path_rates,
+)
 from timm.layers.grn import GlobalResponseNorm
 from timm.models._builder import build_model_with_cfg
 from timm.models._features import feature_take_indices
@@ -582,7 +593,7 @@ class CSATv2(nn.Module):
 
         # Build drop path rates for all blocks (0 for transformer blocks when transformer_drop_path=False)
         total_blocks = sum(depths) if transformer_drop_path else sum(d - t for d, t in zip(depths, transformer_depths))
-        dp_iter = iter(torch.linspace(0, drop_path_rate, total_blocks).tolist())
+        dp_iter = iter(calculate_drop_path_rates(drop_path_rate, total_blocks))
         dp_rates = []
         for depth, t_depth in zip(depths, transformer_depths):
             dp_rates += [next(dp_iter) for _ in range(depth - t_depth)]

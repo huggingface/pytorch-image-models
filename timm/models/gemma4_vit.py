@@ -18,7 +18,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import RmsNorm, DropPath, to_2tuple, trunc_normal_tf_, use_fused_attn, get_device_dtype
+from timm.layers import (
+    RmsNorm,
+    DropPath,
+    to_2tuple,
+    trunc_normal_tf_,
+    use_fused_attn,
+    get_device_dtype,
+    calculate_drop_path_rates,
+)
 
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
@@ -698,7 +706,7 @@ class Gemma4VitEncoder(nn.Module):
         )
 
         # Transformer blocks
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]
+        dpr = calculate_drop_path_rates(drop_path_rate, depth)
         self.blocks = nn.ModuleList([
             Gemma4Block(
                 dim=embed_dim,
