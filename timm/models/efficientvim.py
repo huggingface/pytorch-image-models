@@ -828,13 +828,13 @@ def _cfg(**kwargs: Any) -> Dict[str, Any]:
 
 default_cfgs = generate_default_cfgs({
     'efficientvim_m1.e300_in1k': _cfg(
-        hf_hub_id='remyxai/efficientvim_m1.e300_in1k',
+        hf_hub_id='timm/',
     ),
     'efficientvim_m1.e450_in1k': _cfg(
-        hf_hub_id='remyxai/efficientvim_m1.e450_in1k',
+        hf_hub_id='timm/',
     ),
     'efficientvim_m1_dist.in1k': _cfg(
-        hf_hub_id='remyxai/efficientvim_m1_dist.in1k',
+        hf_hub_id='timm/',
         classifier=(
             'heads.0',
             'heads.1',
@@ -847,13 +847,13 @@ default_cfgs = generate_default_cfgs({
         ),
     ),
     'efficientvim_m2.e300_in1k': _cfg(
-        hf_hub_id='remyxai/efficientvim_m2.e300_in1k',
+        hf_hub_id='timm/',
     ),
     'efficientvim_m2.e450_in1k': _cfg(
-        hf_hub_id='remyxai/efficientvim_m2.e450_in1k',
+        hf_hub_id='timm/',
     ),
     'efficientvim_m2_dist.in1k': _cfg(
-        hf_hub_id='remyxai/efficientvim_m2_dist.in1k',
+        hf_hub_id='timm/',
         classifier=(
             'heads.0',
             'heads.1',
@@ -866,13 +866,13 @@ default_cfgs = generate_default_cfgs({
         ),
     ),
     'efficientvim_m3.e300_in1k': _cfg(
-        hf_hub_id='remyxai/efficientvim_m3.e300_in1k',
+        hf_hub_id='timm/',
     ),
     'efficientvim_m3.e450_in1k': _cfg(
-        hf_hub_id='remyxai/efficientvim_m3.e450_in1k',
+        hf_hub_id='timm/',
     ),
     'efficientvim_m3_dist.in1k': _cfg(
-        hf_hub_id='remyxai/efficientvim_m3_dist.in1k',
+        hf_hub_id='timm/',
         classifier=(
             'heads.0',
             'heads.1',
@@ -885,15 +885,15 @@ default_cfgs = generate_default_cfgs({
         ),
     ),
     'efficientvim_m4.e300_in1k': _cfg(
-        hf_hub_id='remyxai/efficientvim_m4.e300_in1k',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256),
     ),
     'efficientvim_m4.e450_in1k': _cfg(
-        hf_hub_id='remyxai/efficientvim_m4.e450_in1k',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256),
     ),
     'efficientvim_m4_dist.in1k': _cfg(
-        hf_hub_id='remyxai/efficientvim_m4_dist.in1k',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256),
         classifier=(
             'heads.0',

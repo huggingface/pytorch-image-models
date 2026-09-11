@@ -809,30 +809,38 @@ def _cfg(url: str = "", **kwargs: Any) -> Dict[str, Any]:
 default_cfgs = generate_default_cfgs({
     "iformer_t.in1k": _cfg(
         url="https://github.com/ChuanyangZheng/iFormer/releases/download/v0.9/iFormer_t.pth",
+        hf_hub_id='timm/',
     ),
     "iformer_s.in1k": _cfg(
         url="https://github.com/ChuanyangZheng/iFormer/releases/download/v0.9/iFormer_s.pth",
+        hf_hub_id='timm/',
     ),
     "iformer_m.in1k": _cfg(
         url="https://github.com/ChuanyangZheng/iFormer/releases/download/v0.9/iFormer_m.pth",
+        hf_hub_id='timm/',
     ),
     "iformer_l.in1k": _cfg(
         url="https://github.com/ChuanyangZheng/iFormer/releases/download/v0.9/iFormer_l.pth",
+        hf_hub_id='timm/',
     ),
     "iformer_l2.untrained": _cfg(),
     "iformer_h.in1k": _cfg(
         url="https://github.com/ChuanyangZheng/iFormer/releases/download/v0.9/iFormer_h.pth",
+        hf_hub_id='timm/',
     ),
     "iformer_m_distilled.in1k": _cfg(
         url="https://github.com/ChuanyangZheng/iFormer/releases/download/v0.9/iFormer_m_distill.pth",
+        hf_hub_id='timm/',
         classifier=('head.head.l', 'head.head_dist.l'),
     ),
     "iformer_l_distilled.in1k": _cfg(
         url="https://github.com/ChuanyangZheng/iFormer/releases/download/v0.9/iFormer_l_distill.pth",
+        hf_hub_id='timm/',
         classifier=('head.head.l', 'head.head_dist.l'),
     ),
     "iformer_l2_distilled.in1k": _cfg(
         url="https://github.com/ChuanyangZheng/iFormer/releases/download/v0.9/iFormer_l2_distill.pth",
+        hf_hub_id='timm/',
         classifier=('head.head.l', 'head.head_dist.l'),
     ),
 })
