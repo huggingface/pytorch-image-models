@@ -66,7 +66,7 @@ NON_STD_FILTERS = [
     'convit_*', 'levit*', 'visformer*', 'deit*', 'xcit_*', 'crossvit_*', 'beit*', 'aimv2*', 'swiftformer_*',
     'poolformer_*', 'volo_*', 'sequencer2d_*', 'mvitv2*', 'gcvit*', 'efficientformer*', 'sam_hiera*',
     'eva_*', 'flexivit*', 'eva02*', 'samvit_*', 'efficientvit_m*', 'tiny_vit_*', 'hiera_*', 'vitamin*', 'test_vit*',
-    'gemma4_vit*', 'qwen3_vit*',
+    'gemma4_vit*', 'qwen3_vit*', 'efficientvim*',
 ]
 NUM_NON_STD = len(NON_STD_FILTERS)
 
@@ -596,7 +596,7 @@ def test_model_forward_intermediates(model_name, batch_size):
         assert not torch.isnan(o).any()
 
     output2 = model.forward_features(inpt)
-    assert torch.allclose(output, output2)
+    torch.testing.assert_close(output, output2, rtol=1e-5, atol=1e-8)
 
     # Test that grad-checkpointing, if supported
     try:
@@ -609,7 +609,7 @@ def test_model_forward_intermediates(model_name, batch_size):
             inpt,
             output_fmt=output_fmt,
         )
-        assert torch.allclose(output, output3, rtol=1e-4, atol=1e-5), 'Output does not match'
+        torch.testing.assert_close(output, output3, rtol=1e-4, atol=1e-5)
 
 
 
@@ -1164,13 +1164,20 @@ def test_vit_classifier_encoder_hooks(model_name, encoder_pool):
 
 
 @pytest.mark.base
-def test_qwen_init_weights_after_to_empty():
+@pytest.mark.parametrize('model_name, kwargs', [
+    ('qwen3_vit_88m_merge', dict(embed_dim=32, depth=1, num_heads=4, pos_embed_grid_size=4)),
+    ('iformer_t', dict(dims=(16, 24, 32, 48), depths=(1, 1, 3, 3), attn_groups=(0, 0, 1, 1),
+                       layer_scale_init_value=1e-6)),
+    ('efficientvim_m1_dist', dict(embed_dim=(16, 24, 32), depths=(1, 1, 1), state_dim=(4, 4, 4))),
+])
+def test_model_init_weights_after_to_empty(model_name, kwargs):
     if not hasattr(torch.nn.Module, 'to_empty'):
         pytest.skip('to_empty requires a newer PyTorch version')
     model = create_model(
-        'qwen3_vit_88m_merge', device='meta', num_classes=5, embed_dim=32, depth=1, num_heads=4,
-        pos_embed_grid_size=4,
-    ).to_empty(device='cpu')
+        model_name, device='meta', dtype=torch.float64, num_classes=5, **kwargs,
+    )
+    assert all(p.device.type == 'meta' and p.dtype == torch.float64 for p in model.parameters())
+    model = model.to_empty(device='cpu').eval()
     # Poison storage so missed resets cannot pass just because uninitialized values happen to be finite.
     with torch.no_grad():
         for tensor in list(model.parameters()) + list(model.buffers()):
@@ -1179,5 +1186,69 @@ def test_qwen_init_weights_after_to_empty():
     model.init_weights()
     for name, tensor in list(model.named_parameters()) + list(model.named_buffers()):
         assert torch.isfinite(tensor).all(), name
-    torch.testing.assert_close(model.encoder.blocks[0].norm1.weight, torch.ones(32))
-    assert torch.isfinite(model(torch.randn(1, 3, 64, 64))).all()
+    if model_name.startswith('qwen'):
+        torch.testing.assert_close(model.encoder.blocks[0].norm1.weight, torch.ones(32, dtype=torch.float64))
+    assert torch.isfinite(model(torch.randn(1, 3, 64, 64, dtype=torch.float64))).all()
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name', ['efficientvim_m1', 'efficientvim_m1_dist'])
+def test_efficientvim_branch_features(model_name):
+    model = create_model(
+        model_name, num_classes=5, embed_dim=(16, 24, 32), depths=(1, 1, 1), state_dim=(4, 4, 4),
+    ).eval()
+    x = torch.randn(2, 3, 64, 96)
+    with torch.no_grad():
+        features = model.forward_features(x)
+        assert [t.shape[1] for t in features] == [16, 24, 32, 32]
+        torch.testing.assert_close(model(x), model.forward_head(features))
+        pre_logits = model.forward_head(features, pre_logits=True)
+        assert pre_logits.shape == (2, model.head_hidden_size)
+        expected = model.forward_intermediates(x, indices=[0, 1], norm=True, intermediates_only=True)
+        model.prune_intermediate_layers([0, 1])
+        actual = model.forward_intermediates(x, norm=True, intermediates_only=True)
+        torch.testing.assert_close(actual, expected)
+        assert model(x).shape == (2, model.num_features)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name, kwargs', [
+    ('efficientvim_m1', dict(embed_dim=(16, 24, 32), depths=(1, 1, 1), state_dim=(4, 4, 4))),
+    ('efficientvim_m1_dist', dict(embed_dim=(16, 24, 32), depths=(1, 1, 1), state_dim=(4, 4, 4))),
+    ('iformer_t', dict(dims=(16, 24, 32, 48), depths=(1, 1, 3, 3), attn_groups=(0, 0, 1, 1))),
+])
+def test_mobile_model_fusion_features(model_name, kwargs):
+    from copy import deepcopy
+    from timm.models._features import FeatureGetterNet
+    from timm.utils import reparameterize_model
+
+    model = create_model(model_name, num_classes=5, **kwargs).eval()
+    # Exercise learned BN statistics and nonuniform gates, not just their initial values.
+    for module in model.modules():
+        if isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
+            torch.nn.init.uniform_(module.running_mean, -0.2, 0.2)
+            torch.nn.init.uniform_(module.running_var, 0.5, 1.5)
+            torch.nn.init.uniform_(module.weight, 0.5, 1.5)
+            torch.nn.init.uniform_(module.bias, -0.2, 0.2)
+        if hasattr(module, 'alpha'):
+            torch.nn.init.uniform_(module.alpha, -1, 1)
+    x = torch.randn(2, 3, 64, 96)
+    fused = reparameterize_model(model)
+    assert any(isinstance(m, torch.nn.modules.batchnorm._BatchNorm) for m in model.modules())
+    assert not any(isinstance(m, torch.nn.modules.batchnorm._BatchNorm) for m in fused.modules())
+    with torch.no_grad():
+        torch.testing.assert_close(fused(x), model(x), atol=2e-5, rtol=2e-5)
+        torch.testing.assert_close(reparameterize_model(fused)(x), fused(x), atol=0, rtol=0)
+    for norm, indices in [(False, [0, 1]), (True, [0, -1])]:
+        expected = model.forward_intermediates(x, indices=indices, norm=norm, intermediates_only=True)
+        getter = FeatureGetterNet(deepcopy(model), out_indices=indices, norm=norm).eval()
+        torch.testing.assert_close(getter(x), expected)
+        fused_getter = reparameterize_model(getter)
+        torch.testing.assert_close(fused_getter(x), expected, atol=2e-5, rtol=2e-5)
+        torch.testing.assert_close(torch.jit.script(fused_getter)(x), fused_getter(x))
+        getter.train()
+        sum(t.square().mean() for t in getter(x)).backward()
+        assert all(p.grad is not None for p in getter.parameters() if p.requires_grad)
+        # Resetting a classifier after pruning must use the retained feature width.
+        getter.model.reset_classifier(7, global_pool='avg')
+        assert getter.model(x).shape == (2, 7)

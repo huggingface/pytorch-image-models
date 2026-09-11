@@ -13,21 +13,25 @@ iFormer: Integrating ConvNet and Transformer for Mobile Application (ICLR 2025)
 Modifications by / Copyright 2026 Ryan Hou & Ross Wightman, original copyrights below
 """
 
+import argparse
 import re
+from contextlib import nullcontext
+from functools import partial
 from typing import Any, Dict, List, Optional, Set, Tuple, Type, Union
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, calculate_drop_path_rates, get_device_dtype, trunc_normal_
+from timm.layers import DropPath, calculate_drop_path_rates, get_device_dtype, trunc_normal_, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
 from ._registry import generate_default_cfgs, register_model
 
-__all__ = ["iFormer"]
+__all__ = ["IFormer"]
 
 
 class ConvNorm(nn.Sequential):
@@ -136,9 +140,7 @@ class RepVitClassifier(nn.Module):
         self.distilled_training = False
         self.num_classes = num_classes
         if distillation:
-            self.head_dist = (
-                NormLinear(dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
-            )
+            self.head_dist = NormLinear(dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
         else:
             self.head_dist = nn.Identity()
 
@@ -180,9 +182,7 @@ class SHMA(nn.Module):
             dim: int,
             ratio: int = 1,
             head_dim_reduction_ratio: int = 2,
-            num_heads: int = 1,
             window_size: int = 0,
-            fused_attn: bool = False,
             device=None,
             dtype=None,
     ):
@@ -190,9 +190,8 @@ class SHMA(nn.Module):
         super().__init__()
         mid_dim = int(dim * ratio)
         dim_attn = dim // head_dim_reduction_ratio
-        self.dim_head = dim_attn // num_heads
-        self.scale = self.dim_head**-0.5
-        self.fused_attn = fused_attn
+        self.scale = dim_attn**-0.5
+        self.fused_attn = use_fused_attn()
         self.window_size = window_size
         self.q = ConvNorm(dim, dim_attn, 1, 1, 0, **dd)
         self.k = ConvNorm(dim, dim_attn, 1, 1, 0, **dd)
@@ -221,19 +220,16 @@ class SHMA(nn.Module):
         v = v.flatten(2)
 
         if self.fused_attn:
-            q_t = q.transpose(-1, -2).contiguous()
-            k_t = k.transpose(-1, -2).contiguous()
-            v_t = v.transpose(-1, -2).contiguous()
-            x_attn = (
-                F.scaled_dot_product_attention(
-                    q_t,
-                    k_t,
-                    v_t,
-                    dropout_p=self.attn_drop.p if self.training else 0.0,
-                )
-                .transpose(-1, -2)
-                .reshape(B, -1, H, W)
+            q_t = q.transpose(-1, -2).unsqueeze(1)
+            k_t = k.transpose(-1, -2).unsqueeze(1)
+            v_t = v.transpose(-1, -2).unsqueeze(1)
+            x_attn = F.scaled_dot_product_attention(
+                q_t,
+                k_t,
+                v_t,
+                dropout_p=self.attn_drop.p if self.training else 0.0,
             )
+            x_attn = x_attn.transpose(-1, -2).reshape(B, -1, H, W)
         else:
             q_s = q * self.scale
             attn = (q_s.transpose(-2, -1) @ k).softmax(dim=-1)
@@ -257,7 +253,7 @@ class SHMA(nn.Module):
     @staticmethod
     def _window_reverse(windows: torch.Tensor, window_size: int, H: int, W: int) -> torch.Tensor:
         _, C, _, _ = windows.shape
-        B = int(windows.shape[0] / (H * W / window_size / window_size))
+        B = windows.shape[0] // ((H // window_size) * (W // window_size))
         x = windows.view(B, H // window_size, W // window_size, C, window_size, window_size)
         x = x.permute(0, 3, 1, 4, 2, 5).contiguous().view(B, C, H, W)
         return x
@@ -276,15 +272,19 @@ class Residual(nn.Module):
         dd = {"device": device, "dtype": dtype}
         super().__init__()
         self.module = module
+        self.layer_scale_init_value = layer_scale_init_value
         self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
         if layer_scale_init_value > 0 and dim is not None:
-
             self.gamma = nn.Parameter(
                 layer_scale_init_value * torch.ones((1, dim, 1, 1), **dd),
                 requires_grad=True,
             )
         else:
             self.gamma = None
+
+    def reset_parameters(self) -> None:
+        if self.gamma is not None:
+            nn.init.constant_(self.gamma, self.layer_scale_init_value)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.gamma is not None:
@@ -396,6 +396,13 @@ class RepCPE(nn.Module):
             **dd,
         )
 
+    @torch.no_grad()
+    def fuse(self) -> nn.Conv2d:
+        conv = self.cpe.module.fuse()
+        kh, kw = conv.kernel_size
+        conv.weight[:, :, kh // 2, kw // 2] += 1
+        return conv
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.cpe(x)
 
@@ -419,6 +426,7 @@ class StageBlock(nn.Module):
     ):
         dd = {"device": device, "dtype": dtype}
         super().__init__()
+        assert depth >= 3 * num_attn, 'Each attention group requires three blocks.'
         self.grad_checkpointing = False
         self.downsample = nn.Identity() if in_dim == dim else ConvNorm(in_dim, dim, 3, 2, 1, **dd)
 
@@ -486,7 +494,7 @@ class Stem(nn.Module):
         return x
 
 
-class iFormer(nn.Module):
+class IFormer(nn.Module):
     def __init__(
             self,
             in_chans: int = 3,
@@ -513,8 +521,7 @@ class iFormer(nn.Module):
         self.in_chans = in_chans
         self.global_pool = global_pool
         self.distillation = distillation
-        if not isinstance(depths, (list, tuple)):
-            depths = (depths)  # it means the model has only one stage
+        assert len(dims) == len(depths) == len(attn_groups) == len(attn_head_dim_reduction)
         self.num_stages = len(depths)
         self.feature_info = []
 
@@ -541,28 +548,29 @@ class iFormer(nn.Module):
             )
             prev_dim = dims[i]
             stages.append(stage)
-            self.feature_info += [dict(num_chs=dims[i], reduction=2**(i+2), module=f"stages.{i}")]
+            self.feature_info += [dict(num_chs=dims[i], reduction=2 ** (i + 2), module=f"stages.{i}")]
         self.stages = nn.Sequential(*stages)
 
         self.num_features = self.head_hidden_size = dims[-1]
         self.head_drop = nn.Dropout(drop_rate)
         self.head = RepVitClassifier(dims[-1], num_classes, distillation, 0.0, **dd)
-        self.apply(self._init_weights)
+        self.init_weights(needs_reset=False)
 
-    def _init_weights(self, m: nn.Module) -> None:
+    @torch.jit.ignore
+    def init_weights(self, needs_reset: bool = True) -> None:
+        """Initialize parameters and restore buffers after ``to_empty()``."""
+        self.apply(partial(self._init_weights, needs_reset=needs_reset))
+
+    def _init_weights(self, m: nn.Module, needs_reset: bool = True) -> None:
         if isinstance(m, (nn.Conv2d, nn.Linear)):
             trunc_normal_(m.weight, std=0.02)
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.BatchNorm2d):
-            nn.init.constant_(m.weight, 1)
-            nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.BatchNorm1d):
-            nn.init.constant_(m.weight, 1)
-            nn.init.constant_(m.bias, 0)
+        elif needs_reset and hasattr(m, 'reset_parameters'):
+            m.reset_parameters()
 
     @torch.jit.ignore
-    def no_weight_decay(self) -> Set:
+    def no_weight_decay(self) -> Set[str]:
         return set()
 
     @torch.jit.ignore
@@ -624,7 +632,7 @@ class iFormer(nn.Module):
         Args:
             x: Input image tensor.
             indices: Take last n blocks if int, all if None, select matching indices if sequence.
-            norm: Apply norm layer to compatible intermediates.
+            norm: Unused; there is no final feature normalization layer.
             stop_early: Stop iterating over blocks when last desired intermediate hit.
             output_fmt: Shape of intermediate feature outputs.
             intermediates_only: Only return intermediate features.
@@ -641,7 +649,7 @@ class iFormer(nn.Module):
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             stages = self.stages
         else:
-            stages = self.stages[: max_index + 1]
+            stages = self.stages[:max_index + 1]
 
         for feat_idx, stage in enumerate(stages):
             x = stage(x)
@@ -660,7 +668,7 @@ class iFormer(nn.Module):
             prune_head: bool = True,
     ) -> List[int]:
         """Prune layers not required for specified intermediates.
-        
+
         Args:
             indices: Indices of intermediate layers to keep.
             prune_norm: Whether to prune normalization layer.
@@ -670,7 +678,12 @@ class iFormer(nn.Module):
             List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
-        self.stages = self.stages[: max_index + 1]  # truncate blocks w/ stem as idx 0
+        if max_index + 1 < len(self.stages):
+            assert prune_head, 'The classifier requires the final stage.'
+        self.stages = self.stages[:max_index + 1]
+        self.feature_info = self.feature_info[:max_index + 1]
+        self.num_stages = len(self.stages)
+        self.num_features = self.head_hidden_size = self.feature_info[-1]['num_chs']
         if prune_head:
             self.reset_classifier(0, "")
         return take_indices
@@ -681,7 +694,9 @@ class iFormer(nn.Module):
         return x
 
     def forward_head(
-            self, x: torch.Tensor, pre_logits: bool = False
+            self,
+            x: torch.Tensor,
+            pre_logits: bool = False,
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         assert self.global_pool in ("avg", ""), f"Unsupported global_pool {self.global_pool}"
         if self.global_pool == "avg":
@@ -711,6 +726,7 @@ class iFormer(nn.Module):
                     fuse_children(child)
 
         fuse_children(self)
+        return self
 
 
 def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: nn.Module) -> Dict[str, torch.Tensor]:
@@ -729,7 +745,7 @@ def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: nn.Module) 
         elif key.startswith("classifier."):
             key = key.replace("classifier.", "head.head.", 1)
 
-        # stem: official downsample_layers.0 — your Stem conv1/conv2/conv3
+        # stem: official downsample_layers.0 — Stem conv1/conv2/conv3
         if key.startswith("downsample_layers.0.0."):
             key = key.replace("downsample_layers.0.0.", "stem.conv1.", 1)
         elif key.startswith("downsample_layers.0.2.conv_exp_bn1."):
@@ -772,13 +788,20 @@ def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: nn.Module) 
 
 def _cfg(url: str = "", **kwargs: Any) -> Dict[str, Any]:
     return {
-        "url": url, "num_classes": 1000, "input_size": (3, 224, 224), "pool_size": (7, 7),
-        "crop_pct": 0.875, "interpolation": "bicubic",
-        "mean": IMAGENET_DEFAULT_MEAN, "std": IMAGENET_DEFAULT_STD,
-        "first_conv": "stem.conv1.c", "classifier": "head.head.l",
+        "url": url,
+        "num_classes": 1000,
+        "input_size": (3, 224, 224),
+        "pool_size": (7, 7),
+        "crop_pct": 0.875,
+        "interpolation": "bicubic",
+        "mean": IMAGENET_DEFAULT_MEAN,
+        "std": IMAGENET_DEFAULT_STD,
+        "first_conv": "stem.conv1.c",
+        "classifier": "head.head.l",
         "paper_ids": "arXiv:2501.15369",
         "paper_name": "iFormer: Integrating ConvNet and Transformer for Mobile Application",
-        "origin_url": "https://github.com/ChuanyangZheng/iFormer", "license": "mit",
+        "origin_url": "https://github.com/ChuanyangZheng/iFormer",
+        "license": "mit",
         **kwargs,
     }
 
@@ -786,132 +809,175 @@ def _cfg(url: str = "", **kwargs: Any) -> Dict[str, Any]:
 default_cfgs = generate_default_cfgs({
     "iformer_t.in1k": _cfg(
         url="https://github.com/ChuanyangZheng/iFormer/releases/download/v0.9/iFormer_t.pth",
-        # hf_hub_id='timm/',
     ),
     "iformer_s.in1k": _cfg(
         url="https://github.com/ChuanyangZheng/iFormer/releases/download/v0.9/iFormer_s.pth",
-        # hf_hub_id='timm/',
     ),
     "iformer_m.in1k": _cfg(
         url="https://github.com/ChuanyangZheng/iFormer/releases/download/v0.9/iFormer_m.pth",
-        # hf_hub_id='timm/',
     ),
     "iformer_l.in1k": _cfg(
         url="https://github.com/ChuanyangZheng/iFormer/releases/download/v0.9/iFormer_l.pth",
-        # hf_hub_id='timm/',
     ),
     "iformer_l2.untrained": _cfg(),
     "iformer_h.in1k": _cfg(
         url="https://github.com/ChuanyangZheng/iFormer/releases/download/v0.9/iFormer_h.pth",
-        # hf_hub_id='timm/',
     ),
     "iformer_m_distilled.in1k": _cfg(
         url="https://github.com/ChuanyangZheng/iFormer/releases/download/v0.9/iFormer_m_distill.pth",
         classifier=('head.head.l', 'head.head_dist.l'),
-        # hf_hub_id='timm/',
     ),
     "iformer_l_distilled.in1k": _cfg(
         url="https://github.com/ChuanyangZheng/iFormer/releases/download/v0.9/iFormer_l_distill.pth",
         classifier=('head.head.l', 'head.head_dist.l'),
-        # hf_hub_id='timm/',
     ),
     "iformer_l2_distilled.in1k": _cfg(
         url="https://github.com/ChuanyangZheng/iFormer/releases/download/v0.9/iFormer_l2_distill.pth",
         classifier=('head.head.l', 'head.head_dist.l'),
-        # hf_hub_id='timm/',
     ),
 })
 
 
-def _create_iformer(variant: str, pretrained: bool = False, **kwargs: Any) -> iFormer:
-    return build_model_with_cfg(
-        iFormer, variant, pretrained,
-        pretrained_filter_fn=checkpoint_filter_fn,
-        feature_cfg=dict(out_indices=(0, 1, 2, 3), flatten_sequential=True),
-        **kwargs,
-    )
+def _create_iformer(variant: str, pretrained: bool = False, **kwargs: Any) -> IFormer:
+    # The original releases contain NumPy scalars and argparse training metadata.
+    # Keep weights-only loading enabled and scope the allowlist to this model's load.
+    load_context = nullcontext()
+    if pretrained and hasattr(torch.serialization, 'safe_globals'):
+        numpy_core = np._core if hasattr(np, '_core') else np.core
+        scalar = numpy_core.multiarray.scalar
+        safe_types = [argparse.Namespace, np.dtype, type(np.dtype('float64'))]
+        if np.lib.NumpyVersion(np.__version__) >= '2.0.0':
+            safe_types.append((scalar, 'numpy.core.multiarray.scalar'))
+        else:
+            safe_types.append(scalar)
+        load_context = torch.serialization.safe_globals(safe_types)
+    with load_context:
+        return build_model_with_cfg(
+            IFormer,
+            variant,
+            pretrained,
+            pretrained_filter_fn=checkpoint_filter_fn,
+            feature_cfg=dict(out_indices=(0, 1, 2, 3), flatten_sequential=True),
+            **kwargs,
+        )
 
 
 @register_model
-def iformer_t(pretrained: bool = False, **kwargs: Any) -> iFormer:
+def iformer_t(pretrained: bool = False, **kwargs: Any) -> IFormer:
     model_args = dict(
-        dims=(32, 64, 128, 256), depths=(2, 2, 16, 6), attn_groups=(0, 0, 3, 2),
-        attn_head_dim_reduction=(0, 0, 2, 4), conv_ratio=3, ffn_ratio=2,
+        dims=(32, 64, 128, 256),
+        depths=(2, 2, 16, 6),
+        attn_groups=(0, 0, 3, 2),
+        attn_head_dim_reduction=(0, 0, 2, 4),
+        conv_ratio=3,
+        ffn_ratio=2,
     )
     return _create_iformer("iformer_t", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def iformer_s(pretrained: bool = False, **kwargs: Any) -> iFormer:
+def iformer_s(pretrained: bool = False, **kwargs: Any) -> IFormer:
     model_args = dict(
-        dims=(32, 64, 176, 320), depths=(2, 2, 19, 6), attn_groups=(0, 0, 3, 2),
-        attn_head_dim_reduction=(0, 0, 2, 4), conv_ratio=4, ffn_ratio=3,
+        dims=(32, 64, 176, 320),
+        depths=(2, 2, 19, 6),
+        attn_groups=(0, 0, 3, 2),
+        attn_head_dim_reduction=(0, 0, 2, 4),
+        conv_ratio=4,
+        ffn_ratio=3,
     )
     return _create_iformer("iformer_s", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def iformer_m(pretrained: bool = False, **kwargs: Any) -> iFormer:
+def iformer_m(pretrained: bool = False, **kwargs: Any) -> IFormer:
     model_args = dict(
-        dims=(48, 96, 192, 384), depths=(2, 2, 22, 6), attn_groups=(0, 0, 4, 2),
-        attn_head_dim_reduction=(0, 0, 2, 4), conv_ratio=4, ffn_ratio=3,
+        dims=(48, 96, 192, 384),
+        depths=(2, 2, 22, 6),
+        attn_groups=(0, 0, 4, 2),
+        attn_head_dim_reduction=(0, 0, 2, 4),
+        conv_ratio=4,
+        ffn_ratio=3,
     )
     return _create_iformer("iformer_m", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def iformer_l(pretrained: bool = False, **kwargs: Any) -> iFormer:
+def iformer_l(pretrained: bool = False, **kwargs: Any) -> IFormer:
     model_args = dict(
-        dims=(48, 96, 256, 384), depths=(2, 2, 33, 6), attn_groups=(0, 0, 8, 2),
-        attn_head_dim_reduction=(0, 0, 2, 4), conv_ratio=4, ffn_ratio=3,
+        dims=(48, 96, 256, 384),
+        depths=(2, 2, 33, 6),
+        attn_groups=(0, 0, 8, 2),
+        attn_head_dim_reduction=(0, 0, 2, 4),
+        conv_ratio=4,
+        ffn_ratio=3,
     )
     return _create_iformer("iformer_l", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def iformer_l2(pretrained: bool = False, **kwargs: Any) -> iFormer:
+def iformer_l2(pretrained: bool = False, **kwargs: Any) -> IFormer:
     model_args = dict(
-        dims=(64, 128, 256, 512), depths=(3, 3, 46, 9), attn_groups=(0, 0, 11, 3),
-        attn_head_dim_reduction=(0, 0, 2, 4), conv_ratio=4, ffn_ratio=3,
+        dims=(64, 128, 256, 512),
+        depths=(3, 3, 46, 9),
+        attn_groups=(0, 0, 11, 3),
+        attn_head_dim_reduction=(0, 0, 2, 4),
+        conv_ratio=4,
+        ffn_ratio=3,
     )
     return _create_iformer("iformer_l2", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def iformer_h(pretrained: bool = False, **kwargs: Any) -> iFormer:
+def iformer_h(pretrained: bool = False, **kwargs: Any) -> IFormer:
     model_args = dict(
-        dims=(96, 192, 384, 768), depths=(5, 5, 60, 18), attn_groups=(0, 0, 15, 6),
-        attn_head_dim_reduction=(0, 0, 1, 1), conv_ratio=4, ffn_ratio=4,
+        dims=(96, 192, 384, 768),
+        depths=(5, 5, 60, 18),
+        attn_groups=(0, 0, 15, 6),
+        attn_head_dim_reduction=(0, 0, 1, 1),
+        conv_ratio=4,
+        ffn_ratio=4,
         layer_scale_init_value=1e-6,
     )
     return _create_iformer("iformer_h", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def iformer_m_distilled(pretrained: bool = False, **kwargs: Any) -> iFormer:
+def iformer_m_distilled(pretrained: bool = False, **kwargs: Any) -> IFormer:
     model_args = dict(
-        dims=(48, 96, 192, 384), depths=(2, 2, 22, 6), attn_groups=(0, 0, 4, 2),
-        attn_head_dim_reduction=(0, 0, 2, 4), conv_ratio=4, ffn_ratio=3,
+        dims=(48, 96, 192, 384),
+        depths=(2, 2, 22, 6),
+        attn_groups=(0, 0, 4, 2),
+        attn_head_dim_reduction=(0, 0, 2, 4),
+        conv_ratio=4,
+        ffn_ratio=3,
         distillation=True,
     )
     return _create_iformer("iformer_m_distilled", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def iformer_l_distilled(pretrained: bool = False, **kwargs: Any) -> iFormer:
+def iformer_l_distilled(pretrained: bool = False, **kwargs: Any) -> IFormer:
     model_args = dict(
-        dims=(48, 96, 256, 384), depths=(2, 2, 33, 6), attn_groups=(0, 0, 8, 2),
-        attn_head_dim_reduction=(0, 0, 2, 4), conv_ratio=4, ffn_ratio=3,
+        dims=(48, 96, 256, 384),
+        depths=(2, 2, 33, 6),
+        attn_groups=(0, 0, 8, 2),
+        attn_head_dim_reduction=(0, 0, 2, 4),
+        conv_ratio=4,
+        ffn_ratio=3,
         distillation=True,
     )
     return _create_iformer("iformer_l_distilled", pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def iformer_l2_distilled(pretrained: bool = False, **kwargs: Any) -> iFormer:
+def iformer_l2_distilled(pretrained: bool = False, **kwargs: Any) -> IFormer:
     model_args = dict(
-        dims=(64, 128, 256, 512), depths=(3, 3, 46, 9), attn_groups=(0, 0, 11, 3),
-        attn_head_dim_reduction=(0, 0, 2, 4), conv_ratio=4, ffn_ratio=3,
+        dims=(64, 128, 256, 512),
+        depths=(3, 3, 46, 9),
+        attn_groups=(0, 0, 11, 3),
+        attn_head_dim_reduction=(0, 0, 2, 4),
+        conv_ratio=4,
+        ffn_ratio=3,
         distillation=True,
     )
     return _create_iformer("iformer_l2_distilled", pretrained=pretrained, **dict(model_args, **kwargs))
