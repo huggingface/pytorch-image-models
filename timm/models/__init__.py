@@ -11,6 +11,7 @@ from .crossvit import *
 from .csatv2 import *
 from .cspnet import *
 from .davit import *
+from .deepseek_vit import *
 from .deit import *
 from .densenet import *
 from .dla import *
