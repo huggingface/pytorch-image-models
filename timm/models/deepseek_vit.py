@@ -17,12 +17,11 @@ by default.
 
 For example, `deepseek_vit_412m.deepseek_v4_1_flash` with `num_classes=45` returns image logits
 (B, 45), while `deepseek_vit_412m_enc.deepseek_v4_1_flash` returns projected tokens
-(B, ceil(H/3)*ceil(W/3), 5120). Encoder checkpoint weights load into the classifier under
-`encoder.*`; its classification head is initialized separately.
+(B, ceil(H/3)*ceil(W/3), 5120), where H and W are patch-grid dimensions. Encoder checkpoint weights
+load into the classifier under `encoder.*`; its classification head is initialized separately.
 
-Weights are remapped on the fly from the DeepSeek checkpoint shard that holds the vision tower, so
-`pretrained=True` reads the original `deepseek-ai/*` repos with no re-hosting; every non-vision
-(LLM) tensor in that shard is dropped by the checkpoint filter.
+Pretrained weights are native timm remaps hosted in the `timm/*` Hugging Face repositories.
+The checkpoint filters also support original DeepSeek vision shards, dropping non-vision (LLM) tensors.
 
 Reference: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash (`inference/vision.py`),
 https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-Vision-Exp. Weights are MIT licensed.
@@ -610,10 +609,8 @@ def checkpoint_filter_fn_encoder(
     Every non-vision tensor (the LLM) is dropped, so a raw checkpoint shard can be passed directly.
 
     The source checkpoint keeps the vision tower under `vision.` / `aligner.` and the LLM at the top
-    level, where `norm.weight` and `head.weight` collide with timm's own names (the shard the
-    pretrained cfgs point at happens to hold no such tensor, but the full checkpoint does). So an
-    unprefixed key is trusted only when the dict has no `vision.` keys at all, i.e. when it is
-    already in timm layout.
+    level, where `norm.weight` and `head.weight` collide with timm's own names. An unprefixed key
+    is trusted only when the dict has no `vision.` keys at all, i.e. when it is already in timm layout.
     """
     from_source = any(k.startswith('vision.') for k in state_dict)
     out_dict = {}
