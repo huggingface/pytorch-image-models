@@ -1,6 +1,7 @@
 """Qwen3 Vision Transformer
 
-Vision encoder of the Qwen3-VL / Qwen3.5 / Qwen3.8 multimodal models from Alibaba Qwen team.
+Vision encoder of the Qwen3-VL / Qwen3.5 / Qwen3.8 multimodal models from Alibaba Qwen team, and of the
+driving-domain Qwen-Drive-1.0 built on that same tower.
 
 A plain pre-norm ViT (SigLIP-2 style widths, GELU-tanh MLP, fused QKV with bias) with two position encodings
 applied together: a learned absolute grid (48x48 for the released models, bilinearly resampled to the input grid
@@ -18,7 +19,8 @@ Weights are native timm remaps of the source VLM vision tensors. The Conv3d patc
 `temporal_patch_size=2` frames is folded into a Conv2d since the image path feeds the same frame twice
 (mathematically identical, verified against the transformers reference).
 
-Reference: https://github.com/QwenLM/Qwen3-VL, transformers `Qwen3VLVisionModel` / `Qwen3_5VisionModel`.
+Reference: https://github.com/QwenLM/Qwen3-VL, https://github.com/QwenLM/Qwen-Drive-1.0,
+transformers `Qwen3VLVisionModel` / `Qwen3_5VisionModel`.
 Weights are released under Apache-2.0 by the Qwen team, except Qwen3.8-Flash-Next (Qwen Community License 1.0).
 
 Copyright 2026 Yonghye Kwon
@@ -551,13 +553,14 @@ def checkpoint_filter_fn_encoder(
         state_dict: Dict[str, torch.Tensor],
         model: Qwen3VitEncoder,
 ) -> Dict[str, torch.Tensor]:
-    """Remap `model.visual.*` tensors of a Qwen3-VL / Qwen3.5 / Qwen3.8 checkpoint (or shard) to timm keys.
+    """Remap `model.visual.*` tensors of a Qwen3-VL / Qwen3.5 / Qwen3.8 / Qwen-Drive checkpoint to timm keys.
 
     Every non-vision tensor (the LLM) is dropped, so a raw VLM shard can be passed directly.
     """
     out_dict = {}
     for k, v in state_dict.items():
-        for prefix in ('model.visual.', 'visual.', 'encoder.'):
+        # `vlm.model.visual.` is Qwen-Drive, which nests the whole VLM under a `vlm.` attribute
+        for prefix in ('vlm.model.visual.', 'model.visual.', 'visual.', 'encoder.'):
             if k.startswith(prefix):
                 k = k[len(prefix) :]
                 break
@@ -744,6 +747,16 @@ _SOURCE_CFGS = {
         out_features=4096,
         origin_url='https://huggingface.co/Qwen/Qwen3-VL-235B-A22B-Instruct',
     ),
+    # Qwen-Drive-1.0: the Qwen3.5-4B tower after driving-domain training. Same architecture and projector width,
+    # but the weights moved (mean |diff| vs Qwen3.5-4B ~2e-5 in early blocks rising to ~3e-4 at the projector),
+    # so it is a distinct tag rather than an alias. Its checkpoint nests the VLM under `vlm.`, and the driving
+    # heads (BEV perception, planning expert) live in separate files -- nothing extra to drop here.
+    'qwen3_vit_306m.qwen_drive_1_0_4b': _cfg(
+        hf_hub_id='Qwen/Qwen-Drive-1.0-4B',
+        hf_hub_filename='model.safetensors',
+        out_features=2560,
+        origin_url='https://huggingface.co/Qwen/Qwen-Drive-1.0-4B',
+    ),
 }
 
 
@@ -775,7 +788,7 @@ def qwen3_vit_88m_merge(pretrained: bool = False, **kwargs) -> Qwen3VitClassifie
 
 @register_model
 def qwen3_vit_306m(pretrained: bool = False, **kwargs) -> Qwen3VitClassifier:
-    """Qwen3.5 vision classifier, 24 x 1024 (306M w/o projector). Source: Qwen3.5-2B / 4B."""
+    """Qwen3.5 vision classifier, 24 x 1024 (306M w/o projector). Source: Qwen3.5-2B / 4B, Qwen-Drive-1.0-4B."""
     model_args = dict(embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4.0)
     return _create_qwen3_vit_classifier('qwen3_vit_306m', pretrained=pretrained, **dict(model_args, **kwargs))
 
