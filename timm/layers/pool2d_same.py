@@ -55,7 +55,7 @@ def max_pool2d_same(
         dilation: List[int] = (1, 1),
         ceil_mode: bool = False,
 ):
-    x = pad_same(x, kernel_size, stride, value=-float('inf'))
+    x = pad_same(x, kernel_size, stride, dilation, value=-float('inf'))
     return F.max_pool2d(x, kernel_size, stride, (0, 0), dilation, ceil_mode)
 
 
@@ -77,7 +77,7 @@ class MaxPool2dSame(nn.MaxPool2d):
         super().__init__(kernel_size, stride, (0, 0), dilation, ceil_mode)
 
     def forward(self, x):
-        x = pad_same(x, self.kernel_size, self.stride, value=-float('inf'))
+        x = pad_same(x, self.kernel_size, self.stride, self.dilation, value=-float('inf'))
         return F.max_pool2d(x, self.kernel_size, self.stride, (0, 0), self.dilation, self.ceil_mode)
 
 

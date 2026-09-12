@@ -12,6 +12,39 @@ if torch_backend is not None:
 torch_device = os.environ.get('TORCH_DEVICE', 'cpu')
 
 
+@pytest.mark.parametrize('api', ['functional', 'module', 'factory'])
+@pytest.mark.parametrize('input_size,kernel_size,stride,dilation,padding', [
+    ((5, 7), (3, 3), (2, 2), (1, 1), (1, 1, 1, 1)),
+    ((5, 7), (3, 3), (2, 2), (2, 2), (2, 2, 2, 2)),
+    ((6, 7), (2, 3), (2, 3), (3, 2), (2, 2, 1, 1)),
+    ((2, 3), (3, 2), (2, 2), (2, 3), (1, 2, 1, 2)),
+])
+def test_max_pool2d_same_dilation(api, input_size, kernel_size, stride, dilation, padding):
+    """Dilated SAME pooling preserves output size and matches explicitly padded pooling."""
+    from timm.layers.pool2d_same import MaxPool2dSame, create_pool2d, max_pool2d_same
+
+    # Negative inputs also verify that padded values cannot become maxima at the borders.
+    height, width = input_size
+    x = -torch.arange(1, height * width + 1, device=torch_device, dtype=torch.float32).reshape(1, 1, height, width)
+    expected = torch.nn.functional.max_pool2d(
+        torch.nn.functional.pad(x, padding, value=-float('inf')),
+        kernel_size,
+        stride,
+        dilation=dilation,
+    )
+
+    if api == 'functional':
+        actual = max_pool2d_same(x, kernel_size, stride, dilation=dilation)
+    elif api == 'module':
+        actual = MaxPool2dSame(kernel_size, stride, dilation=dilation)(x)
+    else:
+        actual = create_pool2d('max', kernel_size, stride, padding='same', dilation=dilation)(x)
+
+    expected_shape = ((height + stride[0] - 1) // stride[0], (width + stride[1] - 1) // stride[1])
+    assert actual.shape[-2:] == expected_shape
+    torch.testing.assert_close(actual, expected)
+
+
 # Adaptive Avg/Max Pooling Tests
 
 class TestAdaptiveAvgMaxPool:
