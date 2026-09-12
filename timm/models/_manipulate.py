@@ -286,9 +286,26 @@ def checkpoint_seq(
     return x
 
 
-def adapt_input_conv(in_chans: int, conv_weight: Tensor) -> Tensor:
-    conv_type = conv_weight.dtype
-    conv_weight = conv_weight.float()  # Some weights are in torch.half, ensure it's float for sum on CPU
+def adapt_input_conv(in_chans: int, conv_weight: Tensor, base_chans: int = 3) -> Tensor:
+    """Adapt pretrained input convolution weights to a different channel count.
+
+    Args:
+        in_chans: Number of input channels for the target model.
+        conv_weight: Pretrained Conv2d weights in OIHW layout.
+        base_chans: Number of physical input channels used for pretraining. This
+            can differ from the weight's input dimension for space-to-depth stems.
+
+    Returns:
+        Weights with repeated/truncated channels scaled by ``base_chans / in_chans``.
+        Single-channel inputs instead sum the source channels, preserving separate
+        spatial groups for space-to-depth stems. Matching channel counts are unchanged.
+
+    Raises:
+        ValueError: If either channel count is not positive.
+        NotImplementedError: If the weight format cannot be adapted.
+    """
+    if in_chans < 1 or base_chans < 1:
+        raise ValueError('Input and base channel counts must be positive.')
     if conv_weight.ndim != 4:
         # Non-Conv2d first-conv weight (e.g., Linear patch embed in NaFlexVit /
         # Gemma4Vit). Can't infer the (C, P, P) factorization from shape alone,
@@ -297,23 +314,27 @@ def adapt_input_conv(in_chans: int, conv_weight: Tensor) -> Tensor:
             f'adapt_input_conv only supports 4D Conv2d weights; got ndim={conv_weight.ndim}.'
         )
     O, I, J, K = conv_weight.shape
+    if in_chans == base_chans:
+        return conv_weight
+    conv_type = conv_weight.dtype
+    conv_weight = conv_weight.float()  # Some weights are in torch.half, ensure it's float for sum on CPU
     if in_chans == 1:
-        if I > 3:
-            assert conv_weight.shape[1] % 3 == 0
+        if I > base_chans:
+            assert I % base_chans == 0
             # For models with space2depth stems
-            conv_weight = conv_weight.reshape(O, I // 3, 3, J, K)
+            conv_weight = conv_weight.reshape(O, I // base_chans, base_chans, J, K)
             conv_weight = conv_weight.sum(dim=2, keepdim=False)
         else:
             conv_weight = conv_weight.sum(dim=1, keepdim=True)
-    elif in_chans != 3:
-        if I != 3:
+    else:
+        if I != base_chans:
             raise NotImplementedError('Weight format not supported by conversion.')
         else:
             # NOTE this strategy should be better than random init, but there could be other combinations of
-            # the original RGB input layer weights that'd work better for specific cases.
-            repeat = int(math.ceil(in_chans / 3))
+            # the original input layer weights that'd work better for specific cases.
+            repeat = int(math.ceil(in_chans / base_chans))
             conv_weight = conv_weight.repeat(1, repeat, 1, 1)[:, :in_chans, :, :]
-            conv_weight *= (3 / float(in_chans))
+            conv_weight *= (base_chans / float(in_chans))
     conv_weight = conv_weight.to(conv_type)
     return conv_weight
 
