@@ -74,6 +74,50 @@ You can finetune any of the pre-trained models just by changing the classifier (
 
 To fine-tune on your own dataset, you have to write a PyTorch training loop or adapt `timm`'s [training script](training_script) to use your dataset.
 
+## Adapt Pretrained Weights to Different Input Channels
+
+Set `in_chans` to the number of channels your model will receive. For a non-RGB
+checkpoint, its pretrained configuration's `input_size[0]` must describe the
+**source checkpoint's** channel count. For example, to use two stacked 13-band
+images with a matching 13-band ResNet-18 checkpoint:
+
+```py
+model = timm.create_model(
+    'resnet18',
+    pretrained=True,
+    in_chans=26,
+    num_classes=10,
+    pretrained_cfg_overlay={
+        'file': 'path/to/your_13_band_resnet18.pth',
+        'input_size': (13, 224, 224),
+        'num_classes': 10,
+    },
+)
+```
+
+This example requires your own checkpoint with the matching architecture and
+source class count. Input convolution weights are repeated or truncated in
+channel order, then multiplied by the source-to-target channel ratio. Thus a
+13-to-26 conversion repeats the weights twice and scales them by 1/2; repeated
+copies of the same frame preserve the input convolution's response. A 13-to-11
+conversion keeps the first 11 channels and scales by 13/11. Matching channel
+counts load unchanged. Conversion to one channel sums the source-channel weights.
+
+For direct weight conversion, specify the same source information explicitly:
+
+```py
+from timm.models import adapt_input_conv
+
+temporal_weights = adapt_input_conv(26, pretrained_weights, base_chans=13)
+```
+
+`base_chans` describes physical image channels, which can differ from a
+space-to-depth stem's convolution input dimension. The existing RGB default and
+space-to-depth grayscale conversion remain supported; other space-to-depth
+channel conversions still use the unsupported-format fallback during loading.
+Band-specific selection, semantic band matching, and normalization are not
+inferred: arrange the bands and preprocessing for your sensor and task.
+
 ## Use a Pretrained Model for Feature Extraction
 
 Without modifying the network, one can call model.forward_features(input) on any model instead of the usual model(input). This will bypass the head classifier and global pooling for networks.
