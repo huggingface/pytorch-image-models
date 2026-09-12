@@ -12,11 +12,15 @@
 
 ## What's New
 
-## September 10, 2026
+## September 10-11, 2026
 
 * Add Qwen3-VL / Qwen3.5 / Qwen3.8 ViT classifier and encoder variants, including classifiers w/ and w/o the native spatial merger.
 * Add Sapiens2 ViTs with EVA and NaFlexViT support. Both model additions include native timm Hub weights. Thanks [Yonghye Kwon](https://github.com/developer0hye).
+* Add iFormer with native timm Hub weights. Thanks [Ryan Hou](https://github.com/brianhou0208).
+* Add EfficientViM with native timm Hub weights. Thanks [smellslikeml](https://github.com/smellslikeml).
+* Add DeepSeek-V4 / V4.1 ViT classifiers and encoders with native timm Hub weights. Thanks [Yonghye Kwon](https://github.com/developer0hye).
 * Switch default NaFlex SigLIP position interpolation, `inference.py` input-size selection, and improve `--model-kwargs` parsing.
+* Fix meta-device construction and device/dtype factory support for a few models; move config tests to meta for faster CI, meta context coverage.
 
 ## August 27, 2026
 * Add [LowFormer](https://github.com/altair199797/lowformer) model and weights
