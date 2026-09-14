@@ -133,3 +133,25 @@ def test_augmix_blended_flag_respects_zero(config_str, expected_blended):
     # to select the blended code path instead of disabling it.
     transform = augment_and_mix_transform(config_str, hparams={})
     assert transform.blended == expected_blended
+
+
+@pytest.mark.parametrize('size, mode', [
+    ((53, 37), 'RGB'),  # non-square, width != height
+    ((40, 40), 'L'),    # single band, np.asarray() has no channel axis
+    ((53, 37), 'L'),
+])
+def test_augmix_basic_mixes_non_square_and_single_band_images(size, mode):
+    # _apply_basic accumulated into a (width, height, bands) buffer, but np.asarray(img) is
+    # (height, width[, bands]); the two only line up for square multi-band images.
+    from PIL import Image
+
+    img = Image.fromarray(np.random.randint(0, 256, size=(size[1], size[0], 3), dtype=np.uint8)).convert(mode)
+    # fill colour must match the band count, as create_transform() derives it from `mean`
+    hparams = dict(img_mean=(128,) * len(img.getbands()))
+    transform = augment_and_mix_transform('augmix-m5-w4-d2', hparams=hparams)
+    assert not transform.blended
+
+    out = transform(img)
+
+    assert out.size == img.size
+    assert out.mode == img.mode

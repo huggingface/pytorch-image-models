@@ -919,8 +919,7 @@ class AugMixAugment:
         # This is a literal adaptation of the paper/official implementation without normalizations and
         # PIL <-> Numpy conversions between every op. It is still quite CPU compute heavy compared to the
         # typical augmentation transforms, could use a GPU / Kornia implementation.
-        img_shape = img.size[0], img.size[1], len(img.getbands())
-        mixed = np.zeros(img_shape, dtype=np.float32)
+        mixed = np.zeros_like(img, dtype=np.float32)
         for mw in mixing_weights:
             depth = self.depth if self.depth > 0 else np.random.randint(1, 4)
             ops = np.random.choice(self.ops, depth, replace=True)
