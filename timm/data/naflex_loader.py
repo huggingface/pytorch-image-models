@@ -92,6 +92,7 @@ class NaFlexPrefetchLoader:
         # Check for CUDA/NPU availability
         self.is_cuda = device.type == 'cuda' and torch.cuda.is_available()
         self.is_npu = device.type == 'npu' and torch.npu.is_available()
+        self.stream = None
 
     def __iter__(self) -> Iterator[Tuple[Dict[str, torch.Tensor], torch.Tensor]]:
         """Iterate through the loader with prefetching and normalization.
@@ -100,17 +101,30 @@ class NaFlexPrefetchLoader:
             Tuple of (input_dict, targets) with normalized patches.
         """
         first = True
+
+        device_mod = None
         if self.is_cuda:
-            stream = torch.cuda.Stream(device=self.device)
-            stream_context = partial(torch.cuda.stream, stream=stream)
+            device_mod = torch.cuda
         elif self.is_npu:
-            stream = torch.npu.Stream(device=self.device)
-            stream_context = partial(torch.npu.stream, stream=stream)
+            device_mod = torch.npu
+
+        if device_mod is not None:
+            if self.stream is None:
+                # One stream for the lifetime of the loader. The caching allocator pools blocks per stream,
+                # so a new stream per epoch leaves every previous epoch's blocks cached but unusable.
+                self.stream = device_mod.Stream(device=self.device)
+            stream_context = partial(device_mod.stream, stream=self.stream)
+            consumer_stream = device_mod.current_stream(device=self.device)
         else:
-            stream = None
             stream_context = suppress
+            consumer_stream = None
 
         for next_input_dict, next_target in self.loader:
+            if consumer_stream is not None:
+                # Blocks released by the consumer may be handed to the allocations below. Do not let the
+                # prefetch stream write into them until the consumer's queued work has finished.
+                self.stream.wait_stream(consumer_stream)
+
             with stream_context():
                 # Move all tensors in input_dict to device
                 for k, v in next_input_dict.items():
@@ -179,16 +193,15 @@ class NaFlexPrefetchLoader:
             else:
                 first = False
 
-            if stream is not None:
-                if self.is_cuda:
-                    torch.cuda.current_stream(device=self.device).wait_stream(stream)
-                elif self.is_npu:
-                    torch.npu.current_stream(device=self.device).wait_stream(stream)
+            if consumer_stream is not None:
+                consumer_stream = device_mod.current_stream(device=self.device)
+                consumer_stream.wait_stream(self.stream)
 
             input_dict = next_input_dict
             target = next_target
 
-        yield input_dict, target
+        if not first:
+            yield input_dict, target
 
     def __len__(self) -> int:
         """Get length of underlying loader.

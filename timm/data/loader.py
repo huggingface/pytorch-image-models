@@ -79,6 +79,11 @@ def adapt_to_chs(x, n):
 
 
 class PrefetchLoader:
+    """Prefetch batches to the device on a side stream and normalize them there.
+
+    The transfer of the next batch overlaps the consumer's work on the current one. Batches must
+    be consumed on the stream that is current when the iterator is advanced.
+    """
 
     def __init__(
             self,
@@ -120,20 +125,33 @@ class PrefetchLoader:
             self.random_erasing = None
         self.is_cuda = device.type == 'cuda' and torch.cuda.is_available()
         self.is_npu = device.type == 'npu' and torch.npu.is_available()
+        self.stream = None
 
     def __iter__(self):
         first = True
+
+        device_mod = None
         if self.is_cuda:
-            stream = torch.cuda.Stream(device=self.device)
-            stream_context = partial(torch.cuda.stream, stream=stream)
+            device_mod = torch.cuda
         elif self.is_npu:
-            stream = torch.npu.Stream(device=self.device)
-            stream_context = partial(torch.npu.stream, stream=stream)
+            device_mod = torch.npu
+
+        if device_mod is not None:
+            if self.stream is None:
+                # One stream for the lifetime of the loader. The caching allocator pools blocks per stream,
+                # so a new stream per epoch leaves every previous epoch's blocks cached but unusable.
+                self.stream = device_mod.Stream(device=self.device)
+            stream_context = partial(device_mod.stream, stream=self.stream)
+            consumer_stream = device_mod.current_stream(device=self.device)
         else:
-            stream = None
             stream_context = suppress
+            consumer_stream = None
 
         for next_input, next_target in self.loader:
+            if consumer_stream is not None:
+                # Blocks released by the consumer may be handed to the allocations below. Do not let the
+                # prefetch stream write into them until the consumer's queued work has finished.
+                self.stream.wait_stream(consumer_stream)
 
             with stream_context():
                 next_input = next_input.to(device=self.device, non_blocking=True)
@@ -147,16 +165,15 @@ class PrefetchLoader:
             else:
                 first = False
 
-            if stream is not None:
-                if self.is_cuda:
-                    torch.cuda.current_stream(device=self.device).wait_stream(stream)
-                elif self.is_npu:
-                    torch.npu.current_stream(device=self.device).wait_stream(stream)
+            if consumer_stream is not None:
+                consumer_stream = device_mod.current_stream(device=self.device)
+                consumer_stream.wait_stream(self.stream)
 
             input = next_input
             target = next_target
 
-        yield input, target
+        if not first:
+            yield input, target
 
     def __len__(self):
         return len(self.loader)
@@ -463,7 +480,7 @@ def create_loader(
             re_prob=prefetch_re_prob,
             re_mode=re_mode,
             re_count=re_count,
-            re_num_splits=re_num_splits
+            re_num_splits=re_num_splits,
         )
 
     return loader
