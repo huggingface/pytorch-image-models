@@ -671,6 +671,7 @@ class Gemma4VitEncoder(nn.Module):
         super().__init__()
         assert global_pool in ('soft', 'avg', 'none', ''), \
             f"global_pool must be one of 'soft', 'avg', 'none' (or ''); got {global_pool!r}"
+        self.in_chans = in_chans
         self.global_pool = global_pool
         self.num_features = self.head_hidden_size = self.embed_dim = embed_dim
         # Encoder has no classifier head; ``num_classes`` kept for timm API
@@ -1059,6 +1060,7 @@ class Gemma4VitClassifier(nn.Module):
             f"use Gemma4VitEncoder directly for 'soft' VLM-style pooling."
         assert encoder_pool in ('', 'none', 'soft'), \
             f"Gemma4VitClassifier encoder_pool must be '', 'none', or 'soft' (got {encoder_pool!r})."
+        self.in_chans = in_chans
         self.num_classes = num_classes
         self.global_pool = global_pool
         self.encoder_pool = encoder_pool

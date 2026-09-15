@@ -308,6 +308,7 @@ def test_model_default_cfgs(model_name, batch_size, cfg_device):
     assert getattr(model, 'head_hidden_size') > 0
     state_dict = model.state_dict()
     cfg = model.default_cfg
+    assert model.in_chans == cfg['input_size'][0]
 
     pool_size = cfg['pool_size']
     input_size = model.default_cfg['input_size']
@@ -388,6 +389,7 @@ def test_model_default_cfgs_non_std(model_name, batch_size, cfg_device):
     assert getattr(model, 'head_hidden_size') > 0
     state_dict = model.state_dict()
     cfg = model.default_cfg
+    assert model.in_chans == cfg['input_size'][0]
 
     input_size = _get_input_size(model=model)
     if max(input_size) > 320:  # FIXME const

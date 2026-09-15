@@ -38,6 +38,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropPath, calculate_drop_path_rates, Mlp, ClassifierHead, to_2tuple, _assert, ndgrid, get_device_dtype
+from ._input import update_model_input_size
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
@@ -186,6 +187,8 @@ class WindowMultiHeadAttention(nn.Module):
         window_size = to_2tuple(window_size)
         if window_size != self.window_size:
             self.window_size = window_size
+            window_area = window_size[0] * window_size[1]
+            self.relative_coordinates_log = self.logit_scale.new_empty(window_area * window_area, 2)
             self._make_pair_wise_relative_positions()
 
     def _relative_positional_encodings(self) -> torch.Tensor:
@@ -868,7 +871,7 @@ class SwinTransformerV2Cr(nn.Module):
         """
         if img_size is not None:
             self.patch_embed.set_input_size(img_size=img_size)
-            grid_size = self.patch_embed.grid_size
+        grid_size = self.patch_embed.grid_size
 
         if window_size is None and window_ratio is not None:
             window_size = tuple([s // window_ratio for s in grid_size])
@@ -880,6 +883,10 @@ class SwinTransformerV2Cr(nn.Module):
                 window_size=window_size,
                 always_partition=always_partition,
             )
+
+        self.img_size = self.patch_embed.img_size
+        self.window_size = to_2tuple(window_size)
+        update_model_input_size(self, self.img_size, window_size=window_size, always_partition=always_partition)
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):

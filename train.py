@@ -32,11 +32,18 @@ import torchvision.utils
 import yaml
 
 from timm import utils
-from timm.data import create_dataset, create_loader, create_naflex_loader, resolve_data_config, \
-    Mixup, FastCollateMixup, AugMixDataset
+from timm.data import (
+    create_dataset,
+    create_loader,
+    create_naflex_loader,
+    resolve_input_data_config,
+    Mixup,
+    FastCollateMixup,
+    AugMixDataset,
+)
 from timm.layers import convert_splitbn_model, convert_sync_batchnorm, set_fast_norm
 from timm.loss import JsdCrossEntropy, SoftTargetCrossEntropy, BinaryCrossEntropy, LabelSmoothingCrossEntropy
-from timm.models import create_model, safe_model_name
+from timm.models import create_model, resolve_model_input_args, safe_model_name
 from timm.optim import create_optimizer_v2, optimizer_kwargs
 from timm.scheduler import create_scheduler_v2, scheduler_kwargs
 from timm.utils import NativeScaler
@@ -539,12 +546,6 @@ def main():
     if args.fast_norm:
         set_fast_norm()
 
-    in_chans = 3
-    if args.in_chans is not None:
-        in_chans = args.in_chans
-    elif args.input_size is not None:
-        in_chans = args.input_size[0]
-
     factory_kwargs = {}
     if args.pretrained_path:
         # merge with pretrained_cfg of model, 'file' has priority over 'url' and 'hf_hub'.
@@ -554,20 +555,22 @@ def main():
         )
 
     model = create_model(
-        args.model,
-        pretrained=args.pretrained,
-        in_chans=in_chans,
-        num_classes=args.num_classes,
-        drop_rate=args.drop,
-        drop_path_rate=args.drop_path,
-        drop_block_rate=args.drop_block,
-        global_pool=args.gp,
-        bn_momentum=args.bn_momentum,
-        bn_eps=args.bn_eps,
-        scriptable=args.torchscript,
-        checkpoint_path=args.initial_checkpoint,
-        **factory_kwargs,
-        **args.model_kwargs,
+        **resolve_model_input_args(
+            args.model,
+            vars(args),
+            pretrained=args.pretrained,
+            num_classes=args.num_classes,
+            drop_rate=args.drop,
+            drop_path_rate=args.drop_path,
+            drop_block_rate=args.drop_block,
+            global_pool=args.gp,
+            bn_momentum=args.bn_momentum,
+            bn_eps=args.bn_eps,
+            scriptable=args.torchscript,
+            checkpoint_path=args.initial_checkpoint,
+            **factory_kwargs,
+            **args.model_kwargs,
+        )
     )
     if args.head_init_scale is not None:
         with torch.no_grad():
@@ -590,7 +593,7 @@ def main():
         _logger.info(
             f'Model {safe_model_name(args.model)} created, param count:{sum([m.numel() for m in model.parameters()])}')
 
-    data_config = resolve_data_config(vars(args), model=model, verbose=utils.is_primary(args))
+    data_config = resolve_input_data_config(model, vars(args), verbose=utils.is_primary(args))
 
     # setup augmentation batch splits for contrastive loss or split bn
     num_aug_splits = 0

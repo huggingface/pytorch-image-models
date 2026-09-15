@@ -18,9 +18,9 @@ import torch
 import torch.nn as nn
 import torch.nn.parallel
 
-from timm.data import resolve_data_config
+from timm.data import resolve_input_data_config
 from timm.layers import set_fast_norm
-from timm.models import create_model, is_model, list_models
+from timm.models import create_model, is_model, list_models, resolve_model_input_args
 from timm.optim import create_optimizer_v2
 from timm.utils import setup_default_logging, set_jit_fuser, decay_batch_step, check_batch_size_retry, ParseKwargs,\
     reparameterize_model
@@ -81,6 +81,13 @@ parser.add_argument('-b', '--batch-size', default=256, type=int,
                     metavar='N', help='mini-batch size (default: 256)')
 parser.add_argument('--img-size', default=None, type=int,
                     metavar='N', help='Input image dimension, uses model default if empty')
+parser.add_argument(
+    '--in-chans',
+    default=None,
+    type=int,
+    metavar='N',
+    help='Input image channels, uses model default if empty',
+)
 parser.add_argument('--input-size', default=None, nargs=3, type=int, metavar='N',
                     help='Input all image dimensions (d h w, e.g. --input-size 3 224 224), uses model default if empty')
 parser.add_argument('--use-train-size', action='store_true', default=False,
@@ -235,15 +242,17 @@ class BenchmarkRunner:
         if fuser:
             set_jit_fuser(fuser)
         self.model = create_model(
-            model_name,
-            num_classes=kwargs.pop('num_classes', None),
-            in_chans=3,
-            global_pool=kwargs.pop('gp', 'fast'),
-            scriptable=torchscript,
-            drop_rate=kwargs.pop('drop', 0.),
-            drop_path_rate=kwargs.pop('drop_path', None),
-            drop_block_rate=kwargs.pop('drop_block', None),
-            **kwargs.pop('model_kwargs', {}),
+            **resolve_model_input_args(
+                model_name,
+                kwargs,
+                num_classes=kwargs.pop('num_classes', None),
+                global_pool=kwargs.pop('gp', 'fast'),
+                scriptable=torchscript,
+                drop_rate=kwargs.pop('drop', 0.0),
+                drop_path_rate=kwargs.pop('drop_path', None),
+                drop_block_rate=kwargs.pop('drop_block', None),
+                **kwargs.get('model_kwargs', {}),
+            )
         )
         if reparam:
             self.model = reparameterize_model(self.model)
@@ -256,7 +265,7 @@ class BenchmarkRunner:
         self.param_count = count_params(self.model)
         _logger.info('Model %s created, param count: %d' % (model_name, self.param_count))
 
-        data_config = resolve_data_config(kwargs, model=self.model, use_test_size=not use_train_size)
+        data_config = resolve_input_data_config(self.model, kwargs, use_test_size=not use_train_size)
         self.input_size = data_config['input_size']
         self.batch_size = kwargs.pop('batch_size', 256)
 
