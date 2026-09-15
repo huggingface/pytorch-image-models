@@ -1207,6 +1207,7 @@ class FastVit(nn.Module):
     ) -> None:
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
+        self.in_chans = in_chans
         self.num_classes = 0 if fork_feat else num_classes
         self.fork_feat = fork_feat
         self.global_pool = global_pool

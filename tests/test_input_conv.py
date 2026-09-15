@@ -15,10 +15,13 @@ def _reference_channels(weight, source_channels, target_channels):
         return weight.clone()
     if target_channels == 1:
         return weight.sum(dim=1, keepdim=True)
-    return torch.stack([
-        weight[:, channel % source_channels] * (source_channels / target_channels)
-        for channel in range(target_channels)
-    ], dim=1)
+    return torch.stack(
+        [
+            weight[:, channel % source_channels] * (source_channels / target_channels)
+            for channel in range(target_channels)
+        ],
+        dim=1,
+    )
 
 
 @pytest.mark.parametrize('source,target', [(13, 13), (13, 26), (13, 52), (13, 11), (11, 13), (13, 3), (13, 1)])
@@ -38,10 +41,10 @@ def test_adapt_non_rgb_input_conv(source, target, dtype):
 @pytest.mark.parametrize('base_channels', [3, 13])
 def test_space_to_depth_grayscale_preserves_spatial_groups(base_channels):
     weight = _weights(base_channels * 4)
-    expected = torch.stack([
-        weight[:, offset:offset + base_channels].sum(dim=1)
-        for offset in range(0, base_channels * 4, base_channels)
-    ], dim=1)
+    expected = torch.stack(
+        [weight[:, offset:offset + base_channels].sum(dim=1) for offset in range(0, base_channels * 4, base_channels)],
+        dim=1,
+    )
 
     result = adapt_input_conv(1, weight, base_chans=base_channels)
 
@@ -102,9 +105,20 @@ def _load_sensor_model(source_channels, target_channels, second_stem=False, line
     return source, target, original_target, state_dict
 
 
-@pytest.mark.parametrize('source_channels,target_channels', [
-    (13, 13), (13, 26), (13, 52), (13, 11), (11, 13), (13, 3), (13, 1), (3, 1), (3, 6),
-])
+@pytest.mark.parametrize(
+    'source_channels,target_channels',
+    [
+        (13, 13),
+        (13, 26),
+        (13, 52),
+        (13, 11),
+        (11, 13),
+        (13, 3),
+        (13, 1),
+        (3, 1),
+        (3, 6),
+    ],
+)
 @pytest.mark.parametrize('second_stem', [False, True])
 def test_load_pretrained_uses_source_channel_metadata(source_channels, target_channels, second_stem):
     source, target, _, _ = _load_sensor_model(source_channels, target_channels, second_stem)
@@ -163,7 +177,11 @@ def test_create_model_transfers_multispectral_checkpoint(frames):
         num_classes=2,
     )
     target = timm.create_model(
-        'resnet18', pretrained=True, in_chans=13 * frames, num_classes=2, pretrained_cfg=cfg,
+        'resnet18',
+        pretrained=True,
+        in_chans=13 * frames,
+        num_classes=2,
+        pretrained_cfg=cfg,
     ).eval()
 
     for name, weight in source.state_dict().items():

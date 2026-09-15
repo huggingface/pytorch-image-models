@@ -9,6 +9,8 @@
     title: Changelog
   title: Get started
 - sections:
+  - local: model_adaptation
+    title: Adapt and Export Models
   - local: feature_extraction
     title: Using Pretrained Models as Feature Extractors
   - local: hparams

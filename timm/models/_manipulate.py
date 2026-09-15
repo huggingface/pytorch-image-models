@@ -334,7 +334,7 @@ def adapt_input_conv(in_chans: int, conv_weight: Tensor, base_chans: int = 3) ->
             # the original input layer weights that'd work better for specific cases.
             repeat = int(math.ceil(in_chans / base_chans))
             conv_weight = conv_weight.repeat(1, repeat, 1, 1)[:, :in_chans, :, :]
-            conv_weight *= (base_chans / float(in_chans))
+            conv_weight *= base_chans / float(in_chans)
     conv_weight = conv_weight.to(conv_type)
     return conv_weight
 

@@ -218,6 +218,7 @@ class DeepseekVitEncoder(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         assert global_pool in ('', 'avg', 'align')
         assert embed_dim % num_heads == 0
+        self.in_chans = in_chans
         self.num_classes = 0
         self.global_pool = global_pool
         self.num_features = self.head_hidden_size = self.embed_dim = embed_dim
@@ -455,6 +456,7 @@ class DeepseekVitClassifier(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         assert global_pool in ('', 'avg')
         assert encoder_pool in ('', 'align')
+        self.in_chans = in_chans
         self.num_classes = num_classes
         self.global_pool = global_pool
         self.encoder_pool = encoder_pool

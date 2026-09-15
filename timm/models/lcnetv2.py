@@ -254,6 +254,7 @@ class LCNetV2(nn.Module):
         """
         dd = {'device': device, 'dtype': dtype}
         super().__init__()
+        self.in_chans = in_chans
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.grad_checkpointing = False

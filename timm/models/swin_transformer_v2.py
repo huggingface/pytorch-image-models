@@ -23,6 +23,7 @@ import torch.nn.functional as F
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, calculate_drop_path_rates, to_2tuple, trunc_normal_, ClassifierHead,\
     resample_patch_embed, ndgrid, get_act_layer, LayerType, get_device_dtype
+from ._input import update_model_input_size
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
@@ -940,6 +941,15 @@ class SwinTransformerV2(nn.Module):
                 window_size=window_sizes[index],
                 always_partition=always_partition,
             )
+
+        # record the per-stage windows in use, a model rebuilt w/ img_size alone would use the constructor windows
+        update_model_input_size(
+            self,
+            self.patch_embed.img_size,
+            patch_size=patch_size,
+            window_size=window_sizes,
+            always_partition=always_partition,
+        )
 
     @torch.jit.ignore
     def no_weight_decay(self) -> Set[str]:
