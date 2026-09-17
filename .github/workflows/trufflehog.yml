@@ -3,8 +3,12 @@ on:
 
 name: Secret Leaks
 
+permissions: {}
+
 jobs:
   trufflehog:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
@@ -12,7 +16,7 @@ jobs:
       with:
         fetch-depth: 0
     - name: Secret Scanning
-      uses: trufflesecurity/trufflehog@363923b901c911a9164f50b6c423f47c15372b1c  # main
+      uses: trufflesecurity/trufflehog@363923b901c911a9164f50b6c423f47c15372b1c # v3.97.4
       with:
         # Only fail on verified secrets. Avoids CI breakage from unverified false positives
         # (e.g. high-entropy base64 blobs in old notebook output cells) surfaced by full-tree
