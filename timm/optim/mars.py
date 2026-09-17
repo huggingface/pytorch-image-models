@@ -202,6 +202,9 @@ class Mars(Optimizer):
                     caution=group['caution'],
                 )
 
-                state['last_grad'] = grad
+                # Copy the gradient rather than keeping a reference to p.grad. With
+                # zero_grad(set_to_none=False) p.grad is zeroed and accumulated into in place, so a
+                # reference would always equal the current gradient by the time of the next step.
+                state['last_grad'].copy_(grad)
 
         return loss
