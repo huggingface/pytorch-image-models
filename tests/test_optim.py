@@ -825,3 +825,30 @@ def test_sgdw_multi_tensor_weight_decay_matches_single_tensor():
     single32, single64 = run(False)
     torch.testing.assert_close(multi32, single32)
     torch.testing.assert_close(multi64, single64)
+
+
+def test_mars_last_grad_is_copied_not_aliased():
+    # Mars keeps the previous gradient in state['last_grad'] for its variance reduction term. It used
+    # to store a reference to p.grad instead of a copy. With zero_grad(set_to_none=False) the gradient
+    # is zeroed in place and the next backward accumulates into the same tensor, so the stored
+    # 'previous' gradient was always equal to the current one and the correction term was silently
+    # zero. set_to_none=True allocates a fresh p.grad every step and was never affected, so the two
+    # must give the same trajectory for the same sequence of gradients.
+    from timm.optim.mars import Mars
+
+    def run(set_to_none):
+        generator = torch.Generator().manual_seed(0)
+        param = Parameter(torch.ones(4, 3))
+        optimizer = Mars([param], lr=1e-2)
+        for _ in range(4):
+            direction = torch.randn(param.shape, generator=generator)
+            optimizer.zero_grad(set_to_none=set_to_none)
+            (param * direction).sum().backward()
+            optimizer.step()
+        return param.detach().clone(), optimizer.state[param]['last_grad'], param.grad
+
+    param_none, _, _ = run(True)
+    param_zero, last_grad, grad = run(False)
+    torch.testing.assert_close(param_zero, param_none)
+    assert last_grad is not grad
+    torch.testing.assert_close(last_grad, grad)
