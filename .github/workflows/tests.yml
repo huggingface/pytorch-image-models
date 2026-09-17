@@ -72,7 +72,7 @@ jobs:
       run: pip install --upgrade 'numpy<2.0'
     - name: Cache HF hub downloads
       if: contains(matrix.testmarker, 'base')  # only test_model_inference downloads weights
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/huggingface/hub
         key: hf-hub-${{ matrix.python }}-${{ matrix.torch.base }}-${{ github.run_id }}
