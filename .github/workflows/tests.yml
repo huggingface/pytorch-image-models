@@ -42,9 +42,9 @@ jobs:
       id-token: write  # mint an OIDC token to exchange for a short-lived HF Hub token
 
     steps:
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
     - name: Set up Python ${{ matrix.python }}
-      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v6
       with:
         python-version: ${{ matrix.python }}
     - name: Install testing dependencies
@@ -72,7 +72,7 @@ jobs:
       run: pip install --upgrade 'numpy<2.0'
     - name: Cache HF hub downloads
       if: contains(matrix.testmarker, 'base')  # only test_model_inference downloads weights
-      uses: actions/cache@v4
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/huggingface/hub
         key: hf-hub-${{ matrix.python }}-${{ matrix.torch.base }}-${{ github.run_id }}

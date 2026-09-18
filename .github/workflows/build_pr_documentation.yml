@@ -9,7 +9,7 @@ concurrency:
 
 jobs:
   build:
-    uses: huggingface/doc-builder/.github/workflows/build_pr_documentation.yml@e60a538eea9817ab312196d0d233604b01697265  # main
+    uses: huggingface/doc-builder/.github/workflows/build_pr_documentation.yml@17ccdf17e0f5e5f88b1ce9f20b3b73fb19017169  # main
     with:
       commit_sha: ${{ github.event.pull_request.head.sha }}
       pr_number: ${{ github.event.number }}

@@ -1,6 +1,7 @@
 import os
 import pkgutil
 from copy import deepcopy
+from typing import Optional
 
 from torch import nn as nn
 
@@ -163,7 +164,56 @@ def adapt_model_from_string(parent_module, model_string):
     new_module.eval()
     parent_module.eval()
 
+    # The rebuilt layers have new widths, but feature_info still carries the unpruned channel counts.
+    _adapt_feature_info(new_module)
+
     return new_module
+
+
+def _module_out_chs(module: nn.Module) -> Optional[int]:
+    """Return the output width of a conv / norm / linear layer, or None for any other module."""
+    if isinstance(module, nn.Conv2d):
+        return module.out_channels
+    if isinstance(module, nn.BatchNorm2d):
+        return module.num_features
+    if isinstance(module, nn.Linear):
+        return module.out_features
+    return None
+
+
+def _adapt_feature_info(module: nn.Module) -> None:
+    """Update ``feature_info`` channel counts in-place to match a pruned module tree.
+
+    Each feature entry names the module producing that feature. After pruning, its output width is the
+    width of the last conv / norm / linear layer registered within it. A parameter-less feature module,
+    such as a stem activation, takes the width of the last such layer registered before it.
+
+    Args:
+        module: Pruned model whose ``feature_info`` (a list of dicts or a ``FeatureInfo``) is updated.
+    """
+    feature_info = getattr(module, 'feature_info', None)
+    infos = getattr(feature_info, 'info', feature_info)
+    if not isinstance(infos, (list, tuple)):
+        return
+    entries = [(i, info['module']) for i, info in enumerate(infos) if isinstance(info, dict) and info.get('module')]
+    before = {}
+    within = {}
+    current = None
+    for name, m in module.named_modules():
+        for i, prefix in entries:
+            if name == prefix:
+                before[i] = current
+        out_chs = _module_out_chs(m)
+        if out_chs is None:
+            continue
+        current = out_chs
+        for i, prefix in entries:
+            if name == prefix or name.startswith(prefix + '.'):
+                within[i] = out_chs
+    for i, _ in entries:
+        num_chs = within.get(i, before.get(i))
+        if num_chs is not None:
+            infos[i]['num_chs'] = num_chs
 
 
 def adapt_model_from_file(parent_module, model_variant):

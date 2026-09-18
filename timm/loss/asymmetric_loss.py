@@ -36,15 +36,12 @@ class AsymmetricLossMultiLabel(nn.Module):
 
         # Asymmetric Focusing
         if self.gamma_neg > 0 or self.gamma_pos > 0:
-            if self.disable_torch_grad_focal_loss:
-                torch.set_grad_enabled(False)
-            pt0 = xs_pos * y
-            pt1 = xs_neg * (1 - y)  # pt = p if t > 0 else 1-p
-            pt = pt0 + pt1
-            one_sided_gamma = self.gamma_pos * y + self.gamma_neg * (1 - y)
-            one_sided_w = torch.pow(1 - pt, one_sided_gamma)
-            if self.disable_torch_grad_focal_loss:
-                torch.set_grad_enabled(True)
+            with torch.set_grad_enabled(torch.is_grad_enabled() and not self.disable_torch_grad_focal_loss):
+                pt0 = xs_pos * y
+                pt1 = xs_neg * (1 - y)  # pt = p if t > 0 else 1-p
+                pt = pt0 + pt1
+                one_sided_gamma = self.gamma_pos * y + self.gamma_neg * (1 - y)
+                one_sided_w = torch.pow(1 - pt, one_sided_gamma)
             loss *= one_sided_w
 
         return -loss.sum()
