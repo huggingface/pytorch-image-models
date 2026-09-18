@@ -23,6 +23,7 @@ import torch.nn.functional as F
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, calculate_drop_path_rates, to_2tuple, trunc_normal_, ClassifierHead,\
     resample_patch_embed, ndgrid, get_act_layer, LayerType, get_device_dtype
+from ._input import update_model_input_size
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
@@ -892,7 +893,7 @@ class SwinTransformerV2(nn.Module):
         """
         if img_size is not None or patch_size is not None:
             self.patch_embed.set_input_size(img_size=img_size, patch_size=patch_size)
-            grid_size = self.patch_embed.grid_size
+        grid_size = self.patch_embed.grid_size
 
         if window_size is None and window_ratio is not None:
             window_size = tuple([s // window_ratio for s in grid_size])
@@ -904,6 +905,14 @@ class SwinTransformerV2(nn.Module):
                 window_size=window_size,
                 always_partition=always_partition,
             )
+
+        update_model_input_size(
+            self,
+            self.patch_embed.img_size,
+            patch_size=patch_size,
+            window_size=window_size,
+            always_partition=always_partition,
+        )
 
     @torch.jit.ignore
     def no_weight_decay(self) -> Set[str]:

@@ -650,6 +650,7 @@ class CPUBone(nn.Module):
         if downsample_expand_ratios is None:
             downsample_expand_ratios = (expand_ratio,) * num_stages
         assert len(downsample_expand_ratios) == num_stages
+        self.in_chans = in_chans
         self.num_classes = num_classes
         self.num_features = width_list[-1]
         self.head_hidden_size = head_widths[-1]

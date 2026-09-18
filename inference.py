@@ -18,10 +18,17 @@ import numpy as np
 import pandas as pd
 import torch
 
-from timm.data import create_dataset, create_loader, resolve_data_config, ImageNetInfo, infer_imagenet_subset, \
-    CustomDatasetInfo, DatasetInfoLabelMapper
+from timm.data import (
+    create_dataset,
+    create_loader,
+    resolve_input_data_config,
+    ImageNetInfo,
+    infer_imagenet_subset,
+    CustomDatasetInfo,
+    DatasetInfoLabelMapper,
+)
 from timm.layers import apply_test_time_pool
-from timm.models import create_model
+from timm.models import create_model, resolve_model_input_args
 from timm.utils import AverageMeter, setup_default_logging, set_jit_fuser, ParseKwargs
 
 try:
@@ -180,19 +187,15 @@ def main():
         set_jit_fuser(args.fuser)
 
     # create model
-    in_chans = 3
-    if args.in_chans is not None:
-        in_chans = args.in_chans
-    elif args.input_size is not None:
-        in_chans = args.input_size[0]
-
     model = create_model(
-        args.model,
-        num_classes=args.num_classes,
-        in_chans=in_chans,
-        pretrained=args.pretrained,
-        checkpoint_path=args.checkpoint,
-        **args.model_kwargs,
+        **resolve_model_input_args(
+            args.model,
+            vars(args),
+            num_classes=args.num_classes,
+            pretrained=args.pretrained,
+            checkpoint_path=args.checkpoint,
+            **args.model_kwargs,
+        )
     )
     if args.num_classes is None:
         assert hasattr(model, 'num_classes'), 'Model must have `num_classes` attr if not set on cmd line/config.'
@@ -204,7 +207,7 @@ def main():
     _logger.info(
         f'Model {args.model} created, param count: {sum([m.numel() for m in model.parameters()])}')
 
-    data_config = resolve_data_config(vars(args), model=model, use_test_size=not args.use_train_size)
+    data_config = resolve_input_data_config(model, vars(args), use_test_size=not args.use_train_size)
     test_time_pool = False
     if args.test_pool:
         model, test_time_pool = apply_test_time_pool(model, data_config)

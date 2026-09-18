@@ -1201,6 +1201,7 @@ class NaFlexVit(nn.Module):
         mlp_layer = cfg.mlp_layer or Mlp   # TODO: Support configurable mlp_layer via string lookup
 
         # Store instance variables
+        self._traits = dict(fixed_input_size=False, first_conv='embeds.proj')
         self.num_classes = num_classes
         self.in_chans = in_chans
         self.global_pool = cfg.global_pool

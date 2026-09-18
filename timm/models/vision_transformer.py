@@ -73,6 +73,7 @@ from timm.layers import (
     LayerType,
     LayerScale,
 )
+from ._input import get_pretrained_grid_size, update_model_input_size
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._helpers import _load_npz_checkpoint
@@ -1034,7 +1035,7 @@ class VisionTransformer(nn.Module):
         if self.pos_embed is not None:
             num_prefix_tokens = 0 if self.no_embed_class else self.num_prefix_tokens
             num_new_tokens = self.patch_embed.num_patches + num_prefix_tokens
-            if num_new_tokens != self.pos_embed.shape[1]:
+            if num_new_tokens != self.pos_embed.shape[1] or self.patch_embed.grid_size != prev_grid_size:
                 self.pos_embed = nn.Parameter(resample_abs_pos_embed(
                     self.pos_embed,
                     new_size=self.patch_embed.grid_size,
@@ -1042,6 +1043,8 @@ class VisionTransformer(nn.Module):
                     num_prefix_tokens=num_prefix_tokens,
                     verbose=True,
                 ))
+
+        update_model_input_size(self, self.patch_embed.img_size, patch_size=patch_size)
 
     def _pos_embed(self, x: torch.Tensor) -> torch.Tensor:
         """Apply positional embedding to input."""
@@ -1900,17 +1903,25 @@ def checkpoint_filter_fn(
                     antialias=antialias,
                     verbose=True,
                 )
-        elif k == 'pos_embed' and v.shape[1] != model.pos_embed.shape[1]:
-            # To resize pos embedding when using model at different size from pretrained weights
+        elif k == 'pos_embed' and model.pos_embed is not None:
             num_prefix_tokens = 0 if getattr(model, 'no_embed_class', False) else getattr(model, 'num_prefix_tokens', 1)
-            v = resample_abs_pos_embed(
-                v,
-                new_size=model.patch_embed.grid_size,
-                num_prefix_tokens=num_prefix_tokens,
-                interpolation=interpolation,
-                antialias=antialias,
-                verbose=True,
+            old_size = get_pretrained_grid_size(
+                model,
+                state_dict.get('patch_embed.proj.weight'),
+                v.shape[1] - num_prefix_tokens,
             )
+            if v.shape[1] != model.pos_embed.shape[1] or (
+                old_size is not None and old_size != model.patch_embed.grid_size
+            ):
+                v = resample_abs_pos_embed(
+                    v,
+                    new_size=model.patch_embed.grid_size,
+                    old_size=old_size,
+                    num_prefix_tokens=num_prefix_tokens,
+                    interpolation=interpolation,
+                    antialias=antialias,
+                    verbose=True,
+                )
         elif adapt_layer_scale and 'gamma_' in k:
             # remap layer-scale gamma into sub-module (deit3 models)
             k = re.sub(r'gamma_([0-9])', r'ls\1.gamma', k)

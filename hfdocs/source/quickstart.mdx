@@ -74,6 +74,11 @@ You can finetune any of the pre-trained models just by changing the classifier (
 
 To fine-tune on your own dataset, you have to write a PyTorch training loop or adapt `timm`'s [training script](training_script) to use your dataset.
 
+For different input channels, set `in_chans` to the model's target channel count;
+the pretrained configuration must describe the source weights. See
+[Adapt and Export Models](model_adaptation) for channel conversion and saving
+adapted models with their current configuration.
+
 ## Use a Pretrained Model for Feature Extraction
 
 Without modifying the network, one can call model.forward_features(input) on any model instead of the usual model(input). This will bypass the head classifier and global pooling for networks.

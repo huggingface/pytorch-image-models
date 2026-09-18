@@ -2,6 +2,7 @@ import hashlib
 import json
 import logging
 import os
+from copy import deepcopy
 from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -28,6 +29,7 @@ except ImportError:
 
 from timm import __version__
 from ._helpers import _torch_load, load_state_dict
+from ._input import get_model_args, get_model_input_config
 from ._pretrained import filter_pretrained_cfg
 
 try:
@@ -183,6 +185,20 @@ def _parse_model_cfg(
         pretrained_cfg["label_descriptions"] = cfg.pop("label_descriptions")
 
     model_args = cfg.get("model_args", {})
+    # Stored reconstruction arguments describe the saved weights, before the factory
+    # applies any new target overrides. Repair older exports that retained source metadata.
+    if model_args.get('dynamic_img_size') or model_args.get('strict_img_size') is False or model_args.get('use_naflex'):
+        pretrained_cfg['fixed_input_size'] = False
+    if model_args.get('in_chans') is not None:
+        input_size = pretrained_cfg.get('input_size', (3, 224, 224))
+        pretrained_cfg['input_size'] = (model_args['in_chans'], *input_size[1:])
+        for key in ('test_input_size', 'min_input_size'):
+            if pretrained_cfg.get(key):
+                pretrained_cfg[key] = (model_args['in_chans'], *pretrained_cfg[key][1:])
+    if model_args.get('img_size') is not None and pretrained_cfg.get('fixed_input_size', False):
+        size = model_args['img_size']
+        size = (size, size) if isinstance(size, int) else tuple(size)
+        pretrained_cfg['input_size'] = (pretrained_cfg['input_size'][0], *size)
     model_name = cfg["architecture"]
     return pretrained_cfg, model_name, model_args
 
@@ -330,14 +346,57 @@ def save_config_for_hf(
         model: torch.nn.Module,
         config_path: str,
         model_config: Optional[dict] = None,
-        model_args: Optional[dict] = None
+        model_args: Optional[dict] = None,
+        data_config: Optional[dict] = None,
 ):
-    model_config = model_config or {}
+    """Export configuration describing the current weights without modifying their source config.
+
+    Reconstruction arguments are recorded by the model factory and supported resize
+    methods. Pass ``model_args`` for explicit serializable replacements, and
+    ``data_config`` for the preprocessing used with the exported checkpoint.
+    """
+    from timm.data.model_config import resolve_input_data_config
+
+    model_config = deepcopy(model_config or {})
     hf_config = {}
-    pretrained_cfg = filter_pretrained_cfg(model.pretrained_cfg, remove_source=True, remove_null=True)
+    pretrained_cfg = deepcopy(
+        filter_pretrained_cfg(
+            {k: v for k, v in model.pretrained_cfg.items() if k != 'state_dict'},
+            remove_source=True,
+            remove_null=True,
+        )
+    )
+    pretrained_cfg.update(model_config.pop('pretrained_cfg', {}))
+    current_input = get_model_input_config(model)
+    export_args = model_config.pop('model_args', {})
+    export_args.update(model_args or {})
+    current_args = get_model_args(model, export_args)
+    for key, value in current_args.items():
+        try:
+            json.dumps(value)
+        except (TypeError, ValueError) as e:
+            raise ValueError(f'Model argument {key!r} is not serializable; provide a model_args replacement.') from e
+    pretrained_cfg.update(resolve_input_data_config(model, args=data_config, pretrained_cfg=pretrained_cfg))
+    pretrained_cfg['fixed_input_size'] = current_input['fixed_input_size']
+    pretrained_cfg['first_conv'] = current_input['first_conv']
+    pretrained_cfg['custom_load'] = False  # exports always contain native timm state dicts
+    pretrained_cfg.pop('label_offset', None)  # any source label offset has already been applied
+    if tuple(pretrained_cfg['input_size'][1:]) != tuple(model.pretrained_cfg['input_size'][1:]):
+        pretrained_cfg['pool_size'] = None
+    for key in ('test_input_size', 'min_input_size'):
+        if pretrained_cfg.get(key):
+            pretrained_cfg[key] = (current_input['input_size'][0], *pretrained_cfg[key][1:])
+    if current_input['fixed_input_size']:
+        pretrained_cfg.pop('test_input_size', None)
+    if model.num_classes != pretrained_cfg.get('num_classes'):
+        for key in ('label_names', 'label_descriptions', 'label_offset'):
+            pretrained_cfg.pop(key, None)
+    pretrained_cfg['num_classes'] = model.num_classes
     # set some values at root config level
     hf_config['architecture'] = pretrained_cfg.pop('architecture')
     hf_config['num_classes'] = model_config.pop('num_classes', model.num_classes)
+    if hf_config['num_classes'] != model.num_classes:
+        raise ValueError('Export num_classes must match the current model.')
 
     # NOTE these attr saved for informational purposes, do not impact model build
     hf_config['num_features'] = model_config.pop('num_features', model.num_features)
@@ -365,13 +424,13 @@ def save_config_for_hf(
         # maps label names -> descriptions
         hf_config['label_descriptions'] = label_descriptions
 
-    if model_args:
-        hf_config['model_args'] = model_args
+    if current_args:
+        hf_config['model_args'] = current_args
 
     hf_config['pretrained_cfg'] = pretrained_cfg
     hf_config.update(model_config)
 
-    with config_path.open('w') as f:
+    with Path(config_path).open('w') as f:
         json.dump(hf_config, f, indent=2)
 
 
@@ -381,7 +440,9 @@ def save_for_hf(
         model_config: Optional[dict] = None,
         model_args: Optional[dict] = None,
         safe_serialization: Union[bool, Literal["both"]] = False,
+        data_config: Optional[dict] = None,
 ):
+    """Save native weights and their current model and preprocessing configuration."""
     assert has_hf_hub(True)
     save_directory = Path(save_directory)
     save_directory.mkdir(exist_ok=True, parents=True)
@@ -400,6 +461,7 @@ def save_for_hf(
         config_path,
         model_config=model_config,
         model_args=model_args,
+        data_config=data_config,
     )
 
 
@@ -416,10 +478,13 @@ def push_to_hf_hub(
         model_args: Optional[dict] = None,
         task_name: str = 'image-classification',
         safe_serialization: Union[bool, Literal["both"]] = 'both',
+        data_config: Optional[dict] = None,
 ):
     """
     Arguments:
         (...)
+        model_args: Explicit reconstruction arguments supplementing those recorded by the factory.
+        data_config: Preprocessing used with the exported checkpoint, including input size and normalization.
         safe_serialization (`bool` or `"both"`, *optional*, defaults to `False`):
             Whether to save the model using `safetensors` or the traditional PyTorch way (that uses `pickle`).
             Can be set to `"both"` in order to push both safe and unsafe weights.
@@ -443,6 +508,7 @@ def push_to_hf_hub(
             tmpdir,
             model_config=model_config,
             model_args=model_args,
+            data_config=data_config,
             safe_serialization=safe_serialization,
         )
 

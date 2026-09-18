@@ -23,9 +23,14 @@ import torch.nn as nn
 import torch.nn.parallel
 
 from timm import utils
-from timm.data import create_dataset, create_loader, resolve_data_config, RealLabelsImagenet
+from timm.data import (
+    create_dataset,
+    create_loader,
+    resolve_input_data_config,
+    RealLabelsImagenet,
+)
 from timm.layers import apply_test_time_pool, set_fast_norm
-from timm.models import create_model, load_checkpoint, is_model, list_models
+from timm.models import create_model, load_checkpoint, is_model, list_models, resolve_model_input_args
 from timm.utils import accuracy, AverageMeter, natural_key, setup_default_logging, set_jit_fuser, \
     decay_batch_step, check_batch_size_retry, ParseKwargs, reparameterize_model
 
@@ -213,20 +218,16 @@ def validate(args):
         set_fast_norm()
 
     # create model
-    in_chans = 3
-    if args.in_chans is not None:
-        in_chans = args.in_chans
-    elif args.input_size is not None:
-        in_chans = args.input_size[0]
-
     model = create_model(
-        args.model,
-        pretrained=args.pretrained,
-        num_classes=args.num_classes,
-        in_chans=in_chans,
-        global_pool=args.gp,
-        scriptable=args.torchscript,
-        **args.model_kwargs,
+        **resolve_model_input_args(
+            args.model,
+            vars(args),
+            pretrained=args.pretrained,
+            num_classes=args.num_classes,
+            global_pool=args.gp,
+            scriptable=args.torchscript,
+            **args.model_kwargs,
+        )
     )
     if args.num_classes is None:
         assert hasattr(model, 'num_classes'), 'Model must have `num_classes` attr if not set on cmd line/config.'
@@ -241,9 +242,9 @@ def validate(args):
     param_count = sum([m.numel() for m in model.parameters()])
     _logger.info('Model %s created, param count: %d' % (args.model, param_count))
 
-    data_config = resolve_data_config(
+    data_config = resolve_input_data_config(
+        model,
         vars(args),
-        model=model,
         use_test_size=not args.use_train_size,
         verbose=True,
     )

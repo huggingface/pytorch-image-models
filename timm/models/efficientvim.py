@@ -494,6 +494,7 @@ class EfficientViM(nn.Module):
         assert global_pool in ('avg', '')
         assert global_pool or num_classes == 0
         assert len(depths) == len(embed_dim) == len(state_dim)
+        self.in_chans = in_chans
         self.global_pool = global_pool
         self.num_classes = num_classes
         self.num_layers = len(depths)
