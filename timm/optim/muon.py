@@ -21,6 +21,7 @@ Based on implementation by Keller Jordan, see
 Hacked together by Ross Wightman
 """
 import logging
+import math
 import numbers
 import warnings
 from typing import List, Mapping, Optional, Sequence, Tuple, Union
@@ -238,7 +239,7 @@ def get_adamuon_lr_scale(
     """Adjust learning rate based on parameter shape for AdaMuon.
 
     Args:
-        param_shape: Shape of the parameter tensor
+        param_shape: Shape of the update that went through Newton-Schulz, (out, in) or (spatial_prod, out, in)
         adjust_lr_fn: Scaling function name
 
     Returns:
@@ -249,7 +250,9 @@ def get_adamuon_lr_scale(
     if adjust_lr_fn == "match_rms_adamw":
         # AdaMuon paper: normalize by RMS, then scale by 0.2 * sqrt(numel)
         # https://arxiv.org/abs/2507.11005
-        return 0.2 * (out_chs * in_chs) ** 0.5, True
+        # The update is divided by its norm over the whole tensor, so every dim counts, in batched conv
+        # mode that includes the leading spatial dim.
+        return 0.2 * math.prod(param_shape) ** 0.5, True
     elif adjust_lr_fn == "rms_to_rms":
         return (out_chs / in_chs) ** 0.5, False
     elif adjust_lr_fn == "rsqrt_in":
@@ -601,6 +604,14 @@ def _single_tensor_adamuon(
             scale_eps=scale_eps,
         )
 
+        # Get shape-based LR scaling and whether to apply RMS normalization. Use the shape that went through
+        # Newton-Schulz, (out, in) or (spatial_prod, out, in), like the Muon path does. The original N-D shape
+        # of a conv weight ends in (kh, kw), which are not the matrix dims.
+        if adjust_lr_fn:
+            scale, use_rms_norm = get_adamuon_lr_scale(update_ortho.shape, adjust_lr_fn)
+        else:
+            scale, use_rms_norm = 1.0, False
+
         # Reshape back to original shape for second moment tracking
         if conv_mode == "batched" and update_ortho.ndim >= 3:
             # Permute back: (spatial_prod, out, in) -> (out, in, spatial_prod)
@@ -609,12 +620,6 @@ def _single_tensor_adamuon(
 
         # Update second moment on orthogonalized directions (element-wise)
         exp_avg_sq.mul_(beta2).addcmul_(update_ortho, update_ortho, value=1.0 - beta2)
-
-        # Get shape-based LR scaling and whether to apply RMS normalization
-        if adjust_lr_fn:
-            scale, use_rms_norm = get_adamuon_lr_scale(update_ortho.shape, adjust_lr_fn)
-        else:
-            scale, use_rms_norm = 1.0, False
 
         if use_rms_norm:
             # Bias correction not needed if scaling by norm
