@@ -368,10 +368,10 @@ class TestStateDict:
     def test_plateau_state_dict_save_load(self):
         """Test PlateauLRScheduler state dict save/load."""
         optimizer = _create_optimizer()
-        scheduler = PlateauLRScheduler(optimizer)
+        scheduler = PlateauLRScheduler(optimizer, patience_t=2, decay_rate=0.5)
 
-        # Step a few times
-        for epoch in range(5):
+        # Leave the scheduler just before its next decay.
+        for epoch in range(1, 4):
             scheduler.step(epoch, metric=1.0)
 
         # Save state
@@ -380,11 +380,15 @@ class TestStateDict:
 
         # Create new scheduler and load state
         optimizer2 = _create_optimizer()
-        scheduler2 = PlateauLRScheduler(optimizer2)
+        scheduler2 = PlateauLRScheduler(optimizer2, patience_t=2, decay_rate=0.5)
         scheduler2.load_state_dict(state_dict)
 
         # State should be restored
         assert scheduler2.state_dict() == state_dict
+
+        scheduler.step(4, metric=1.0)
+        scheduler2.step(4, metric=1.0)
+        assert optimizer2.param_groups[0]['lr'] == optimizer.param_groups[0]['lr']
 
 
 class TestStepUpdate:
