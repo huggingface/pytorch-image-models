@@ -245,15 +245,18 @@ def load_pretrained(
             state_dict = filter_fn(state_dict)
 
     input_convs = pretrained_cfg.get('first_conv', None)
-    if input_convs is not None and in_chans != 3:
+    pretrained_in_chans = (pretrained_cfg.get('input_size') or (3,))[0]
+    if input_convs is not None and in_chans != pretrained_in_chans:
         if isinstance(input_convs, str):
             input_convs = (input_convs,)
         for input_conv_name in input_convs:
             weight_name = input_conv_name + '.weight'
             try:
-                state_dict[weight_name] = adapt_input_conv(in_chans, state_dict[weight_name])
+                state_dict[weight_name] = adapt_input_conv(
+                    in_chans, state_dict[weight_name], base_chans=pretrained_in_chans)
                 _logger.info(
-                    f'Converted input conv {input_conv_name} pretrained weights from 3 to {in_chans} channel(s)')
+                    f'Converted input conv {input_conv_name} pretrained weights '
+                    f'from {pretrained_in_chans} to {in_chans} channel(s)')
             except NotImplementedError as e:
                 del state_dict[weight_name]
                 strict = False
