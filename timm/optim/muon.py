@@ -192,6 +192,8 @@ def zeropower_via_newtonschulz(
 
         # Perform Newton-Schulz iterations
         for a, b, c in coeff_sequence:
+            # CPU baddbmm before PyTorch 2.1 can propagate NaNs from A despite beta=0:
+            # https://github.com/pytorch/pytorch/pull/96086
             mm_fn(A, X, X.mT, beta=0.0, alpha=1.0, out=A)  # A = X @ X.mT
             mm_fn(A, A, A, beta=b, alpha=c, out=B)  # B = b * A + c * A @ A
             mm_fn(X, B, X, beta=a, alpha=1.0, out=C)  # C = a * X + B @ X
@@ -250,8 +252,7 @@ def get_adamuon_lr_scale(
     if adjust_lr_fn == "match_rms_adamw":
         # AdaMuon paper: normalize by RMS, then scale by 0.2 * sqrt(numel)
         # https://arxiv.org/abs/2507.11005
-        # The update is divided by its norm over the whole tensor, so every dim counts, in batched conv
-        # mode that includes the leading spatial dim.
+        # Match the norm over the whole tensor, including spatial batches.
         return 0.2 * math.prod(param_shape) ** 0.5, True
     elif adjust_lr_fn == "rms_to_rms":
         return (out_chs / in_chs) ** 0.5, False
@@ -604,9 +605,7 @@ def _single_tensor_adamuon(
             scale_eps=scale_eps,
         )
 
-        # Get shape-based LR scaling and whether to apply RMS normalization. Use the shape that went through
-        # Newton-Schulz, (out, in) or (spatial_prod, out, in), like the Muon path does. The original N-D shape
-        # of a conv weight ends in (kh, kw), which are not the matrix dims.
+        # Scale from the orthogonalized matrix dimensions before restoring the convolution shape.
         if adjust_lr_fn:
             scale, use_rms_norm = get_adamuon_lr_scale(update_ortho.shape, adjust_lr_fn)
         else:
@@ -636,7 +635,7 @@ def _single_tensor_adamuon(
         # RMS-aligned rescaling: normalize by update norm, then scale by shape factor
         # Used by AdaMuon paper approach (match_rms_adamw), not by μP approach (rms_to_rms)
         if use_rms_norm:
-            # eq(8) in AdaMuon paper, 0.2 / RMS(update) = 0.2 * sqrt(ndim) / frob(update)
+            # eq(8) in AdaMuon paper, 0.2 / RMS(update) = 0.2 * sqrt(numel) / frob(update)
             update_norm = update_adaptive.norm().add_(eps)
             update_adaptive = update_adaptive / update_norm
 

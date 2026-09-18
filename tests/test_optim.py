@@ -21,6 +21,7 @@ torch_backend = os.environ.get('TORCH_BACKEND')
 if torch_backend is not None:
     importlib.import_module(torch_backend)
 torch_device = os.environ.get('TORCH_DEVICE', 'cuda')
+torch_version = tuple(int(v) for v in torch.__version__.split('.')[:2])
 
 # HACK relying on internal PyTorch test functionality for comparisons that I don't want to write
 torch_tc = TestCase()
@@ -421,43 +422,56 @@ def test_kron(optimizer):
     _test_model(optimizer, dict(lr=1e-3))
 
 
-def test_kron_load_state_dict_fills_missing_corrected_weight_decay():
-    # Kron defined __setstate__ twice. The first definition back-filled the corrected_weight_decay
-    # group option for checkpoints written before that option existed, the second one only cleared
-    # the einsum expression cache, and Python kept the second. Optimizer.load_state_dict replaces
-    # param_groups with the saved ones and then calls __setstate__, so resuming such a checkpoint
-    # with decoupled weight decay raised KeyError on the first step. Both behaviours must survive.
+@pytest.mark.parametrize('saved_corrected_weight_decay', [None, False, True])
+def test_kron_load_state_dict_corrected_weight_decay(saved_corrected_weight_decay):
+    # Loading must clear cached expressions and back-fill missing defaults without overwriting saved values.
     from timm.optim.kron import Kron
 
     def make():
-        weight = Parameter(torch.randn(4, 3))
-        bias = Parameter(torch.randn(4))
-        return Kron([weight, bias], lr=1e-3, weight_decay=0.1, decoupled_decay=True)
+        weight = Parameter(torch.ones(4, 3))
+        bias = Parameter(torch.ones(4))
+        return Kron(
+            [{'params': [weight]}, {'params': [bias]}], lr=1e-3, weight_decay=0.1,
+            decoupled_decay=True, corrected_weight_decay=True, deterministic=True)
 
     def step(optimizer):
-        for p in optimizer.param_groups[0]['params']:
-            p.grad = torch.ones_like(p)
+        for group in optimizer.param_groups:
+            for p in group['params']:
+                p.grad = torch.ones_like(p)
         optimizer.step()
 
     optimizer = make()
     step(optimizer)
     assert optimizer._param_exprs
 
-    state_dict = optimizer.state_dict()
+    state_dict = deepcopy(optimizer.state_dict())
     for group in state_dict['param_groups']:
-        del group['corrected_weight_decay']
+        if saved_corrected_weight_decay is None:
+            del group['corrected_weight_decay']
+        else:
+            group['corrected_weight_decay'] = saved_corrected_weight_decay
 
-    # the einsum expression cache is still cleared on load
-    optimizer.load_state_dict(state_dict)
+    optimizer.load_state_dict(deepcopy(state_dict))
     assert optimizer._param_exprs == {}
 
     resumed = make()
-    resumed.load_state_dict(state_dict)
-    for group in resumed.param_groups:
-        assert group['corrected_weight_decay'] is False
-    step(resumed)
-    for p in resumed.param_groups[0]['params']:
-        assert torch.isfinite(p).all()
+    resumed.load_state_dict(deepcopy(state_dict))
+    for source_group, resumed_group in zip(optimizer.param_groups, resumed.param_groups):
+        for source, dest in zip(source_group['params'], resumed_group['params']):
+            with torch.no_grad():
+                dest.copy_(source)
+
+    expected = saved_corrected_weight_decay if saved_corrected_weight_decay is not None else False
+    for opt in (optimizer, resumed):
+        for group in opt.param_groups:
+            assert group['corrected_weight_decay'] is expected
+            group['lr'] *= 0.5  # Exercise corrected decay at an LR different from the initial value.
+        step(opt)
+        assert opt._param_exprs
+    for source_group, resumed_group in zip(optimizer.param_groups, resumed.param_groups):
+        for source, dest in zip(source_group['params'], resumed_group['params']):
+            assert torch.isfinite(dest).all()
+            torch.testing.assert_close(source, dest)
 
 
 @pytest.mark.parametrize('optimizer',  ['muon', 'nmuon'])
@@ -846,24 +860,18 @@ def test_adafactor_bv_factored_row_normalization(shape):
 
 
 @pytest.mark.parametrize('clipping_threshold', [0.5, 2.0])
-def test_adafactor_bv_clipping_threshold(clipping_threshold):
-    # AdafactorBigVision clips the update by its RMS the way big_vision and optax.clip_by_block_rms do:
-    # update / max(1, rms(update) / clipping_threshold). The denominator used to be
-    # min(1, rms(update) * clipping_threshold), which never clipped a large update and scaled every
-    # update with an RMS below 1 / clipping_threshold up to exactly that RMS. Compare against an
-    # unclipped run on the same gradients. The unclipped updates have an RMS of 1.0, about 1.31 and
-    # about 0.017, so with a threshold of 0.5 the first two must be clipped to an RMS of 0.5 and the
-    # third left alone, and with a threshold of 2.0 all three must pass through unchanged.
+@pytest.mark.parametrize('shape', [(4,), (16, 32), (32, 16)])
+def test_adafactor_bv_clipping_threshold(clipping_threshold, shape):
+    # Compare to unclipped updates above/below the threshold, including zero gradients and both
+    # factored axis orders. Small updates must not grow, and zero updates must stay finite.
     from timm.optim.adafactor_bv import AdafactorBigVision
 
-    grads = [
-        torch.tensor([0.5, -1.0, 2.0, -4.0], dtype=torch.double),
-        torch.tensor([5.0, -10.0, 20.0, -40.0], dtype=torch.double),
-        torch.tensor([0.05, -0.1, 0.2, -0.4], dtype=torch.double),
-    ]
+    generator = torch.Generator().manual_seed(0)
+    grad = torch.randn(shape, dtype=torch.double, generator=generator)
+    grads = [torch.zeros_like(grad), grad, 10 * grad, 0.1 * grad, torch.zeros_like(grad)]
 
     def make(threshold):
-        param = Parameter(torch.zeros(4, dtype=torch.double))
+        param = Parameter(torch.zeros(shape, dtype=torch.double))
         opt = AdafactorBigVision(
             [param], lr=1.0, momentum=None, eps=1e-30, weight_decay=0.0, clipping_threshold=threshold)
         return param, opt
@@ -933,41 +941,82 @@ def test_mars_last_grad_is_copied_not_aliased():
     torch.testing.assert_close(last_grad, grad)
 
 
-@pytest.mark.parametrize('adjust_lr_fn', ['match_rms_adamw', 'rms_to_rms', 'rsqrt_in'])
-def test_adamuon_conv_flatten_matches_2d(adjust_lr_fn):
-    # In flatten mode a conv weight (out, in, kh, kw) is orthogonalized as the (out, in * kh * kw) matrix.
-    # The second moment is element-wise and the RMS normalization is over the whole tensor, so one AdaMuon
-    # step on the conv weight must equal one step on the flattened 2D weight given the same gradient.
-    # The LR scale used to be computed from the original N-D shape, whose trailing dims are (kh, kw), so
-    # conv weights got a scale based on the kernel size instead of the matrix dims.
+@pytest.mark.parametrize('adjust_lr_fn', ['match_rms_adamw', 'rms_to_rms', 'rsqrt_in', None])
+@pytest.mark.parametrize('shape', [(8, 4, 3), (8, 4, 3, 3), (8, 4, 2, 3, 3)])
+@pytest.mark.parametrize('nesterov', [False, True])
+def test_adamuon_conv_flatten_matches_2d(adjust_lr_fn, shape, nesterov):
+    # Flattened convolutions must follow the same trajectory as the equivalent matrix, including
+    # second moments and decay. LR scaling must use matrix dimensions instead of kernel dimensions.
     from timm.optim.muon import Muon
 
     generator = torch.Generator().manual_seed(0)
-    grad = torch.randn(8, 4, 3, 3, generator=generator)
+    param_conv = Parameter(torch.randn(shape, generator=generator))
+    param_2d = Parameter(param_conv.detach().reshape(shape[0], -1).clone())
+    kwargs = dict(lr=0.1, weight_decay=0.1, algo='adamuon', adjust_lr_fn=adjust_lr_fn, nesterov=nesterov)
+    opt_conv = Muon([param_conv], **kwargs)
+    opt_2d = Muon([param_2d], **kwargs)
+    for _ in range(3):
+        grad = torch.randn(shape, generator=generator)
+        param_conv.grad = grad.clone()
+        param_2d.grad = grad.reshape_as(param_2d).clone()
+        opt_conv.step()
+        opt_2d.step()
+        assert opt_conv.state[param_conv]['use_muon']
+        torch.testing.assert_close(param_conv.reshape_as(param_2d), param_2d)
+        torch.testing.assert_close(
+            opt_conv.state[param_conv]['exp_avg_sq'].reshape_as(param_2d),
+            opt_2d.state[param_2d]['exp_avg_sq'])
 
-    def one_step(g):
-        param = Parameter(torch.zeros_like(g))
-        opt = Muon([param], lr=1.0, weight_decay=0.0, algo='adamuon', adjust_lr_fn=adjust_lr_fn)
-        param.grad = g.clone()
-        opt.step()
-        return param.detach().clone()
 
-    param_conv = one_step(grad)
-    param_2d = one_step(grad.reshape(8, -1).contiguous())
-    torch.testing.assert_close(param_conv.reshape(8, -1), param_2d)
-
-
-@pytest.mark.parametrize('shape', [(8, 36), (8, 4, 3, 3)])
-def test_adamuon_first_step_rms(shape):
-    # With the default match_rms_adamw scaling AdaMuon divides the update by its Frobenius norm and scales
-    # by 0.2 * sqrt(numel), so the first step has RMS 0.2 * lr whatever the shape. A conv weight used to be
-    # scaled by 0.2 * sqrt(kh * kw) instead, an update sqrt(out * in) times too small.
+@pytest.mark.parametrize('adjust_lr_fn', ['match_rms_adamw', 'rms_to_rms', 'rsqrt_in', None])
+@pytest.mark.parametrize('normalize_spatial', [False, True])
+def test_adamuon_conv_batched_matches_repeated_2d(adjust_lr_fn, normalize_spatial):
+    # Repeating a matrix across spatial positions must preserve its update, apart from the
+    # optional spatial normalization. This also checks the non-RMS scaling modes in batched mode.
     from timm.optim.muon import Muon
+
+    if torch_version < (2, 1):
+        pytest.skip('Older CPU batched bfloat16 kernels have different rounding and a beta=0 NaN bug (pytorch#96086)')
+
+    generator = torch.Generator().manual_seed(0)
+    param_2d = Parameter(torch.zeros(8, 4))
+    param_conv = Parameter(torch.zeros(8, 4, 2, 3))
+    kwargs = dict(weight_decay=0.0, algo='adamuon', adjust_lr_fn=adjust_lr_fn)
+    spatial_scale = 6 ** -0.5 if normalize_spatial else 1.0
+    opt_2d = Muon([param_2d], lr=0.1 * spatial_scale, **kwargs)
+    opt_conv = Muon([param_conv], lr=0.1, conv_mode='batched', normalize_spatial=normalize_spatial, **kwargs)
+    for _ in range(3):
+        grad = torch.randn(8, 4, generator=generator)
+        param_2d.grad = grad.clone()
+        param_conv.grad = grad[:, :, None, None].expand_as(param_conv).clone()
+        opt_2d.step()
+        opt_conv.step()
+        assert opt_conv.state[param_conv]['use_muon']
+        expected = param_2d[:, :, None, None].expand_as(param_conv)
+        torch.testing.assert_close(param_conv, expected)
+
+
+@pytest.mark.parametrize('shape', [(8, 36), (8, 4, 3), (8, 4, 3, 3), (8, 4, 2, 3, 3)])
+@pytest.mark.parametrize('conv_mode,normalize_spatial', [('flatten', True), ('batched', False), ('batched', True)])
+def test_adamuon_update_rms(shape, conv_mode, normalize_spatial):
+    # RMS alignment uses the whole tensor, with optional 1/sqrt(spatial_size) scaling in batched mode.
+    from timm.optim.muon import Muon
+
+    if conv_mode == 'batched' and len(shape) > 2 and torch_version < (2, 1):
+        pytest.skip('Older CPU baddbmm can propagate uninitialized NaNs with beta=0 (pytorch#96086)')
 
     generator = torch.Generator().manual_seed(0)
     param = Parameter(torch.zeros(shape))
-    opt = Muon([param], lr=1.0, weight_decay=0.0, algo='adamuon')
-    param.grad = torch.randn(shape, generator=generator)
-    opt.step()
-    rms = param.detach().pow(2).mean().sqrt()
-    torch.testing.assert_close(rms, torch.tensor(0.2), rtol=1e-2, atol=1e-3)
+    opt = Muon([param], lr=0.1, weight_decay=0.0, algo='adamuon',
+               conv_mode=conv_mode, normalize_spatial=normalize_spatial)
+    expected_rms = 0.2 * 0.1
+    if conv_mode == 'batched' and normalize_spatial:
+        spatial_size = param.numel() // (shape[0] * shape[1])
+        expected_rms /= spatial_size ** 0.5
+    for _ in range(3):
+        before = param.detach().clone()
+        param.grad = torch.randn(shape, generator=generator)
+        opt.step()
+        assert opt.state[param]['use_muon']
+        rms = (before - param.detach()).square().mean().sqrt()
+        torch.testing.assert_close(rms, torch.tensor(expected_rms), rtol=1e-5, atol=1e-7)
