@@ -421,6 +421,45 @@ def test_kron(optimizer):
     _test_model(optimizer, dict(lr=1e-3))
 
 
+def test_kron_load_state_dict_fills_missing_corrected_weight_decay():
+    # Kron defined __setstate__ twice. The first definition back-filled the corrected_weight_decay
+    # group option for checkpoints written before that option existed, the second one only cleared
+    # the einsum expression cache, and Python kept the second. Optimizer.load_state_dict replaces
+    # param_groups with the saved ones and then calls __setstate__, so resuming such a checkpoint
+    # with decoupled weight decay raised KeyError on the first step. Both behaviours must survive.
+    from timm.optim.kron import Kron
+
+    def make():
+        weight = Parameter(torch.randn(4, 3))
+        bias = Parameter(torch.randn(4))
+        return Kron([weight, bias], lr=1e-3, weight_decay=0.1, decoupled_decay=True)
+
+    def step(optimizer):
+        for p in optimizer.param_groups[0]['params']:
+            p.grad = torch.ones_like(p)
+        optimizer.step()
+
+    optimizer = make()
+    step(optimizer)
+    assert optimizer._param_exprs
+
+    state_dict = optimizer.state_dict()
+    for group in state_dict['param_groups']:
+        del group['corrected_weight_decay']
+
+    # the einsum expression cache is still cleared on load
+    optimizer.load_state_dict(state_dict)
+    assert optimizer._param_exprs == {}
+
+    resumed = make()
+    resumed.load_state_dict(state_dict)
+    for group in resumed.param_groups:
+        assert group['corrected_weight_decay'] is False
+    step(resumed)
+    for p in resumed.param_groups[0]['params']:
+        assert torch.isfinite(p).all()
+
+
 @pytest.mark.parametrize('optimizer',  ['muon', 'nmuon'])
 def test_muon(optimizer):
     _test_rosenbrock(
