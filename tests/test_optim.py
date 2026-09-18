@@ -852,3 +852,43 @@ def test_mars_last_grad_is_copied_not_aliased():
     torch.testing.assert_close(param_zero, param_none)
     assert last_grad is not grad
     torch.testing.assert_close(last_grad, grad)
+
+
+@pytest.mark.parametrize('adjust_lr_fn', ['match_rms_adamw', 'rms_to_rms', 'rsqrt_in'])
+def test_adamuon_conv_flatten_matches_2d(adjust_lr_fn):
+    # In flatten mode a conv weight (out, in, kh, kw) is orthogonalized as the (out, in * kh * kw) matrix.
+    # The second moment is element-wise and the RMS normalization is over the whole tensor, so one AdaMuon
+    # step on the conv weight must equal one step on the flattened 2D weight given the same gradient.
+    # The LR scale used to be computed from the original N-D shape, whose trailing dims are (kh, kw), so
+    # conv weights got a scale based on the kernel size instead of the matrix dims.
+    from timm.optim.muon import Muon
+
+    generator = torch.Generator().manual_seed(0)
+    grad = torch.randn(8, 4, 3, 3, generator=generator)
+
+    def one_step(g):
+        param = Parameter(torch.zeros_like(g))
+        opt = Muon([param], lr=1.0, weight_decay=0.0, algo='adamuon', adjust_lr_fn=adjust_lr_fn)
+        param.grad = g.clone()
+        opt.step()
+        return param.detach().clone()
+
+    param_conv = one_step(grad)
+    param_2d = one_step(grad.reshape(8, -1).contiguous())
+    torch.testing.assert_close(param_conv.reshape(8, -1), param_2d)
+
+
+@pytest.mark.parametrize('shape', [(8, 36), (8, 4, 3, 3)])
+def test_adamuon_first_step_rms(shape):
+    # With the default match_rms_adamw scaling AdaMuon divides the update by its Frobenius norm and scales
+    # by 0.2 * sqrt(numel), so the first step has RMS 0.2 * lr whatever the shape. A conv weight used to be
+    # scaled by 0.2 * sqrt(kh * kw) instead, an update sqrt(out * in) times too small.
+    from timm.optim.muon import Muon
+
+    generator = torch.Generator().manual_seed(0)
+    param = Parameter(torch.zeros(shape))
+    opt = Muon([param], lr=1.0, weight_decay=0.0, algo='adamuon')
+    param.grad = torch.randn(shape, generator=generator)
+    opt.step()
+    rms = param.detach().pow(2).mean().sqrt()
+    torch.testing.assert_close(rms, torch.tensor(0.2), rtol=1e-2, atol=1e-3)
