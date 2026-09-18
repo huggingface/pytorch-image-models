@@ -806,6 +806,46 @@ def test_adafactor_bv_factored_row_normalization(shape):
     torch.testing.assert_close(param_t, param.t())
 
 
+@pytest.mark.parametrize('clipping_threshold', [0.5, 2.0])
+def test_adafactor_bv_clipping_threshold(clipping_threshold):
+    # AdafactorBigVision clips the update by its RMS the way big_vision and optax.clip_by_block_rms do:
+    # update / max(1, rms(update) / clipping_threshold). The denominator used to be
+    # min(1, rms(update) * clipping_threshold), which never clipped a large update and scaled every
+    # update with an RMS below 1 / clipping_threshold up to exactly that RMS. Compare against an
+    # unclipped run on the same gradients. The unclipped updates have an RMS of 1.0, about 1.31 and
+    # about 0.017, so with a threshold of 0.5 the first two must be clipped to an RMS of 0.5 and the
+    # third left alone, and with a threshold of 2.0 all three must pass through unchanged.
+    from timm.optim.adafactor_bv import AdafactorBigVision
+
+    grads = [
+        torch.tensor([0.5, -1.0, 2.0, -4.0], dtype=torch.double),
+        torch.tensor([5.0, -10.0, 20.0, -40.0], dtype=torch.double),
+        torch.tensor([0.05, -0.1, 0.2, -0.4], dtype=torch.double),
+    ]
+
+    def make(threshold):
+        param = Parameter(torch.zeros(4, dtype=torch.double))
+        opt = AdafactorBigVision(
+            [param], lr=1.0, momentum=None, eps=1e-30, weight_decay=0.0, clipping_threshold=threshold)
+        return param, opt
+
+    param_ref, opt_ref = make(None)
+    param_clip, opt_clip = make(clipping_threshold)
+    for grad in grads:
+        before_ref = param_ref.detach().clone()
+        before_clip = param_clip.detach().clone()
+        param_ref.grad = grad.clone()
+        param_clip.grad = grad.clone()
+        opt_ref.step()
+        opt_clip.step()
+        update_ref = before_ref - param_ref.detach()
+        update_clip = before_clip - param_clip.detach()
+        rms_ref = (update_ref.norm(2) / update_ref.numel() ** 0.5).item()
+        torch.testing.assert_close(update_clip, update_ref / max(1.0, rms_ref / clipping_threshold))
+        rms_clip = (update_clip.norm(2) / update_clip.numel() ** 0.5).item()
+        assert rms_clip <= min(rms_ref, clipping_threshold) + 1e-9
+
+
 def test_sgdw_multi_tensor_weight_decay_matches_single_tensor():
     # The foreach path groups params by (device, dtype) and iterates the groups. Decoupled weight
     # decay must be applied to each group's params, otherwise params spanning more than one partition
