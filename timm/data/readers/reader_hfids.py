@@ -187,7 +187,9 @@ class ReaderHfids(Reader):
                 f'(datasets {datasets.__version__}).'
             )
             if self.is_training:
-                raise RuntimeError(msg + ' Reduce the number of loader workers or use a dataset with more shards.')
+                raise RuntimeError(
+                    msg + ' Reduce the number of loader workers to at most the shard count, or load the '
+                    'dataset with the map-style hfds reader.')
             _logger.warning(msg + ' Those workers will be idle.')
 
     def _num_samples_per_worker(self):
