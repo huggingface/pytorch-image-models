@@ -38,6 +38,33 @@ python inference.py --data-dir /imagenet/validation/ --model mobilenetv3_large_1
 
 ## Training Examples
 
+### Multi-label classification
+
+Use `--task multilabel` for images with multiple independent labels. The target column contains a list of positive, zero-based class IDs; `--num-classes` sets the vocabulary size. Labels are converted to float multi-hot targets before batching, and empty lists represent images with no positive labels. Datasets that instead store a dense multi-hot vector of length `--num-classes` (bool, int, or float values in `[0, 1]`) pass `--target-format multihot`; the vector is used as-is, so soft values train directly with BCE and are binarized at 0.5 for the evaluation metrics. Class maps for multi-hot targets must be keyed by source class index. Without the flag every list is read as class indices, since an integer multi-hot vector is indistinguishable from an index list.
+
+The [plant pathology dataset](https://huggingface.co/datasets/timm/plant-pathology-2021) provides this format: an `image` column and a `labels` column containing a sequence of `ClassLabel` values. Its six classes are `complex`, `frog_eye_leaf_spot`, `healthy`, `powdery_mildew`, `rust`, and `scab`. For example, `[5, 1, 0]` becomes `[1, 1, 0, 0, 0, 1]`.
+
+```bash
+python train.py --dataset hfds/timm/plant-pathology-2021 \
+  --task multilabel --target-key labels --num-classes 6 \
+  --model resnet50 --pretrained --batch-size 32 --epochs 30 \
+  --opt adamw --lr 1e-4 --weight-decay 0.01 --amp
+
+python validate.py --dataset hfds/timm/plant-pathology-2021 \
+  --task multilabel --target-key labels --num-classes 6 \
+  --model resnet50 --checkpoint ./output/train/<experiment>/model_best.pth.tar
+```
+
+`hfids/timm/plant-pathology-2021` supports streaming with the same target format. Multi-label targets are supported by the Hugging Face `hfds` and `hfids` readers, and by WebDataset (`wds`) shards that store a list of class IDs in each sample's `.json` sidecar under the field named by `--target-key` (without `--target-key` the `.cls` file supplies a single class index). The folder and tar readers yield single class indices.
+
+Datasets that store one binary field per label, such as [Wake Vision](https://www.tensorflow.org/datasets/catalog/wake_vision), can pass a comma separated list of field names instead: `--target-key person,depiction,body_part`. Each field becomes one class in the order listed, values greater than zero count as positive, and `--num-classes` must equal the number of fields. Multi-field keys define their own format, so `--target-format` stays at its default. This works for the `hfds`, `hfids`, and `tfds` readers, and for WebDataset when the fields are in the `.json` sidecar. Fields nested in sub-dicts are addressed with `/`, for example `--input-key input --target-key output/pollen_output,output/wasps_output` for the TFDS `bee_dataset`; single target keys accept the same paths, and a literal field name containing `/` (such as TFDS `image/filename`) takes precedence over a path. Standard and NaFlex loaders support multi-label targets, including mixup and cutmix; NaFlex training currently requires a map-style dataset such as `hfds`.
+
+The task trains with binary cross-entropy with logits. Smoothing defaults to zero for multi-label training; setting `--smoothing s` moves each binary target to `target * (1 - s) + 0.5 * s`, applied by Mixup/CutMix when they are active and by the loss otherwise. Existing `--bce-pos-weight`, `--bce-sum`, and `--bce-target-thresh` options also apply. Distillation and JSD loss are not supported by this task.
+
+Validation reports BCE loss, `map` (mean average precision), `micro_f1`, `macro_f1`, and `sample_f1`. Metrics are percentages and use the complete validation set, including predictions gathered across distributed ranks. Ordered distributed sampler padding is excluded. Exact mAP retains predictions on CPU until evaluation finishes, so its memory use scales with the number of examples and classes. Classes without positives contribute zero AP; F1 values with a zero denominator are zero.
+
+`--eval-metric map` is the default for checkpoint selection and scheduling. F1 uses a sigmoid probability threshold of 0.5, configurable with `--multilabel-threshold`; mAP is independent of this threshold. Model outputs remain logits, so apply sigmoid for independent class probabilities when using the trained model.
+
 ### EfficientNet-B2 with RandAugment - 80.4 top-1, 95.1 top-5
 
 These params are for dual Titan RTX cards with NVIDIA Apex installed:

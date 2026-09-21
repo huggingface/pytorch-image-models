@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from timm.models import create_model
 from timm.utils import unwrap_model
 
+from .classification import resolve_classification_loss
 from .task import TrainingTask
 
 _logger = logging.getLogger(__name__)
@@ -150,7 +151,8 @@ class TokenDistillationTask(TrainingTask):
     Args:
         student_model: Student model with set_distilled_training() method
         teacher_model: Teacher model - can be a model name string, nn.Module, or TokenDistillationTeacher
-        criterion: Task loss function for main head (default: CrossEntropyLoss)
+        criterion: Task loss function for main head. Created by create_classification_loss() from
+            loss_kwargs when None.
         teacher_pretrained_path: Path to teacher pretrained weights (used when teacher_model is a string)
         distill_type: 'soft' for KL-div or 'hard' for CE with teacher argmax
         distill_loss_weight: Weight for distillation loss
@@ -189,6 +191,7 @@ class TokenDistillationTask(TrainingTask):
             device: Optional[torch.device] = None,
             dtype: Optional[torch.dtype] = None,
             verbose: bool = True,
+            **loss_kwargs,
     ):
         super().__init__(device=device, dtype=dtype, verbose=verbose)
 
@@ -226,7 +229,7 @@ class TokenDistillationTask(TrainingTask):
 
         self.trainable_module = student_model
         self.teacher = teacher
-        self.criterion = criterion if criterion is not None else nn.CrossEntropyLoss()
+        self.criterion = resolve_classification_loss(criterion, self.device, **loss_kwargs)
         self.distill_type = distill_type
         self.temperature = temperature
 

@@ -50,6 +50,11 @@ class OrderedDistributedSampler(Sampler):
     def __len__(self):
         return self.num_samples
 
+    @property
+    def num_valid_samples(self) -> int:
+        """Samples on this rank that are real data, excluding the padding that makes ranks even."""
+        return max(0, (len(self.dataset) + self.num_replicas - 1 - self.rank) // self.num_replicas)
+
 
 class RepeatAugSampler(Sampler):
     """Sampler that restricts data loading to a subset of the dataset for distributed,
