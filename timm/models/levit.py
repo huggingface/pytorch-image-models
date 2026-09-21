@@ -263,7 +263,7 @@ class Attention(nn.Module):
     @torch.no_grad()
     def train(self, mode=True):
         super().train(mode)
-        if mode and self.attention_bias_cache:
+        if self.attention_bias_cache:
             self.attention_bias_cache = {}  # clear ab cache
 
     def reset_parameters(self) -> None:
@@ -390,7 +390,7 @@ class AttentionDownsample(nn.Module):
     @torch.no_grad()
     def train(self, mode=True):
         super().train(mode)
-        if mode and self.attention_bias_cache:
+        if self.attention_bias_cache:
             self.attention_bias_cache = {}  # clear ab cache
 
     def reset_parameters(self) -> None:
