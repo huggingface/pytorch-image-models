@@ -235,7 +235,7 @@ class CascadedGroupAttention(torch.nn.Module):
     @torch.no_grad()
     def train(self, mode=True):
         super().train(mode)
-        if mode and self.attention_bias_cache:
+        if self.attention_bias_cache:
             self.attention_bias_cache = {}  # clear ab cache
 
     def get_attention_biases(self, device: torch.device) -> torch.Tensor:

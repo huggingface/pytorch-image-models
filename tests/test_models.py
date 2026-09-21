@@ -1349,3 +1349,27 @@ def test_mobile_model_fusion_features(model_name, kwargs):
         # Resetting a classifier after pruning must use the retained feature width.
         getter.model.reset_classifier(7, global_pool='avg')
         assert getter.model(x).shape == (2, 7)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name', [
+    'levit_128s', 'levit_conv_128s', 'efficientformer_l1', 'efficientformerv2_s0', 'tiny_vit_5m_224', 'efficientvit_m0',
+])
+def test_eval_refreshes_attention_bias_cache(model_name):
+    # A model that stays in eval mode while its weights change (e.g. an EMA copy between validation runs)
+    # must not keep using the attention biases cached from the previous weights once eval() is called again.
+    model = create_model(model_name).eval()
+    attn_modules = [m for m in model.modules() if hasattr(m, 'attention_bias_cache')]
+    assert attn_modules
+    x = torch.randn(1, *model.pretrained_cfg['input_size'])
+    with torch.no_grad():
+        model(x)
+        for m in attn_modules:
+            m.attention_biases.normal_()
+        model.eval()
+        model(x)
+        for m in attn_modules:
+            torch.testing.assert_close(
+                m.get_attention_biases(x.device),
+                m.attention_biases[:, m.attention_bias_idxs],
+            )
