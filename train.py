@@ -958,7 +958,7 @@ def main():
                 device=device,
                 dtype=model_dtype,
                 verbose=utils.is_primary(args),
-                **loss_kwargs,
+                criterion_kwargs=loss_kwargs,
             )
         elif args.kd_distill_type == 'feature':
             task = FeatureDistillationTask(
@@ -971,7 +971,7 @@ def main():
                 device=device,
                 dtype=model_dtype,
                 verbose=utils.is_primary(args),
-                **loss_kwargs,
+                criterion_kwargs=loss_kwargs,
             )
         elif args.kd_distill_type == 'token':
             task = TokenDistillationTask(
@@ -984,7 +984,7 @@ def main():
                 device=device,
                 dtype=model_dtype,
                 verbose=utils.is_primary(args),
-                **loss_kwargs,
+                criterion_kwargs=loss_kwargs,
             )
         else:
             raise ValueError(f"Unknown distillation type: {args.kd_distill_type}")
@@ -995,7 +995,7 @@ def main():
             device=device,
             dtype=model_dtype,
             verbose=utils.is_primary(args),
-            **loss_kwargs,
+            criterion_kwargs=loss_kwargs,
         )
     else:
         # Standard classification task
@@ -1004,7 +1004,7 @@ def main():
             device=device,
             dtype=model_dtype,
             verbose=utils.is_primary(args),
-            **loss_kwargs,
+            criterion_kwargs=loss_kwargs,
         )
 
     model = task.get_trainable_module()

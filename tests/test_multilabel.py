@@ -165,12 +165,14 @@ def test_create_classification_loss_dispatch(kwargs, expected):
         assert loss.smoothing == (0. if kwargs.get('soft_targets') else kwargs.get('smoothing', 0.))
 
 
-def test_classification_task_loss_kwargs_validation():
+def test_classification_task_criterion_kwargs_validation():
     model = nn.Linear(2, 3)
     with pytest.raises(ValueError, match='not both'):
-        ClassificationTask(model, nn.CrossEntropyLoss(), smoothing=0.1, verbose=False)
-    with pytest.raises(TypeError):
-        ClassificationTask(model, smoothin=0.1, verbose=False)
+        ClassificationTask(model, nn.CrossEntropyLoss(), criterion_kwargs=dict(smoothing=0.1), verbose=False)
+    with pytest.raises(TypeError):  # loss options are not accepted as bare task kwargs
+        ClassificationTask(model, smoothing=0.1, verbose=False)
+    with pytest.raises(TypeError):  # and typos inside criterion_kwargs reach the factory
+        ClassificationTask(model, criterion_kwargs=dict(smoothin=0.1), verbose=False)
     with pytest.raises(ValueError, match='JSD'):
         create_classification_loss(multi_label=True, jsd_splits=2)
     with pytest.raises(ValueError, match='threshold'):
@@ -182,7 +184,7 @@ def test_multilabel_task_creates_bce_with_dense_smoothing():
     model = nn.Linear(2, 3)
     target = torch.tensor([[1., 0., 1.], [0., 1., 1.]])
     bce = nn.functional.binary_cross_entropy_with_logits
-    task = MultiLabelClassificationTask(model, smoothing=0.2, verbose=False)
+    task = MultiLabelClassificationTask(model, criterion_kwargs=dict(smoothing=0.2), verbose=False)
     assert isinstance(task.criterion, BinaryCrossEntropy) and task.criterion.smooth_dense
     result = task(torch.ones(2, 2), target)
     torch.testing.assert_close(result['loss'], bce(result['output'], target * 0.8 + 0.1))
@@ -191,7 +193,8 @@ def test_multilabel_task_creates_bce_with_dense_smoothing():
     # Mixup applies the smoothing itself, so the criterion created for soft targets must not smooth again.
     mixed = mixup_target(target, 3, lam=0.25, smoothing=0.2, multi_label=True)
     torch.testing.assert_close(mixed, (target * 0.25 + target.flip(0) * 0.75) * 0.8 + 0.1)
-    soft_task = MultiLabelClassificationTask(model, smoothing=0.2, soft_targets=True, verbose=False)
+    soft_task = MultiLabelClassificationTask(
+        model, criterion_kwargs=dict(smoothing=0.2, soft_targets=True), verbose=False)
     result = soft_task(torch.ones(2, 2), mixed)
     torch.testing.assert_close(result['loss'], bce(result['output'], mixed))
     with pytest.raises(ValueError, match='dense floating-point'):

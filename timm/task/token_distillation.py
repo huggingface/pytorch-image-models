@@ -1,6 +1,6 @@
 """Token-based distillation training task for models with distillation heads."""
 import logging
-from typing import Dict, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -152,7 +152,8 @@ class TokenDistillationTask(TrainingTask):
         student_model: Student model with set_distilled_training() method
         teacher_model: Teacher model - can be a model name string, nn.Module, or TokenDistillationTeacher
         criterion: Task loss function for main head. Created by create_classification_loss() from
-            loss_kwargs when None.
+            criterion_kwargs when None.
+        criterion_kwargs: Arguments for create_classification_loss() when criterion is None.
         teacher_pretrained_path: Path to teacher pretrained weights (used when teacher_model is a string)
         distill_type: 'soft' for KL-div or 'hard' for CE with teacher argmax
         distill_loss_weight: Weight for distillation loss
@@ -183,6 +184,7 @@ class TokenDistillationTask(TrainingTask):
             student_model: nn.Module,
             teacher_model: Union[str, nn.Module, TokenDistillationTeacher],
             criterion: Optional[nn.Module] = None,
+            criterion_kwargs: Optional[Dict[str, Any]] = None,
             teacher_pretrained_path: Optional[str] = None,
             distill_type: str = 'soft',
             distill_loss_weight: Optional[float] = None,
@@ -191,7 +193,6 @@ class TokenDistillationTask(TrainingTask):
             device: Optional[torch.device] = None,
             dtype: Optional[torch.dtype] = None,
             verbose: bool = True,
-            **loss_kwargs,
     ):
         super().__init__(device=device, dtype=dtype, verbose=verbose)
 
@@ -229,7 +230,7 @@ class TokenDistillationTask(TrainingTask):
 
         self.trainable_module = student_model
         self.teacher = teacher
-        self.criterion = resolve_classification_loss(criterion, self.device, **loss_kwargs)
+        self.criterion = resolve_classification_loss(criterion, self.device, criterion_kwargs=criterion_kwargs)
         self.distill_type = distill_type
         self.temperature = temperature
 

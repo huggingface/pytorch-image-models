@@ -1,6 +1,6 @@
 """Knowledge distillation training tasks and components."""
 import logging
-from typing import Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -213,7 +213,8 @@ class LogitDistillationTask(TrainingTask):
     Args:
         student_model: Student model to train
         teacher_model: Teacher model - can be a model name string, nn.Module, or DistillationTeacher
-        criterion: Task loss function. Created by create_classification_loss() from loss_kwargs when None.
+        criterion: Task loss function. Created by create_classification_loss() from criterion_kwargs when None.
+        criterion_kwargs: Arguments for create_classification_loss() when criterion is None.
         teacher_pretrained_path: Path to teacher pretrained weights (used when teacher_model is a string)
         loss_type: Type of distillation loss (currently only 'kl' supported)
         distill_loss_weight: Weight for distillation loss
@@ -244,6 +245,7 @@ class LogitDistillationTask(TrainingTask):
             student_model: nn.Module,
             teacher_model: Union[str, nn.Module, DistillationTeacher],
             criterion: Optional[nn.Module] = None,
+            criterion_kwargs: Optional[Dict[str, Any]] = None,
             teacher_pretrained_path: Optional[str] = None,
             loss_type: str = 'kl',
             distill_loss_weight: Optional[float] = None,
@@ -252,7 +254,6 @@ class LogitDistillationTask(TrainingTask):
             device: Optional[torch.device] = None,
             dtype: Optional[torch.dtype] = None,
             verbose: bool = True,
-            **loss_kwargs,
     ):
         super().__init__(device=device, dtype=dtype, verbose=verbose)
 
@@ -267,7 +268,7 @@ class LogitDistillationTask(TrainingTask):
 
         self.trainable_module = student_model
         self.teacher = teacher
-        self.criterion = resolve_classification_loss(criterion, self.device, **loss_kwargs)
+        self.criterion = resolve_classification_loss(criterion, self.device, criterion_kwargs=criterion_kwargs)
         self.loss_type = loss_type
         self.temperature = temperature
 
@@ -485,7 +486,8 @@ class FeatureDistillationTask(TrainingTask):
     Args:
         student_model: Student model to train
         teacher_model: Teacher model - can be a model name string, nn.Module, or DistillationTeacher
-        criterion: Task loss function. Created by create_classification_loss() from loss_kwargs when None.
+        criterion: Task loss function. Created by create_classification_loss() from criterion_kwargs when None.
+        criterion_kwargs: Arguments for create_classification_loss() when criterion is None.
         teacher_pretrained_path: Path to teacher pretrained weights (used when teacher_model is a string)
         distill_loss_weight: Weight for distillation loss
         task_loss_weight: Weight for task loss
@@ -510,6 +512,7 @@ class FeatureDistillationTask(TrainingTask):
             student_model: nn.Module,
             teacher_model: Union[str, nn.Module, DistillationTeacher],
             criterion: Optional[nn.Module] = None,
+            criterion_kwargs: Optional[Dict[str, Any]] = None,
             teacher_pretrained_path: Optional[str] = None,
             distill_loss_weight: Optional[float] = None,
             task_loss_weight: Optional[float] = None,
@@ -518,7 +521,6 @@ class FeatureDistillationTask(TrainingTask):
             device: Optional[torch.device] = None,
             dtype: Optional[torch.dtype] = None,
             verbose: bool = True,
-            **loss_kwargs,
     ):
         super().__init__(device=device, dtype=dtype, verbose=verbose)
 
@@ -532,7 +534,7 @@ class FeatureDistillationTask(TrainingTask):
         )
 
         self.teacher = teacher
-        self.criterion = resolve_classification_loss(criterion, self.device, **loss_kwargs)
+        self.criterion = resolve_classification_loss(criterion, self.device, criterion_kwargs=criterion_kwargs)
 
         # Determine weighting mode
         if distill_loss_weight is not None:

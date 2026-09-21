@@ -1,6 +1,6 @@
 """Classification training task."""
 import logging
-from typing import Callable, Dict, Optional, Union
+from typing import Any, Callable, Dict, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -58,13 +58,14 @@ def resolve_classification_loss(
         criterion: Optional[Union[nn.Module, Callable]],
         device: torch.device,
         multi_label: bool = False,
-        **loss_kwargs,
+        criterion_kwargs: Optional[Dict[str, Any]] = None,
 ) -> Union[nn.Module, Callable]:
-    """Return an explicit criterion moved to device, or create one from create_classification_loss() kwargs."""
+    """Return an explicit criterion moved to device, or create one with create_classification_loss(**criterion_kwargs)."""
     if criterion is None:
-        criterion = create_classification_loss(multi_label=multi_label, **loss_kwargs)
-    elif loss_kwargs:
-        raise ValueError(f'Pass either an explicit criterion or loss kwargs, not both: {sorted(loss_kwargs)}')
+        criterion = create_classification_loss(multi_label=multi_label, **(criterion_kwargs or {}))
+    elif criterion_kwargs:
+        raise ValueError(
+            f'Pass either an explicit criterion or criterion_kwargs, not both: {sorted(criterion_kwargs)}')
     if isinstance(criterion, nn.Module):
         criterion = criterion.to(device=device)
     return criterion
@@ -79,14 +80,14 @@ class ClassificationTask(TrainingTask):
 
     Args:
         model: The model to train
-        criterion: Loss function. Created from loss_kwargs when None.
+        criterion: Loss function. Created from criterion_kwargs when None.
+        criterion_kwargs: Arguments for create_classification_loss() when criterion is None.
         device: Device for task tensors/buffers
         dtype: Dtype for task tensors/buffers
         verbose: Enable info logging
-        **loss_kwargs: Arguments for create_classification_loss() when criterion is None.
 
     Example:
-        >>> task = ClassificationTask(model, smoothing=0.1, device=torch.device('cuda'))
+        >>> task = ClassificationTask(model, criterion_kwargs=dict(smoothing=0.1), device=torch.device('cuda'))
         >>> result = task(input, target)
         >>> result['loss'].backward()
     """
@@ -97,10 +98,10 @@ class ClassificationTask(TrainingTask):
             self,
             model: nn.Module,
             criterion: Optional[Union[nn.Module, Callable]] = None,
+            criterion_kwargs: Optional[Dict[str, Any]] = None,
             device: Optional[torch.device] = None,
             dtype: Optional[torch.dtype] = None,
             verbose: bool = True,
-            **loss_kwargs,
     ):
         super().__init__(device=device, dtype=dtype, verbose=verbose)
         self.trainable_module = model
@@ -108,7 +109,7 @@ class ClassificationTask(TrainingTask):
             criterion,
             self.device,
             multi_label=self.multi_label,
-            **loss_kwargs,
+            criterion_kwargs=criterion_kwargs,
         )
 
         if self.verbose:
@@ -183,9 +184,12 @@ class MultiLabelClassificationTask(ClassificationTask):
 
     Args:
         model: The model to train
-        criterion: Loss function. Created from loss kwargs when None.
+        criterion: Loss function. Created from criterion_kwargs when None.
+        criterion_kwargs: Arguments for create_classification_loss() when criterion is None.
         threshold: Sigmoid probability threshold for the evaluator's F1 metrics.
-        **kwargs: ClassificationTask arguments, including loss kwargs.
+        device: Device for task tensors/buffers
+        dtype: Dtype for task tensors/buffers
+        verbose: Enable info logging
     """
 
     multi_label = True
@@ -194,12 +198,16 @@ class MultiLabelClassificationTask(ClassificationTask):
             self,
             model: nn.Module,
             criterion: Optional[Union[nn.Module, Callable]] = None,
+            criterion_kwargs: Optional[Dict[str, Any]] = None,
             threshold: float = 0.5,
-            **kwargs,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+            verbose: bool = True,
     ):
         if not 0. < threshold < 1.:
             raise ValueError('Multi-label prediction threshold must be between 0 and 1.')
-        super().__init__(model, criterion, **kwargs)
+        super().__init__(
+            model, criterion, criterion_kwargs=criterion_kwargs, device=device, dtype=dtype, verbose=verbose)
         self.threshold = threshold
 
     def forward(
