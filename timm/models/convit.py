@@ -65,7 +65,9 @@ class GPSA(nn.Module):
         self.pos_proj = nn.Linear(3, num_heads, **dd)
         self.proj_drop = nn.Dropout(proj_drop)
         self.gating_param = nn.Parameter(torch.ones(self.num_heads, **dd))
-        self.rel_indices: torch.Tensor = torch.zeros(1, 1, 1, 3, **dd)  # silly torchscript hack, won't work with None
+        # registered as a non-persistent buffer (rather than a plain attribute) so nn.Module.to()
+        # keeps it in sync with the rest of the module's device/dtype between forward calls
+        self.register_buffer('rel_indices', torch.zeros(1, 1, 1, 3, **dd), persistent=False)
 
     def forward(self, x):
         B, N, C = x.shape
