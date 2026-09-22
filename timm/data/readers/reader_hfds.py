@@ -4,7 +4,7 @@ Hacked together by / Copyright 2022 Ross Wightman
 """
 import io
 import math
-from typing import Optional
+from typing import List, Optional
 
 import torch
 import torch.distributed as dist
@@ -37,7 +37,7 @@ class ReaderHfds(Reader):
             class_map: dict = None,
             input_key: str = 'image',
             target_key: str = 'label',
-            additional_features: Optional[list[str]] = None,
+            additional_features: Optional[List[str]] = None,
             download: bool = False,
             trust_remote_code: bool = False
     ):
