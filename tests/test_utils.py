@@ -11,15 +11,29 @@ from timm.utils.model import _freeze_unfreeze
 from timm.utils.model import avg_sq_ch_mean, avg_ch_var, avg_ch_var_residual
 from timm.utils.model import reparameterize_model
 from timm.utils.model import get_state_dict
-from timm.utils.metrics import AverageMeter
+from timm.utils.metrics import AverageMeter, accuracy
 import argparse
 from timm.utils.misc import ParseKwargs
+import torch
+
 
 def test_average_meter_zero_count():
     # update with n=0 on a fresh meter (count == 0) must not raise ZeroDivisionError
     meter = AverageMeter()
     meter.update(1.0, n=0)
     assert meter.avg == 0
+
+
+def test_accuracy_1d_logits():
+    # a single logits vector used to IndexError on output.size()[1]
+    output = torch.zeros(5)
+    output[2] = 10.
+    acc = accuracy(output, torch.tensor(2), topk=(1, 3))
+    assert acc[0].item() == 100.
+    acc = accuracy(output, torch.tensor(0), topk=(1,))
+    assert acc[0].item() == 0.
+    acc = accuracy(output.unsqueeze(0).repeat(2, 1), torch.tensor([2, 2]), topk=(1,))
+    assert acc[0].item() == 100.
 
 
 def test_freeze_unfreeze():
