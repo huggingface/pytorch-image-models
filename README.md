@@ -17,19 +17,17 @@
 * Extend training-only RoPE coordinate augmentation (shift, jitter, rescale) to axial, mixed, and MRoPE embeddings,
   sharing helpers with DINOv3 while preserving its existing augmentation behavior.
 * Add `grid_type` and `normalize_coords` options to the Fourier / rotary builders (`build_fourier_pos_embed`,
-  `build_rotary_pos_embed`) and axial RoPE modules, and configurable MRoPE sections in EVA. Support `rotate_half` in
-  the tuple-output `RotaryEmbedding` and the `base` factory variant. Correct rotation-layout forwarding in EVA,
-  NaFlexViT, and MRoPE attention pooling.
+  `build_rotary_pos_embed`) and axial RoPE modules, and configurable MRoPE sections in EVA. 
+* Support `rotate_half` in the tuple-output `RotaryEmbedding` and the `base` factory variant. 
+* Correct rotation-layout forwarding in EVA, NaFlexViT, and MRoPE attention pooling.
 * Keep non-learned RoPE frequency and coordinate buffers at least float32 in half/bfloat16 models, and compute mixed
   RoPE phases in float32 under autocast. These precision fixes can change low-precision model outputs.
 * Fix batched RoPE embeddings for pixel grids and reference-shape rescaling. DINOv3 `grid_indexing='xy'` now swaps
   coordinate channels as requested; outputs for these previously incorrect configurations change.
 * Make `apply_rot_embed`, `apply_rot_embed_cat`, and `apply_rot_embed_list` return each input's dtype, casting after
-  the rotation without first downcasting sin/cos. Direct callers previously receiving promoted outputs now receive
-  the input dtype. Consolidate the two axial RoPE modules behind a private base. Existing calls remain compatible,
-  but the `bands` buffer is now retained in both cached and dynamic modes (`rope.bands` is no longer
-  `None` in cached mode), and cached-mode augmented embeddings use the retained bands; call
-  `init_non_persistent_buffers()` after changing band parameters on an existing module.
+  the rotation without first downcasting sin/cos.
+* Consolidate the two axial RoPE modules behind a private base. Existing calls remain compatible, but the `bands` 
+  buffer is now retained in both cached and dynamic modes (`rope.bands` is no longer `None` in cached mode)
 
 ## September 10-11, 2026
 
