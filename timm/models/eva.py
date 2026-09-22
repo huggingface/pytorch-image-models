@@ -628,6 +628,7 @@ class Eva(nn.Module):
             head_init_scale: float = 0.001,
             device=None,
             dtype=None,
+            rope_mrope_section: Optional[Tuple[int, int, int]] = None,
     ):
         """Initialize the EVA Vision Transformer model.
 
@@ -664,14 +665,15 @@ class Eva(nn.Module):
             no_embed_class: Don't include position embeddings for class (or reg) tokens
             use_abs_pos_emb: Use absolute (learned) positional embeddings
             use_rot_pos_emb: Use rotary position embeddings
-            rope_type: Type of RoPE to use ('cat', 'mixed', 'dinov3', etc.).
+            rope_type: Type of RoPE to use ('cat', 'mixed', 'dinov3', or 'mrope').
             rope_grid_offset: Offset for rotary position embedding grid
             rope_grid_indexing: Indexing mode for rotary position embeddings ('ij' or 'xy')
             rope_temperature: Temperature parameter for ROPE frequency computation
-            rope_rotate_half: Use half rotation layout (rotate D/2 dims), else use interleaved rotation layout
-            rope_shift_coords: Train-time RoPE coordinate shift augmentation, uniform in [-s, s] (rope_type='dinov3')
-            rope_jitter_coords: Train-time RoPE per-axis log-uniform scale augmentation in [1/J, J] (rope_type='dinov3')
-            rope_rescale_coords: Train-time RoPE shared log-uniform scale augmentation in [1/R, R] (rope_type='dinov3')
+            rope_rotate_half: Use half rotation for both embeddings and attention, else interleaved rotation.
+                Mixed RoPE requires False; MRoPE always uses half rotation.
+            rope_shift_coords: Train-time RoPE coordinate shift, uniform in [-s, s], in the rope grid's units.
+            rope_jitter_coords: Train-time RoPE per-axis log-uniform scale augmentation in [1/J, J].
+            rope_rescale_coords: Train-time RoPE shared log-uniform scale augmentation in [1/R, R].
             use_post_norm: Use post-norm transformer block type
             use_pre_transformer_norm: Use normalization layer before transformer blocks
             use_post_transformer_norm: Use normalization layer after transformer blocks
@@ -682,6 +684,7 @@ class Eva(nn.Module):
             dynamic_img_pad: Apply dynamic padding for irregular image sizes
             ref_feat_shape: Reference feature shape for rotary position embedding scale
             head_init_scale: Initialization scale for classification head weights
+            rope_mrope_section: Temporal, height, and width frequency sections for MRoPE. None uses (8, 12, 12).
         """
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
@@ -746,6 +749,10 @@ class Eva(nn.Module):
                 feat_shape=None if dynamic_img_size else self.patch_embed.grid_size,
                 temperature=rope_temperature,
                 grid_indexing=rope_grid_indexing,
+                rotate_half=rope_rotate_half or rope_type == 'mrope',
+                shift_coords=rope_shift_coords,
+                jitter_coords=rope_jitter_coords,
+                rescale_coords=rope_rescale_coords,
                 **dd,
             )
             if rope_type == 'mixed':
@@ -760,10 +767,9 @@ class Eva(nn.Module):
             elif rope_type == 'dinov3':
                 rope_kwargs.update(dict(
                     grid_offset=rope_grid_offset,
-                    shift_coords=rope_shift_coords,
-                    jitter_coords=rope_jitter_coords,
-                    rescale_coords=rope_rescale_coords,
                 ))
+            elif rope_type == 'mrope' and rope_mrope_section is not None:
+                rope_kwargs.update(dict(mrope_section=rope_mrope_section))
 
             self.rope = create_rope_embed(rope_type=rope_type, **rope_kwargs)
         else:
@@ -800,7 +806,7 @@ class Eva(nn.Module):
                 scale_mlp=scale_mlp,
                 scale_attn_inner=scale_attn_inner,
                 attn_type=attn_type,
-                rotate_half=rope_rotate_half,
+                rotate_half=rope_rotate_half or rope_type == 'mrope',
                 num_prefix_tokens=self.num_prefix_tokens,
                 proj_drop=proj_drop_rate,
                 attn_drop=attn_drop_rate,
@@ -941,7 +947,8 @@ class Eva(nn.Module):
                 ))
 
         if self.rope is not None:
-            self.rope.update_feat_shape(self.patch_embed.grid_size)
+            if hasattr(self.rope, 'update_feat_shape'):
+                self.rope.update_feat_shape(self.patch_embed.grid_size)
 
     def _pos_embed(self, x) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         if self.dynamic_img_size:
@@ -960,7 +967,14 @@ class Eva(nn.Module):
             rot_pos_embed = self.rope.get_embed(shape=(H, W)) if self.rope is not None else None
         else:
             pos_embed = self.pos_embed
-            rot_pos_embed = self.rope.get_embed() if self.rope is not None else None
+            if self.rope is not None:
+                if hasattr(self.rope, 'feat_shape'):
+                    rot_pos_embed = self.rope.get_embed()
+                else:
+                    # MRoPE always generates embeddings from an explicit grid shape.
+                    rot_pos_embed = self.rope.get_embed(shape=self.patch_embed.grid_size)
+            else:
+                rot_pos_embed = None
 
         to_cat = []
         if self.cls_token is not None:

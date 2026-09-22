@@ -90,13 +90,14 @@ class RotAttentionPool2d(nn.Module):
         self.drop = nn.Dropout(drop_rate)
         self.proj = nn.Linear(embed_dim, self.out_features, **dd) if out_features != 0 else nn.Identity()
 
+        self.rotate_half = rope_type == 'mrope'
         self.pos_embed = create_rope_embed(
             rope_type=rope_type,
             dim=embed_dim,
             num_heads=num_heads,
             in_pixels=False,
             ref_feat_shape=ref_feat_size,
-            rotate_half=False,
+            rotate_half=self.rotate_half,
             **dd,
         )
 
@@ -159,8 +160,12 @@ class RotAttentionPool2d(nn.Module):
         if isinstance(rope, tuple):
             # RotaryEmbedding returns (sin, cos) tuple - concatenate for apply_rot_embed_cat
             rope = torch.cat(rope, dim=-1)
-        q = torch.cat([q[:, :, :1, :], apply_rot_embed_cat(q[:, :, 1:, :], rope)], dim=2).type_as(v)
-        k = torch.cat([k[:, :, :1, :], apply_rot_embed_cat(k[:, :, 1:, :], rope)], dim=2).type_as(v)
+        q = torch.cat([
+            q[:, :, :1, :], apply_rot_embed_cat(q[:, :, 1:, :], rope, half=self.rotate_half),
+        ], dim=2).type_as(v)
+        k = torch.cat([
+            k[:, :, :1, :], apply_rot_embed_cat(k[:, :, 1:, :], rope, half=self.rotate_half),
+        ], dim=2).type_as(v)
 
         if self.fused_attn:
             x = nn.functional.scaled_dot_product_attention(q, k, v)

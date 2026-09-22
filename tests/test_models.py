@@ -974,6 +974,33 @@ def test_naflexvit_forward_intermediates_dict_input():
 
 
 @pytest.mark.base
+def test_naflexvit_mixed_rope_dict_input():
+    """NaFlex (pre-patchified dict) input with mixed (per-depth) RoPE: the batched per-depth rope iterator must
+    produce the same result as running each sample alone."""
+    model = create_model('naflexvit_base_patch16_gap', embed_dim=64, depth=2, num_heads=2, rope_type='mixed')
+    model.eval()
+    n = 8 * 8
+    patches = torch.randn(2, n, 16 * 16 * 3)
+    coord = torch.zeros(2, n, 2, dtype=torch.long)
+    coord[0, :, 0] = torch.arange(n) // 8
+    coord[0, :, 1] = torch.arange(n) % 8
+    n2 = 6 * 10
+    coord[1, :n2, 0] = torch.arange(n2) // 10
+    coord[1, :n2, 1] = torch.arange(n2) % 10
+    valid = torch.zeros(2, n, dtype=torch.bool)
+    valid[0] = True
+    valid[1, :n2] = True
+    batch = {'patches': patches, 'patch_coord': coord, 'patch_valid': valid}
+
+    with torch.no_grad():
+        out = model(batch)
+        assert out.shape == (2, model.num_classes) and torch.isfinite(out).all()
+        for i in range(2):
+            single = {k: v[i:i + 1] for k, v in batch.items()}
+            torch.testing.assert_close(model(single), out[i:i + 1], atol=1e-5, rtol=1e-5)
+
+
+@pytest.mark.base
 def test_naflexvit_patch_interpolation_capability():
     common_kwargs = dict(embed_dim=32, depth=1, num_heads=2)
     fixed_model = create_model('naflexvit_base_patch16_gap', **common_kwargs)
