@@ -244,6 +244,10 @@ def apply_rot_embed(
         cos_emb: torch.Tensor,
         half: bool = False,
 ) -> torch.Tensor:
+    # sin_emb/cos_emb default to float32 (see build_rotary_pos_embed); match x's dtype so a half-precision
+    # query/key tensor isn't silently upcast to float32 by this multiply.
+    sin_emb = sin_emb.to(x.dtype)
+    cos_emb = cos_emb.to(x.dtype)
     # x: [..., D], eg [x0, x1, x2, x3, x4, x5]
     if half:
         # sin: [..., D], eg [sin0, sin1, sin2, sin0, sin1, sin2]
@@ -265,6 +269,10 @@ def apply_rot_embed_list(
 ) -> List[torch.Tensor]:
     if isinstance(x, torch.Tensor):
         x = [x]
+    # sin_emb/cos_emb default to float32; match the first tensor's dtype (all tensors in the list come from
+    # the same forward pass, so they share a dtype) so this doesn't silently upcast a half-precision input.
+    sin_emb = sin_emb.to(x[0].dtype)
+    cos_emb = cos_emb.to(x[0].dtype)
     # x: [..., D], eg [x0, x1, x2, x3, x4, x5]
     if half:
         # sin: [..., D], eg [sin0, sin1, sin2, sin0, sin1, sin2]
@@ -284,6 +292,10 @@ def apply_rot_embed_cat(
         half: bool = False
 ) -> torch.Tensor:
     sin_emb, cos_emb = emb.chunk(2, -1)
+    # emb defaults to float32 (see build_rotary_pos_embed / get_embed); match x's dtype so a half-precision
+    # query/key tensor isn't silently upcast to float32 by this multiply.
+    sin_emb = sin_emb.to(x.dtype)
+    cos_emb = cos_emb.to(x.dtype)
     # x: [..., D], eg [x0, x1, x2, x3, x4, x5]
     if half:
         # sin: [..., D], eg [sin0, sin1, sin2, sin0, sin1, sin2]

@@ -12,6 +12,11 @@ from timm.layers import (
     NormMlpClassifierHead,
     PatchEmbedInterpolator,
     RotAttentionPool2d,
+    RotaryEmbeddingCat,
+    RotaryEmbeddingMRope,
+    apply_rot_embed,
+    apply_rot_embed_cat,
+    apply_rot_embed_list,
     create_act_layer,
     get_act_fn,
     get_act_layer,
@@ -417,5 +422,38 @@ def test_attn2d(bias, expand_first, head_first, attn_mask):
     o1 = attn(x, mask)
     attn.fused_attn = False
     o2 = attn(x, mask)
-    
+
     assert torch.allclose(o1, o2, atol=1e-5), f"{torch.abs(o1 - o2).max()}"
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+@pytest.mark.parametrize("half", [True, False])
+def test_apply_rot_embed_preserves_dtype(dtype, half):
+    # sin_emb/cos_emb default to float32 (build_rotary_pos_embed's own default), so applying rotary embeddings
+    # to a half-precision q/k tensor used to silently upcast the result to float32.
+    d = 32
+    x = torch.randn(2, 4, 16, d, dtype=dtype)
+    sin_emb = torch.randn(16, d)
+    cos_emb = torch.randn(16, d)
+    emb = torch.cat([sin_emb, cos_emb], dim=-1)
+
+    assert apply_rot_embed(x, sin_emb, cos_emb, half=half).dtype == dtype
+    assert apply_rot_embed_cat(x, emb, half=half).dtype == dtype
+    outs = apply_rot_embed_list([x, x.clone()], sin_emb, cos_emb, half=half)
+    assert all(o.dtype == dtype for o in outs)
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32])
+def test_rotary_embedding_cat_preserves_dtype(dtype):
+    rope = RotaryEmbeddingCat(dim=32, in_pixels=False)
+    emb = rope.get_embed(shape=(4, 4))
+    x = torch.randn(2, 8, 16, 32, dtype=dtype)
+    assert apply_rot_embed_cat(x, emb).dtype == dtype
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32])
+def test_rotary_embedding_mrope_preserves_dtype(dtype):
+    rope = RotaryEmbeddingMRope(dim=32, mrope_section=(2, 5, 5))
+    emb = rope.get_embed(shape=(4, 4))
+    x = torch.randn(2, 8, 16, 32, dtype=dtype)
+    assert apply_rot_embed_cat(x, emb, half=True).dtype == dtype
