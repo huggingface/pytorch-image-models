@@ -244,21 +244,22 @@ def apply_rot_embed(
         cos_emb: torch.Tensor,
         half: bool = False,
 ) -> torch.Tensor:
-    # sin_emb/cos_emb default to float32 (see build_rotary_pos_embed); match x's dtype so a half-precision
-    # query/key tensor isn't silently upcast to float32 by this multiply.
-    sin_emb = sin_emb.to(x.dtype)
-    cos_emb = cos_emb.to(x.dtype)
+    # sin_emb/cos_emb default to float32 (see build_rotary_pos_embed). Do the multiply-add at their
+    # (possibly higher) precision and cast only the completed rotation to x's dtype, so a half-precision
+    # query/key tensor isn't silently left at float32 by this function without losing trig precision
+    # to an eager downcast of sin_emb/cos_emb first.
     # x: [..., D], eg [x0, x1, x2, x3, x4, x5]
     if half:
         # sin: [..., D], eg [sin0, sin1, sin2, sin0, sin1, sin2]
         # cos: [..., D], eg [cos0, cos1, cos2, cos0, cos1, cos2
         # rope_rotate_half(x): eg [-x3, -x4, -x5, x0, x1, x2]
-        return x * cos_emb + rope_rotate_half(x) * sin_emb
+        out = x * cos_emb + rope_rotate_half(x) * sin_emb
     else:
         # sin: [..., D], eg [sin0, sin0, sin1, sin1, sin2, sin2]
         # cos: [..., D], eg [cos0, cos0, cos1, cos1, cos2, cos2]
         # rot(x): eg [-x1, x0, -x3, x2, -x5, x4]
-        return x * cos_emb + rot(x) * sin_emb
+        out = x * cos_emb + rot(x) * sin_emb
+    return out.to(dtype=x.dtype)
 
 
 def apply_rot_embed_list(
@@ -269,21 +270,7 @@ def apply_rot_embed_list(
 ) -> List[torch.Tensor]:
     if isinstance(x, torch.Tensor):
         x = [x]
-    # sin_emb/cos_emb default to float32; match the first tensor's dtype (all tensors in the list come from
-    # the same forward pass, so they share a dtype) so this doesn't silently upcast a half-precision input.
-    sin_emb = sin_emb.to(x[0].dtype)
-    cos_emb = cos_emb.to(x[0].dtype)
-    # x: [..., D], eg [x0, x1, x2, x3, x4, x5]
-    if half:
-        # sin: [..., D], eg [sin0, sin1, sin2, sin0, sin1, sin2]
-        # cos: [..., D], eg [cos0, cos1, cos2, cos0, cos1, cos2
-        # rope_rotate_half(x): eg [-x3, -x4, -x5, x0, x1, x2]
-        return [t * cos_emb + rope_rotate_half(t) * sin_emb for t in x]
-    else:
-        # sin: [..., D], eg [sin0, sin0, sin1, sin1, sin2, sin2]
-        # cos: [..., D], eg [cos0, cos0, cos1, cos1, cos2, cos2]
-        # rot(x): eg [-x1, x0, -x3, x2, -x5, x4]
-        return [t * cos_emb + rot(t) * sin_emb for t in x]
+    return [apply_rot_embed(t, sin_emb, cos_emb, half=half) for t in x]
 
 
 def apply_rot_embed_cat(
@@ -292,21 +279,7 @@ def apply_rot_embed_cat(
         half: bool = False
 ) -> torch.Tensor:
     sin_emb, cos_emb = emb.chunk(2, -1)
-    # emb defaults to float32 (see build_rotary_pos_embed / get_embed); match x's dtype so a half-precision
-    # query/key tensor isn't silently upcast to float32 by this multiply.
-    sin_emb = sin_emb.to(x.dtype)
-    cos_emb = cos_emb.to(x.dtype)
-    # x: [..., D], eg [x0, x1, x2, x3, x4, x5]
-    if half:
-        # sin: [..., D], eg [sin0, sin1, sin2, sin0, sin1, sin2]
-        # cos: [..., D], eg [cos0, cos1, cos2, cos0, cos1, cos2
-        # rope_rotate_half(x), eg [-x3, -x4, -x5, x0, x1, x2]
-        return x * cos_emb + rope_rotate_half(x) * sin_emb
-    else:
-        # sin: [..., D], eg [sin0, sin0, sin1, sin1, sin2, sin2]
-        # cos: [..., D], eg [cos0, cos0, cos1, cos1, cos2, cos2]
-        # rot(x), eg [-x1, x0, -x3, x2, -x5, x4]
-        return x * cos_emb + rot(x) * sin_emb
+    return apply_rot_embed(x, sin_emb, cos_emb, half=half)
 
 
 def apply_keep_indices_nlc(
