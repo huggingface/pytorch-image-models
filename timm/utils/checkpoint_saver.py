@@ -124,6 +124,20 @@ class CheckpointSaver:
         self.checkpoint_files = self.checkpoint_files[:delete_index]
 
     def save_checkpoint(self, epoch, metric=None):
+        """Save the current state as ``last`` and, if it earns a place, as a numbered epoch checkpoint.
+
+        Ranked checkpoints (``metric`` given) are kept best to worst, with ties keeping the earlier epoch. Unranked
+        checkpoints (``metric`` is None) follow them, newest first, so without a metric the history contains the last
+        ``max_history`` epochs. An unranked checkpoint never displaces a ranked one, while a ranked checkpoint always
+        displaces an unranked one when the history is full.
+
+        Args:
+            epoch: Epoch index of the state being saved.
+            metric: Value used to rank the checkpoint, or None to keep it by recency only.
+
+        Returns:
+            Tuple of (best_metric, best_epoch), both None until a ranked checkpoint has been saved.
+        """
         assert epoch >= 0
         tmp_save_path = os.path.join(self.checkpoint_dir, 'tmp' + self.extension)
         last_save_path = os.path.join(self.checkpoint_dir, 'last' + self.extension)
@@ -142,15 +156,16 @@ class CheckpointSaver:
             save_path = os.path.join(self.checkpoint_dir, filename)
             self._duplicate(last_save_path, save_path)
 
-            # Keep unranked checkpoints after ranked ones, newest first, so history trimming remains deterministic.
-            self.checkpoint_files.insert(0, (save_path, metric))
-            ranked_files = [checkpoint for checkpoint in self.checkpoint_files if checkpoint[1] is not None]
-            unranked_files = [checkpoint for checkpoint in self.checkpoint_files if checkpoint[1] is None]
+            self.checkpoint_files.append((save_path, metric))
             ranked_files = sorted(
-                ranked_files,
-                key=lambda x: x[1],
+                [c for c in self.checkpoint_files if c[1] is not None],
+                key=lambda c: c[1],
                 reverse=not self.decreasing  # sort in descending order if a lower metric is not better
             )
+            unranked_files = [c for c in self.checkpoint_files if c[1] is None]
+            if metric is None:
+                # Existing unranked entries are already newest first; move only the newly appended entry.
+                unranked_files.insert(0, unranked_files.pop())
             self.checkpoint_files = ranked_files + unranked_files
 
             checkpoints_str = "Current checkpoints:\n"
