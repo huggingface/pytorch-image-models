@@ -835,6 +835,12 @@ def test_rope_aug_reference_and_rng(kind, cached, aug, rope_device):
 @pytest.mark.parametrize('kind,cached', _CASES)
 @pytest.mark.parametrize('dtype', [torch.float32, torch.bfloat16, torch.float16])
 def test_rope_aug_eval_initialization_and_caches(kind, cached, dtype, rope_device):
+    if kind == 'mixed' and dtype == torch.float16 and rope_device.type == 'cpu':
+        # Mixed frequency initialization needs FP16 cosine, unavailable on older CPU builds.
+        try:
+            torch.zeros(1, dtype=dtype).cos()
+        except RuntimeError:
+            pytest.skip('CPU float16 cosine is unavailable on this PyTorch version')
     torch.manual_seed(321)
     plain = _make(kind, cached, device=rope_device, dtype=dtype)
     rng_plain = _rng(rope_device)
@@ -1043,7 +1049,8 @@ def test_rope_cached_aug_reuses_bands(kind, rope_device, monkeypatch):
 def _assert_independent_grid(t_x, t_y):
     assert t_x.is_contiguous() and t_y.is_contiguous()
     assert t_x._base is None and t_y._base is None
-    assert t_x.untyped_storage().data_ptr() != t_y.untyped_storage().data_ptr()
+    storage = getattr(torch.Tensor, 'untyped_storage', torch.Tensor.storage)
+    assert storage(t_x).data_ptr() != storage(t_y).data_ptr()
 
 
 @pytest.mark.parametrize('shape', [(1, 1), (5, 9)])
@@ -1254,7 +1261,8 @@ def test_mrope_attention_pool_layout(qkv_separate):
     rope = pool.pos_embed.get_embed((3, 5))
     q = torch.cat([q[:, :, :1], apply_rot_embed_cat(q[:, :, 1:], rope, half=True)], 2)
     k = torch.cat([k[:, :, :1], apply_rot_embed_cat(k[:, :, 1:], rope, half=True)], 2)
-    expected = torch.nn.functional.scaled_dot_product_attention(q, k, v).transpose(1, 2).reshape(2, 16, 64)
+    attn = ((q * q.shape[-1] ** -0.5) @ k.transpose(-2, -1)).softmax(dim=-1)
+    expected = (attn @ v).transpose(1, 2).reshape(2, 16, 64)
     expected = pool.proj(expected)[:, 0]
     with torch.no_grad():
         torch.testing.assert_close(pool(x), expected)
