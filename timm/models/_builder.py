@@ -14,6 +14,7 @@ from timm.models._helpers import load_state_dict
 from timm.models._hub import has_hf_hub, download_cached_file, check_cached_file, load_state_dict_from_hf, \
     load_state_dict_from_path, load_custom_from_hf
 from timm.models._manipulate import adapt_input_conv
+from timm.models._input import _init_model_traits, get_model_traits
 from timm.models._pretrained import PretrainedCfg
 from timm.models._prune import adapt_model_from_file
 from timm.models._registry import get_pretrained_cfg
@@ -244,21 +245,53 @@ def load_pretrained(
             # for backwards compat with filter fn that take one arg
             state_dict = filter_fn(state_dict)
 
-    input_convs = pretrained_cfg.get('first_conv', None)
-    if input_convs is not None and in_chans != 3:
+    input_convs = get_model_traits(model).get('first_conv', pretrained_cfg.get('first_conv'))
+    pretrained_in_chans = (pretrained_cfg.get('input_size') or (3,))[0]
+    if input_convs is not None:
         if isinstance(input_convs, str):
             input_convs = (input_convs,)
         for input_conv_name in input_convs:
             weight_name = input_conv_name + '.weight'
+            if weight_name not in state_dict:
+                # A model-specific checkpoint filter may have remapped the source stem.
+                # Leave validation of its output to load_state_dict.
+                continue
+            module = model.get_submodule(input_conv_name)
+            weight = state_dict[weight_name]
+            if weight.shape == module.weight.shape:
+                if in_chans != pretrained_in_chans:
+                    _logger.warning(
+                        f'Pretrained {input_conv_name} weights already match the model, but input_size declares '
+                        f'{pretrained_in_chans} source channels and the model has {in_chans}. Loading unchanged.'
+                    )
+                continue
+            if isinstance(module, nn.Conv2d) and weight.ndim == 4:
+                # Validate the declared channels against the known target stem expansion/grouping.
+                # This is a consistency check, not an inference of source channels from tensor shape.
+                if weight.shape[1] * in_chans * module.groups != pretrained_in_chans * module.in_channels:
+                    raise RuntimeError(
+                        f'Pretrained {input_conv_name} weight shape {tuple(weight.shape)} is inconsistent with '
+                        f'input_size[0]={pretrained_in_chans}. Correct the source pretrained_cfg before adapting '
+                        f'to {in_chans} channels.'
+                    )
+            if in_chans == pretrained_in_chans:
+                continue
             try:
-                state_dict[weight_name] = adapt_input_conv(in_chans, state_dict[weight_name])
+                state_dict[weight_name] = adapt_input_conv(
+                    in_chans,
+                    state_dict[weight_name],
+                    base_chans=pretrained_in_chans,
+                )
                 _logger.info(
-                    f'Converted input conv {input_conv_name} pretrained weights from 3 to {in_chans} channel(s)')
+                    f'Converted input conv {input_conv_name} pretrained weights '
+                    f'from {pretrained_in_chans} to {in_chans} channel(s)'
+                )
             except NotImplementedError as e:
                 del state_dict[weight_name]
                 strict = False
                 _logger.warning(
-                    f'Unable to convert pretrained {input_conv_name} weights, using random init for this layer.')
+                    f'Unable to convert pretrained {input_conv_name} weights, using random init for this layer.'
+                )
 
     classifiers = pretrained_cfg.get('classifier', None)
     label_offset = pretrained_cfg.get('label_offset', 0)
@@ -395,9 +428,10 @@ def build_model_with_cfg(
         pretrained_filter_fn: Optional[Callable] = None,
         cache_dir: Optional[Union[str, Path]] = None,
         kwargs_filter: Optional[Tuple[str]] = None,
+        pretrained_model_args: Optional[Dict] = None,
         **kwargs,
 ) -> ModelT:
-    """ Build model with specified default_cfg and optional model_cfg
+    """Build model with specified default_cfg and optional model_cfg
 
     This helper fn aids in the construction of a model including:
       * handling default_cfg and associated pretrained weight loading
@@ -417,6 +451,7 @@ def build_model_with_cfg(
         pretrained_filter_fn: Filter callable for pretrained weights
         cache_dir: Override model cache dir for Hugging Face Hub and Torch checkpoints
         kwargs_filter: Kwargs keys to filter (remove) before passing to model
+        pretrained_model_args: Reconstruction arguments describing the source checkpoint.
         **kwargs: Model args passed through to model __init__
     """
     pruned = kwargs.pop('pruned', False)
@@ -448,7 +483,9 @@ def build_model_with_cfg(
     else:
         model = model_cls(cfg=model_cfg, **kwargs)
     model.pretrained_cfg = pretrained_cfg
+    model.pretrained_model_args = pretrained_model_args or {}
     model.default_cfg = model.pretrained_cfg  # alias for backwards compat
+    _init_model_traits(model, kwargs, pretrained_cfg)
 
     if pruned:
         model = adapt_model_from_file(model, variant)
@@ -498,7 +535,13 @@ def build_model_with_cfg(
         if output_fmt is not None and not use_getter:  # don't set default for intermediate feat getter
             feature_cfg.setdefault('output_fmt', output_fmt)
 
+        traits = get_model_traits(model)
+        input_metadata = dict(_traits=dict(model._traits))
+        if 'in_chans' in traits:
+            input_metadata['in_chans'] = traits['in_chans']
         model = feature_cls(model, **feature_cfg)
+        for key, value in input_metadata.items():
+            setattr(model, key, value)
         model.pretrained_cfg = pretrained_cfg_for_features(pretrained_cfg)  # add back pretrained cfg
         model.default_cfg = model.pretrained_cfg  # alias for rename backwards compat (default_cfg -> pretrained_cfg)
 

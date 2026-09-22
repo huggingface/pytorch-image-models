@@ -5,13 +5,15 @@ from typing import Any, Dict, Optional, Tuple, Union
 from torch import nn
 
 from timm.layers import set_layer_config
+from ._builder import resolve_pretrained_cfg
 from ._helpers import load_checkpoint
+from ._input import _requested_input, _spatial_size
 from ._hub import load_model_config_from_hf, load_model_config_from_path
 from ._pretrained import PretrainedCfg
 from ._registry import is_model, model_entrypoint, split_model_name_tag
 
 
-__all__ = ['parse_model_name', 'safe_model_name', 'create_model']
+__all__ = ['parse_model_name', 'safe_model_name', 'resolve_model_input_args', 'create_model']
 
 # Model sources that may be specified as a URI-like scheme prefix on model names.
 _MODEL_SOURCES = ('hf-hub', 'local-dir')
@@ -78,6 +80,85 @@ def safe_model_name(model_name: str, remove_source: bool = True) -> str:
     return make_safe(model_name)
 
 
+def _resolve_model_source(
+        model_name: str,
+        pretrained_cfg: Optional[Union[str, Dict[str, Any], PretrainedCfg]],
+        kwargs: Dict[str, Any],
+        cache_dir: Optional[Union[str, Path]] = None,
+) -> Tuple[str, Optional[Union[str, Dict[str, Any], PretrainedCfg]], Dict[str, Any]]:
+    """Resolve source metadata and saved arguments before applying target adaptation."""
+    kwargs = dict(kwargs)
+    model_source, model_id = parse_model_name(model_name)
+    if model_source:
+        assert not pretrained_cfg, 'pretrained_cfg should not be set when sourcing model from Hugging Face Hub.'
+        if model_source == 'hf-hub':
+            # For model names specified in the form `hf-hub:path/architecture_name@revision`,
+            # load model weights + pretrained_cfg from Hugging Face hub.
+            pretrained_cfg, model_name, model_args = load_model_config_from_hf(
+                model_id,
+                cache_dir=cache_dir,
+            )
+        elif model_source == 'local-dir':
+            pretrained_cfg, model_name, model_args = load_model_config_from_path(
+                model_id,
+            )
+        else:
+            assert False, f'Unknown model_source {model_source}'
+        if model_args:
+            kwargs['pretrained_model_args'] = dict(model_args)
+            for k, v in model_args.items():
+                kwargs.setdefault(k, v)
+    else:
+        model_name, pretrained_tag = split_model_name_tag(model_id)
+        if pretrained_tag and not pretrained_cfg:
+            # a valid pretrained_cfg argument takes priority over tag in model name
+            pretrained_cfg = pretrained_tag
+
+    if not is_model(model_name):
+        raise RuntimeError('Unknown model (%s)' % model_name)
+
+    return model_name, pretrained_cfg, kwargs
+
+
+def resolve_model_input_args(
+        model_name: str,
+        args: Optional[Dict[str, Any]] = None,
+        **model_kwargs,
+) -> Dict[str, Any]:
+    """Resolve script input requests into arguments for ``create_model``.
+
+    Saved model arguments are defaults. Explicit channel/size requests select the
+    target without overwriting metadata describing the source checkpoint.
+    """
+    args = args or {}
+    model_kwargs = {k: v for k, v in model_kwargs.items() if v is not None}
+    channels, size = _requested_input(args, {'in_chans': model_kwargs.get('in_chans')})
+    explicit_size = model_kwargs.get('img_size')
+    pretrained_cfg = model_kwargs.pop('pretrained_cfg', None)
+    overlay = model_kwargs.pop('pretrained_cfg_overlay', None)
+    name, pretrained_cfg, model_kwargs = _resolve_model_source(
+        model_name,
+        pretrained_cfg,
+        model_kwargs,
+        model_kwargs.get('cache_dir'),
+    )
+    cfg = resolve_pretrained_cfg(name, pretrained_cfg, overlay).to_dict()
+    if channels is not None:
+        model_kwargs['in_chans'] = channels
+    fixed = (
+        cfg.get('fixed_input_size', False)
+        and not model_kwargs.get('dynamic_img_size', False)
+        and not model_kwargs.get('use_naflex', False)
+        and model_kwargs.get('strict_img_size', True)
+    )
+    if size is not None:
+        if fixed and explicit_size is not None and _spatial_size(explicit_size) != size:
+            raise ValueError(f'Conflicting input image sizes: requested {size}, model_kwargs.img_size={explicit_size}.')
+        if explicit_size is None and (cfg.get('fixed_input_size', False) or 'img_size' in model_kwargs):
+            model_kwargs['img_size'] = size
+    return dict(model_name=name, pretrained_cfg=cfg, **model_kwargs)
+
+
 def create_model(
         model_name: str,
         pretrained: bool = False,
@@ -142,33 +223,7 @@ def create_model(
     # non-supporting models don't break and default args remain in effect.
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
-    model_source, model_id = parse_model_name(model_name)
-    if model_source:
-        assert not pretrained_cfg, 'pretrained_cfg should not be set when sourcing model from Hugging Face Hub.'
-        if model_source == 'hf-hub':
-            # For model names specified in the form `hf-hub:path/architecture_name@revision`,
-            # load model weights + pretrained_cfg from Hugging Face hub.
-            pretrained_cfg, model_name, model_args = load_model_config_from_hf(
-                model_id,
-                cache_dir=cache_dir,
-            )
-        elif model_source == 'local-dir':
-            pretrained_cfg, model_name, model_args = load_model_config_from_path(
-                model_id,
-            )
-        else:
-            assert False, f'Unknown model_source {model_source}'
-        if model_args:
-            for k, v in model_args.items():
-                kwargs.setdefault(k, v)
-    else:
-        model_name, pretrained_tag = split_model_name_tag(model_id)
-        if pretrained_tag and not pretrained_cfg:
-            # a valid pretrained_cfg argument takes priority over tag in model name
-            pretrained_cfg = pretrained_tag
-
-    if not is_model(model_name):
-        raise RuntimeError('Unknown model (%s)' % model_name)
+    model_name, pretrained_cfg, kwargs = _resolve_model_source(model_name, pretrained_cfg, kwargs, cache_dir)
 
     create_fn = model_entrypoint(model_name)
     with set_layer_config(scriptable=scriptable, exportable=exportable, no_jit=no_jit):
@@ -179,6 +234,12 @@ def create_model(
             cache_dir=cache_dir,
             **kwargs,
         )
+
+    # Keep factory options for native checkpoint reconstruction, excluding runtime placement.
+    model._model_args = dict(
+        getattr(model, '_model_args', {}),
+        **{k: v for k, v in kwargs.items() if k not in ('device', 'dtype', 'pretrained_model_args')},
+    )
 
     if checkpoint_path:
         load_checkpoint(model, checkpoint_path)

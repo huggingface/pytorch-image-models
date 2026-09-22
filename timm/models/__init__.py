@@ -106,6 +106,7 @@ from ._builder import (
 )
 from ._factory import (
     create_model as create_model,
+    resolve_model_input_args as resolve_model_input_args,
     parse_model_name as parse_model_name,
     safe_model_name as safe_model_name,
 )
@@ -151,6 +152,11 @@ from ._manipulate import (
     checkpoint_seq as checkpoint_seq,
     checkpoint as checkpoint,
     adapt_input_conv as adapt_input_conv,
+)
+from ._input import (
+    get_model_args as get_model_args,
+    get_model_input_config as get_model_input_config,
+    get_model_traits as get_model_traits,
 )
 from ._pretrained import (
     PretrainedCfg as PretrainedCfg,
