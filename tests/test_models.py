@@ -479,6 +479,21 @@ def test_pruned_efficientnet_in_chans(model_name):
         assert model(torch.randn(1, 1, 32, 32)).shape == (1, 1000)
 
 
+@pytest.mark.base
+def test_convit_dtype_change_after_forward():
+    """GPSA.rel_indices is cached on the first forward; a dtype change afterwards must
+    still be picked up since the cached tensor's shape doesn't change."""
+    model = create_model('convit_tiny', pretrained=False)
+    model.eval()
+    x = torch.randn(1, 3, 224, 224)
+    with torch.no_grad():
+        model(x)  # populate the rel_indices cache in float32
+    model.to(torch.bfloat16)
+    with torch.no_grad():
+        out = model(x.to(torch.bfloat16))
+    assert out.dtype == torch.bfloat16
+
+
 @pytest.mark.torchscript
 @pytest.mark.timeout(timeout120)
 @pytest.mark.parametrize(
