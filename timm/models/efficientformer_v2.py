@@ -169,6 +169,10 @@ class Attention2d(torch.nn.Module):
         if self.attention_bias_cache:
             self.attention_bias_cache = {}  # clear ab cache
 
+    def _apply(self, fn):
+        self.attention_bias_cache = {}
+        return super()._apply(fn)
+
     def reset_parameters(self) -> None:
         """Initialize parameters and buffers."""
         nn.init.zeros_(self.attention_biases)
@@ -309,6 +313,10 @@ class Attention2dDownsample(torch.nn.Module):
         super().train(mode)
         if self.attention_bias_cache:
             self.attention_bias_cache = {}  # clear ab cache
+
+    def _apply(self, fn):
+        self.attention_bias_cache = {}
+        return super()._apply(fn)
 
     def reset_parameters(self) -> None:
         """Initialize parameters and buffers."""
