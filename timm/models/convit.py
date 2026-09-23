@@ -136,6 +136,10 @@ class GPSA(nn.Module):
         dtype = self.qk.weight.dtype
         return rel_indices.to(device=device, dtype=dtype)
 
+    def init_non_persistent_buffers(self) -> None:
+        """Recompute the cached relative position indices for the current resolution."""
+        self.rel_indices = self.get_rel_indices(self.rel_indices.shape[1])
+
 
 class MHSA(nn.Module):
     def __init__(
