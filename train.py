@@ -1273,12 +1273,13 @@ def main():
 
     if utils.is_primary(args):
         # for parsable results display, dump top-10 summaries to avoid excess console spam
+        # best first w/ stable sort so ties keep the earlier epoch, matching CheckpointSaver's retained history
         display_results = sorted(
             results,
             key=lambda x: x.get('validation', x.get('train')).get(eval_metric, 0),
-            reverse=decreasing_metric,
-        )
-        print(f'--result\n{json.dumps(display_results[-10:], indent=4)}')
+            reverse=not decreasing_metric,
+        )[:10]
+        print(f'--result\n{json.dumps(display_results[::-1], indent=4)}')
 
 
 def train_one_epoch(
