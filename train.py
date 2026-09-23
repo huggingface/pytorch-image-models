@@ -1413,9 +1413,9 @@ def train_one_epoch(
 
         if args.synchronize_step:
             if device.type == 'cuda':
-                torch.cuda.synchronize()
+                torch.cuda.synchronize(device)
             elif device.type == 'npu':
-                torch.npu.synchronize()
+                torch.npu.synchronize(device)
         time_now = time.time()
 
         update_time_m.update(time.time() - update_start_time)
@@ -1522,9 +1522,9 @@ def validate(
                 reduced_loss = loss.data
 
             if device.type == 'cuda':
-                torch.cuda.synchronize()
+                torch.cuda.synchronize(device)
             elif device.type == "npu":
-                torch.npu.synchronize()
+                torch.npu.synchronize(device)
 
             batch_size = output.shape[0]
             losses_m.update(reduced_loss.item(), batch_size)
