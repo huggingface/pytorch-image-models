@@ -33,15 +33,16 @@ import yaml
 
 from timm import utils
 from timm.data import create_dataset, create_loader, create_naflex_loader, resolve_data_config, \
-    Mixup, FastCollateMixup, AugMixDataset
+    Mixup, FastCollateMixup, AugMixDataset, MultiLabelTarget
 from timm.layers import convert_splitbn_model, convert_sync_batchnorm, set_fast_norm
-from timm.loss import JsdCrossEntropy, SoftTargetCrossEntropy, BinaryCrossEntropy, LabelSmoothingCrossEntropy
 from timm.models import create_model, safe_model_name
 from timm.optim import create_optimizer_v2, optimizer_kwargs
 from timm.scheduler import create_scheduler_v2, scheduler_kwargs
 from timm.utils import NativeScaler
 from timm.task import (
     ClassificationTask,
+    MultiLabelClassificationTask,
+    evaluation_sample_limit,
     LogitDistillationTask,
     FeatureDistillationTask,
     TokenDistillationTask,
@@ -79,6 +80,8 @@ parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 
 # Dataset parameters
 group = parser.add_argument_group('Dataset parameters')
+group.add_argument('--task', default='classification', choices=('classification', 'multilabel'),
+                   help='Classification task (default: classification)')
 # Keep this argument outside the dataset group because it is positional.
 parser.add_argument('data', nargs='?', metavar='DIR', const=None,
                     help='path to dataset (positional is *deprecated*, use --data-dir)')
@@ -104,6 +107,9 @@ group.add_argument('--input-key', default=None, type=str,
                    help='Dataset key for input images.')
 group.add_argument('--target-key', default=None, type=str,
                    help='Dataset key for target labels.')
+group.add_argument('--target-format', default=None, type=str, choices=('indices', 'multihot'),
+                   help='Single-key multi-label target format: a list of class indices (default) or a dense multi-hot '
+                        'vector of length --num-classes. Comma separated --target-key fields define their own format.')
 group.add_argument('--dataset-trust-remote-code', action='store_true', default=False,
                    help='Allow huggingface dataset import to execute code downloaded from the dataset\'s repo.')
 
@@ -323,8 +329,8 @@ group.add_argument('--mixup-mode', type=str, default='batch',
                    help='How to apply mixup/cutmix params. Per "batch", "pair", or "elem"')
 group.add_argument('--mixup-off-epoch', default=0, type=int, metavar='N',
                    help='Turn off mixup after this epoch, disabled if 0 (default: 0)')
-group.add_argument('--smoothing', type=float, default=0.1,
-                   help='Label smoothing (default: 0.1)')
+group.add_argument('--smoothing', type=float, default=None,
+                   help='Label smoothing (default: 0.1 for classification, 0 for multilabel)')
 group.add_argument('--train-interpolation', type=str, default='random',
                    help='Training interpolation (random, bilinear, bicubic default: "random")')
 group.add_argument('--drop', type=float, default=0.0, metavar='PCT',
@@ -392,8 +398,10 @@ group.add_argument('--output', default='', type=str, metavar='PATH',
                    help='path to output folder (default: none, current dir)')
 group.add_argument('--experiment', default='', type=str, metavar='NAME',
                    help='name of train experiment, name of sub-folder for output')
-group.add_argument('--eval-metric', default='top1', type=str, metavar='EVAL_METRIC',
-                   help='Best metric (default: "top1"')
+group.add_argument('--eval-metric', default=None, type=str, metavar='EVAL_METRIC',
+                   help='Best metric (default: top1 for classification, map for multilabel)')
+group.add_argument('--multilabel-threshold', default=0.5, type=float,
+                   help='Sigmoid probability threshold for multi-label F1 metrics (default: 0.5)')
 group.add_argument('--tta', type=int, default=0, metavar='N',
                    help='Test/inference time augmentation (oversampling) factor. 0=None (default: 0)')
 group.add_argument('--use-multi-epochs-loader', action='store_true', default=False,
@@ -475,6 +483,19 @@ def _parse_args():
     # The main arg parser parses the rest of the args, the usual
     # defaults will have been overridden if config file specified.
     args = parser.parse_args(remaining)
+
+    multi_label = args.task == 'multilabel'
+    if args.smoothing is None:
+        args.smoothing = 0. if multi_label else 0.1
+    if multi_label:
+        if args.num_classes is None or args.num_classes <= 0:
+            parser.error('--task multilabel requires a positive --num-classes.')
+        if args.kd_model_name is not None or args.jsd_loss:
+            parser.error('Multi-label training does not support distillation or JSD loss.')
+        if not 0. < args.multilabel_threshold < 1.:
+            parser.error('--multilabel-threshold must be between 0 and 1.')
+    elif args.target_format == 'multihot':
+        parser.error('--target-format multihot requires --task multilabel.')
 
     # Cache the args as a text string to save them in the output dir later
     args_text = yaml.safe_dump(args.__dict__, default_flow_style=False)
@@ -652,6 +673,9 @@ def main():
     else:
         input_img_mode = args.input_img_mode
 
+    multi_label = args.task == 'multilabel'
+    target_transform = MultiLabelTarget(args.num_classes, dense=args.target_format == 'multihot') \
+        if multi_label else None
     dataset_train = create_dataset(
         args.dataset,
         root=args.data_dir,
@@ -665,6 +689,8 @@ def main():
         input_img_mode=input_img_mode,
         input_key=args.input_key,
         target_key=args.target_key,
+        target_format=args.target_format,
+        target_transform=target_transform,
         num_samples=args.train_num_samples,
         trust_remote_code=args.dataset_trust_remote_code,
     )
@@ -682,6 +708,8 @@ def main():
             input_img_mode=input_img_mode,
             input_key=args.input_key,
             target_key=args.target_key,
+            target_format=args.target_format,
+            target_transform=target_transform,
             num_samples=args.val_num_samples,
             trust_remote_code=args.dataset_trust_remote_code,
         )
@@ -752,7 +780,8 @@ def main():
             switch_prob=args.mixup_switch_prob,
             mode=args.mixup_mode,
             label_smoothing=args.smoothing,
-            num_classes=args.num_classes
+            num_classes=args.num_classes,
+            multi_label=multi_label,
         )
 
     naflex_mode = False
@@ -902,34 +931,18 @@ def main():
                 **eval_loader_kwargs,
             )
 
-    # setup loss function
+    # setup loss function, the task creates its criterion via create_classification_loss()
     if args.jsd_loss:
         assert num_aug_splits > 1  # JSD only valid with aug splits set
-        train_loss_fn = JsdCrossEntropy(num_splits=num_aug_splits, smoothing=args.smoothing)
-    elif mixup_active:
-        # smoothing is handled with mixup target transform which outputs sparse, soft targets
-        if args.bce_loss:
-            train_loss_fn = BinaryCrossEntropy(
-                target_threshold=args.bce_target_thresh,
-                sum_classes=args.bce_sum,
-                pos_weight=args.bce_pos_weight,
-            )
-        else:
-            train_loss_fn = SoftTargetCrossEntropy()
-    elif args.smoothing:
-        if args.bce_loss:
-            train_loss_fn = BinaryCrossEntropy(
-                smoothing=args.smoothing,
-                target_threshold=args.bce_target_thresh,
-                sum_classes=args.bce_sum,
-                pos_weight=args.bce_pos_weight,
-            )
-        else:
-            train_loss_fn = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
-    else:
-        train_loss_fn = nn.CrossEntropyLoss()
-    train_loss_fn = train_loss_fn.to(device=device)
-    validate_loss_fn = nn.CrossEntropyLoss().to(device=device)
+    loss_kwargs = dict(
+        bce=args.bce_loss,
+        smoothing=args.smoothing,
+        soft_targets=mixup_active,  # Mixup/CutMix output dense targets with smoothing already applied
+        jsd_splits=num_aug_splits if args.jsd_loss else 0,
+        bce_target_thresh=args.bce_target_thresh,
+        bce_sum=args.bce_sum,
+        bce_pos_weight=args.bce_pos_weight,
+    )
 
     # Setup training task (classification or distillation)
     if args.kd_model_name is not None:
@@ -938,7 +951,6 @@ def main():
             task = LogitDistillationTask(
                 student_model=model,
                 teacher_model=args.kd_model_name,
-                criterion=train_loss_fn,
                 loss_type=args.kd_loss_type,
                 distill_loss_weight=args.distill_loss_weight,
                 task_loss_weight=args.task_loss_weight,
@@ -946,12 +958,12 @@ def main():
                 device=device,
                 dtype=model_dtype,
                 verbose=utils.is_primary(args),
+                criterion_kwargs=loss_kwargs,
             )
         elif args.kd_distill_type == 'feature':
             task = FeatureDistillationTask(
                 student_model=model,
                 teacher_model=args.kd_model_name,
-                criterion=train_loss_fn,
                 distill_loss_weight=args.distill_loss_weight,
                 task_loss_weight=args.task_loss_weight,
                 student_feature_dim=args.kd_student_feature_dim,
@@ -959,12 +971,12 @@ def main():
                 device=device,
                 dtype=model_dtype,
                 verbose=utils.is_primary(args),
+                criterion_kwargs=loss_kwargs,
             )
         elif args.kd_distill_type == 'token':
             task = TokenDistillationTask(
                 student_model=model,
                 teacher_model=args.kd_model_name,
-                criterion=train_loss_fn,
                 distill_type=args.kd_token_distill_type,
                 distill_loss_weight=args.distill_loss_weight,
                 task_loss_weight=args.task_loss_weight,
@@ -972,17 +984,27 @@ def main():
                 device=device,
                 dtype=model_dtype,
                 verbose=utils.is_primary(args),
+                criterion_kwargs=loss_kwargs,
             )
         else:
             raise ValueError(f"Unknown distillation type: {args.kd_distill_type}")
+    elif multi_label:
+        task = MultiLabelClassificationTask(
+            model=model,
+            threshold=args.multilabel_threshold,
+            device=device,
+            dtype=model_dtype,
+            verbose=utils.is_primary(args),
+            criterion_kwargs=loss_kwargs,
+        )
     else:
         # Standard classification task
         task = ClassificationTask(
             model=model,
-            criterion=train_loss_fn,
             device=device,
             dtype=model_dtype,
             verbose=utils.is_primary(args),
+            criterion_kwargs=loss_kwargs,
         )
 
     model = task.get_trainable_module()
@@ -1048,7 +1070,18 @@ def main():
         model = task.get_trainable_module()
 
     # setup checkpoint saver and eval metric tracking
-    eval_metric = args.eval_metric if loader_eval is not None else 'loss'
+    # setup evaluator, the task's evaluator defines the default metric and the metrics available for --eval-metric
+    evaluator = None
+    if loader_eval is not None:
+        evaluator = task.create_evaluator(max_samples=evaluation_sample_limit(loader_eval))
+        eval_metric = args.eval_metric or evaluator.default_metric
+        if eval_metric not in evaluator.metric_names:
+            raise ValueError(
+                f"--eval-metric '{eval_metric}' is not produced by {type(evaluator).__name__}, "
+                f"choose from {evaluator.metric_names}."
+            )
+    else:
+        eval_metric = 'loss'  # train loss
     decreasing_metric = eval_metric == 'loss'
     best_metric = None
     best_epoch = None
@@ -1169,7 +1202,7 @@ def main():
                 eval_metrics = validate(
                     eval_model,
                     loader_eval,
-                    validate_loss_fn,
+                    evaluator,
                     args,
                     device=device,
                     amp_autocast=amp_autocast,
@@ -1184,11 +1217,12 @@ def main():
                     ema_eval_metrics = validate(
                         task.get_eval_model(ema=True),
                         loader_eval,
-                        validate_loss_fn,
+                        evaluator,
                         args,
                         device=device,
                         amp_autocast=amp_autocast,
                         log_suffix=' (EMA)',
+                        model_dtype=model_dtype,
                     )
                     eval_metrics = ema_eval_metrics
             else:
@@ -1475,17 +1509,15 @@ def train_one_epoch(
 def validate(
         model,
         loader,
-        loss_fn,
+        evaluator,
         args,
         device=torch.device('cuda'),
         amp_autocast=suppress,
         model_dtype=None,
-        log_suffix=''
+        log_suffix='',
 ):
     batch_time_m = utils.AverageMeter()
-    losses_m = utils.AverageMeter()
-    top1_m = utils.AverageMeter()
-    top5_m = utils.AverageMeter()
+    evaluator.reset()
 
     model.eval()
 
@@ -1511,40 +1543,27 @@ def validate(
                     output = output.unfold(0, reduce_factor, reduce_factor).mean(dim=2)
                     target = target[0:target.size(0):reduce_factor]
 
-                loss = loss_fn(output, target)
-            acc1, acc5 = utils.accuracy(output, target, topk=(1, 5))
-
-            if args.distributed:
-                reduced_loss = utils.reduce_tensor(loss.data, args.world_size)
-                acc1 = utils.reduce_tensor(acc1, args.world_size)
-                acc5 = utils.reduce_tensor(acc5, args.world_size)
-            else:
-                reduced_loss = loss.data
+                evaluator.update(output, target)
 
             if device.type == 'cuda':
                 torch.cuda.synchronize(device)
             elif device.type == "npu":
                 torch.npu.synchronize(device)
 
-            batch_size = output.shape[0]
-            losses_m.update(reduced_loss.item(), batch_size)
-            top1_m.update(acc1.item(), batch_size)
-            top5_m.update(acc5.item(), batch_size)
-
             batch_time_m.update(time.time() - end)
             end = time.time()
             if utils.is_primary(args) and (last_batch or batch_idx % args.log_interval == 0):
                 log_name = 'Test' + log_suffix
+                metric_text = '  '.join(f'{name}: {value:.4f}' for name, value in evaluator.summary().items())
                 _logger.info(
                     f'{log_name}: [{batch_idx:>4d}/{last_idx}]  '
                     f'Time: {batch_time_m.val:.3f} ({batch_time_m.avg:.3f})  '
-                    f'Loss: {losses_m.val:>7.3f} ({losses_m.avg:>6.3f})  '
-                    f'Acc@1: {top1_m.val:>7.3f} ({top1_m.avg:>7.3f})  '
-                    f'Acc@5: {top5_m.val:>7.3f} ({top5_m.avg:>7.3f})'
+                    f'{metric_text}'
                 )
 
-    metrics = OrderedDict([('loss', losses_m.avg), ('top1', top1_m.avg), ('top5', top5_m.avg)])
-
+    metrics = evaluator.compute(distributed=args.distributed)
+    if utils.is_primary(args):
+        _logger.info('Test%s: %s', log_suffix, '  '.join(f'{name}: {value:.4f}' for name, value in metrics.items()))
     return metrics
 
 
