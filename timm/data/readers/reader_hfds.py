@@ -3,7 +3,7 @@
 Hacked together by / Copyright 2022 Ross Wightman
 """
 import io
-from typing import Optional
+from typing import List, Optional
 
 try:
     import datasets
@@ -27,7 +27,7 @@ class ReaderHfds(Reader):
             input_key: str = 'image',
             target_key: str = 'label',
             target_format: Optional[str] = None,
-            additional_features: Optional[list[str]] = None,
+            additional_features: Optional[List[str]] = None,
             download: bool = False,
             trust_remote_code: bool = False
     ):

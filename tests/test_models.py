@@ -479,6 +479,21 @@ def test_pruned_efficientnet_in_chans(model_name):
         assert model(torch.randn(1, 1, 32, 32)).shape == (1, 1000)
 
 
+@pytest.mark.base
+def test_convit_dtype_change_after_forward():
+    """GPSA.rel_indices is cached on the first forward; a dtype change afterwards must
+    still be picked up since the cached tensor's shape doesn't change."""
+    model = create_model('convit_tiny', pretrained=False)
+    model.eval()
+    x = torch.randn(1, 3, 224, 224)
+    with torch.no_grad():
+        model(x)  # populate the rel_indices cache in float32
+    model.to(torch.bfloat16)
+    with torch.no_grad():
+        out = model(x.to(torch.bfloat16))
+    assert out.dtype == torch.bfloat16
+
+
 @pytest.mark.torchscript
 @pytest.mark.timeout(timeout120)
 @pytest.mark.parametrize(
@@ -1349,3 +1364,27 @@ def test_mobile_model_fusion_features(model_name, kwargs):
         # Resetting a classifier after pruning must use the retained feature width.
         getter.model.reset_classifier(7, global_pool='avg')
         assert getter.model(x).shape == (2, 7)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name', [
+    'levit_128s', 'levit_conv_128s', 'efficientformer_l1', 'efficientformerv2_s0', 'tiny_vit_5m_224', 'efficientvit_m0',
+])
+def test_eval_refreshes_attention_bias_cache(model_name):
+    # A model that stays in eval mode while its weights change (e.g. an EMA copy between validation runs)
+    # must not keep using the attention biases cached from the previous weights once eval() is called again.
+    model = create_model(model_name).eval()
+    attn_modules = [m for m in model.modules() if hasattr(m, 'attention_bias_cache')]
+    assert attn_modules
+    x = torch.randn(1, *model.pretrained_cfg['input_size'])
+    with torch.no_grad():
+        model(x)
+        for m in attn_modules:
+            m.attention_biases.normal_()
+        model.eval()
+        model(x)
+        for m in attn_modules:
+            torch.testing.assert_close(
+                m.get_attention_biases(x.device),
+                m.attention_biases[:, m.attention_bias_idxs],
+            )

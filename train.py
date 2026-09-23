@@ -1447,9 +1447,9 @@ def train_one_epoch(
 
         if args.synchronize_step:
             if device.type == 'cuda':
-                torch.cuda.synchronize()
+                torch.cuda.synchronize(device)
             elif device.type == 'npu':
-                torch.npu.synchronize()
+                torch.npu.synchronize(device)
         time_now = time.time()
 
         update_time_m.update(time.time() - update_start_time)
@@ -1546,9 +1546,9 @@ def validate(
                 evaluator.update(output, target)
 
             if device.type == 'cuda':
-                torch.cuda.synchronize()
+                torch.cuda.synchronize(device)
             elif device.type == "npu":
-                torch.npu.synchronize()
+                torch.npu.synchronize(device)
 
             batch_time_m.update(time.time() - end)
             end = time.time()

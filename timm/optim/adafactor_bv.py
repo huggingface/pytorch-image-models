@@ -24,7 +24,7 @@ def _factored_dims(
         shape: Tuple[int, ...],
         factored: bool,
         min_dim_size_to_factor: int
-) -> Optional[tuple[int, int]]:
+) -> Optional[Tuple[int, int]]:
     """Whether to use a factored second moment estimator.
 
     This function returns a tuple with the two largest axes to reduce over.

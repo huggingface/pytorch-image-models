@@ -166,7 +166,7 @@ class Attention2d(torch.nn.Module):
     @torch.no_grad()
     def train(self, mode=True):
         super().train(mode)
-        if mode and self.attention_bias_cache:
+        if self.attention_bias_cache:
             self.attention_bias_cache = {}  # clear ab cache
 
     def reset_parameters(self) -> None:
@@ -307,7 +307,7 @@ class Attention2dDownsample(torch.nn.Module):
     @torch.no_grad()
     def train(self, mode=True):
         super().train(mode)
-        if mode and self.attention_bias_cache:
+        if self.attention_bias_cache:
             self.attention_bias_cache = {}  # clear ab cache
 
     def reset_parameters(self) -> None:
