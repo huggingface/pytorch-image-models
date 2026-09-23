@@ -88,7 +88,8 @@ def _decode_block_str(block_str):
     is assumed to indicate the block type.
 
     leading string - block type (
-      ir = InvertedResidual, ds = DepthwiseSep, dsa = DeptwhiseSep with pw act, cn = ConvBnAct)
+      ir = InvertedResidual, ds = DepthwiseSep, dsa = DeptwhiseSep with pw act, cn = ConvBnAct,
+      tu = TuckerConv)
     r - number of repeat blocks,
     k - kernel size,
     s - strides (1-9),
@@ -96,6 +97,8 @@ def _decode_block_str(block_str):
     c - output channels,
     se - squeeze/excitation ratio
     n - activation fn ('re', 'r6', 'hs', or 'sw')
+    ir (tu block only) - input rank ratio
+    or (tu block only) - output rank ratio
     Args:
         block_str: a string representation of block arguments.
     Returns:
@@ -187,6 +190,13 @@ def _decode_block_str(block_str):
         block_args.update(dict(
             kernel_size=int(options['k']),
             skip=skip is True,
+        ))
+    elif block_type == 'tu':
+        block_args.update(dict(
+            kernel_size=_parse_ksize(options['k']),
+            input_rank_ratio=float(options['ir']),
+            output_rank_ratio=float(options['or']),
+            noskip=skip is False,
         ))
     elif block_type == 'uir':
         # override exp / proj kernels for start/end in uir block
@@ -415,6 +425,9 @@ class EfficientNetBuilder:
         elif bt == 'cn':
             _log_info_if('  ConvBnAct {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
             block = ConvBnAct(**ba)
+        elif bt == 'tu':
+            _log_info_if('  TuckerConv {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
+            block = TuckerConv(**ba)
         elif bt == 'uir':
             _log_info_if('  UniversalInvertedResidual {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
             block = UniversalInvertedResidual(**ba, layer_scale_init_value=self.layer_scale_init_value)

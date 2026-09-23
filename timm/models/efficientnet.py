@@ -17,6 +17,9 @@ An implementation of EfficienNet that covers variety of related models with effi
 * MNasNet B1, A1 (SE), Small
   - MnasNet: Platform-Aware Neural Architecture Search for Mobile - https://arxiv.org/abs/1807.11626
 
+* MobileDets (CPU, DSP, EdgeTPU, GPU)
+  - MobileDets: Searching for Object Detection Architectures for Mobile Accelerators - https://arxiv.org/abs/2004.14525
+
 * FBNet-C
   - FBNet: Hardware-Aware Efficient ConvNet Design via Differentiable NAS - https://arxiv.org/abs/1812.03443
 
@@ -1300,6 +1303,125 @@ def _gen_mobilenet_edgetpu(variant, channel_multiplier=1.0, depth_multiplier=1.0
     return model
 
 
+def _gen_mobiledet_cpu(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
+    """ MobileDet-CPU
+
+    Architecture ported from the reference TF implementation, not the original paper directly:
+    https://github.com/tensorflow/models/blob/420a7253e034a12ae2208e6ec94d3e4936177a53/research/object_detection/models/ssd_mobiledet_feature_extractor.py
+    Ref: `MobileDets: Searching for Object Detection Architectures for Mobile Accelerators` - https://arxiv.org/abs/2004.14525
+
+    NOTE this only ports the architecture (as a classification backbone with an added head/classifier, the
+    original is a detection-only feature extractor with no ImageNet head) -- there are no pretrained weights,
+    and no attempt is made to exactly match the reference's squeeze-excite reduction channel rounding, so this
+    should not be assumed numerically identical to the paper/reference even once trained from scratch.
+    """
+    arch_def = [
+        # stage 0, "C1" in the reference - inverted bottleneck w/ no expansion (== DepthwiseSeparableConv) + SE
+        ['ds_r1_k3_s1_c8_se0.25_noskip'],
+        # stage 1, "C2"
+        ['ir_r1_k3_s2_e4_c16_se0.25_noskip'],
+        # stage 2, "C3"
+        ['ir_r1_k3_s2_e8_c32_se0.25_noskip', 'ir_r1_k3_s1_e4_c32_se0.25', 'ir_r1_k3_s1_e4_c32_se0.25',
+         'ir_r1_k3_s1_e4_c32_se0.25'],
+        # stage 3, "C4"
+        ['ir_r1_k5_s2_e8_c72_se0.25_noskip', 'ir_r1_k3_s1_e8_c72_se0.25', 'ir_r1_k5_s1_e4_c72_se0.25',
+         'ir_r1_k3_s1_e4_c72_se0.25', 'ir_r1_k3_s1_e8_c72_se0.25_noskip', 'ir_r1_k3_s1_e8_c72_se0.25',
+         'ir_r1_k3_s1_e8_c72_se0.25', 'ir_r1_k3_s1_e8_c72_se0.25'],
+        # stage 4, "C5"
+        ['ir_r1_k5_s2_e8_c104_se0.25_noskip', 'ir_r1_k5_s1_e4_c104_se0.25', 'ir_r1_k5_s1_e4_c104_se0.25',
+         'ir_r1_k3_s1_e4_c104_se0.25', 'ir_r1_k3_s1_e8_c144_se0.25_noskip'],
+    ]
+    model_kwargs = dict(
+        block_args=decode_arch_def(arch_def),
+        num_features=1280,
+        stem_size=16,
+        stem_kernel_size=3,
+        round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        act_layer=resolve_act_layer(kwargs, 'hard_swish'),
+        **kwargs,
+    )
+    model = _create_effnet(variant, pretrained, **model_kwargs)
+    return model
+
+
+def _gen_mobiledet_dsp(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
+    """ MobileDet-DSP, see `_gen_mobiledet_cpu` for reference/porting notes. """
+    arch_def = [
+        ['ds_r1_k3_s1_c24_noskip'],
+        ['er_r1_k3_s2_e4_c32_noskip', 'er_r1_k3_s1_e4_c32', 'ir_r1_k3_s1_e4_c32',
+         'tu_r1_k3_s1_ir0.25_or0.75_c32'],
+        ['er_r1_k3_s2_e8_c64_noskip', 'ir_r1_k3_s1_e4_c64', 'er_r1_k3_s1_e4_c64', 'er_r1_k3_s1_e4_c64'],
+        ['er_r1_k3_s2_e8_c120_noskip', 'ir_r1_k3_s1_e4_c120', 'ir_r1_k3_s1_e8_c120', 'ir_r1_k3_s1_e8_c120',
+         'er_r1_k3_s1_e8_c144_noskip', 'ir_r1_k3_s1_e8_c144', 'ir_r1_k3_s1_e8_c144', 'ir_r1_k3_s1_e8_c144'],
+        ['ir_r1_k3_s2_e4_c160_noskip', 'ir_r1_k3_s1_e4_c160', 'er_r1_k3_s1_e4_c160',
+         'tu_r1_k3_s1_ir0.75_or0.75_c160', 'ir_r1_k3_s1_e8_c240_noskip'],
+    ]
+    model_kwargs = dict(
+        block_args=decode_arch_def(arch_def),
+        num_features=1280,
+        stem_size=32,
+        stem_kernel_size=3,
+        round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        act_layer=resolve_act_layer(kwargs, 'relu6'),
+        **kwargs,
+    )
+    model = _create_effnet(variant, pretrained, **model_kwargs)
+    return model
+
+
+def _gen_mobiledet_edgetpu(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
+    """ MobileDet-EdgeTPU, see `_gen_mobiledet_cpu` for reference/porting notes. """
+    arch_def = [
+        ['tu_r1_k3_s1_ir0.25_or0.75_c16_noskip'],
+        ['er_r1_k3_s2_e8_c16_noskip', 'er_r1_k3_s1_e4_c16', 'er_r1_k3_s1_e8_c16', 'er_r1_k3_s1_e4_c16'],
+        ['er_r1_k5_s2_e8_c40_noskip', 'er_r1_k3_s1_e4_c40', 'er_r1_k3_s1_e4_c40', 'er_r1_k3_s1_e4_c40'],
+        ['ir_r1_k3_s2_e8_c72_noskip', 'ir_r1_k3_s1_e8_c72', 'er_r1_k3_s1_e4_c72', 'er_r1_k3_s1_e4_c72',
+         'ir_r1_k5_s1_e8_c96_noskip', 'ir_r1_k5_s1_e8_c96', 'ir_r1_k3_s1_e8_c96', 'ir_r1_k3_s1_e8_c96'],
+        ['ir_r1_k5_s2_e8_c120_noskip', 'ir_r1_k3_s1_e8_c120', 'ir_r1_k5_s1_e4_c120', 'ir_r1_k3_s1_e8_c120',
+         'ir_r1_k5_s1_e8_c384_noskip'],
+    ]
+    model_kwargs = dict(
+        block_args=decode_arch_def(arch_def),
+        num_features=1280,
+        stem_size=32,
+        stem_kernel_size=3,
+        round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        act_layer=resolve_act_layer(kwargs, 'relu6'),
+        **kwargs,
+    )
+    model = _create_effnet(variant, pretrained, **model_kwargs)
+    return model
+
+
+def _gen_mobiledet_gpu(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
+    """ MobileDet-GPU, see `_gen_mobiledet_cpu` for reference/porting notes. """
+    arch_def = [
+        ['tu_r1_k3_s1_ir0.25_or0.25_c16_noskip'],
+        ['er_r1_k3_s2_e8_c32_noskip', 'tu_r1_k3_s1_ir0.25_or0.25_c32', 'tu_r1_k3_s1_ir0.25_or0.25_c32',
+         'tu_r1_k3_s1_ir0.25_or0.25_c32'],
+        ['er_r1_k3_s2_e8_c64_noskip', 'er_r1_k3_s1_e8_c64', 'er_r1_k3_s1_e8_c64', 'er_r1_k3_s1_e4_c64'],
+        ['er_r1_k3_s2_e8_c128_noskip', 'er_r1_k3_s1_e4_c128', 'er_r1_k3_s1_e4_c128', 'er_r1_k3_s1_e4_c128',
+         'er_r1_k3_s1_e8_c128_noskip', 'er_r1_k3_s1_e8_c128', 'er_r1_k3_s1_e8_c128', 'er_r1_k3_s1_e8_c128'],
+        ['er_r1_k3_s2_e4_c128_noskip', 'er_r1_k3_s1_e4_c128', 'er_r1_k3_s1_e4_c128', 'er_r1_k3_s1_e4_c128',
+         'ir_r1_k3_s1_e8_c384_noskip'],
+    ]
+    model_kwargs = dict(
+        block_args=decode_arch_def(arch_def),
+        num_features=1280,
+        stem_size=32,
+        stem_kernel_size=3,
+        round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        act_layer=resolve_act_layer(kwargs, 'relu6'),
+        **kwargs,
+    )
+    model = _create_effnet(variant, pretrained, **model_kwargs)
+    return model
+
+
 def _gen_test_efficientnet(variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrained=False, **kwargs):
     """ Minimal test EfficientNet generator.
     """
@@ -1904,6 +2026,11 @@ default_cfgs = generate_default_cfgs({
     'mobilenet_edgetpu_v2_l.untrained': _cfg(
         #hf_hub_id='timm/',
         input_size=(3, 224, 224), crop_pct=0.9),
+
+    'mobiledet_cpu.untrained': _cfg(input_size=(3, 224, 224), crop_pct=0.9),
+    'mobiledet_dsp.untrained': _cfg(input_size=(3, 224, 224), crop_pct=0.9),
+    'mobiledet_edgetpu.untrained': _cfg(input_size=(3, 224, 224), crop_pct=0.9),
+    'mobiledet_gpu.untrained': _cfg(input_size=(3, 224, 224), crop_pct=0.9),
 
     "test_efficientnet.r160_in1k": _cfg(
         hf_hub_id='timm/',
@@ -2898,6 +3025,34 @@ def mobilenet_edgetpu_v2_m(pretrained=False, **kwargs) -> EfficientNet:
 def mobilenet_edgetpu_v2_l(pretrained=False, **kwargs) -> EfficientNet:
     """ MobileNet-EdgeTPU-v2 Large. """
     model = _gen_mobilenet_edgetpu('mobilenet_edgetpu_v2_l', pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobiledet_cpu(pretrained=False, **kwargs) -> EfficientNet:
+    """ MobileDet-CPU. Architecture only, no pretrained weights. """
+    model = _gen_mobiledet_cpu('mobiledet_cpu', pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobiledet_dsp(pretrained=False, **kwargs) -> EfficientNet:
+    """ MobileDet-DSP. Architecture only, no pretrained weights. """
+    model = _gen_mobiledet_dsp('mobiledet_dsp', pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobiledet_edgetpu(pretrained=False, **kwargs) -> EfficientNet:
+    """ MobileDet-EdgeTPU. Architecture only, no pretrained weights. """
+    model = _gen_mobiledet_edgetpu('mobiledet_edgetpu', pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobiledet_gpu(pretrained=False, **kwargs) -> EfficientNet:
+    """ MobileDet-GPU. Architecture only, no pretrained weights. """
+    model = _gen_mobiledet_gpu('mobiledet_gpu', pretrained=pretrained, **kwargs)
     return model
 
 

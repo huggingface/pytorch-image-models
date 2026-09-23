@@ -1373,3 +1373,24 @@ def test_eval_refreshes_attention_bias_cache(model_name):
                 m.get_attention_biases(x.device),
                 m.attention_biases[:, m.attention_bias_idxs],
             )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name, expected_chs', [
+    # channel count at each of the 5 stride-2 reduction stages (C1..C5), from the reference TF
+    # implementation: https://github.com/tensorflow/models/blob/420a7253e034a12ae2208e6ec94d3e4936177a53/
+    # research/object_detection/models/ssd_mobiledet_feature_extractor.py
+    ('mobiledet_cpu', [8, 16, 32, 72, 144]),
+    ('mobiledet_dsp', [24, 32, 64, 144, 240]),
+    ('mobiledet_edgetpu', [16, 16, 40, 96, 384]),
+    ('mobiledet_gpu', [16, 32, 64, 128, 384]),
+])
+def test_mobiledet_reduction_channels(model_name, expected_chs):
+    # Guards the architecture transcription against a silent regression: each variant must keep the
+    # exact per-stage channel counts and stride-2/4/8/16/32 reduction schedule of the reference backbone.
+    model = create_model(model_name, features_only=True).eval()
+    assert [f['reduction'] for f in model.feature_info.info] == [2, 4, 8, 16, 32]
+    x = torch.randn(1, 3, 224, 224)
+    with torch.no_grad():
+        feats = model(x)
+    assert [f.shape[1] for f in feats] == expected_chs

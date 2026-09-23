@@ -25,7 +25,7 @@ from timm.layers import (
 
 __all__ = [
     'SqueezeExcite', 'ConvBnAct', 'DepthwiseSeparableConv', 'InvertedResidual', 'CondConvResidual', 'EdgeResidual',
-    'UniversalInvertedResidual', 'MobileAttention'
+    'UniversalInvertedResidual', 'MobileAttention', 'TuckerConv'
 ]
 
 ModuleType = Type[nn.Module]
@@ -756,6 +756,89 @@ class EdgeResidual(nn.Module):
         x = self.se(x)
         x = self.conv_pwl(x)
         x = self.bn2(x)
+        if self.has_skip:
+            x = self.drop_path(x) + shortcut
+        return x
+
+
+class TuckerConv(nn.Module):
+    """ Tucker convolution block (generalized bottleneck)
+
+    A Tucker-2 style factorization of a regular conv: a 1x1 conv reduces to an 'input rank',
+    a full KxK conv operates at an independent 'output rank', then a 1x1 conv expands to
+    out_chs. Unlike InvertedResidual/EdgeResidual there is no depthwise conv and no single
+    expansion ratio -- the input and output ranks are each an independent fraction of
+    in_chs/out_chs, which is what lets this block trade capacity for compute differently
+    than an MBConv-style block at the same channel counts.
+
+    Introduced in `MobileDets: Searching for Object Detection Architectures for Mobile
+    Accelerators` - https://arxiv.org/abs/2004.14525
+    """
+
+    def __init__(
+            self,
+            in_chs: int,
+            out_chs: int,
+            kernel_size: int = 3,
+            stride: int = 1,
+            dilation: int = 1,
+            pad_type: str = '',
+            input_rank_ratio: float = 0.25,
+            output_rank_ratio: float = 0.25,
+            noskip: bool = False,
+            act_layer: LayerType = nn.ReLU,
+            norm_layer: LayerType = nn.BatchNorm2d,
+            aa_layer: Optional[LayerType] = None,
+            drop_path_rate: float = 0.,
+            device=None,
+            dtype=None,
+    ):
+        dd = {'device': device, 'dtype': dtype}
+        super().__init__()
+        norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
+        input_rank = make_divisible(in_chs * input_rank_ratio)
+        output_rank = make_divisible(out_chs * output_rank_ratio)
+        self.has_skip = (in_chs == out_chs and stride == 1) and not noskip
+        use_aa = aa_layer is not None and stride > 1  # FIXME handle dilation
+
+        # Input-rank reduction, 1x1
+        self.conv_input = create_conv2d(in_chs, input_rank, 1, padding=pad_type, **dd)
+        self.bn1 = norm_act_layer(input_rank, inplace=True, **dd)
+
+        # Core spatial convolution at output-rank channels
+        self.conv_core = create_conv2d(
+            input_rank,
+            output_rank,
+            kernel_size,
+            stride=1 if use_aa else stride,
+            dilation=dilation,
+            padding=pad_type,
+            **dd,
+        )
+        self.bn2 = norm_act_layer(output_rank, inplace=True, **dd)
+
+        self.aa = create_aa(aa_layer, channels=output_rank, stride=stride, enable=use_aa, **dd)
+
+        # Output-rank expansion, 1x1, linear (no activation, matches the reference)
+        self.conv_pwl = create_conv2d(output_rank, out_chs, 1, padding=pad_type, **dd)
+        self.bn3 = norm_act_layer(out_chs, apply_act=False, **dd)
+        self.drop_path = DropPath(drop_path_rate) if drop_path_rate else nn.Identity()
+
+    def feature_info(self, location):
+        if location == 'expansion':  # after the core conv, before the final pwl projection
+            return dict(module='conv_pwl', hook_type='forward_pre', num_chs=self.conv_pwl.in_channels)
+        else:  # location == 'bottleneck', block output
+            return dict(module='', num_chs=self.conv_pwl.out_channels)
+
+    def forward(self, x):
+        shortcut = x
+        x = self.conv_input(x)
+        x = self.bn1(x)
+        x = self.conv_core(x)
+        x = self.bn2(x)
+        x = self.aa(x)
+        x = self.conv_pwl(x)
+        x = self.bn3(x)
         if self.has_skip:
             x = self.drop_path(x) + shortcut
         return x
