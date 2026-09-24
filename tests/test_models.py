@@ -1388,3 +1388,70 @@ def test_eval_refreshes_attention_bias_cache(model_name):
                 m.get_attention_biases(x.device),
                 m.attention_biases[:, m.attention_bias_idxs],
             )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('dtype', [torch.float16, torch.bfloat16])
+@pytest.mark.parametrize('module_name, class_name, kwargs', [
+    ('efficientformer', 'Attention', dict(dim=16, key_dim=4, num_heads=2, attn_ratio=2, resolution=2)),
+    ('efficientformer_v2', 'Attention2d', dict(dim=16, key_dim=4, num_heads=2, attn_ratio=2, resolution=2)),
+    ('efficientformer_v2', 'Attention2dDownsample', dict(dim=16, key_dim=4, num_heads=2, attn_ratio=2, resolution=2)),
+    ('efficientvit_msra', 'CascadedGroupAttention', dict(dim=16, key_dim=4, num_heads=2, attn_ratio=2, resolution=2,
+                                                       kernels=(3, 3))),
+    ('levit', 'Attention', dict(dim=16, key_dim=4, num_heads=2, attn_ratio=2, resolution=2)),
+    ('levit', 'AttentionDownsample', dict(in_dim=16, out_dim=16, key_dim=4, num_heads=2, attn_ratio=2, resolution=2)),
+    ('tiny_vit', 'Attention', dict(dim=16, key_dim=4, num_heads=2, attn_ratio=2, resolution=(2, 2))),
+])
+def test_eval_attention_bias_cache_after_dtype_change(module_name, class_name, kwargs, dtype):
+    module = importlib.import_module(f'timm.models.{module_name}')
+    attention = getattr(module, class_name)(**kwargs)
+    attention.eval()
+    device = torch.device('cpu')
+    with torch.no_grad():
+        cached = attention.get_attention_biases(device)
+        assert cached.dtype == torch.float32
+        attention.to(dtype=dtype)
+        refreshed = attention.get_attention_biases(device)
+        assert refreshed.dtype == dtype
+        torch.testing.assert_close(refreshed, attention.attention_biases[:, attention.attention_bias_idxs])
+        assert attention.get_attention_biases(device) is refreshed
+
+        attention.to(dtype=torch.float32)
+        restored = attention.get_attention_biases(device)
+        assert restored.dtype == torch.float32
+        torch.testing.assert_close(restored, attention.attention_biases[:, attention.attention_bias_idxs])
+
+
+@pytest.mark.base
+def test_eval_attention_forward_after_dtype_change():
+    from copy import deepcopy
+    from timm.models.efficientformer import Attention
+
+    attention = Attention(dim=16, key_dim=4, num_heads=2, attn_ratio=2, resolution=2)
+    attention.eval()
+    x = torch.randn(1, 4, 16)
+    with torch.no_grad():
+        attention.attention_biases.normal_()
+        reference = deepcopy(attention).to(dtype=torch.bfloat16)
+        expected = reference(x.to(dtype=torch.bfloat16))
+        attention(x)  # populate the float32 eval cache
+        attention.to(dtype=torch.bfloat16)
+        actual = attention(x.to(dtype=torch.bfloat16))
+        torch.testing.assert_close(actual, expected)
+
+
+@pytest.mark.base
+def test_attention_bias_cache_apply_preserves_recurse_argument():
+    from inspect import signature
+    from timm.models.efficientformer import Attention
+
+    if 'recurse' not in signature(torch.nn.Module._apply).parameters:
+        pytest.skip('This PyTorch version does not support the recurse argument')
+
+    attention = Attention(dim=16, key_dim=4, num_heads=2, attn_ratio=2, resolution=2)
+    attention.eval()
+    attention.get_attention_biases(torch.device('cpu'))
+    attention._apply(lambda tensor: tensor.double() if tensor.is_floating_point() else tensor, recurse=False)
+    assert not attention.attention_bias_cache
+    assert attention.attention_biases.dtype == torch.float64
+    assert attention.qkv.weight.dtype == torch.float32
