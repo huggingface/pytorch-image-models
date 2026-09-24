@@ -266,9 +266,9 @@ class Attention(nn.Module):
         if self.attention_bias_cache:
             self.attention_bias_cache = {}  # clear ab cache
 
-    def _apply(self, fn):
+    def _apply(self, fn, *args, **kwargs):
         self.attention_bias_cache = {}
-        return super()._apply(fn)
+        return super()._apply(fn, *args, **kwargs)
 
     def reset_parameters(self) -> None:
         """Initialize parameters and buffers."""
@@ -397,9 +397,9 @@ class AttentionDownsample(nn.Module):
         if self.attention_bias_cache:
             self.attention_bias_cache = {}  # clear ab cache
 
-    def _apply(self, fn):
+    def _apply(self, fn, *args, **kwargs):
         self.attention_bias_cache = {}
-        return super()._apply(fn)
+        return super()._apply(fn, *args, **kwargs)
 
     def reset_parameters(self) -> None:
         """Initialize parameters and buffers."""

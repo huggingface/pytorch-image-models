@@ -260,9 +260,9 @@ class Attention(torch.nn.Module):
         if self.attention_bias_cache:
             self.attention_bias_cache = {}  # clear ab cache
 
-    def _apply(self, fn):
+    def _apply(self, fn, *args, **kwargs):
         self.attention_bias_cache = {}
-        return super()._apply(fn)
+        return super()._apply(fn, *args, **kwargs)
 
     def get_attention_biases(self, device: torch.device) -> torch.Tensor:
         if torch.jit.is_tracing() or self.training:

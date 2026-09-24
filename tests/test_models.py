@@ -1438,3 +1438,20 @@ def test_eval_attention_forward_after_dtype_change():
         attention.to(dtype=torch.bfloat16)
         actual = attention(x.to(dtype=torch.bfloat16))
         torch.testing.assert_close(actual, expected)
+
+
+@pytest.mark.base
+def test_attention_bias_cache_apply_preserves_recurse_argument():
+    from inspect import signature
+    from timm.models.efficientformer import Attention
+
+    if 'recurse' not in signature(torch.nn.Module._apply).parameters:
+        pytest.skip('This PyTorch version does not support the recurse argument')
+
+    attention = Attention(dim=16, key_dim=4, num_heads=2, attn_ratio=2, resolution=2)
+    attention.eval()
+    attention.get_attention_biases(torch.device('cpu'))
+    attention._apply(lambda tensor: tensor.double() if tensor.is_floating_point() else tensor, recurse=False)
+    assert not attention.attention_bias_cache
+    assert attention.attention_biases.dtype == torch.float64
+    assert attention.qkv.weight.dtype == torch.float32
