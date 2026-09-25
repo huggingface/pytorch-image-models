@@ -28,6 +28,10 @@
     distributed sampler padding.
   * See the [timm multi-label image datasets](https://huggingface.co/collections/timm/timm-multi-label-image-datasets)
     collection on the Hub for example / benchmark datasets that work out of the box.
+* New loss options via `--loss`
+  * Poly-1, Two-way, ZLPR, and Distribution-Balanced losses.
+  * Class-frequency weighting for BCE / ASL, computed from label counts gathered by `class_weights.py`.
+  * ASL is now fp16-safe and defaults to `batchmean` reduction
 * RoPE Refactor
   * Extend training-only RoPE coordinate augmentation (shift, jitter, rescale) to axial, mixed, and MRoPE embeddings,
     sharing helpers with DINOv3 while preserving its existing augmentation behavior.
