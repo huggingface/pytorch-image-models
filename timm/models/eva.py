@@ -616,6 +616,7 @@ class Eva(nn.Module):
             rope_shift_coords: Optional[float] = None,
             rope_jitter_coords: Optional[float] = None,
             rope_rescale_coords: Optional[float] = None,
+            rope_mrope_section: Optional[Tuple[int, int, int]] = None,
             use_post_norm: bool = False,
             use_pre_transformer_norm: bool = False,
             use_post_transformer_norm: Optional[bool] = None,
@@ -628,7 +629,6 @@ class Eva(nn.Module):
             head_init_scale: float = 0.001,
             device=None,
             dtype=None,
-            rope_mrope_section: Optional[Tuple[int, int, int]] = None,
     ):
         """Initialize the EVA Vision Transformer model.
 
@@ -674,6 +674,7 @@ class Eva(nn.Module):
             rope_shift_coords: Train-time RoPE coordinate shift, uniform in [-s, s], in the rope grid's units.
             rope_jitter_coords: Train-time RoPE per-axis log-uniform scale augmentation in [1/J, J].
             rope_rescale_coords: Train-time RoPE shared log-uniform scale augmentation in [1/R, R].
+            rope_mrope_section: Temporal, height, and width frequency sections for MRoPE. None uses (8, 12, 12).
             use_post_norm: Use post-norm transformer block type
             use_pre_transformer_norm: Use normalization layer before transformer blocks
             use_post_transformer_norm: Use normalization layer after transformer blocks
@@ -684,7 +685,6 @@ class Eva(nn.Module):
             dynamic_img_pad: Apply dynamic padding for irregular image sizes
             ref_feat_shape: Reference feature shape for rotary position embedding scale
             head_init_scale: Initialization scale for classification head weights
-            rope_mrope_section: Temporal, height, and width frequency sections for MRoPE. None uses (8, 12, 12).
         """
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
@@ -971,7 +971,7 @@ class Eva(nn.Module):
                 if hasattr(self.rope, 'feat_shape'):
                     rot_pos_embed = self.rope.get_embed()
                 else:
-                    # MRoPE always generates embeddings from an explicit grid shape.
+                    # RoPE modules without a feat_shape (e.g. MRoPE) need an explicit grid shape.
                     rot_pos_embed = self.rope.get_embed(shape=self.patch_embed.grid_size)
             else:
                 rot_pos_embed = None
