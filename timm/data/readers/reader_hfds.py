@@ -81,15 +81,24 @@ class ReaderHfds(Reader):
             assert 'path' in image and image['path']
             image = open(image['path'], 'rb')
 
-        label = multi_field_target(item, self.target_keys) if self.target_keys else get_field(item, self.label_key)
-        if self.remap_class:
-            label = remap_target(label, self.class_to_idx, self._source_names, dense=self.dense_target)
+        label = self._get_target(item)
 
         if self.additional_features is not None:
             features = [item[feat] for feat in self.additional_features]
             return image, label, *features
         else:
             return image, label
+
+    def _get_target(self, item):
+        label = multi_field_target(item, self.target_keys) if self.target_keys else get_field(item, self.label_key)
+        if self.remap_class:
+            label = remap_target(label, self.class_to_idx, self._source_names, dense=self.dense_target)
+        return label
+
+    def iter_targets(self):
+        """Iterate over the targets in dataset order, without reading image data."""
+        for item in self.dataset.remove_columns(self.image_key):
+            yield self._get_target(item)
 
     def __len__(self):
         return len(self.dataset)

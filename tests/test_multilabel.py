@@ -17,8 +17,14 @@ from timm.data.distributed_sampler import OrderedDistributedSampler
 from timm.data.loader import fast_collate
 from timm.data.mixup import FastCollateMixup, Mixup, mixup_target
 from timm.data.naflex_mixup import NaFlexMixup, pairwise_mixup_target
-from timm.loss import BinaryCrossEntropy, JsdCrossEntropy, LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
-from timm.task import ClassificationTask, MultiLabelClassificationTask, create_classification_loss
+from timm.loss import (
+    AsymmetricLossMultiLabel, AsymmetricLossSingleLabel, BinaryCrossEntropy, DistributionBalancedLoss,
+    JsdCrossEntropy, LabelSmoothingCrossEntropy, PolyBinaryCrossEntropy, PolyCrossEntropy,
+    SoftTargetCrossEntropy, TwoWayLoss, ZlprLoss,
+    compute_class_weights, create_classification_loss, load_class_stats, load_class_weights,
+    resolve_class_weights,
+)
+from timm.task import ClassificationTask, MultiLabelClassificationTask
 from timm.task.evaluator import (
     ClassificationEvaluator, MultiLabelClassificationEvaluator, evaluation_sample_limit,
 )
@@ -150,19 +156,375 @@ def test_bce_smooth_dense():
     ({}, nn.CrossEntropyLoss),
     (dict(smoothing=0.1), LabelSmoothingCrossEntropy),
     (dict(smoothing=0.1, soft_targets=True), SoftTargetCrossEntropy),
-    (dict(bce=True), BinaryCrossEntropy),
-    (dict(bce=True, smoothing=0.1), BinaryCrossEntropy),
-    (dict(bce=True, smoothing=0.1, soft_targets=True), BinaryCrossEntropy),
-    (dict(jsd_splits=2, smoothing=0.1), JsdCrossEntropy),
+    (dict(loss_type='ce', smoothing=0.1), LabelSmoothingCrossEntropy),
+    (dict(loss_type='bce'), BinaryCrossEntropy),
+    (dict(loss_type='bce', smoothing=0.1), BinaryCrossEntropy),
+    (dict(loss_type='bce', smoothing=0.1, soft_targets=True), BinaryCrossEntropy),
+    (dict(loss_type='jsd', jsd_splits=2, smoothing=0.1), JsdCrossEntropy),
     (dict(multi_label=True, smoothing=0.1), BinaryCrossEntropy),
     (dict(multi_label=True, smoothing=0.1, soft_targets=True), BinaryCrossEntropy),
+    (dict(loss_type='asl', smoothing=0.1), AsymmetricLossSingleLabel),
+    (dict(loss_type='asl', multi_label=True, smoothing=0.1), AsymmetricLossMultiLabel),
+    (dict(loss_type='asl', multi_label=True, smoothing=0.1, soft_targets=True), AsymmetricLossMultiLabel),
+    (dict(loss_type='twoway', multi_label=True), TwoWayLoss),
+    (dict(loss_type='zlpr', multi_label=True), ZlprLoss),
+    (dict(loss_type='poly', smoothing=0.1), PolyCrossEntropy),
+    (dict(loss_type='poly', smoothing=0.1, soft_targets=True), PolyCrossEntropy),
+    (dict(loss_type='poly', multi_label=True, smoothing=0.1), PolyBinaryCrossEntropy),
+    (dict(loss_type='db', multi_label=True, class_counts=[3, 1], num_samples=4), DistributionBalancedLoss),
+    (dict(loss_type='db', multi_label=True, class_counts=[3, 1], num_samples=4, soft_targets=True),
+     DistributionBalancedLoss),
 ])
 def test_create_classification_loss_dispatch(kwargs, expected):
     loss = create_classification_loss(**kwargs)
     assert isinstance(loss, expected)
     if isinstance(loss, BinaryCrossEntropy):
         assert loss.smooth_dense == kwargs.get('multi_label', False)
+    if isinstance(loss, (BinaryCrossEntropy, AsymmetricLossMultiLabel)):
         assert loss.smoothing == (0. if kwargs.get('soft_targets') else kwargs.get('smoothing', 0.))
+    if isinstance(loss, AsymmetricLossSingleLabel):
+        assert loss.eps == kwargs['smoothing']
+
+
+@pytest.mark.parametrize('kwargs,match', [
+    (dict(loss_type='focal'), 'Unknown loss type'),
+    (dict(loss_type='ce', multi_label=True), 'does not support multi-label'),
+    (dict(loss_type='jsd', multi_label=True, jsd_splits=2), 'does not support multi-label'),
+    (dict(loss_type='jsd', jsd_splits=0), 'jsd_splits'),
+    (dict(loss_type='twoway'), 'requires multi-label'),
+    (dict(loss_type='zlpr'), 'requires multi-label'),
+    (dict(loss_type='twoway', multi_label=True, soft_targets=True), 'binary targets'),
+    (dict(loss_type='zlpr', multi_label=True, smoothing=0.1), 'binary targets'),
+    (dict(loss_type='asl', multi_label=True, bce_sum=True), 'only apply to the bce loss'),
+    (dict(loss_type='zlpr', multi_label=True, pos_weight=2.), 'only supported by bce'),
+    (dict(loss_type='asl', class_weight=[1., 2.]), 'only supported by bce'),
+    (dict(loss_type='ce', class_weight=[1., 2.]), 'only supported by bce'),
+    (dict(loss_type='asl', soft_targets=True), 'Mixup/CutMix'),
+    (dict(loss_type='asl', asl_reduction='sum'), 'batchmean'),
+    (dict(loss_type='asl', multi_label=True, asl_reduction='max'), 'Unknown reduction'),
+    (dict(loss_type='db', multi_label=True), 'requires class_counts'),
+    (dict(loss_type='poly', poly_gamma=2.), 'multi-label'),
+    (dict(loss_type='poly', poly_alpha=0.25), 'multi-label'),
+    (dict(loss_type='poly', multi_label=True, class_weight=[1., 2.]), 'only supported'),
+    (dict(loss_type='db', class_counts=[3, 1], num_samples=4), 'requires multi-label'),
+    (dict(loss_type='bce', multi_label=True, class_counts=[3, 1], num_samples=4), 'only used by the db loss'),
+    (dict(loss_type='db', multi_label=True, class_counts=[3, 5], num_samples=4), 'class_counts must be'),
+    (dict(loss_type='db', multi_label=True, class_counts=[3, 1], num_samples=4, pos_weight=2.), 'only supported'),
+])
+def test_create_classification_loss_validation(kwargs, match):
+    with pytest.raises(ValueError, match=match):
+        create_classification_loss(**kwargs)
+
+
+def _reference_asl(x, y, gamma_neg=4., gamma_pos=1., clip=0.05, eps=1e-8):
+    # The original ASL formulation and reduction (sum over batch and classes).
+    xs_pos = torch.sigmoid(x)
+    xs_neg = (1 - xs_pos + clip).clamp(max=1) if clip else 1 - xs_pos
+    loss = y * torch.log(xs_pos.clamp(min=eps)) + (1 - y) * torch.log(xs_neg.clamp(min=eps))
+    pt = xs_pos * y + xs_neg * (1 - y)
+    loss = loss * torch.pow(1 - pt, gamma_pos * y + gamma_neg * (1 - y))
+    return -loss.sum()
+
+
+def test_asl_multilabel_reduction_and_smoothing():
+    torch.manual_seed(0)
+    x = torch.randn(4, 6) * 3
+    y = (torch.rand(4, 6) > 0.6).float()
+    ref = _reference_asl(x, y)
+    torch.testing.assert_close(AsymmetricLossMultiLabel(reduction='sum')(x, y), ref)
+    torch.testing.assert_close(AsymmetricLossMultiLabel()(x, y), ref / 4)  # default batchmean
+    torch.testing.assert_close(AsymmetricLossMultiLabel(reduction='mean')(x, y), ref / 24)
+    assert AsymmetricLossMultiLabel(reduction='none')(x, y).shape == (4, 6)
+    torch.testing.assert_close(AsymmetricLossMultiLabel(clip=0., reduction='sum')(x, y), _reference_asl(x, y, clip=0.))
+    torch.testing.assert_close(
+        AsymmetricLossMultiLabel(smoothing=0.2, reduction='sum')(x, y), _reference_asl(x, y * 0.8 + 0.1))
+
+
+@pytest.mark.parametrize('clip', [0.05, 0.])
+def test_asl_multilabel_low_precision_logits(clip):
+    # Saturated fp16 probabilities used to underflow the eps clamp, log(0) * 0 -> NaN.
+    x = torch.tensor([[-20., -12., 9., 3.], [18., -18., 0.5, -25.]])
+    y = torch.tensor([[0., 0., 1., 1.], [1., 0., 0., 0.]])
+    ref = AsymmetricLossMultiLabel(clip=clip)(x, y)
+    for dtype in (torch.float16, torch.bfloat16):
+        xl = x.to(dtype).requires_grad_()
+        loss = AsymmetricLossMultiLabel(clip=clip)(xl, y.to(dtype))
+        loss.backward()
+        assert loss.dtype == torch.float32 and torch.isfinite(xl.grad).all()
+        torch.testing.assert_close(loss, ref, atol=1e-2, rtol=1e-2)
+
+
+def test_multilabel_task_creates_asl():
+    model = nn.Linear(2, 3)
+    target = torch.tensor([[1., 0., 1.], [0., 1., 1.]])
+    task = MultiLabelClassificationTask(
+        model, criterion_kwargs=dict(loss_type='asl', smoothing=0.2, asl_reduction='sum'), verbose=False)
+    assert isinstance(task.criterion, AsymmetricLossMultiLabel)
+    result = task(torch.ones(2, 2), target)
+    torch.testing.assert_close(result['loss'], _reference_asl(result['output'], target * 0.8 + 0.1))
+    result['loss'].backward()
+    assert torch.isfinite(model.weight.grad).all()
+
+
+def test_bce_and_asl_class_weights():
+    torch.manual_seed(0)
+    x = torch.randn(4, 3) * 2
+    y = (torch.rand(4, 3) > 0.5).float()
+    class_weight, pos_weight = torch.tensor([0.5, 1., 2.]), torch.tensor([3., 1., 0.25])
+    bce = create_classification_loss(
+        loss_type='bce', multi_label=True, class_weight=class_weight.tolist(), pos_weight=pos_weight)
+    torch.testing.assert_close(bce(x, y), nn.functional.binary_cross_entropy_with_logits(
+        x, y, weight=class_weight, pos_weight=pos_weight))
+    asl = create_classification_loss(
+        loss_type='asl', multi_label=True, class_weight=class_weight, pos_weight=pos_weight, asl_gamma_pos=0.,
+        asl_gamma_neg=0., asl_clip=0., asl_reduction='mean')
+    # without focusing and clipping ASL reduces to (weighted) BCE, up to the eps clamp
+    torch.testing.assert_close(asl(x, y), nn.functional.binary_cross_entropy_with_logits(
+        x, y, weight=class_weight, pos_weight=pos_weight), atol=1e-6, rtol=1e-5)
+
+
+def _reference_two_way(x, y, tp=4., tn=1.):
+    # Direct loops over the paper formulation, one softplus(hard negative - hard positive) term per
+    # class (over samples) and per sample (over classes) that has at least one positive.
+    def terms(x, y):
+        out = []
+        for xi, yi in zip(x, y):
+            pos, neg = xi[yi > 0.5], xi[yi <= 0.5]
+            if not len(pos):
+                continue
+            hard_pos = -tp * torch.logsumexp(-pos / tp, 0)
+            hard_neg = tn * torch.logsumexp(neg / tn, 0) if len(neg) else torch.tensor(-float('inf'))
+            out.append(nn.functional.softplus(hard_neg - hard_pos))
+        return torch.stack(out).mean() if out else torch.tensor(0.)
+    return terms(x.t(), y.t()) + terms(x, y)
+
+
+def test_two_way_loss():
+    torch.manual_seed(0)
+    x = torch.randn(6, 5) * 3
+    y = (torch.rand(6, 5) > 0.6).float()
+    y[0] = 0  # a sample without positives
+    y[:, 1] = 1  # a class without negatives
+    y[:, 2] = 0  # a class without positives
+    for tp, tn in ((4., 1.), (1., 2.)):
+        torch.testing.assert_close(TwoWayLoss(tp, tn)(x, y), _reference_two_way(x, y, tp, tn))
+    xl = x.half().requires_grad_()
+    loss = TwoWayLoss()(xl, y)
+    loss.backward()
+    assert loss.dtype == torch.float32 and torch.isfinite(xl.grad).all()
+    # no positives in the batch at all, zero loss that is still attached to the graph
+    xz = x.clone().requires_grad_()
+    loss = TwoWayLoss()(xz, torch.zeros_like(y))
+    loss.backward()
+    assert loss.item() == 0. and torch.equal(xz.grad, torch.zeros_like(x))
+
+
+def test_zlpr_loss():
+    torch.manual_seed(0)
+    x = torch.randn(4, 6) * 3
+    y = (torch.rand(4, 6) > 0.6).float()
+    y[0], y[1] = 0, 1  # no positives, no negatives
+    ref = torch.stack([
+        torch.log1p(torch.exp(xi[yi == 0]).sum()) + torch.log1p(torch.exp(-xi[yi == 1]).sum())
+        for xi, yi in zip(x, y)
+    ]).mean()
+    torch.testing.assert_close(ZlprLoss()(x, y), ref)
+    xl = (x * 10).half().requires_grad_()
+    loss = ZlprLoss()(xl, y)
+    loss.backward()
+    assert torch.isfinite(loss) and torch.isfinite(xl.grad).all()
+
+
+def test_compute_class_weights():
+    counts, num_samples = [2, 8, 0, 5], 10
+    kind, weights = compute_class_weights(counts, num_samples)
+    assert kind == 'pos_weight'
+    torch.testing.assert_close(weights, torch.tensor([4., 0.25, 9., 1.]))  # zero positives treated as one
+    _, weights = compute_class_weights(counts, num_samples, power=0.5, max_weight=2.)
+    torch.testing.assert_close(weights, torch.tensor([2., 0.5, 2., 1.]))
+    kind, weights = compute_class_weights(counts, num_samples, method='inv_freq')
+    assert kind == 'class_weight'
+    raw = torch.tensor([5., 1.25, 10., 2.])
+    torch.testing.assert_close(weights, raw / raw.mean())
+    kind, weights = compute_class_weights(counts, num_samples, method='effective_num', beta=0.9)
+    raw = 0.1 / (1 - 0.9 ** torch.tensor([2., 8., 1., 5.], dtype=torch.float64))
+    assert kind == 'class_weight'
+    torch.testing.assert_close(weights, (raw / raw.mean()).float())
+    with pytest.raises(ValueError, match='Unknown class weight method'):
+        compute_class_weights(counts, num_samples, method='median')
+    with pytest.raises(ValueError, match='num_samples'):
+        compute_class_weights(counts, 4)
+
+
+def test_load_class_weights(tmp_path):
+    assert load_class_weights(None) is None and load_class_weights(' ') is None
+    assert load_class_weights('2.5') == 2.5 and load_class_weights(2) == 2.
+    torch.testing.assert_close(load_class_weights('1, 2,3'), torch.tensor([1., 2., 3.]))
+    (tmp_path / 'w.txt').write_text('1 2\n3\n')
+    torch.testing.assert_close(load_class_weights(str(tmp_path / 'w.txt')), torch.tensor([1., 2., 3.]))
+    (tmp_path / 'list.json').write_text('[0.5, 4]')
+    torch.testing.assert_close(load_class_weights(str(tmp_path / 'list.json')), torch.tensor([0.5, 4.]))
+    (tmp_path / 'cw.json').write_text(json.dumps(dict(class_weight=[1., 2.], pos_counts=[3, 1])))
+    torch.testing.assert_close(load_class_weights(str(tmp_path / 'cw.json'), 'class_weight'), torch.tensor([1., 2.]))
+    with pytest.raises(ValueError, match="no 'pos_weight' entry"):
+        load_class_weights(str(tmp_path / 'cw.json'), 'pos_weight')
+    for bad in ('1,-2', 'nan', True):
+        with pytest.raises(ValueError):
+            load_class_weights(bad)
+
+
+def _reference_db(x, y, counts, num_samples, map_alpha=0.1, map_beta=10., map_mu=0.2, neg_scale=2.,
+                  init_bias=0.05, gamma=2., balance=2.):
+    # The reference formulation for binary targets, switching logits and weights by label.
+    freq_inv = 1. / counts
+    repeat_rate = (y * freq_inv).sum(1, keepdim=True)
+    weight = torch.sigmoid(map_beta * (freq_inv / repeat_rate - map_mu)) + map_alpha
+    z = x - torch.log(num_samples / counts - 1) * init_bias / neg_scale
+    z = torch.where(y > 0, z, z * neg_scale)
+    weight = torch.where(y > 0, weight, weight / neg_scale)
+    bce = nn.functional.binary_cross_entropy_with_logits
+    loss = bce(z, y, weight=weight, reduction='none')
+    if gamma:
+        pt = torch.exp(-bce(z, y, reduction='none'))
+        loss = balance * (1 - pt) ** gamma * loss
+    return loss.mean()
+
+
+@pytest.mark.parametrize('kwargs', [
+    {},
+    dict(neg_scale=5., init_bias=0.1),
+    dict(gamma=0.),
+    dict(map_alpha=0.3, map_beta=4., map_mu=0.5, neg_scale=1., init_bias=0.),
+])
+def test_distribution_balanced_loss(kwargs):
+    torch.manual_seed(0)
+    x = torch.randn(8, 5) * 3
+    y = (torch.rand(8, 5) > 0.6).float()
+    y[:, 0] = 1  # every sample has a positive, as in the reference datasets
+    counts, num_samples = torch.tensor([900., 40., 7., 300., 120.]), 1000
+    db_kwargs = dict(kwargs)
+    if 'gamma' in db_kwargs:
+        db_kwargs['focal_gamma'] = db_kwargs.pop('gamma')
+    loss = DistributionBalancedLoss(counts, num_samples, **db_kwargs)
+    torch.testing.assert_close(loss(x, y), _reference_db(x, y, counts, num_samples, **kwargs))
+
+
+def test_distribution_balanced_loss_edge_cases():
+    counts, num_samples = [0, 5, 10], 10  # never and always positive classes are clamped
+    loss_fn = DistributionBalancedLoss(counts, num_samples)
+    assert torch.isfinite(loss_fn.freq_inv).all() and torch.isfinite(loss_fn.logit_bias).all()
+    x = (torch.randn(4, 3) * 20).half().requires_grad_()
+    y = torch.tensor([[0., 0., 0.], [1., 0., 1.], [0.3, 0.7, 0.], [0., 1., 1.]])  # empty and soft targets
+    loss = loss_fn(x, y)
+    loss.backward()
+    assert loss.dtype == torch.float32 and torch.isfinite(loss) and torch.isfinite(x.grad).all()
+    per_elem = DistributionBalancedLoss(counts, num_samples, reduction='none')(x.detach(), y)
+    assert per_elem.shape == (4, 3)
+    torch.testing.assert_close(DistributionBalancedLoss(counts, num_samples, reduction='sum')(x.detach(), y),
+                               per_elem.sum())
+
+
+def test_load_class_stats(tmp_path):
+    assert load_class_stats(None) is None
+    path = tmp_path / 'stats.json'
+    path.write_text(json.dumps(dict(pos_counts=[3, 0, 1], num_samples=4, class_names=None)))
+    counts, num_samples = load_class_stats(str(path))
+    torch.testing.assert_close(counts, torch.tensor([3., 0., 1.]))
+    assert num_samples == 4
+    path.write_text(json.dumps(dict(pos_weight=[1., 1.])))
+    with pytest.raises(ValueError, match='pos_counts'):
+        load_class_stats(str(path))
+
+
+def test_resolve_class_weights():
+    stats = (torch.tensor([2., 8., 0., 5.]), 10)
+    torch.testing.assert_close(
+        resolve_class_weights('neg_pos', 'pos_weight', stats), torch.tensor([4., 0.25, 9., 1.]))
+    torch.testing.assert_close(
+        resolve_class_weights('neg_pos', 'pos_weight', stats, power=0.5, max_weight=2.),
+        torch.tensor([2., 0.5, 2., 1.]),
+    )
+    _, expected = compute_class_weights(*stats, method='effective_num', beta=0.9)
+    torch.testing.assert_close(resolve_class_weights('effective_num', 'class_weight', stats, beta=0.9), expected)
+    # explicit weights pass through, stats unused
+    torch.testing.assert_close(resolve_class_weights('1,2', 'class_weight', stats), torch.tensor([1., 2.]))
+    assert resolve_class_weights(None, 'pos_weight', stats) is None
+    with pytest.raises(ValueError, match='computes class_weight values'):
+        resolve_class_weights('inv_freq', 'pos_weight', stats)
+    with pytest.raises(ValueError, match='computes pos_weight values'):
+        resolve_class_weights('neg_pos', 'class_weight', stats)
+    with pytest.raises(ValueError, match='requires class stats'):
+        resolve_class_weights('neg_pos', 'pos_weight')
+
+
+def _reference_poly_ce(x, labels, epsilon, smoothing=0.):
+    # The paper's softmax Poly-1 with label smoothing, one_minus_pt from the smoothed labels.
+    num_classes = labels.shape[-1]
+    smooth = labels * (1 - smoothing) + smoothing / num_classes
+    ce = -(smooth * x.log_softmax(-1)).sum(-1)
+    one_minus_pt = (smooth * (1 - x.softmax(-1))).sum(-1)
+    return (ce + epsilon * one_minus_pt).mean()
+
+
+def _reference_poly_focal(x, labels, epsilon, gamma=2., alpha=None):
+    # The paper's sigmoid Poly-1 focal loss, optionally alpha balanced.
+    p = torch.sigmoid(x)
+    pt = labels * p + (1 - labels) * (1 - p)
+    fl = nn.functional.binary_cross_entropy_with_logits(x, labels, reduction='none') * (1 - pt) ** gamma
+    poly = epsilon * (1 - pt) ** (gamma + 1)
+    if alpha is not None:
+        weight = labels * alpha + (1 - labels) * (1 - alpha)
+        fl, poly = fl * weight, poly * weight
+    return (fl + poly).mean()
+
+
+def test_poly_cross_entropy():
+    torch.manual_seed(0)
+    x = torch.randn(6, 5) * 2
+    index = torch.randint(0, 5, (6,))
+    onehot = nn.functional.one_hot(index, 5).float()
+    for epsilon, smoothing in ((2., 0.), (1., 0.1), (-1., 0.2)):
+        loss = PolyCrossEntropy(epsilon=epsilon, smoothing=smoothing)
+        torch.testing.assert_close(loss(x, index), _reference_poly_ce(x, onehot, epsilon, smoothing))
+    # epsilon 0 is cross-entropy / label smoothing cross-entropy
+    torch.testing.assert_close(PolyCrossEntropy(epsilon=0.)(x, index), nn.functional.cross_entropy(x, index))
+    torch.testing.assert_close(
+        PolyCrossEntropy(epsilon=0., smoothing=0.1)(x, index), LabelSmoothingCrossEntropy(0.1)(x, index))
+    # dense (Mixup) targets are used as given
+    soft = mixup_target(index, 5, lam=0.7, smoothing=0.1)
+    torch.testing.assert_close(PolyCrossEntropy(smoothing=0.1)(x, soft), _reference_poly_ce(x, soft, 2.))
+    assert PolyCrossEntropy(reduction='none')(x, index).shape == (6,)
+    xl = (x * 20).half().requires_grad_()
+    loss = PolyCrossEntropy()(xl, index)
+    loss.backward()
+    assert loss.dtype == torch.float32 and torch.isfinite(xl.grad).all()
+
+
+def test_poly_binary_cross_entropy():
+    torch.manual_seed(0)
+    x = torch.randn(4, 6) * 3
+    y = (torch.rand(4, 6) > 0.6).float()
+    for epsilon, gamma, alpha in ((2., 0., None), (-1., 2., None), (1., 2., 0.25)):
+        loss = PolyBinaryCrossEntropy(epsilon=epsilon, gamma=gamma, alpha=alpha)
+        torch.testing.assert_close(loss(x, y), _reference_poly_focal(x, y, epsilon, gamma, alpha))
+    torch.testing.assert_close(
+        PolyBinaryCrossEntropy(epsilon=0.)(x, y), nn.functional.binary_cross_entropy_with_logits(x, y))
+    torch.testing.assert_close(
+        PolyBinaryCrossEntropy(smoothing=0.2)(x, y), _reference_poly_focal(x, y * 0.8 + 0.1, 2., gamma=0.))
+    torch.testing.assert_close(
+        PolyBinaryCrossEntropy(reduction='batchmean')(x, y), PolyBinaryCrossEntropy(reduction='sum')(x, y) / 4)
+    xl = (x * 10).half().requires_grad_()
+    loss = PolyBinaryCrossEntropy(gamma=2.)(xl, y)
+    loss.backward()
+    assert loss.dtype == torch.float32 and torch.isfinite(xl.grad).all()
+
+
+def test_loss_factory_task_reexport():
+    import timm.loss
+    import timm.task
+    assert timm.task.create_classification_loss is timm.loss.create_classification_loss
+    assert timm.task.LOSS_TYPES is timm.loss.LOSS_TYPES
+    assert timm.task.MULTI_LABEL_LOSS_TYPES is timm.loss.MULTI_LABEL_LOSS_TYPES
 
 
 def test_classification_task_criterion_kwargs_validation():
@@ -173,8 +535,8 @@ def test_classification_task_criterion_kwargs_validation():
         ClassificationTask(model, smoothing=0.1, verbose=False)
     with pytest.raises(TypeError):  # and typos inside criterion_kwargs reach the factory
         ClassificationTask(model, criterion_kwargs=dict(smoothin=0.1), verbose=False)
-    with pytest.raises(ValueError, match='JSD'):
-        create_classification_loss(multi_label=True, jsd_splits=2)
+    with pytest.raises(ValueError, match='multi-label'):
+        MultiLabelClassificationTask(model, criterion_kwargs=dict(loss_type='jsd', jsd_splits=2), verbose=False)
     with pytest.raises(ValueError, match='threshold'):
         MultiLabelClassificationTask(model, threshold=1.5, verbose=False)
     assert isinstance(ClassificationTask(model, verbose=False).criterion, nn.CrossEntropyLoss)
@@ -639,3 +1001,84 @@ def test_multilabel_train_and_validate_cli(monkeypatch, tmp_path, hf_dataset, re
     results = validate.validate(val_args)
     assert 'map' in results and 'top1' not in results
     assert results['map'] == pytest.approx(float(summary[0]['eval_map']), abs=1e-3)
+
+
+def test_class_weights_script(monkeypatch, tmp_path, hf_dataset):
+    import class_weights
+
+    output = tmp_path / 'stats.json'
+    monkeypatch.setattr('sys.argv', [
+        'class_weights.py', '--dataset', 'hfds/fixture', '--task', 'multilabel', '--target-key', 'labels',
+        '--num-classes', '6', '--output', str(output), '--method', 'neg_pos',  # the preview is only logged
+    ])
+    class_weights.main()
+    stats = json.loads(output.read_text())
+    assert stats['num_samples'] == 8 and stats['pos_counts'] == [2, 2, 2, 2, 1, 2]
+    assert stats['class_names'][5] == 'scab' and 'pos_weight' not in stats
+    torch.testing.assert_close(
+        resolve_class_weights('neg_pos', 'pos_weight', load_class_stats(str(output))),
+        torch.tensor([3., 3., 3., 3., 7., 3.]))
+
+    # single-label targets from a ClassLabel field, stats printed to stdout without --output
+    monkeypatch.setattr('sys.argv', ['class_weights.py', '--dataset', 'hfds/fixture', '--target-key', 'person'])
+    printed = []
+    monkeypatch.setattr('builtins.print', lambda *a, **kw: printed.append(' '.join(map(str, a))))
+    class_weights.main()
+    stats = json.loads(printed[0])
+    assert stats['pos_counts'] == [4, 4] and stats['class_names'] == ['no', 'yes']
+
+
+def test_train_cli_loss_flags(monkeypatch, tmp_path, hf_dataset):
+    import train
+
+    common = ['--dataset', 'hfds/fixture', '--target-key', 'labels', '--num-classes', '6', '--device', 'cpu']
+    (tmp_path / 'stats.json').write_text(json.dumps(dict(pos_counts=[2, 2, 2, 2, 1, 2], num_samples=8)))
+    monkeypatch.setattr(
+        'sys.argv', ['train.py', '--task', 'multilabel', '--bce-loss', '--bce-pos-weight', '2', *common])
+    args, _ = train._parse_args()
+    assert args.loss == 'bce' and args.loss_pos_weight == '2.0'
+    monkeypatch.setattr('sys.argv', ['train.py', '--jsd-loss', '--aug-splits', '3', *common])
+    assert train._parse_args()[0].loss == 'jsd'
+    for bad in (
+            ['--task', 'multilabel', '--bce-loss', '--loss', 'asl'],
+            ['--task', 'multilabel', '--loss', 'twoway', '--mixup', '0.5'],
+            ['--task', 'multilabel', '--loss', 'zlpr', '--loss-pos-weight', '2'],
+            ['--jsd-loss'],  # no augmentation splits
+            ['--loss', 'zlpr'],  # single-label
+            ['--task', 'multilabel', '--loss-class-weight', str(tmp_path / 'missing.json')],
+            ['--task', 'multilabel', '--loss', 'db'],  # no class stats
+            ['--task', 'multilabel', '--loss-pos-weight', 'neg_pos'],  # no class stats
+            ['--task', 'multilabel', '--class-stats', str(tmp_path / 'stats.json'), '--loss-pos-weight', 'inv_freq'],
+    ):
+        monkeypatch.setattr('sys.argv', ['train.py', *bad, *common])
+        with pytest.raises(SystemExit):
+            train._parse_args()
+
+    monkeypatch.setattr(train, 'create_model', lambda *a, **kw: _TinyClassifier(kw['num_classes']))
+    run = ['--task', 'multilabel', *common, '--workers', '0', '--batch-size', '2', '--img-size', '8', '--epochs', '1',
+           '--warmup-epochs', '0', '--opt', 'sgd', '--lr', '0.01', '--no-aug', '--output', str(tmp_path)]
+    stats = str(tmp_path / 'stats.json')
+    (tmp_path / 'pos_weight.json').write_text(json.dumps(dict(pos_weight=[3., 3., 3., 3., 7., 3.])))
+    for loss in ('bce', 'asl', 'poly', 'twoway', 'zlpr', 'db'):
+        extra = {
+            # both weight kinds from the same stats, and an explicit weight file
+            'bce': ['--class-stats', stats, '--loss-pos-weight', 'neg_pos', '--loss-class-weight', 'effective_num',
+                    '--loss-weight-power', '0.5'],
+            'asl': ['--loss-pos-weight', str(tmp_path / 'pos_weight.json')],
+            'db': ['--class-stats', stats],
+            'poly': ['--poly-gamma', '2', '--poly-epsilon', '-1'],
+        }.get(loss, [])
+        monkeypatch.setattr('sys.argv', ['train.py', *run, '--loss', loss, '--experiment', loss, *extra])
+        train.main()
+        summary = list(csv.DictReader((tmp_path / loss / 'summary.csv').open()))
+        assert 0. <= float(summary[0]['eval_map']) <= 100.
+    # single-label Poly-1 from a ClassLabel field
+    single = ['--dataset', 'hfds/fixture', '--target-key', 'person', '--num-classes', '2', '--device', 'cpu',
+              *run[len(common) + 2:]]
+    monkeypatch.setattr('sys.argv', ['train.py', *single, '--loss', 'poly', '--experiment', 'poly_single'])
+    train.main()
+    summary = list(csv.DictReader((tmp_path / 'poly_single' / 'summary.csv').open()))
+    assert 0. <= float(summary[0]['eval_top1']) <= 100.
+    monkeypatch.setattr('sys.argv', ['train.py', *run, '--loss-class-weight', '1,2,3', '--experiment', 'bad'])
+    with pytest.raises(ValueError, match='has 3 entries but the model has 6 classes'):
+        train.main()

@@ -35,6 +35,7 @@ from timm import utils
 from timm.data import create_dataset, create_loader, create_naflex_loader, resolve_data_config, \
     Mixup, FastCollateMixup, AugMixDataset, MultiLabelTarget
 from timm.layers import convert_splitbn_model, convert_sync_batchnorm, set_fast_norm
+from timm.loss import LOSS_TYPES, create_classification_loss, load_class_stats, resolve_class_weights
 from timm.models import create_model, safe_model_name
 from timm.optim import create_optimizer_v2, optimizer_kwargs
 from timm.scheduler import create_scheduler_v2, scheduler_kwargs
@@ -297,16 +298,59 @@ group.add_argument('--aug-repeats', type=float, default=0,
                    help='Number of augmentation repetitions (distributed training only) (default: 0)')
 group.add_argument('--aug-splits', type=int, default=0,
                    help='Number of augmentation splits (default: 0, valid: 0 or >=2)')
-group.add_argument('--jsd-loss', action='store_true', default=False,
-                   help='Enable Jensen-Shannon Divergence + CE loss. Use with `--aug-splits`.')
-group.add_argument('--bce-loss', action='store_true', default=False,
-                   help='Enable BCE loss w/ Mixup/CutMix use.')
+group.add_argument('--loss', default=None, type=str, choices=LOSS_TYPES,
+                   help='Loss type, "jsd" requires `--aug-splits`, "twoway", "zlpr", and "db" are multi-label only, '
+                        '"db" requires `--class-stats` (default: "ce" for classification, "bce" for multilabel)')
+group.add_argument('--class-stats', default=None, type=str, metavar='FILENAME',
+                   help='Training label stats (per-class counts) JSON from class_weights.py, for weight methods '
+                        'and the db loss')
+group.add_argument('--loss-pos-weight', default=None, type=str, metavar='WEIGHTS',
+                   help='Positive term weights for bce / multi-label asl, "neg_pos" (from `--class-stats`), a value, '
+                        'comma separated list, or file')
+group.add_argument('--loss-class-weight', default=None, type=str, metavar='WEIGHTS',
+                   help='Per-class loss weights for bce / multi-label asl, "inv_freq" or "effective_num" (from '
+                        '`--class-stats`), a value, comma separated list, or file')
+group.add_argument('--loss-weight-power', type=float, default=1.,
+                   help='Exponent for neg_pos / inv_freq weights, 0.5 for square root weighting (default: 1.)')
+group.add_argument('--loss-weight-beta', type=float, default=0.999,
+                   help='Effective number beta for effective_num weights (default: 0.999)')
+group.add_argument('--loss-weight-max', type=float, default=None,
+                   help='Cap weights computed from `--class-stats` at this value (default: None)')
 group.add_argument('--bce-sum', action='store_true', default=False,
                    help='Sum over classes when using BCE loss.')
 group.add_argument('--bce-target-thresh', type=float, default=None,
                    help='Threshold for binarizing softened BCE targets (default: None, disabled).')
+group.add_argument('--asl-gamma-pos', type=float, default=1.,
+                   help='ASL focusing parameter for positive targets (default: 1.)')
+group.add_argument('--asl-gamma-neg', type=float, default=4.,
+                   help='ASL focusing parameter for negative targets (default: 4.)')
+group.add_argument('--asl-clip', type=float, default=0.05,
+                   help='ASL probability margin for negatives, 0 disables, multi-label only (default: 0.05)')
+group.add_argument('--asl-reduction', type=str, default='batchmean', choices=('batchmean', 'sum', 'mean'),
+                   help='ASL reduction, "batchmean" sums classes and averages the batch, "sum" is the original ASL '
+                        'reduction, multi-label only (default: "batchmean")')
+group.add_argument('--poly-epsilon', type=float, default=2.,
+                   help='Poly-1 loss coefficient, 0 reduces to CE / BCE (default: 2., the paper ImageNet setting)')
+group.add_argument('--poly-gamma', type=float, default=0.,
+                   help='Poly-1 focal loss gamma, multi-label only (default: 0., disabled)')
+group.add_argument('--poly-alpha', type=float, default=None,
+                   help='Poly-1 focal loss positive balance weight, multi-label only (default: None, disabled)')
+group.add_argument('--twoway-tp', type=float, default=4.,
+                   help='Two-way loss positive logit temperature (default: 4.)')
+group.add_argument('--twoway-tn', type=float, default=1.,
+                   help='Two-way loss negative logit temperature (default: 1.)')
+group.add_argument('--db-neg-scale', type=float, default=2.,
+                   help='DB loss negative-tolerant logit scale, 1 disables (default: 2.)')
+group.add_argument('--db-init-bias', type=float, default=0.05,
+                   help='DB loss class prior logit shift factor, 0 disables (default: 0.05)')
+group.add_argument('--db-focal-gamma', type=float, default=2.,
+                   help='DB loss focusing parameter, 0 disables the focal term (default: 2.)')
+group.add_argument('--bce-loss', action='store_true', default=False,
+                   help='DEPRECATED, use `--loss bce`.')
+group.add_argument('--jsd-loss', action='store_true', default=False,
+                   help='DEPRECATED, use `--loss jsd`.')
 group.add_argument('--bce-pos-weight', type=float, default=None,
-                   help='Positive weighting for BCE loss.')
+                   help='DEPRECATED, use `--loss-pos-weight`.')
 group.add_argument('--reprob', type=float, default=0., metavar='PCT',
                    help='Random erase prob (default: 0.)')
 group.add_argument('--remode', type=str, default='pixel',
@@ -484,22 +528,85 @@ def _parse_args():
     # defaults will have been overridden if config file specified.
     args = parser.parse_args(remaining)
 
+    # map deprecated loss flags
+    for flag, loss_type in (('bce_loss', 'bce'), ('jsd_loss', 'jsd')):
+        if getattr(args, flag):
+            _logger.warning(f'--{flag.replace("_", "-")} is deprecated, use --loss {loss_type}.')
+            if args.loss not in (None, loss_type):
+                parser.error(f'--{flag.replace("_", "-")} conflicts with --loss {args.loss}.')
+            args.loss = loss_type
+    if args.bce_pos_weight is not None:
+        _logger.warning('--bce-pos-weight is deprecated, use --loss-pos-weight.')
+        if args.loss_pos_weight is not None:
+            parser.error('--bce-pos-weight conflicts with --loss-pos-weight.')
+        args.loss_pos_weight = str(args.bce_pos_weight)
+
     multi_label = args.task == 'multilabel'
     if args.smoothing is None:
         args.smoothing = 0. if multi_label else 0.1
     if multi_label:
         if args.num_classes is None or args.num_classes <= 0:
             parser.error('--task multilabel requires a positive --num-classes.')
-        if args.kd_model_name is not None or args.jsd_loss:
-            parser.error('Multi-label training does not support distillation or JSD loss.')
+        if args.kd_model_name is not None:
+            parser.error('Multi-label training does not support distillation.')
         if not 0. < args.multilabel_threshold < 1.:
             parser.error('--multilabel-threshold must be between 0 and 1.')
     elif args.target_format == 'multihot':
         parser.error('--target-format multihot requires --task multilabel.')
+    try:
+        # validate the loss configuration (and weight files) before any data or model setup
+        create_classification_loss(multi_label=multi_label, **_loss_kwargs(args))
+    except (ValueError, OSError) as e:
+        parser.error(str(e))
 
     # Cache the args as a text string to save them in the output dir later
     args_text = yaml.safe_dump(args.__dict__, default_flow_style=False)
     return args, args_text
+
+
+def _loss_kwargs(args) -> dict:
+    """Options for create_classification_loss(), shared by argument validation and the training task."""
+    class_stats = load_class_stats(args.class_stats)
+    weight_kwargs = dict(
+        class_stats=class_stats,
+        power=args.loss_weight_power,
+        beta=args.loss_weight_beta,
+        max_weight=args.loss_weight_max,
+    )
+    loss_kwargs = dict(
+        loss_type=args.loss,
+        smoothing=args.smoothing,
+        # Mixup/CutMix output dense targets with smoothing already applied
+        soft_targets=args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None,
+        class_weight=resolve_class_weights(args.loss_class_weight, 'class_weight', **weight_kwargs),
+        pos_weight=resolve_class_weights(args.loss_pos_weight, 'pos_weight', **weight_kwargs),
+        bce_target_thresh=args.bce_target_thresh,
+        bce_sum=args.bce_sum,
+    )
+    if args.loss == 'asl':
+        loss_kwargs.update(
+            asl_gamma_pos=args.asl_gamma_pos,
+            asl_gamma_neg=args.asl_gamma_neg,
+            asl_clip=args.asl_clip,
+            asl_reduction=args.asl_reduction,
+        )
+    elif args.loss == 'poly':
+        loss_kwargs.update(poly_epsilon=args.poly_epsilon, poly_gamma=args.poly_gamma, poly_alpha=args.poly_alpha)
+    elif args.loss == 'jsd':
+        loss_kwargs.update(jsd_splits=args.aug_splits)
+    elif args.loss == 'twoway':
+        loss_kwargs.update(twoway_tp=args.twoway_tp, twoway_tn=args.twoway_tn)
+    elif args.loss == 'db':
+        if class_stats is None:
+            raise ValueError('--loss db requires --class-stats (see class_weights.py).')
+        loss_kwargs.update(
+            class_counts=class_stats[0],
+            num_samples=class_stats[1],
+            db_neg_scale=args.db_neg_scale,
+            db_init_bias=args.db_init_bias,
+            db_focal_gamma=args.db_focal_gamma,
+        )
+    return loss_kwargs
 
 
 def _set_loader_epoch(loader, epoch: int) -> None:
@@ -932,17 +1039,12 @@ def main():
             )
 
     # setup loss function, the task creates its criterion via create_classification_loss()
-    if args.jsd_loss:
-        assert num_aug_splits > 1  # JSD only valid with aug splits set
-    loss_kwargs = dict(
-        bce=args.bce_loss,
-        smoothing=args.smoothing,
-        soft_targets=mixup_active,  # Mixup/CutMix output dense targets with smoothing already applied
-        jsd_splits=num_aug_splits if args.jsd_loss else 0,
-        bce_target_thresh=args.bce_target_thresh,
-        bce_sum=args.bce_sum,
-        bce_pos_weight=args.bce_pos_weight,
-    )
+    loss_kwargs = _loss_kwargs(args)
+    for name in ('class_weight', 'pos_weight', 'class_counts'):
+        weight = loss_kwargs.get(name)
+        if isinstance(weight, torch.Tensor) and weight.numel() != model.num_classes:
+            raise ValueError(
+                f'Loss {name} has {weight.numel()} entries but the model has {model.num_classes} classes.')
 
     # Setup training task (classification or distillation)
     if args.kd_model_name is not None:
