@@ -4,6 +4,7 @@ import os
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar, Union
+from urllib.parse import urlsplit
 
 from torch import nn as nn
 from torch.hub import load_state_dict_from_url
@@ -86,6 +87,27 @@ def _resolve_pretrained_source(pretrained_cfg: Dict[str, Any]) -> Tuple[str, str
         # if a filename override is set, return tuple for location w/ (hub_id, filename)
         pretrained_loc = pretrained_loc, pretrained_cfg['hf_hub_filename']
     return load_from, pretrained_loc
+
+
+def _use_custom_load(pretrained_cfg: Dict[str, Any], pretrained_loc: Union[str, Path]) -> bool:
+    """Check if a file / url checkpoint should be loaded with the model's `load_pretrained` fn.
+
+    `custom_load` describes the format of the registry weights (original JAX/Flax .npz archives).
+    A `file` or `url` override, e.g. via `pretrained_cfg_overlay` or train.py `--pretrained-path`,
+    keeps the flag, but a native PyTorch or safetensors checkpoint there must use the state-dict path.
+
+    Args:
+        pretrained_cfg: Pretrained config for the model.
+        pretrained_loc: Checkpoint file path or url.
+
+    Returns:
+        True if `custom_load` is set and the checkpoint is a NumPy (.npz / .npy) archive.
+    """
+    if not pretrained_cfg.get('custom_load', False):
+        return False
+    loc = str(pretrained_loc)
+    path = urlsplit(loc).path if '://' in loc else loc
+    return os.path.splitext(path)[-1].lower() in ('.npz', '.npy')
 
 
 def set_pretrained_download_progress(enable: bool = True) -> None:
@@ -181,14 +203,14 @@ def load_pretrained(
         state_dict = pretrained_loc  # pretrained_loc is the actual state dict for this override
     elif load_from == 'file':
         _logger.info(f'Loading pretrained weights from file ({pretrained_loc})')
-        if pretrained_cfg.get('custom_load', False):
+        if _use_custom_load(pretrained_cfg, pretrained_loc):
             model.load_pretrained(pretrained_loc)
             return
         else:
             state_dict = load_state_dict(pretrained_loc)
     elif load_from == 'url':
         _logger.info(f'Loading pretrained weights from url ({pretrained_loc})')
-        if pretrained_cfg.get('custom_load', False):
+        if _use_custom_load(pretrained_cfg, pretrained_loc):
             pretrained_loc = download_cached_file(
                 pretrained_loc,
                 progress=_DOWNLOAD_PROGRESS,

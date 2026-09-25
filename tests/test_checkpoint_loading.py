@@ -348,3 +348,84 @@ def test_naflexvit_factory_remaps_classic_vit_checkpoint(tmp_path):
         expected = src_model(inputs)
         actual = dst_model(inputs)
     torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-6)
+
+
+_CUSTOM_LOAD_MODEL_KWARGS = {
+    # default pretrained tags of these models are original JAX .npz checkpoints (custom_load=True)
+    'vit_tiny_patch16_224': dict(img_size=8, patch_size=4, embed_dim=8, depth=1, num_heads=2),
+    'resnetv2_50x1_bit': dict(),
+}
+
+
+def _save_native_checkpoint(state_dict, checkpoint_path, checkpoint_type):
+    if checkpoint_type == 'safetensors':
+        import safetensors.torch
+        safetensors.torch.save_file({k: v.contiguous() for k, v in state_dict.items()}, str(checkpoint_path))
+    else:
+        torch.save(state_dict, checkpoint_path)
+
+
+@pytest.mark.parametrize('model_name', list(_CUSTOM_LOAD_MODEL_KWARGS))
+@pytest.mark.parametrize('checkpoint_type', ['pth', 'safetensors'])
+def test_native_checkpoint_file_loads_for_custom_load_cfg(tmp_path, model_name, checkpoint_type):
+    import timm
+
+    model_kwargs = _CUSTOM_LOAD_MODEL_KWARGS[model_name]
+    src_model = timm.create_model(model_name, pretrained=False, **model_kwargs)
+    assert src_model.pretrained_cfg.get('custom_load', False)
+    checkpoint_path = tmp_path / f'native.{checkpoint_type}'
+    _save_native_checkpoint(src_model.state_dict(), checkpoint_path, checkpoint_type)
+
+    dst_model = timm.create_model(
+        model_name,
+        pretrained=True,
+        pretrained_cfg_overlay=dict(file=str(checkpoint_path)),
+        **model_kwargs,
+    )
+
+    dst_state_dict = dst_model.state_dict()
+    for key, value in src_model.state_dict().items():
+        assert torch.equal(dst_state_dict[key], value), key
+
+
+def test_native_checkpoint_file_adapts_head_for_custom_load_cfg(tmp_path):
+    # mirrors train.py --pretrained-path, which overlays `file` and forces head adaptation
+    import timm
+
+    model_kwargs = _CUSTOM_LOAD_MODEL_KWARGS['vit_tiny_patch16_224']
+    src_model = timm.create_model('vit_tiny_patch16_224', pretrained=False, **model_kwargs)
+    checkpoint_path = tmp_path / 'native.pth'
+    torch.save(src_model.state_dict(), checkpoint_path)
+
+    dst_model = timm.create_model(
+        'vit_tiny_patch16_224',
+        pretrained=True,
+        num_classes=5,
+        pretrained_cfg_overlay=dict(file=str(checkpoint_path), num_classes=-1),
+        **model_kwargs,
+    )
+
+    assert dst_model.head.weight.shape == (5, model_kwargs['embed_dim'])
+    dst_state_dict = dst_model.state_dict()
+    for key, value in src_model.state_dict().items():
+        if not key.startswith('head.'):
+            assert torch.equal(dst_state_dict[key], value), key
+
+
+@pytest.mark.parametrize('location,expected', [
+    ('/weights/ViT-B_16.npz', True),
+    ('C:\weights\ViT-B_16.NPZ', True),
+    ('/weights/ViT-B_16.npy', True),
+    ('https://storage.googleapis.com/vit_models/augreg/Ti_16.npz', True),
+    ('https://example.com/weights/ViT-B_16.npz?download=1', True),
+    ('/weights/model.pth', False),
+    ('/weights/model.safetensors', False),
+    ('/weights/pytorch_model.bin', False),
+    ('https://example.com/weights/model.pth', False),
+])
+def test_use_custom_load_only_for_numpy_checkpoints(location, expected):
+    from timm.models._builder import _use_custom_load
+
+    assert _use_custom_load({'custom_load': True}, location) is expected
+    assert _use_custom_load({'custom_load': False}, location) is False
+    assert _use_custom_load({}, location) is False
