@@ -12,6 +12,39 @@
 
 ## What's New
 
+## September 25, 2026
+
+* Multi-label classification support
+  * Add `--task multilabel` to `train.py` / `validate.py`, trained with BCE (`MultiLabelClassificationTask`). See the
+    [training docs](https://huggingface.co/docs/timm/training_script) for details.
+  * Targets can be lists of class indices, dense multi-hot vectors (`--target-format multihot`), or one binary field
+    per class (`--target-key a,b,c`), with `/` paths into nested fields. Supported by the `hfds`, `hfids`, `tfds`
+    (multi-field keys), and `wds` readers.
+  * Mixup / CutMix and NaFlex loaders support multi-label targets. Label smoothing moves each target towards 0.5
+    and defaults to 0 for multi-label.
+  * Validation reports mAP (the default `--eval-metric`) plus micro, macro, and sample F1, with an F1 threshold set by
+    `--multilabel-threshold`.
+  * New dataset-level evaluators compute metrics over the full validation set across distributed ranks, excluding
+    distributed sampler padding.
+  * See the [timm multi-label image datasets](https://huggingface.co/collections/timm/timm-multi-label-image-datasets)
+    collection on the Hub for example / benchmark datasets that work out of the box.
+* RoPE Refactor
+  * Extend training-only RoPE coordinate augmentation (shift, jitter, rescale) to axial, mixed, and MRoPE embeddings,
+    sharing helpers with DINOv3 while preserving its existing augmentation behavior.
+  * Add `grid_type` and `normalize_coords` options to the Fourier / rotary builders (`build_fourier_pos_embed`,
+    `build_rotary_pos_embed`) and axial RoPE modules, and configurable MRoPE sections in EVA.
+  * Support `rotate_half` in the tuple-output `RotaryEmbedding` and the `base` factory variant.
+  * Correct rotation-layout forwarding in EVA, NaFlexViT, and MRoPE attention pooling.
+  * Keep non-learned RoPE frequency and coordinate buffers at least float32 in half/bfloat16 models, and compute mixed
+    RoPE phases in float32 under autocast. These precision fixes can change low-precision model outputs.
+  * Fix batched RoPE embeddings for pixel grids and reference-shape rescaling. DINOv3 `grid_indexing='xy'` now swaps
+    coordinate channels as requested; outputs for these previously incorrect configurations change.
+  * Make `apply_rot_embed`, `apply_rot_embed_cat`, and `apply_rot_embed_list` return each input's dtype, casting after
+    the rotation without first downcasting sin/cos.
+  * Consolidate the two axial RoPE modules behind a private base. Existing calls remain compatible, but the `bands`
+    buffer is now retained in both cached and dynamic modes (`rope.bands` is no longer `None` in cached mode).
+* Train/eval mode switch and dtype change fixes for LeViT and related models (EfficentFormer*, EfficientViT-MSRA, TinyViT) w/ cached attention biases.
+
 ## September 22, 2026
 
 * Add Qwen-Drive-1.0-4B vision tower weights.
