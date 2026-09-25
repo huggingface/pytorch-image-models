@@ -21,6 +21,7 @@ Based on implementation by Keller Jordan, see
 Hacked together by Ross Wightman
 """
 import logging
+import math
 import numbers
 import warnings
 from typing import List, Mapping, Optional, Sequence, Tuple, Union
@@ -191,6 +192,8 @@ def zeropower_via_newtonschulz(
 
         # Perform Newton-Schulz iterations
         for a, b, c in coeff_sequence:
+            # CPU baddbmm before PyTorch 2.1 can propagate NaNs from A despite beta=0:
+            # https://github.com/pytorch/pytorch/pull/96086
             mm_fn(A, X, X.mT, beta=0.0, alpha=1.0, out=A)  # A = X @ X.mT
             mm_fn(A, A, A, beta=b, alpha=c, out=B)  # B = b * A + c * A @ A
             mm_fn(X, B, X, beta=a, alpha=1.0, out=C)  # C = a * X + B @ X
@@ -238,7 +241,7 @@ def get_adamuon_lr_scale(
     """Adjust learning rate based on parameter shape for AdaMuon.
 
     Args:
-        param_shape: Shape of the parameter tensor
+        param_shape: Shape of the update that went through Newton-Schulz, (out, in) or (spatial_prod, out, in)
         adjust_lr_fn: Scaling function name
 
     Returns:
@@ -249,7 +252,8 @@ def get_adamuon_lr_scale(
     if adjust_lr_fn == "match_rms_adamw":
         # AdaMuon paper: normalize by RMS, then scale by 0.2 * sqrt(numel)
         # https://arxiv.org/abs/2507.11005
-        return 0.2 * (out_chs * in_chs) ** 0.5, True
+        # Match the norm over the whole tensor, including spatial batches.
+        return 0.2 * math.prod(param_shape) ** 0.5, True
     elif adjust_lr_fn == "rms_to_rms":
         return (out_chs / in_chs) ** 0.5, False
     elif adjust_lr_fn == "rsqrt_in":
@@ -601,6 +605,12 @@ def _single_tensor_adamuon(
             scale_eps=scale_eps,
         )
 
+        # Scale from the orthogonalized matrix dimensions before restoring the convolution shape.
+        if adjust_lr_fn:
+            scale, use_rms_norm = get_adamuon_lr_scale(update_ortho.shape, adjust_lr_fn)
+        else:
+            scale, use_rms_norm = 1.0, False
+
         # Reshape back to original shape for second moment tracking
         if conv_mode == "batched" and update_ortho.ndim >= 3:
             # Permute back: (spatial_prod, out, in) -> (out, in, spatial_prod)
@@ -609,12 +619,6 @@ def _single_tensor_adamuon(
 
         # Update second moment on orthogonalized directions (element-wise)
         exp_avg_sq.mul_(beta2).addcmul_(update_ortho, update_ortho, value=1.0 - beta2)
-
-        # Get shape-based LR scaling and whether to apply RMS normalization
-        if adjust_lr_fn:
-            scale, use_rms_norm = get_adamuon_lr_scale(update_ortho.shape, adjust_lr_fn)
-        else:
-            scale, use_rms_norm = 1.0, False
 
         if use_rms_norm:
             # Bias correction not needed if scaling by norm
@@ -631,7 +635,7 @@ def _single_tensor_adamuon(
         # RMS-aligned rescaling: normalize by update norm, then scale by shape factor
         # Used by AdaMuon paper approach (match_rms_adamw), not by μP approach (rms_to_rms)
         if use_rms_norm:
-            # eq(8) in AdaMuon paper, 0.2 / RMS(update) = 0.2 * sqrt(ndim) / frob(update)
+            # eq(8) in AdaMuon paper, 0.2 / RMS(update) = 0.2 * sqrt(numel) / frob(update)
             update_norm = update_adaptive.norm().add_(eps)
             update_adaptive = update_adaptive / update_norm
 

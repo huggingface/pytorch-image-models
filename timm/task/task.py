@@ -230,6 +230,15 @@ class TrainingTask(nn.Module):
             return module.no_sync()
         return nullcontext()
 
+    def create_evaluator(self, **kwargs):
+        """Create a fresh evaluator for the eval model returned by get_eval_model().
+
+        The default assumes single-label logits with class index targets. Tasks
+        with other target formats override this to return a matching evaluator.
+        """
+        from .evaluator import ClassificationEvaluator
+        return ClassificationEvaluator(device=self.device, **kwargs)
+
     def forward(
             self,
             input: torch.Tensor,

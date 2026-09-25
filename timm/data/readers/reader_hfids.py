@@ -1,8 +1,9 @@
 """ Dataset reader for HF IterableDataset
 """
+import inspect
+import logging
 import math
 import os
-from itertools import repeat, chain
 from typing import Optional
 
 import torch
@@ -18,9 +19,13 @@ except ImportError as e:
     raise e
 
 
-from .class_map import load_class_map
+from .class_map import load_class_map, remap_target
 from .reader import Reader
 from .shared_count import SharedCount
+from ._hfds import get_class_labels, remote_code_kwargs
+from .targets import check_target_format, get_field, multi_field_class_to_idx, multi_field_target, parse_target_keys
+
+_logger = logging.getLogger(__name__)
 
 
 SHUFFLE_SIZE = int(os.environ.get('HFIDS_SHUFFLE_SIZE', 4096))
@@ -41,12 +46,14 @@ class ReaderHfids(Reader):
             input_key: str = 'image',
             input_img_mode: str = 'RGB',
             target_key: str = 'label',
+            target_format: Optional[str] = None,
             target_img_mode: str = '',
             shuffle_size: Optional[int] = None,
             num_samples: Optional[int] = None,
             trust_remote_code: bool = False
     ):
         super().__init__()
+        self.name = name
         self.root = root
         self.split = split
         self.is_training = is_training
@@ -64,7 +71,7 @@ class ReaderHfids(Reader):
         self.builder = datasets.load_dataset_builder(
             name,
             cache_dir=root,
-            trust_remote_code=trust_remote_code,
+            **remote_code_kwargs(trust_remote_code),
         )
         if download:
             self.builder.download_and_prepare()
@@ -85,11 +92,18 @@ class ReaderHfids(Reader):
             )
 
         self.remap_class = False
+        self.target_keys = parse_target_keys(target_key)  # comma separated keys select binary fields
+        self.dense_target = check_target_format(target_format, self.target_keys) == 'multihot'
+        if self.target_keys:
+            source_classes = multi_field_class_to_idx(self.target_keys, self.builder.info.features)
+        else:
+            source_classes = get_class_labels(self.builder.info, self.target_key)
+        self._source_names = {index: name for name, index in source_classes.items()}
         if class_map:
             self.class_to_idx = load_class_map(class_map)
             self.remap_class = True
         else:
-            self.class_to_idx = {}
+            self.class_to_idx = source_classes
 
         # Distributed world state
         self.dist_rank = 0
@@ -120,7 +134,7 @@ class ReaderHfids(Reader):
         if self.ds is not None:
             return
         if num_workers is not None:
-            self.num_workers = num_workers
+            self.num_workers = max(1, num_workers)  # zero loader workers still has the main process
             self.global_num_workers = self.dist_num_replicas * self.num_workers
 
     def _lazy_init(self):
@@ -145,7 +159,14 @@ class ReaderHfids(Reader):
 
         if self.is_training:
             # will shuffle the list of shards and use a shuffle buffer
-            ds = ds.shuffle(seed=self.common_seed, buffer_size=self.shuffle_size)
+            shuffle_kwargs = {}
+            if 'max_buffer_input_shards' in inspect.signature(ds.shuffle).parameters:
+                # datasets>=5 fills the shuffle buffer from up to 10 interleaved shards, but reports the result as
+                # min(shards per source) shards, which leaves loader workers / nodes without data. Interleave only
+                # as many shards as keeps at least one shard per worker across all nodes.
+                num_shards = getattr(ds, 'num_shards', 1) or 1
+                shuffle_kwargs['max_buffer_input_shards'] = max(1, min(10, num_shards // self.global_num_workers))
+            ds = ds.shuffle(seed=self.common_seed, buffer_size=self.shuffle_size, **shuffle_kwargs)
 
         # Distributed:
         # The dataset has a number of shards that is a factor of `dist_num_replicas` (i.e. if `ds.n_shards % dist_num_replicas == 0`),
@@ -155,6 +176,21 @@ class ReaderHfids(Reader):
         # Workers:
         # In a node, datasets.IterableDataset assigns the shards assigned to the node as evenly as possible to workers.
         self.ds = split_dataset_by_node(ds, rank=self.dist_rank, world_size=self.dist_num_replicas)
+
+        # datasets assigns whole shards to loader workers, a worker without a shard yields nothing. In training
+        # mode that would loop forever below, so fail with an explanation instead (eval workers just sit idle).
+        num_shards = getattr(self.ds, 'num_shards', None)
+        if num_shards is not None and self.num_workers > 1 and num_shards < self.num_workers:
+            msg = (
+                f'Streaming dataset {self.name} reports {num_shards} shard(s) for this process but the loader has '
+                f'{self.num_workers} workers, so {self.num_workers - num_shards} worker(s) would receive no data '
+                f'(datasets {datasets.__version__}).'
+            )
+            if self.is_training:
+                raise RuntimeError(
+                    msg + ' Reduce the number of loader workers to at most the shard count, or load the '
+                    'dataset with the map-style hfds reader.')
+            _logger.warning(msg + ' Those workers will be idle.')
 
     def _num_samples_per_worker(self):
         num_worker_samples = \
@@ -173,25 +209,37 @@ class ReaderHfids(Reader):
         target_sample_count = self._num_samples_per_worker()
         sample_count = 0
 
-        if self.is_training:
-            ds_iter = chain.from_iterable(repeat(self.ds))
-        else:
-            ds_iter = iter(self.ds)
-        for sample in ds_iter:
-            input_data: Image.Image = sample[self.input_key]
-            if self.input_img_mode and input_data.mode != self.input_img_mode:
-                input_data = input_data.convert(self.input_img_mode)
-            target_data = sample[self.target_key]
-            if self.target_img_mode:
-                assert isinstance(target_data, Image.Image), "target_img_mode is specified but target is not an image"
-                if target_data.mode != self.target_img_mode:
-                    target_data = target_data.convert(self.target_img_mode)
-            elif self.remap_class:
-                target_data = self.class_to_idx[target_data]
-            yield input_data, target_data
-            sample_count += 1
-            if self.is_training and sample_count >= target_sample_count:
-                break
+        # Training repeats passes over the (sharded) dataset until this worker's sample count is reached.
+        while True:
+            pass_count = 0
+            for sample in self.ds:
+                input_data: Image.Image = sample[self.input_key]
+                if self.input_img_mode and input_data.mode != self.input_img_mode:
+                    input_data = input_data.convert(self.input_img_mode)
+                target_data = multi_field_target(sample, self.target_keys) if self.target_keys \
+                    else get_field(sample, self.target_key)
+                if self.target_img_mode:
+                    assert isinstance(target_data, Image.Image), "target_img_mode is specified but target is not an image"
+                    if target_data.mode != self.target_img_mode:
+                        target_data = target_data.convert(self.target_img_mode)
+                elif self.remap_class:
+                    target_data = remap_target(
+                        target_data, self.class_to_idx, self._source_names, dense=self.dense_target)
+                yield input_data, target_data
+                sample_count += 1
+                pass_count += 1
+                if self.is_training and sample_count >= target_sample_count:
+                    return
+            if not self.is_training:
+                return
+            if not pass_count:
+                # an empty pass would repeat forever, e.g. a worker that was assigned no shards
+                raise RuntimeError(
+                    f'Streaming dataset {self.name} yielded no samples to loader worker {self.global_worker_id} of '
+                    f'{self.global_num_workers} (dataset reports {getattr(self.ds, "num_shards", "?")} shard(s), '
+                    f'datasets {datasets.__version__}). Reduce the number of loader workers or use a dataset with '
+                    f'more shards.'
+                )
 
     def __len__(self):
         num_samples = self._num_samples_per_worker() * self.num_workers

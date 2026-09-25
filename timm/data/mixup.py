@@ -12,6 +12,7 @@ Hacked together by / Copyright 2019, Ross Wightman
 """
 import numpy as np
 import torch
+from torch.utils.data import default_collate
 
 
 def one_hot(x, num_classes, on_value=1., off_value=0.):
@@ -19,11 +20,16 @@ def one_hot(x, num_classes, on_value=1., off_value=0.):
     return torch.full((x.size()[0], num_classes), off_value, device=x.device).scatter_(1, x, on_value)
 
 
-def mixup_target(target, num_classes, lam=1., smoothing=0.0):
-    off_value = smoothing / num_classes
-    on_value = 1. - smoothing + off_value
-    y1 = one_hot(target, num_classes, on_value=on_value, off_value=off_value)
-    y2 = one_hot(target.flip(0), num_classes, on_value=on_value, off_value=off_value)
+def mixup_target(target, num_classes, lam=1., smoothing=0.0, multi_label=False):
+    if multi_label:
+        if target.ndim != 2 or target.shape[1] != num_classes:
+            raise ValueError('Multi-label mixup expects dense targets shaped (batch, num_classes).')
+        y1 = target.float() * (1. - smoothing) + 0.5 * smoothing
+    else:
+        off_value = smoothing / num_classes
+        on_value = 1. - smoothing + off_value
+        y1 = one_hot(target, num_classes, on_value=on_value, off_value=off_value)
+    y2 = y1.flip(0)
     return y1 * lam + y2 * (1. - lam)
 
 
@@ -100,9 +106,10 @@ class Mixup:
         correct_lam (bool): apply lambda correction when cutmix bbox clipped by image borders
         label_smoothing (float): apply label smoothing to the mixed target tensor
         num_classes (int): number of classes for target
+        multi_label (bool): Mix dense multi-label targets, smoothing each label towards 0.5.
     """
     def __init__(self, mixup_alpha=1., cutmix_alpha=0., cutmix_minmax=None, prob=1.0, switch_prob=0.5,
-                 mode='batch', correct_lam=True, label_smoothing=0.1, num_classes=1000):
+                 mode='batch', correct_lam=True, label_smoothing=0.1, num_classes=1000, multi_label=False):
         self.mixup_alpha = mixup_alpha
         self.cutmix_alpha = cutmix_alpha
         self.cutmix_minmax = cutmix_minmax
@@ -114,6 +121,7 @@ class Mixup:
         self.switch_prob = switch_prob
         self.label_smoothing = label_smoothing
         self.num_classes = num_classes
+        self.multi_label = multi_label
         self.mode = mode
         self.correct_lam = correct_lam  # correct lambda based on clipped area for cutmix
         self.mixup_enabled = True  # set to false to disable mixing (intended tp be set by train loop)
@@ -214,7 +222,7 @@ class Mixup:
             lam = self._mix_pair(x)
         else:
             lam = self._mix_batch(x)
-        target = mixup_target(target, self.num_classes, lam, self.label_smoothing)
+        target = mixup_target(target, self.num_classes, lam, self.label_smoothing, self.multi_label)
         return x, target
 
 
@@ -342,7 +350,7 @@ class FastCollateMixup(Mixup):
             lam = self._mix_pair_collate(output, batch)
         else:
             lam = self._mix_batch_collate(output, batch)
-        target = torch.tensor([b[1] for b in batch], dtype=torch.int64)
-        target = mixup_target(target, self.num_classes, lam, self.label_smoothing)
+        target = default_collate([b[1] for b in batch])
+        target = mixup_target(target, self.num_classes, lam, self.label_smoothing, self.multi_label)
         target = target[:batch_size]
         return output, target

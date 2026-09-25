@@ -12,6 +12,17 @@ import torch.nn.functional as F
 class BinaryCrossEntropy(nn.Module):
     """ BCE with optional one-hot from dense targets, label smoothing, thresholding
     NOTE for experiments comparing CE to BCE /w label smoothing, may remove
+
+    Args:
+        smoothing: Label smoothing applied while one-hot encoding index targets. Dense targets are assumed
+            to be softened upstream (e.g. by Mixup/CutMix) unless smooth_dense is set.
+        target_threshold: Binarize (soft) targets above this value.
+        weight: Per-class rescaling weight.
+        reduction: Loss reduction.
+        sum_classes: Sum the loss over classes before averaging over the batch.
+        pos_weight: Positive class weight.
+        smooth_dense: Also apply smoothing to targets that already match the logit shape (multi-label),
+            moving each binary target towards 0.5.
     """
     def __init__(
             self,
@@ -21,6 +32,7 @@ class BinaryCrossEntropy(nn.Module):
             reduction: str = 'mean',
             sum_classes: bool = False,
             pos_weight: Optional[Union[torch.Tensor, float]] = None,
+            smooth_dense: bool = False,
     ):
         super(BinaryCrossEntropy, self).__init__()
         assert 0. <= smoothing < 1.0
@@ -33,6 +45,7 @@ class BinaryCrossEntropy(nn.Module):
         self.sum_classes = sum_classes
         self.register_buffer('weight', weight)
         self.register_buffer('pos_weight', pos_weight)
+        self.smooth_dense = smooth_dense
 
     def forward(self, x: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         batch_size = x.shape[0]
@@ -49,6 +62,9 @@ class BinaryCrossEntropy(nn.Module):
                 (batch_size, num_classes),
                 off_value,
                 device=x.device, dtype=x.dtype).scatter_(1, target, on_value)
+        elif self.smooth_dense and self.smoothing:
+            # Dense independent binary targets (multi-label), move each label towards 0.5.
+            target = target * (1. - self.smoothing) + 0.5 * self.smoothing
 
         if self.target_threshold is not None:
             # Make target 0, or 1 if threshold set
