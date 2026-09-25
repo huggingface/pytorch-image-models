@@ -5,53 +5,11 @@ from typing import Any, Callable, Dict, Optional, Union
 import torch
 import torch.nn as nn
 
-from timm.loss import BinaryCrossEntropy, JsdCrossEntropy, LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
+from timm.loss import create_classification_loss
 
 from .task import TrainingTask
 
 _logger = logging.getLogger(__name__)
-
-
-def create_classification_loss(
-        multi_label: bool = False,
-        bce: bool = False,
-        smoothing: float = 0.,
-        soft_targets: bool = False,
-        jsd_splits: int = 0,
-        bce_target_thresh: Optional[float] = None,
-        bce_sum: bool = False,
-        bce_pos_weight: Optional[Union[torch.Tensor, float]] = None,
-) -> nn.Module:
-    """Create the training criterion for a classification task.
-
-    Args:
-        multi_label: Targets are dense independent binary labels shaped (B, C), always trained with BCE.
-        bce: Use binary cross-entropy instead of softmax cross-entropy for single-label targets.
-        smoothing: Label smoothing factor. Ignored when soft_targets is set, since Mixup/CutMix
-            already apply it while producing the soft targets.
-        soft_targets: Targets arrive as dense soft distributions from Mixup/CutMix rather than class indices.
-        jsd_splits: Number of augmentation splits for the JSD loss. Values above 1 select JsdCrossEntropy.
-        bce_target_thresh: Binarize soft targets above this value (BCE only).
-        bce_sum: Sum the loss over classes before averaging over the batch (BCE only).
-        bce_pos_weight: Positive class weight (BCE only).
-    """
-    if jsd_splits > 1:
-        if multi_label:
-            raise ValueError('JSD loss is not supported for multi-label targets.')
-        return JsdCrossEntropy(num_splits=jsd_splits, smoothing=smoothing)
-    if multi_label or bce:
-        return BinaryCrossEntropy(
-            smoothing=0. if soft_targets else smoothing,
-            smooth_dense=multi_label,
-            target_threshold=bce_target_thresh,
-            sum_classes=bce_sum,
-            pos_weight=bce_pos_weight,
-        )
-    if soft_targets:
-        return SoftTargetCrossEntropy()
-    if smoothing:
-        return LabelSmoothingCrossEntropy(smoothing=smoothing)
-    return nn.CrossEntropyLoss()
 
 
 def resolve_classification_loss(
@@ -176,7 +134,8 @@ class ClassificationTask(TrainingTask):
 class MultiLabelClassificationTask(ClassificationTask):
     """Independent binary classification with dense float targets shaped (B, C).
 
-    The default criterion is BinaryCrossEntropy with dense-target smoothing. When
+    The default criterion is BinaryCrossEntropy with dense-target smoothing, other losses are
+    selected with criterion_kwargs loss_type (see create_classification_loss). When
     Mixup/CutMix are active they apply the smoothing while producing soft targets
     and the criterion is created with soft_targets=True instead. Evaluation always
     uses unsmoothed binary targets. Model, distributed, compilation, EMA, and
