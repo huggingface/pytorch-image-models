@@ -38,7 +38,9 @@ class OrderedDistributedSampler(Sampler):
         indices = list(range(len(self.dataset)))
 
         # add extra samples to make it evenly divisible
-        indices += indices[:(self.total_size - len(indices))]
+        padding_size = self.total_size - len(indices)
+        if padding_size:
+            indices += (indices * math.ceil(padding_size / len(indices)))[:padding_size]
         assert len(indices) == self.total_size
 
         # subsample
@@ -97,7 +99,7 @@ class RepeatAugSampler(Sampler):
         # num_selected logic defaults to be the same as original RASampler impl, but this one can be tweaked
         # via selected_ratio and selected_round args.
         selected_ratio = selected_ratio or num_replicas  # ratio to reduce selected samples by, num_replicas if 0
-        if selected_round:
+        if selected_round and len(self.dataset) >= selected_round:
             self.num_selected_samples = int(math.floor(
                  len(self.dataset) // selected_round * selected_round / selected_ratio))
         else:
@@ -123,7 +125,7 @@ class RepeatAugSampler(Sampler):
         # add extra samples to make it evenly divisible
         padding_size = self.total_size - len(indices)
         if padding_size > 0:
-            indices += indices[:padding_size]
+            indices += (indices * math.ceil(padding_size / len(indices)))[:padding_size]
         assert len(indices) == self.total_size
 
         # subsample per rank
