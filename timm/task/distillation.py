@@ -31,6 +31,8 @@ class DistillationTeacher(nn.Module):
         num_classes: Number of output classes (required if model_name_or_module is a string)
         in_chans: Number of input channels (used if model_name_or_module is a string)
         pretrained_path: Optional path to pretrained weights (used if model_name_or_module is a string)
+        pretrained_cfg_overlay: Optional pretrained cfg overrides (used if model_name_or_module is a string),
+            applied after those derived from pretrained_path, e.g. custom_load=True for original .npz weights
         device: Device to place the model on
         dtype: Model dtype (uses float32 if None)
     """
@@ -41,6 +43,7 @@ class DistillationTeacher(nn.Module):
             num_classes: Optional[int] = None,
             in_chans: int = 3,
             pretrained_path: Optional[str] = None,
+            pretrained_cfg_overlay: Optional[Dict[str, Any]] = None,
             device: Optional[torch.device] = None,
             dtype: Optional[torch.dtype] = None,
     ):
@@ -50,11 +53,12 @@ class DistillationTeacher(nn.Module):
             _logger.info(f"Creating KD teacher model: '{model_name_or_module}'")
 
             pretrained_kwargs = {'pretrained': True}
+            overlay = {}
             if pretrained_path:
-                pretrained_kwargs['pretrained_cfg_overlay'] = dict(
-                    file=pretrained_path,
-                    num_classes=num_classes,
-                )
+                overlay.update(file=pretrained_path, num_classes=num_classes)
+            overlay.update(pretrained_cfg_overlay or {})
+            if overlay:
+                pretrained_kwargs['pretrained_cfg_overlay'] = overlay
 
             model = create_model(
                 model_name=model_name_or_module,
@@ -168,6 +172,7 @@ def _resolve_teacher(
         pretrained_path: Optional[str],
         device: Optional[torch.device],
         dtype: Optional[torch.dtype],
+        pretrained_cfg_overlay: Optional[Dict[str, Any]] = None,
 ) -> DistillationTeacher:
     """Resolve teacher input to a DistillationTeacher instance.
 
@@ -177,6 +182,7 @@ def _resolve_teacher(
         pretrained_path: Optional path to teacher pretrained weights
         device: Device for teacher
         dtype: Dtype for teacher
+        pretrained_cfg_overlay: Optional teacher pretrained cfg overrides
 
     Returns:
         DistillationTeacher instance
@@ -194,6 +200,7 @@ def _resolve_teacher(
         num_classes=num_classes,
         in_chans=in_chans,
         pretrained_path=pretrained_path,
+        pretrained_cfg_overlay=pretrained_cfg_overlay,
         device=device,
         dtype=dtype,
     )
@@ -216,6 +223,7 @@ class LogitDistillationTask(TrainingTask):
         criterion: Task loss function. Created by create_classification_loss() from criterion_kwargs when None.
         criterion_kwargs: Arguments for create_classification_loss() when criterion is None.
         teacher_pretrained_path: Path to teacher pretrained weights (used when teacher_model is a string)
+        teacher_pretrained_cfg_overlay: Teacher pretrained cfg overrides (used when teacher_model is a string)
         loss_type: Type of distillation loss (currently only 'kl' supported)
         distill_loss_weight: Weight for distillation loss
         task_loss_weight: Weight for task loss
@@ -247,6 +255,7 @@ class LogitDistillationTask(TrainingTask):
             criterion: Optional[nn.Module] = None,
             criterion_kwargs: Optional[Dict[str, Any]] = None,
             teacher_pretrained_path: Optional[str] = None,
+            teacher_pretrained_cfg_overlay: Optional[Dict[str, Any]] = None,
             loss_type: str = 'kl',
             distill_loss_weight: Optional[float] = None,
             task_loss_weight: Optional[float] = None,
@@ -264,6 +273,7 @@ class LogitDistillationTask(TrainingTask):
             teacher_pretrained_path,
             self.device,
             self.dtype,
+            pretrained_cfg_overlay=teacher_pretrained_cfg_overlay,
         )
 
         self.trainable_module = student_model
@@ -323,6 +333,12 @@ class LogitDistillationTask(TrainingTask):
             _logger.info(
                 f"LogitDistillationTask: loss_type={loss_type}, temperature={temperature}"
             )
+
+    def train(self, mode: bool = True) -> 'LogitDistillationTask':
+        """Set task training mode while keeping the teacher in evaluation mode."""
+        super().train(mode)
+        self.teacher.eval()
+        return self
 
     def prepare_distributed(
             self,
@@ -489,6 +505,7 @@ class FeatureDistillationTask(TrainingTask):
         criterion: Task loss function. Created by create_classification_loss() from criterion_kwargs when None.
         criterion_kwargs: Arguments for create_classification_loss() when criterion is None.
         teacher_pretrained_path: Path to teacher pretrained weights (used when teacher_model is a string)
+        teacher_pretrained_cfg_overlay: Teacher pretrained cfg overrides (used when teacher_model is a string)
         distill_loss_weight: Weight for distillation loss
         task_loss_weight: Weight for task loss
         student_feature_dim: Student pre-logits dimension (auto-detected if None)
@@ -514,6 +531,7 @@ class FeatureDistillationTask(TrainingTask):
             criterion: Optional[nn.Module] = None,
             criterion_kwargs: Optional[Dict[str, Any]] = None,
             teacher_pretrained_path: Optional[str] = None,
+            teacher_pretrained_cfg_overlay: Optional[Dict[str, Any]] = None,
             distill_loss_weight: Optional[float] = None,
             task_loss_weight: Optional[float] = None,
             student_feature_dim: Optional[int] = None,
@@ -531,6 +549,7 @@ class FeatureDistillationTask(TrainingTask):
             teacher_pretrained_path,
             self.device,
             self.dtype,
+            pretrained_cfg_overlay=teacher_pretrained_cfg_overlay,
         )
 
         self.teacher = teacher
@@ -605,6 +624,12 @@ class FeatureDistillationTask(TrainingTask):
                 f"FeatureDistillationTask: "
                 f"student_dim={student_feature_dim}, teacher_dim={teacher_feature_dim}"
             )
+
+    def train(self, mode: bool = True) -> 'FeatureDistillationTask':
+        """Set task training mode while keeping the teacher in evaluation mode."""
+        super().train(mode)
+        self.teacher.eval()
+        return self
 
     @staticmethod
     def _detect_feature_dim(model: nn.Module) -> int:

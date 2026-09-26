@@ -26,6 +26,9 @@ _DOWNLOAD_PROGRESS = False
 _CHECK_HASH = False
 _USE_OLD_CACHE = int(os.environ.get('TIMM_USE_OLD_CACHE', 0)) > 0
 
+# Pretrained cfg keys that locate a weight file whose format custom_load describes.
+_PRETRAINED_SOURCE_KEYS = ('file', 'url', 'hf_hub_id', 'hf_hub_filename')
+
 __all__ = [
     'set_pretrained_download_progress',
     'set_pretrained_check_hash',
@@ -375,9 +378,14 @@ def resolve_pretrained_cfg(
             f" Please add a config to the model pretrained_cfg registry or pass explicitly.")
         pretrained_cfg = PretrainedCfg()  # instance with defaults
 
-    pretrained_cfg_overlay = pretrained_cfg_overlay or {}
+    pretrained_cfg_overlay = dict(pretrained_cfg_overlay or {})
     if not pretrained_cfg.architecture:
         pretrained_cfg_overlay.setdefault('architecture', variant)
+    if any(pretrained_cfg_overlay.get(k) for k in _PRETRAINED_SOURCE_KEYS):
+        # custom_load describes the format of the registry weight source. Supplying a non-empty source
+        # resets it unless explicitly set (e.g. custom_load=True for a local copy of original .npz weights).
+        # Clearing an alternative source preserves it for the remaining registry source.
+        pretrained_cfg_overlay.setdefault('custom_load', False)
     pretrained_cfg = dataclasses.replace(pretrained_cfg, **pretrained_cfg_overlay)
 
     return pretrained_cfg

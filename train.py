@@ -122,6 +122,9 @@ group.add_argument('--pretrained', action='store_true', default=False,
                    help='Start with pretrained version of specified network (if avail)')
 group.add_argument('--pretrained-path', default=None, type=str,
                    help='Load this checkpoint as if they were the pretrained weights (with adaptation).')
+group.add_argument('--pretrained-cfg-overlay', nargs='*', default={}, action=utils.ParseKwargs,
+                   help='Override pretrained cfg entries, e.g. custom_load=True for original .npz weights '
+                        'via --pretrained-path (applied after --pretrained-path).')
 group.add_argument('--initial-checkpoint', default='', type=str, metavar='PATH',
                    help='Load this checkpoint into model after initialization (default: none)')
 group.add_argument('--resume', default='', type=str, metavar='PATH',
@@ -674,12 +677,16 @@ def main():
         in_chans = args.input_size[0]
 
     factory_kwargs = {}
+    pretrained_cfg_overlay = {}
     if args.pretrained_path:
         # merge with pretrained_cfg of model, 'file' has priority over 'url' and 'hf_hub'.
-        factory_kwargs['pretrained_cfg_overlay'] = dict(
+        pretrained_cfg_overlay.update(
             file=args.pretrained_path,
             num_classes=-1,  # force head adaptation
         )
+    pretrained_cfg_overlay.update(args.pretrained_cfg_overlay)
+    if pretrained_cfg_overlay:
+        factory_kwargs['pretrained_cfg_overlay'] = pretrained_cfg_overlay
 
     model = create_model(
         args.model,

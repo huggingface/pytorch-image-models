@@ -10,7 +10,7 @@ from ._helpers import resume_task_checkpoint, load_task_ema_checkpoint
 from .classification import ClassificationTask, MultiLabelClassificationTask, resolve_classification_loss
 from .evaluator import ClassificationEvaluator, MultiLabelClassificationEvaluator, evaluation_sample_limit
 from .distillation import DistillationTeacher, LogitDistillationTask, FeatureDistillationTask
-from .token_distillation import TokenDistillationTeacher, TokenDistillationTask
+from .token_distillation import TokenDistillationTask
 
 __all__ = [
     'TrainingTask',
@@ -28,6 +28,5 @@ __all__ = [
     'DistillationTeacher',
     'LogitDistillationTask',
     'FeatureDistillationTask',
-    'TokenDistillationTeacher',
     'TokenDistillationTask',
 ]
