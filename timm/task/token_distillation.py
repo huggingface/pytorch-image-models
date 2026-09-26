@@ -6,129 +6,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from timm.models import create_model
 from timm.utils import unwrap_model
 
 from .classification import resolve_classification_loss
+from .distillation import DistillationTeacher, _resolve_teacher
 from .task import TrainingTask
 
 _logger = logging.getLogger(__name__)
-
-
-class TokenDistillationTeacher(nn.Module):
-    """Wrapper for a teacher model used in token-based distillation.
-
-    Creates and manages a pre-trained teacher model for token distillation,
-    handling model creation and normalization differences between teacher and student.
-
-    Can be created from:
-    - A model name string (creates the model internally)
-    - An existing nn.Module (wraps it with the necessary interface)
-
-    Args:
-        model_name_or_module: Either a model name string or an nn.Module
-        num_classes: Number of output classes (required if model_name_or_module is a string)
-        in_chans: Number of input channels (used if model_name_or_module is a string)
-        pretrained_path: Optional path to pretrained weights (used if model_name_or_module is a string)
-        device: Device to place the model on
-        dtype: Model dtype (uses float32 if None)
-    """
-
-    def __init__(
-            self,
-            model_name_or_module: Union[str, nn.Module],
-            num_classes: Optional[int] = None,
-            in_chans: int = 3,
-            pretrained_path: Optional[str] = None,
-            device: Optional[torch.device] = None,
-            dtype: Optional[torch.dtype] = None,
-    ):
-        super().__init__()
-
-        if isinstance(model_name_or_module, str):
-            _logger.info(f"Creating token distillation teacher model: '{model_name_or_module}'")
-
-            pretrained_kwargs = {'pretrained': True}
-            if pretrained_path:
-                pretrained_kwargs['pretrained_cfg_overlay'] = dict(
-                    file=pretrained_path,
-                    num_classes=num_classes,
-                )
-
-            model = create_model(
-                model_name=model_name_or_module,
-                num_classes=num_classes,
-                in_chans=in_chans,
-                device=device,
-                dtype=dtype,
-                **pretrained_kwargs,
-            )
-        elif isinstance(model_name_or_module, nn.Module):
-            model = model_name_or_module
-        else:
-            raise TypeError(
-                f"model_name_or_module must be a string or nn.Module, got {type(model_name_or_module).__name__}"
-            )
-
-        model.eval()
-        self.model = model
-
-        # Get normalization values from pretrained_cfg if available
-        model_unwrapped = unwrap_model(model)
-        if hasattr(model_unwrapped, 'pretrained_cfg'):
-            mean = model_unwrapped.pretrained_cfg.get('mean', (0.485, 0.456, 0.406))
-            std = model_unwrapped.pretrained_cfg.get('std', (0.229, 0.224, 0.225))
-        else:
-            mean = (0.485, 0.456, 0.406)
-            std = (0.229, 0.224, 0.225)
-
-        mean_kd = torch.tensor(mean, device=device, dtype=dtype).view(1, -1, 1, 1)
-        std_kd = torch.tensor(std, device=device, dtype=dtype).view(1, -1, 1, 1)
-        self.register_buffer('mean_kd', mean_kd, persistent=False)
-        self.register_buffer('std_kd', std_kd, persistent=False)
-
-    def compile(
-            self,
-            backend: str = 'inductor',
-            mode: Optional[str] = None,
-            **compile_kwargs,
-    ) -> 'TokenDistillationTeacher':
-        """Compile teacher logit inference."""
-        self.model = torch.compile(self.model, backend=backend, mode=mode, **compile_kwargs)
-        return self
-
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
-        """Forward pass through teacher model.
-
-        Args:
-            input: Input tensor (should already be normalized for teacher)
-
-        Returns:
-            Teacher logits
-        """
-        return self.model(input)
-
-    def normalize_input(
-            self,
-            input: torch.Tensor,
-            student_mean: Optional[torch.Tensor] = None,
-            student_std: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
-        """Normalize input to match teacher's expected normalization.
-
-        Args:
-            input: Input tensor (already normalized for student)
-            student_mean: Student normalization mean buffer [1, 3, 1, 1]
-            student_std: Student normalization std buffer [1, 3, 1, 1]
-
-        Returns:
-            Input tensor normalized for the teacher model
-        """
-        if student_mean is None or student_std is None:
-            return input
-        if torch.equal(student_mean, self.mean_kd) and torch.equal(student_std, self.std_kd):
-            return input
-        return (input * student_std + student_mean - self.mean_kd) / self.std_kd
 
 
 class TokenDistillationTask(TrainingTask):
@@ -150,11 +34,12 @@ class TokenDistillationTask(TrainingTask):
 
     Args:
         student_model: Student model with set_distilled_training() method
-        teacher_model: Teacher model - can be a model name string, nn.Module, or TokenDistillationTeacher
+        teacher_model: Teacher model - can be a model name string, nn.Module, or DistillationTeacher
         criterion: Task loss function for main head. Created by create_classification_loss() from
             criterion_kwargs when None.
         criterion_kwargs: Arguments for create_classification_loss() when criterion is None.
         teacher_pretrained_path: Path to teacher pretrained weights (used when teacher_model is a string)
+        teacher_pretrained_cfg_overlay: Teacher pretrained cfg overrides (used when teacher_model is a string)
         distill_type: 'soft' for KL-div or 'hard' for CE with teacher argmax
         distill_loss_weight: Weight for distillation loss
         task_loss_weight: Weight for task loss
@@ -182,10 +67,11 @@ class TokenDistillationTask(TrainingTask):
     def __init__(
             self,
             student_model: nn.Module,
-            teacher_model: Union[str, nn.Module, TokenDistillationTeacher],
+            teacher_model: Union[str, nn.Module, DistillationTeacher],
             criterion: Optional[nn.Module] = None,
             criterion_kwargs: Optional[Dict[str, Any]] = None,
             teacher_pretrained_path: Optional[str] = None,
+            teacher_pretrained_cfg_overlay: Optional[Dict[str, Any]] = None,
             distill_type: str = 'soft',
             distill_loss_weight: Optional[float] = None,
             task_loss_weight: Optional[float] = None,
@@ -207,29 +93,15 @@ class TokenDistillationTask(TrainingTask):
         # Enable distilled training mode
         student_unwrapped.set_distilled_training(True)
 
-        # Handle different teacher input types
-        if isinstance(teacher_model, TokenDistillationTeacher):
-            teacher = teacher_model
-        elif isinstance(teacher_model, str) or isinstance(teacher_model, nn.Module):
-            # Get num_classes and in_chans from student
-            num_classes = student_unwrapped.num_classes
-            in_chans = student_unwrapped.in_chans
-            teacher = TokenDistillationTeacher(
-                model_name_or_module=teacher_model,
-                num_classes=num_classes,
-                in_chans=in_chans,
-                pretrained_path=teacher_pretrained_path,
-                device=self.device,
-                dtype=self.dtype,
-            )
-        else:
-            raise TypeError(
-                f"teacher_model must be a model name string, nn.Module, or TokenDistillationTeacher, "
-                f"got {type(teacher_model).__name__}"
-            )
-
         self.trainable_module = student_model
-        self.teacher = teacher
+        self.teacher = _resolve_teacher(
+            teacher=teacher_model,
+            student_model=student_model,
+            pretrained_path=teacher_pretrained_path,
+            pretrained_cfg_overlay=teacher_pretrained_cfg_overlay,
+            device=self.device,
+            dtype=self.dtype,
+        )
         self.criterion = resolve_classification_loss(criterion, self.device, criterion_kwargs=criterion_kwargs)
         self.distill_type = distill_type
         self.temperature = temperature
@@ -284,6 +156,12 @@ class TokenDistillationTask(TrainingTask):
             _logger.info(
                 f"TokenDistillationTask: distill_type={distill_type}, temperature={temperature}"
             )
+
+    def train(self, mode: bool = True) -> 'TokenDistillationTask':
+        """Set task training mode while keeping the teacher in evaluation mode."""
+        super().train(mode)
+        self.teacher.eval()
+        return self
 
     def prepare_distributed(
             self,
