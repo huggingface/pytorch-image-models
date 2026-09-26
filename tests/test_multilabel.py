@@ -924,6 +924,7 @@ def test_naflex_multilabel_loader(hf_dataset, prefetch, is_training):
         torch.testing.assert_close(batches[0][1][0], MultiLabelTarget(6)([5, 1, 0]))
 
 
+@pytest.mark.usefixtures('isolate_cli_backend_flags')
 def test_train_cli_rejects_metric_the_evaluator_does_not_produce(monkeypatch, tmp_path, hf_dataset):
     import train
 
@@ -937,6 +938,7 @@ def test_train_cli_rejects_metric_the_evaluator_does_not_produce(monkeypatch, tm
         train.main()
 
 
+@pytest.mark.usefixtures('isolate_cli_backend_flags')
 def test_multilabel_train_cli_multihot(monkeypatch, tmp_path, hf_dataset):
     import train
 
@@ -972,6 +974,7 @@ class _TinyClassifier(nn.Module):
     pytest.param('hfds', True, 'cuda', marks=pytest.mark.skipif(
         not torch.cuda.is_available(), reason='requires CUDA')),
 ])
+@pytest.mark.usefixtures('isolate_cli_backend_flags')
 def test_multilabel_train_and_validate_cli(monkeypatch, tmp_path, hf_dataset, reader, prefetch, device):
     import train
     import validate
@@ -1028,6 +1031,7 @@ def test_class_weights_script(monkeypatch, tmp_path, hf_dataset):
     assert stats['pos_counts'] == [4, 4] and stats['class_names'] == ['no', 'yes']
 
 
+@pytest.mark.usefixtures('isolate_cli_backend_flags')
 def test_train_cli_loss_flags(monkeypatch, tmp_path, hf_dataset):
     import train
 
