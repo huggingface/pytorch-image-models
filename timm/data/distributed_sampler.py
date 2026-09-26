@@ -104,6 +104,7 @@ class RepeatAugSampler(Sampler):
                  len(self.dataset) // selected_round * selected_round / selected_ratio))
         else:
             self.num_selected_samples = int(math.ceil(len(self.dataset) / selected_ratio))
+        self.num_selected_samples = min(self.num_selected_samples, self.num_samples)
 
     def __iter__(self):
         # deterministically shuffle based on epoch

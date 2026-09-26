@@ -23,3 +23,13 @@ def test_repeat_aug_sampler_uses_tiny_dataset(size, replicas, expected):
 
     assert all(len(indices) == expected for indices in samples)
     assert all(0 <= index < size for indices in samples for index in indices)
+
+
+@pytest.mark.parametrize('size', [64, 256])
+def test_repeat_aug_sampler_caps_selection_to_available_samples(size):
+    dataset = list(range(size))
+    samplers = [RepeatAugSampler(dataset, num_replicas=2, rank=rank, num_repeats=1, selected_ratio=1)
+                for rank in range(2)]
+
+    assert [len(sampler) for sampler in samplers] == [size // 2] * 2
+    assert [len(list(sampler)) for sampler in samplers] == [size // 2] * 2
