@@ -412,23 +412,15 @@ class NaFlexMapDatasetWrapper(IterableDataset):
         else:
             all_indices_shuffled = list(range(total_len))
 
-        # 2. Apply padding for distributed mode
-        indices_for_ranks = all_indices_shuffled
+        # 2. & 3. Select indices for the current rank, wrapping around the *shuffled* list to pad in distributed mode
         if self.distributed and self.world_size > 1:
             padded_total_len = self._padded_samples_per_rank * self.world_size
-            if padded_total_len > total_len:
-                pad_size = padded_total_len - total_len
-                # Repeat initial elements from the *shuffled* list for padding
-                indices_for_ranks = all_indices_shuffled + all_indices_shuffled[:pad_size]
-            # Ensure length matches expectation
-            if len(indices_for_ranks) != padded_total_len:
-                 raise RuntimeError(f"Internal Error: Padded index list length {len(indices_for_ranks)} does not match expected {padded_total_len}")
-
-        # 3. Select indices for the current rank
-        if self.distributed and self.world_size > 1:
-            indices_this_rank = indices_for_ranks[self.rank::self.world_size]
+            indices_this_rank = [
+                all_indices_shuffled[i % total_len]
+                for i in range(self.rank, padded_total_len, self.world_size)
+            ]
         else: # Non-distributed or world_size=1
-            indices_this_rank = indices_for_ranks
+            indices_this_rank = all_indices_shuffled
 
         # Sanity check length
         if len(indices_this_rank) != self._padded_samples_per_rank:
