@@ -4,6 +4,15 @@ Contributions to `timm` for code, documentation, tests are more than welcome!
 
 There haven't been any formal guidelines to date so please bear with me, and feel free to add to this guide.
 
+# Before opening an issue or PR
+
+Maintainer time is limited, so please focus on changes that matter to users.
+
+* Please don't open issues or PRs for edge cases unlikely to be hit in real use. Small fixes like these add review load without helping users. Focus on bugs that affect real training, inference, or model-loading workflows, and include a realistic scenario that triggers the bug.
+* Keep PRs focused, avoid reformatting or refactoring code unrelated to the change.
+* Existing models, pretrained weights, and public functions should produce the same outputs unless the change is fixing a real bug.
+* If you're using AI coding agents, the same guidance is in [AGENTS.md](AGENTS.md).
+
 # Coding style
 
 Code linting and auto-format (black) are not currently in place but open to consideration. In the meantime, the style to follow is (mostly) aligned with Google's guide: https://google.github.io/styleguide/pyguide.html. 
