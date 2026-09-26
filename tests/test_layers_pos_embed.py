@@ -149,6 +149,17 @@ def _assert_all_equal(a, b):
         assert torch.equal(x, y)
 
 
+def _assert_all_close(a, b):
+    # For comparisons against independent reference math: identical angles, but sin / cos over differently shaped
+    # tensors can take different vectorized kernel paths and differ by an ulp depending on the host CPU.
+    a = a if isinstance(a, (list, tuple)) else [a]
+    b = b if isinstance(b, (list, tuple)) else [b]
+    assert len(a) == len(b)
+    for x, y in zip(a, b):
+        assert x.dtype == y.dtype and x.shape == y.shape
+        torch.testing.assert_close(x, y)
+
+
 def _legacy_dinov3_coords(shape, normalize_coords='separate', grid_offset=0., device='cpu'):
     h, w = shape
     h_denom, w_denom = float(h), float(w)
@@ -818,7 +829,7 @@ def test_rope_aug_reference_and_rng(kind, cached, aug, rope_device):
     rng_expected = _rng(rope_device)
     torch.manual_seed(123)
     actual = _cat(m.get_embed(None if cached else _SHAPE, dtype=torch.float32))
-    _assert_all_equal(actual, expected)
+    _assert_all_close(actual, expected)
     _assert_all_equal(_rng(rope_device), rng_expected)
     _assert_all_equal(list(m.buffers()), buffers_before)
     if kind == 'mixed' and any(v is not None for v in aug.values()):

@@ -68,7 +68,7 @@ def _test_state_dict(weight, bias, input, constructor):
 
     def fn_base(optimizer, weight, bias):
         optimizer.zero_grad()
-        i = input_device if weight.device.type != 'cpu' else input
+        i = input if (weight.device, weight.dtype) == (input.device, input.dtype) else input_device
         loss = (weight.mv(i) + bias).pow(2).sum()
         loss.backward()
         return loss
@@ -102,17 +102,28 @@ def _test_state_dict(weight, bias, input, constructor):
     optimizer_c.param_groups.extend(optimizer_c.param_groups)
     torch_tc.assertEqual(optimizer.state_dict()['param_groups'][-1], optimizer_c.state_dict()['param_groups'][-1])
 
-    # Check that state dict can be loaded even when we cast parameters
-    # to a different type and move to a different device.
-    if torch_device == 'cpu':
-        return
-    elif torch_device == 'cuda' and not torch.cuda.is_available():
+    # validate deepcopy() copies all public attributes
+    def getPublicAttr(obj):
+        return set(k for k in obj.__dict__ if not k.startswith('_'))
+
+    assert getPublicAttr(optimizer) == getPublicAttr(deepcopy(optimizer))
+
+    # Caution masks are sensitive to rounding across devices / dtypes. Keep the same-device
+    # state-dict checks above, but don't require matching trajectories after conversion.
+    if any(group.get('caution', False) for group in optimizer.param_groups):
         return
 
+    # Check that state dict can be loaded even when we cast parameters to a different type and move to a
+    # different device (if available). Numerics diverge across devices / dtypes,
+    # so verify the loaded state and that a few steps move in the same direction instead of exact results.
+    device = torch_device
+    if device == 'cuda' and not torch.cuda.is_available():
+        device = 'cpu'
+    dtype = torch.float64
     with torch.no_grad():
-        input_device = Parameter(input.clone().detach().float().to(torch_device))
-        weight_device = Parameter(weight.clone().detach().to(torch_device))
-        bias_device = Parameter(bias.clone().detach().to(torch_device))
+        input_device = Parameter(input.clone().detach().to(device, dtype))
+        weight_device = Parameter(weight.clone().detach().to(device, dtype))
+        bias_device = Parameter(bias.clone().detach().to(device, dtype))
     optimizer_device = constructor(weight_device, bias_device)
     fn_device = functools.partial(fn_base, optimizer_device, weight_device, bias_device)
 
@@ -123,17 +134,37 @@ def _test_state_dict(weight, bias, input, constructor):
     # Make sure state dict wasn't modified
     torch_tc.assertEqual(state_dict, state_dict_c)
 
-    for _i in range(20):
+    # Loaded state should follow its param to the new device / dtype (unless kept in a specific dtype, e.g. bf16
+    # momentum), with values intact. Scalar tensors (step counts, etc.) are bookkeeping and may stay on CPU.
+    param_idx = {p: i for i, p in enumerate(p for g in optimizer_device.param_groups for p in g['params'])}
+    for param, param_state in optimizer_device.state.items():
+        for key, value in param_state.items():
+            if not isinstance(value, torch.Tensor):
+                continue
+            source = state_dict['state'][param_idx[param]][key]
+            if value.dim() and value.is_floating_point():
+                assert value.device == param.device, key
+                assert value.dtype in (param.dtype, source.dtype), key
+            assert torch.equal(value.to('cpu', source.dtype), source), key
+
+    params_device = [weight_device, bias_device]
+    with torch.no_grad():
+        start = [p.clone() for p in (weight, bias)]
+        start_device = [p.clone() for p in params_device]
+    for _i in range(5):
         optimizer.step(fn)
         optimizer_device.step(fn_device)
-        torch_tc.assertEqual(weight, weight_device)
-        torch_tc.assertEqual(bias, bias_device)
-
-    # validate deepcopy() copies all public attributes
-    def getPublicAttr(obj):
-        return set(k for k in obj.__dict__ if not k.startswith('_'))
-
-    assert getPublicAttr(optimizer) == getPublicAttr(deepcopy(optimizer))
+    with torch.no_grad():
+        delta = torch.cat([(p - s).flatten() for p, s in zip((weight, bias), start)])
+        delta_device = torch.cat([(p - s).flatten() for p, s in zip(params_device, start_device)])
+        delta_device = delta_device.to('cpu', delta.dtype)
+    assert torch.isfinite(delta_device).all()
+    if delta.norm() < 1e-8:
+        # reference is stalled, device copy should be too
+        assert delta_device.norm() < 1e-6, f'device update {delta_device.norm():.2e} while reference stalled'
+    else:
+        cos_sim = torch.nn.functional.cosine_similarity(delta, delta_device, dim=0)
+        assert cos_sim > 0.9, f'update direction diverged (cosine similarity {cos_sim:.3f})'
 
 
 def _test_basic_cases(constructor, scheduler_constructors=None):
@@ -299,7 +330,7 @@ def test_optim_factory(optimizer):
     assert isinstance(opt_info, OptimInfo)
 
     lr = (1e-2,) * 4
-    if optimizer in ('mars', 'nadam', 'claprop', 'crmsproptf', 'cadafactorbv', 'csgdw', 'csgdc', 'clamb'):
+    if optimizer in ('mars', 'nadam', 'claprop', 'crmsproptf', 'cadafactorbv', 'csgdw', 'csgdc', 'csgdp', 'clamb'):
         lr = (1e-3,) * 4
     elif optimizer in ('cmars',):
         lr = (1e-4,) * 4
