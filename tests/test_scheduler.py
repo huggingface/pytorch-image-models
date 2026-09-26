@@ -265,21 +265,26 @@ class TestMultiStepScheduler:
             decay_rate=decay_rate,
         )
 
-        # Before first milestone
-        scheduler.step(8)
-        assert optimizer.param_groups[0]['lr'] == pytest.approx(base_lr, rel=1e-5)
+        # Each milestone is the first epoch with the decayed LR
+        for i, milestone in enumerate(decay_t):
+            scheduler.step(milestone - 1)
+            assert optimizer.param_groups[0]['lr'] == pytest.approx(base_lr * decay_rate ** i, rel=1e-5)
+            scheduler.step(milestone)
+            assert optimizer.param_groups[0]['lr'] == pytest.approx(base_lr * decay_rate ** (i + 1), rel=1e-5)
 
-        # After first milestone (step 10 means we've passed milestone at 10)
-        scheduler.step(11)
-        assert optimizer.param_groups[0]['lr'] == pytest.approx(base_lr * decay_rate, rel=1e-5)
+    def test_multistep_matches_torch(self):
+        """Test that the LR at each epoch matches torch.optim.lr_scheduler.MultiStepLR."""
+        decay_t = [3, 7, 8]
+        optimizer = _create_optimizer(lr=0.1)
+        scheduler = MultiStepLRScheduler(optimizer, decay_t=decay_t, decay_rate=0.1)
+        torch_optimizer = _create_optimizer(lr=0.1)
+        torch_scheduler = torch.optim.lr_scheduler.MultiStepLR(torch_optimizer, milestones=decay_t, gamma=0.1)
 
-        # After second milestone
-        scheduler.step(21)
-        assert optimizer.param_groups[0]['lr'] == pytest.approx(base_lr * decay_rate ** 2, rel=1e-5)
-
-        # After third milestone
-        scheduler.step(31)
-        assert optimizer.param_groups[0]['lr'] == pytest.approx(base_lr * decay_rate ** 3, rel=1e-5)
+        for epoch in range(12):
+            assert optimizer.param_groups[0]['lr'] == pytest.approx(torch_optimizer.param_groups[0]['lr'], rel=1e-5)
+            torch_optimizer.step()
+            torch_scheduler.step()
+            scheduler.step(epoch + 1)
 
 
 class TestPolyScheduler:

@@ -51,7 +51,7 @@ class MultiStepLRScheduler(Scheduler):
     def get_curr_decay_steps(self, t):
         # find where in the array t goes,
         # assumes self.decay_t is sorted
-        return bisect.bisect_right(self.decay_t, t + 1)
+        return bisect.bisect_right(self.decay_t, t)
 
     def _get_lr(self, t: int) -> List[float]:
         if t < self.warmup_t:
