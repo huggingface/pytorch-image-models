@@ -47,6 +47,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+
 from timm.layers import (
     get_device_dtype,
     PatchEmbed,
@@ -560,6 +561,7 @@ class Beit(nn.Module):
                 **dd,
             )
             for i in range(depth)])
+
         self.feature_info = [
             dict(module=f'blocks.{i}', num_chs=embed_dim, reduction=r) for i in range(depth)]
 
