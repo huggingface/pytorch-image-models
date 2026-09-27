@@ -19,7 +19,7 @@ from timm.layers import SelectAdaptivePool2d, create_conv2d, GELUTanh, get_devic
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_module
-from ._manipulate import checkpoint_seq
+from ._manipulate import checkpoint, checkpoint_seq
 from ._registry import register_model, generate_default_cfgs
 
 
@@ -882,7 +882,7 @@ class EfficientVit(nn.Module):
 
         for feat_idx, stage in enumerate(stages):
             if self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint_seq(stages, x)
+                x = checkpoint(stage, x)
             else:
                 x = stage(x)
             if feat_idx in take_indices:
@@ -904,7 +904,7 @@ class EfficientVit(nn.Module):
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
         self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
         if prune_head:
-            self.reset_classifier(0, '')
+            self.reset_classifier(0)
         return take_indices
 
     def forward_features(self, x):
@@ -1046,7 +1046,7 @@ class EfficientVitLarge(nn.Module):
 
         for feat_idx, stage in enumerate(stages):
             if self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint_seq(stages, x)
+                x = checkpoint(stage, x)
             else:
                 x = stage(x)
             if feat_idx in take_indices:
@@ -1068,7 +1068,7 @@ class EfficientVitLarge(nn.Module):
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
         self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
         if prune_head:
-            self.reset_classifier(0, '')
+            self.reset_classifier(0)
         return take_indices
 
     def forward_features(self, x):
