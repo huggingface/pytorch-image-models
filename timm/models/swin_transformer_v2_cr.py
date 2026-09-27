@@ -186,6 +186,13 @@ class WindowMultiHeadAttention(nn.Module):
         window_size = to_2tuple(window_size)
         if window_size != self.window_size:
             self.window_size = window_size
+            # the buffer is filled in place, so it needs the new size first
+            win_h, win_w = window_size
+            self.register_buffer(
+                "relative_coordinates_log",
+                self.relative_coordinates_log.new_empty(win_h * win_w * win_h * win_w, 2),
+                persistent=False,
+            )
             self._make_pair_wise_relative_positions()
 
     def _relative_positional_encodings(self) -> torch.Tensor:

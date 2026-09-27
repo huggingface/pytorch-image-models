@@ -1414,6 +1414,18 @@ def test_swinv2_attn_mask_init_after_to_empty():
 
 
 @pytest.mark.base
+def test_swinv2_cr_set_input_size():
+    kwargs = dict(embed_dim=16, depths=(1, 1, 1, 1), num_heads=(1, 1, 1, 1), num_classes=5)
+    model = create_model('swinv2_cr_tiny_224', **kwargs).eval()
+    model.set_input_size(img_size=(448, 448))
+    expected = create_model('swinv2_cr_tiny_224', img_size=(448, 448), **kwargs).eval()
+    expected.load_state_dict(model.state_dict())
+    x = torch.randn(1, 3, 448, 448)
+    with torch.no_grad():
+        torch.testing.assert_close(model(x), expected(x))
+
+
+@pytest.mark.base
 @pytest.mark.parametrize('model_name', [
     'levit_128s', 'levit_conv_128s', 'efficientformer_l1', 'efficientformerv2_s0', 'tiny_vit_5m_224', 'efficientvit_m0',
 ])
