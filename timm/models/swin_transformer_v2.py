@@ -374,6 +374,17 @@ class SwinTransformerV2Block(nn.Module):
             persistent=False,
         )
 
+    def init_non_persistent_buffers(self) -> None:
+        """Initialize non-persistent buffers."""
+        if not self.dynamic_mask:
+            device = self.norm1.weight.device
+            dtype = self.norm1.weight.dtype
+            self.register_buffer(
+                "attn_mask",
+                self.get_attn_mask(device=device, dtype=dtype),
+                persistent=False,
+            )
+
     def get_attn_mask(
             self,
             x: Optional[torch.Tensor] = None,
