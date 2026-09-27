@@ -1395,6 +1395,25 @@ def test_mobile_model_fusion_features(model_name, kwargs):
 
 
 @pytest.mark.base
+def test_swinv2_attn_mask_init_after_to_empty():
+    from timm.models._manipulate import reinit_non_persistent_buffers
+
+    kwargs = dict(embed_dim=16, depths=(2, 2, 2, 2), num_heads=(1, 1, 1, 1), num_classes=5)
+    model = create_model('swinv2_tiny_window8_256', **kwargs).eval()
+    meta_model = create_model('swinv2_tiny_window8_256', device='meta', **kwargs).to_empty(device='cpu').eval()
+    # Poison storage so a buffer that is never recomputed cannot pass by chance.
+    with torch.no_grad():
+        for tensor in meta_model.buffers():
+            if tensor.is_floating_point():
+                tensor.fill_(float('nan'))
+    meta_model.load_state_dict(model.state_dict())
+    reinit_non_persistent_buffers(meta_model)
+    x = torch.randn(1, 3, 256, 256)
+    with torch.no_grad():
+        torch.testing.assert_close(meta_model(x), model(x))
+
+
+@pytest.mark.base
 @pytest.mark.parametrize('model_name', [
     'levit_128s', 'levit_conv_128s', 'efficientformer_l1', 'efficientformerv2_s0', 'tiny_vit_5m_224', 'efficientvit_m0',
 ])
