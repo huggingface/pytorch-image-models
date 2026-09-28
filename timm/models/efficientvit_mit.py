@@ -19,7 +19,7 @@ from timm.layers import SelectAdaptivePool2d, create_conv2d, GELUTanh, get_devic
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_module
-from ._manipulate import checkpoint_seq
+from ._manipulate import checkpoint, checkpoint_seq
 from ._registry import register_model, generate_default_cfgs
 
 
@@ -38,7 +38,7 @@ def val2tuple(x: list or tuple or any, min_len: int = 1, idx_repeat: int = -1):
     return tuple(x)
 
 
-def get_same_padding(kernel_size: int or tuple[int, ...]) -> int or tuple[int, ...]:
+def get_same_padding(kernel_size: Union[int, Tuple[int, ...]]) -> Union[int, Tuple[int, ...]]:
     if isinstance(kernel_size, tuple):
         return tuple([get_same_padding(ks) for ks in kernel_size])
     else:
@@ -882,7 +882,7 @@ class EfficientVit(nn.Module):
 
         for feat_idx, stage in enumerate(stages):
             if self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint_seq(stages, x)
+                x = checkpoint(stage, x)
             else:
                 x = stage(x)
             if feat_idx in take_indices:
@@ -904,7 +904,7 @@ class EfficientVit(nn.Module):
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
         self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
         if prune_head:
-            self.reset_classifier(0, '')
+            self.reset_classifier(0)
         return take_indices
 
     def forward_features(self, x):
@@ -1046,7 +1046,7 @@ class EfficientVitLarge(nn.Module):
 
         for feat_idx, stage in enumerate(stages):
             if self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint_seq(stages, x)
+                x = checkpoint(stage, x)
             else:
                 x = stage(x)
             if feat_idx in take_indices:
@@ -1068,7 +1068,7 @@ class EfficientVitLarge(nn.Module):
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
         self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
         if prune_head:
-            self.reset_classifier(0, '')
+            self.reset_classifier(0)
         return take_indices
 
     def forward_features(self, x):

@@ -35,7 +35,9 @@ except ImportError as e:
     print("Please install tensorflow_datasets package `pip install tensorflow-datasets`.")
     raise e
 
-from .class_map import load_class_map
+from .class_map import load_class_map, remap_target
+from ._hfds import get_class_labels
+from .targets import check_target_format, get_field, multi_field_class_to_idx, multi_field_target, parse_target_keys
 from .reader import Reader
 from .shared_count import SharedCount
 
@@ -57,14 +59,6 @@ def decode_example(serialized_image, feature, dct_method='INTEGER_ACCURATE', cha
 def even_split_indices(split, n, num_samples):
     partitions = [round(i * num_samples / n) for i in range(n + 1)]
     return [f"{split}[{partitions[i]}:{partitions[i + 1]}]" for i in range(n)]
-
-
-def get_class_labels(info):
-    if 'label' not in info.features:
-        return {}
-    class_label = info.features['label']
-    class_to_idx = {n: class_label.str2int(n) for n in class_label.names}
-    return class_to_idx
 
 
 class ReaderTfds(Reader):
@@ -105,6 +99,7 @@ class ReaderTfds(Reader):
             input_key='image',
             input_img_mode='RGB',
             target_key='label',
+            target_format=None,
             target_img_mode='',
             prefetch_size=None,
             shuffle_size=None,
@@ -152,11 +147,18 @@ class ReaderTfds(Reader):
         if download:
             self.builder.download_and_prepare()
         self.remap_class = False
+        self.target_keys = parse_target_keys(target_key)  # comma separated keys select binary fields
+        self.dense_target = check_target_format(target_format, self.target_keys) == 'multihot'
+        if self.target_keys:
+            source_classes = multi_field_class_to_idx(self.target_keys, self.builder.info.features)
+        else:
+            source_classes = get_class_labels(self.builder.info, self.target_key)
+        self._source_names = {index: name for name, index in source_classes.items()}
         if class_map:
             self.class_to_idx = load_class_map(class_map)
             self.remap_class = True
         else:
-            self.class_to_idx = get_class_labels(self.builder.info) if self.target_key == 'label' else {}
+            self.class_to_idx = source_classes
         self.split_info = self.builder.info.splits[split]
         self.num_samples = self.split_info.num_examples
 
@@ -192,6 +194,17 @@ class ReaderTfds(Reader):
         if num_workers is not None:
             self.num_workers = num_workers
             self.global_num_workers = self.dist_num_replicas * self.num_workers
+
+    def _input_decoders(self):
+        """TFDS decoder override for the input image feature, keyed by input_key (nested for '/' paths)."""
+        decoder = decode_example(channels=1 if self.input_img_mode == 'L' else 3)
+        features = self.builder.info.features
+        if self.input_key in features or '/' not in self.input_key:
+            return {self.input_key: decoder}
+        decoders = decoder
+        for part in reversed(self.input_key.split('/')):
+            decoders = {part: decoders}
+        return decoders
 
     def _lazy_init(self):
         """ Lazily initialize the dataset.
@@ -256,7 +269,7 @@ class ReaderTfds(Reader):
         ds = self.builder.as_dataset(
             split=self.subsplit or self.split,
             shuffle_files=self.is_training,
-            decoders=dict(image=decode_example(channels=1 if self.input_img_mode == 'L' else 3)),
+            decoders=self._input_decoders(),
             read_config=read_config,
         )
         # avoid overloading threading w/ combo of TF ds threads + PyTorch workers
@@ -298,17 +311,18 @@ class ReaderTfds(Reader):
         # Iterate until exhausted or sample count hits target when training (ds.repeat enabled)
         sample_count = 0
         for sample in self.ds:
-            input_data = sample[self.input_key]
+            input_data = get_field(sample, self.input_key)
             if self.input_img_mode:
                 if self.input_img_mode == 'L' and input_data.ndim == 3:
                     input_data = input_data[:, :, 0]
                 input_data = Image.fromarray(input_data, mode=self.input_img_mode)
-            target_data = sample[self.target_key]
+            target_data = multi_field_target(sample, self.target_keys) if self.target_keys \
+                else get_field(sample, self.target_key)
             if self.target_img_mode:
                 # dense pixel target
                 target_data = Image.fromarray(target_data, mode=self.target_img_mode)
             elif self.remap_class:
-                target_data = self.class_to_idx[target_data]
+                target_data = remap_target(target_data, self.class_to_idx, self._source_names, dense=self.dense_target)
             yield input_data, target_data
             sample_count += 1
             if self.is_training and sample_count >= target_sample_count:

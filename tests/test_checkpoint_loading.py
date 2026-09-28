@@ -309,7 +309,6 @@ def test_naflexvit_factory_remaps_classic_vit_checkpoint(tmp_path):
         use_naflex=True,
         pretrained_cfg_overlay={
             'file': str(checkpoint_path),
-            'custom_load': False,
             'num_classes': model_kwargs['num_classes'],
         },
         **model_kwargs,
@@ -348,3 +347,190 @@ def test_naflexvit_factory_remaps_classic_vit_checkpoint(tmp_path):
         expected = src_model(inputs)
         actual = dst_model(inputs)
     torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-6)
+
+
+_CUSTOM_LOAD_MODEL_KWARGS = {
+    # default pretrained tags of these models are original JAX .npz weights (custom_load=True)
+    'vit_tiny_patch16_224': dict(img_size=8, patch_size=4, embed_dim=8, depth=1, num_heads=2),
+    'resnetv2_50x1_bit': dict(),
+}
+
+
+@pytest.mark.parametrize('model_name', list(_CUSTOM_LOAD_MODEL_KWARGS))
+@pytest.mark.parametrize('checkpoint_type', ['pth', 'safetensors'])
+def test_native_checkpoint_file_overrides_custom_load_source(tmp_path, model_name, checkpoint_type):
+    import timm
+
+    model_kwargs = _CUSTOM_LOAD_MODEL_KWARGS[model_name]
+    src_model = timm.create_model(model_name, pretrained=False, **model_kwargs)
+    assert src_model.pretrained_cfg['custom_load'] is True
+    checkpoint_path = tmp_path / f'native.{checkpoint_type}'
+    if checkpoint_type == 'safetensors':
+        import safetensors.torch
+        safetensors.torch.save_file(
+            {k: v.contiguous() for k, v in src_model.state_dict().items()},
+            str(checkpoint_path),
+        )
+    else:
+        torch.save(src_model.state_dict(), checkpoint_path)
+
+    dst_model = timm.create_model(
+        model_name,
+        pretrained=True,
+        pretrained_cfg_overlay=dict(file=str(checkpoint_path)),
+        **model_kwargs,
+    )
+
+    dst_state_dict = dst_model.state_dict()
+    for key, value in src_model.state_dict().items():
+        assert torch.equal(dst_state_dict[key], value), key
+
+
+def test_native_checkpoint_file_adapts_head_for_custom_load_source(tmp_path):
+    # mirrors train.py --pretrained-path, which overlays `file` and forces head adaptation
+    import timm
+
+    model_kwargs = _CUSTOM_LOAD_MODEL_KWARGS['vit_tiny_patch16_224']
+    src_model = timm.create_model('vit_tiny_patch16_224', pretrained=False, **model_kwargs)
+    checkpoint_path = tmp_path / 'native.pth'
+    torch.save(src_model.state_dict(), checkpoint_path)
+
+    dst_model = timm.create_model(
+        'vit_tiny_patch16_224',
+        pretrained=True,
+        num_classes=5,
+        pretrained_cfg_overlay=dict(file=str(checkpoint_path), num_classes=-1),
+        **model_kwargs,
+    )
+
+    assert dst_model.head.weight.shape == (5, model_kwargs['embed_dim'])
+    dst_state_dict = dst_model.state_dict()
+    for key, value in src_model.state_dict().items():
+        if not key.startswith('head.'):
+            assert torch.equal(dst_state_dict[key], value), key
+
+
+def test_explicit_custom_load_file_uses_model_loader(tmp_path, monkeypatch):
+    import timm
+    from timm.models.vision_transformer import VisionTransformer
+
+    loaded = []
+    monkeypatch.setattr(VisionTransformer, 'load_pretrained', lambda self, path: loaded.append(path))
+    checkpoint_path = str(tmp_path / 'ViT-Ti_16.npz')
+
+    timm.create_model(
+        'vit_tiny_patch16_224',
+        pretrained=True,
+        pretrained_cfg_overlay=dict(file=checkpoint_path, custom_load=True),
+        **_CUSTOM_LOAD_MODEL_KWARGS['vit_tiny_patch16_224'],
+    )
+
+    assert loaded == [checkpoint_path]
+
+
+@pytest.mark.parametrize('overlay,expected', [
+    (dict(), True),
+    (dict(num_classes=-1), True),
+    (dict(file='model.pth'), False),
+    (dict(url='https://example.com/model.pth'), False),
+    (dict(hf_hub_id='timm/some_model'), False),
+    (dict(hf_hub_filename='model.safetensors'), False),
+    (dict(hf_hub_id='', url='https://example.com/model.pth'), False),
+    (dict(hf_hub_id='', custom_load=False), False),
+    (dict(file='ViT-Ti_16.npz', custom_load=True), True),
+    (dict(hf_hub_id='google/some-jax', hf_hub_filename='ckpt.npz', custom_load='hf'), 'hf'),
+])
+def test_source_overlay_resets_custom_load(overlay, expected):
+    from timm.models import resolve_pretrained_cfg
+
+    input_overlay = dict(overlay)
+    pretrained_cfg = resolve_pretrained_cfg('vit_tiny_patch16_224', pretrained_cfg_overlay=input_overlay)
+
+    assert pretrained_cfg.custom_load == expected
+    assert input_overlay == overlay  # caller's overlay is not modified
+
+
+@pytest.mark.parametrize('source_key', ['file', 'url', 'hf_hub_id', 'hf_hub_filename'])
+@pytest.mark.parametrize('empty_value', [None, ''])
+def test_clearing_pretrained_source_preserves_custom_load(source_key, empty_value):
+    from timm.models import resolve_pretrained_cfg
+
+    pretrained_cfg = resolve_pretrained_cfg(
+        'vit_tiny_patch16_224', pretrained_cfg_overlay={source_key: empty_value})
+
+    assert getattr(pretrained_cfg, source_key) == empty_value
+    assert pretrained_cfg.custom_load is True
+
+
+@pytest.mark.parametrize('empty_value', [None, ''])
+def test_clearing_hf_hub_id_uses_registry_custom_loader(tmp_path, monkeypatch, empty_value):
+    import timm
+    from timm.models import _builder
+    from timm.models.vision_transformer import VisionTransformer
+
+    downloaded = []
+    loaded = []
+    checkpoint_path = str(tmp_path / 'ViT-Ti_16.npz')
+
+    def _download(url, **kwargs):
+        downloaded.append(url)
+        return checkpoint_path
+
+    monkeypatch.setattr(_builder, 'download_cached_file', _download)
+    monkeypatch.setattr(_builder, 'load_state_dict_from_url',
+                        lambda *a, **kw: pytest.fail('Registry .npz weights must use the custom loader'))
+    monkeypatch.setattr(VisionTransformer, 'load_pretrained', lambda self, path: loaded.append(path))
+
+    model = timm.create_model(
+        'vit_tiny_patch16_224',
+        pretrained=True,
+        pretrained_cfg_overlay=dict(hf_hub_id=empty_value),
+        **_CUSTOM_LOAD_MODEL_KWARGS['vit_tiny_patch16_224'],
+    )
+
+    assert model.pretrained_cfg['url'].endswith('.npz')
+    assert downloaded == [model.pretrained_cfg['url']]
+    assert loaded == [checkpoint_path]
+
+
+@pytest.mark.usefixtures('isolate_cli_backend_flags')
+@pytest.mark.parametrize('extra_args,expected', [
+    ([], dict(file='weights.npz', num_classes=-1)),
+    (['--pretrained-cfg-overlay', 'custom_load=True'], dict(file='weights.npz', num_classes=-1, custom_load=True)),
+    (['--pretrained-cfg-overlay', 'num_classes=10'], dict(file='weights.npz', num_classes=10)),
+])
+def test_train_pretrained_cfg_overlay(monkeypatch, extra_args, expected):
+    import train
+
+    class _Created(Exception):
+        pass
+
+    def _create_model(*args, **kwargs):
+        raise _Created(kwargs)
+
+    monkeypatch.setattr(train, 'create_model', _create_model)
+    monkeypatch.setattr('sys.argv', [
+        'train.py', '--model', 'vit_tiny_patch16_224', '--pretrained', '--pretrained-path', 'weights.npz',
+        '--device', 'cpu', *extra_args,
+    ])
+    with pytest.raises(_Created) as e:
+        train.main()
+    assert e.value.args[0]['pretrained_cfg_overlay'] == expected
+
+
+def test_teacher_pretrained_cfg_overlay_custom_load(tmp_path, monkeypatch):
+    from timm.task import DistillationTeacher
+    from timm.models.vision_transformer import VisionTransformer
+
+    loaded = []
+    monkeypatch.setattr(VisionTransformer, 'load_pretrained', lambda self, path: loaded.append(path))
+    checkpoint_path = str(tmp_path / 'ViT-Ti_16.npz')
+
+    DistillationTeacher(
+        'vit_tiny_patch16_224',
+        num_classes=1000,
+        pretrained_path=checkpoint_path,
+        pretrained_cfg_overlay=dict(custom_load=True),
+    )
+
+    assert loaded == [checkpoint_path]

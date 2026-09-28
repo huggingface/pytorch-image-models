@@ -657,7 +657,7 @@ def _gen_mobilenet_v5(
         **kwargs,
 ) -> MobileNetV5Encoder:
     if 'mobilenetv5_base' in variant:
-        arch_def: list[list[str]] = [
+        arch_def: List[List[str]] = [
             # Stage 0: 128x128 in
             [
                 'er_r1_k3_s2_e4_c128',
@@ -711,7 +711,7 @@ def _gen_mobilenet_v5(
             ],
         ]
     else:
-        arch_def: list[list[str]] = [
+        arch_def: List[List[str]] = [
             # Stage 0: 128x128 in
             [
                 'er_r1_k3_s2_e4_c128',

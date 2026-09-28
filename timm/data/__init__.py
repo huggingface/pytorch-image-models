@@ -21,6 +21,7 @@ from .naflex_transforms import (
     patchify_image,
 )
 from .scheduled_sampler import ScheduledBatchSampler, ScheduledTransformDataset
+from .target_transforms import MultiLabelTarget
 from .readers import create_reader
 from .readers import get_img_extensions, is_img_extension, set_img_extensions, add_img_extensions, del_img_extensions
 from .real_labels import RealLabelsImagenet

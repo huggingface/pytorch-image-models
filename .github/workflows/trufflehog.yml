@@ -18,6 +18,9 @@ jobs:
     - name: Secret Scanning
       uses: trufflesecurity/trufflehog@363923b901c911a9164f50b6c423f47c15372b1c # v3.97.4
       with:
+        # Pin the scanner image, the action otherwise runs ghcr.io/trufflesecurity/trufflehog:latest
+        # and detector / verifier changes can start failing CI without any repo change.
+        version: 3.97.4
         # Only fail on verified secrets. Avoids CI breakage from unverified false positives
         # (e.g. high-entropy base64 blobs in old notebook output cells) surfaced by full-tree
         # scans when scanner detectors change. See PR #2708 discussion.

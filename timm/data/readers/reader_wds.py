@@ -29,7 +29,10 @@ except ImportError:
     wds = None
     expand_urls = None
 
-from .class_map import load_class_map
+from .class_map import load_class_map, remap_target
+from .targets import (
+    check_target_format, get_field, has_field, multi_field_class_to_idx, multi_field_target, parse_target_keys,
+)
 from .reader import Reader
 from .shared_count import SharedCount
 
@@ -123,11 +126,15 @@ def _parse_split_info(split: str, info: Dict):
     return split_info
 
 
+class WdsTargetKeyError(ValueError):
+    """The configured target key cannot be resolved for a sample, a dataset / config error rather than transient."""
+
+
 def log_and_continue(exn):
     """Call in an exception handler to ignore exceptions, issue a warning, and continue."""
     _logger.warning(f'Handling webdataset error ({repr(exn)}). Ignoring.')
     # NOTE: try force an exit on errors that are clearly code / config and not transient
-    if isinstance(exn, TypeError):
+    if isinstance(exn, (TypeError, WdsTargetKeyError)):
         raise exn
     return True
 
@@ -136,24 +143,44 @@ def _decode(
         sample,
         image_key='jpg',
         image_mode='RGB',
-        target_key='cls',
-        alt_label=''
+        target_key=None,
+        alt_label='',
 ):
     """ Custom sample decode
     * decode and convert PIL Image
-    * cls byte string label to int
+    * resolve the target: the .cls byte string as an int when no key is set, otherwise from the json sidecar,
+      either the target_key (or the split's alt_label) field holding an int, or a list (class indices, or a
+      multi-hot vector under the 'multihot' target format) passed through for the target transform,
+      or a tuple of binary field names whose on (> 0) fields form the multi-label index list
     * pass through JSON byte string (if it exists) without parse
     """
-    # decode class label, skip if alternate label not valid
-    if alt_label:
-        # alternative labels are encoded in json metadata
+    json_key = target_key or alt_label
+    if json_key:
+        # targets are encoded in json metadata, missing sidecar / key is a hard error (see log_and_continue)
+        multi_field = isinstance(json_key, (tuple, list))
+        keys = tuple(json_key) if multi_field else (json_key,)
+        if 'json' not in sample:
+            raise WdsTargetKeyError(
+                f"Target key(s) {list(keys)} require a json sidecar, sample '{sample.get('__key__')}' has none.")
         meta = json.loads(sample['json'])
-        class_label = int(meta[alt_label])
-        if class_label < 0:
-            # skipped labels currently encoded as -1, may change to a null/None value
-            return None
+        missing = [key for key in keys if not has_field(meta, key)]
+        if missing:
+            raise WdsTargetKeyError(
+                f"Target key(s) {missing} not found in the json sidecar of sample '{sample.get('__key__')}', "
+                f"available keys: {sorted(meta)}.")
+        if multi_field:
+            target = multi_field_target(meta, keys)
+        else:
+            target = get_field(meta, json_key)
+            if isinstance(target, (list, tuple)):
+                target = list(target)  # index list or multi-hot vector, values left for the target transform
+            else:
+                target = int(target)
+                if target < 0:
+                    # skipped labels currently encoded as -1, may change to a null/None value
+                    return None
     else:
-        class_label = int(sample[target_key])
+        target = int(sample['cls'])
 
     # decode image
     img = getfirst(sample, image_key)
@@ -164,7 +191,7 @@ def _decode(
         img = img.convert(image_mode)
 
     # json passed through in undecoded state
-    decoded = dict(jpg=img, cls=class_label, json=sample.get('json', None))
+    decoded = dict(jpg=img, target=target, json=sample.get('json', None))
     return decoded
 
 
@@ -273,7 +300,8 @@ class ReaderWds(Reader):
             class_map: Optional[dict] = None,
             input_key: str = 'jpg;png;webp',
             input_img_mode: str = 'RGB',
-            target_key: str = 'cls',
+            target_key: Optional[str] = None,
+            target_format: Optional[str] = None,
             target_img_mode: str = '',
             filename_key: str = 'filename',
             sample_shuffle_size: Optional[int] = None,
@@ -294,7 +322,9 @@ class ReaderWds(Reader):
 
         self.input_key = input_key
         self.input_img_mode = input_img_mode
-        self.target_key = target_key
+        self.target_key = target_key  # None reads the .cls file, any key names a field of the json sidecar
+        self.target_keys = parse_target_keys(target_key)  # comma separated keys select binary sidecar fields
+        self.dense_target = check_target_format(target_format, self.target_keys) == 'multihot'
         self.filename_key = filename_key
         self.key_ext = '.JPEG'  # extension to add to key for original filenames (DS specific, default ImageNet)
 
@@ -307,11 +337,13 @@ class ReaderWds(Reader):
         if is_training and not self.num_samples:
             raise RuntimeError(f'Invalid split definition, num_samples not specified in train mode.')
         self.remap_class = False
+        source_classes = multi_field_class_to_idx(self.target_keys) if self.target_keys else {}
+        self._source_names = {index: name for name, index in source_classes.items()}
         if class_map:
             self.class_to_idx = load_class_map(class_map)
             self.remap_class = True
         else:
-            self.class_to_idx = {}
+            self.class_to_idx = source_classes
 
         # Distributed world state
         self.dist_rank = 0
@@ -392,11 +424,12 @@ class ReaderWds(Reader):
                     _decode,
                     image_key=self.input_key,
                     image_mode=self.input_img_mode,
+                    target_key=self.target_keys or self.target_key,
                     alt_label=self.split_info.alt_label,
                 ),
                 handler=log_and_continue,
             ),
-            wds.rename(image=self.input_key, target=self.target_key)
+            wds.rename(image=self.input_key, target='target')
         ])
         self.ds = wds.DataPipeline(*pipeline)
 
@@ -435,7 +468,7 @@ class ReaderWds(Reader):
         for sample in ds:
             target = sample['target']
             if self.remap_class:
-                target = self.class_to_idx[target]
+                target = remap_target(target, self.class_to_idx, self._source_names, dense=self.dense_target)
             yield sample['image'], target
             i += 1
         # _logger.info(f'end {i}, {self.worker_id}')  # FIXME temporary debug

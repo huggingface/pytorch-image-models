@@ -180,6 +180,7 @@ class Kron(torch.optim.Optimizer):
 
     def __setstate__(self, state):
         super().__setstate__(state)
+        self._param_exprs = {}
         for group in self.param_groups:
             group.setdefault('corrected_weight_decay', False)
 
@@ -209,10 +210,6 @@ class Kron(torch.optim.Optimizer):
         # Restore the RNG state if it exists
         if 'rng_state' in rng_states:
             self.rng.setstate(rng_states['rng_state'])
-
-    def __setstate__(self, state):
-        super().__setstate__(state)
-        self._param_exprs = {}
 
     @torch.no_grad()
     def step(self, closure=None):

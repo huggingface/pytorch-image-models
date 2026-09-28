@@ -2,7 +2,11 @@ import pytest
 import torch
 import torch.nn as nn
 
-from timm.task import ClassificationTask, FeatureDistillationTask, load_task_ema_checkpoint, resume_task_checkpoint
+from timm.task import (
+    ClassificationTask, FeatureDistillationTask, LogitDistillationTask, TokenDistillationTask,
+    DistillationTeacher,
+    load_task_ema_checkpoint, resume_task_checkpoint,
+)
 from timm.optim import create_optimizer_v2
 from timm.utils import CheckpointSaver
 
@@ -67,6 +71,101 @@ def _param_group_weight_decay(optimizer):
         for group in optimizer.param_groups
         for param in group['params']
     }
+
+
+def _create_tiny_distilled_student():
+    from timm import create_model
+
+    return create_model(
+        'deit_tiny_distilled_patch16_224', pretrained=False,
+        img_size=8, patch_size=4, embed_dim=8, depth=1, num_heads=2, num_classes=3,
+    )
+
+
+@pytest.mark.parametrize('task_cls', [LogitDistillationTask, FeatureDistillationTask, TokenDistillationTask])
+def test_distillation_train_keeps_teacher_in_eval(task_cls):
+    if task_cls is TokenDistillationTask:
+        student = _create_tiny_distilled_student()
+    else:
+        student = TinyFeatureModel(hidden=4)
+    teacher = TinyFeatureModel(hidden=6)
+    teacher.stem = nn.Sequential(teacher.stem, nn.BatchNorm1d(6), nn.Dropout(0.5))
+    task = task_cls(student, teacher, criterion=nn.CrossEntropyLoss(), verbose=False)
+    teacher_buffers = {name: value.clone() for name, value in teacher.named_buffers()}
+    x = torch.randn(4, 3, 8, 8)
+    target = torch.tensor([0, 1, 2, 0])
+
+    for mode in (True, False, True):
+        assert (task.train() if mode else task.eval()) is task
+        assert task.training is mode
+        assert all(module.training is mode for module in task.get_trainable_module().modules())
+        assert task.criterion.training is mode
+        assert all(not module.training for module in task.teacher.modules())
+        if mode:
+            task.zero_grad()
+            result = task(x, target)
+            result['loss'].backward()
+            assert student.head.weight.grad is not None
+            if task_cls is TokenDistillationTask:
+                assert student.head_dist.weight.grad is not None
+            elif task_cls is FeatureDistillationTask:
+                assert task.get_trainable_module().projection.weight.grad is not None
+            assert all(param.grad is None for param in teacher.parameters())
+            for name, value in teacher.named_buffers():
+                assert torch.equal(value, teacher_buffers[name]), name
+
+
+@pytest.mark.parametrize('compiled', [
+    False,
+    pytest.param(True, marks=pytest.mark.skipif(not hasattr(torch, 'compile'), reason='requires torch.compile')),
+])
+def test_token_distillation_reuses_teacher_wrapper(compiled):
+    teacher = DistillationTeacher(TinyFeatureModel())
+    student = _create_tiny_distilled_student()
+    task = TokenDistillationTask(student, teacher, verbose=False).train()
+
+    assert task.teacher is teacher
+    x = torch.randn(4, 3, 8, 8)
+    target = torch.tensor([0, 1, 2, 0])
+    with torch.no_grad():
+        expected = task(x, target)
+    if compiled:
+        task.compile(backend='eager')
+        task.train()
+        assert hasattr(teacher.model, '_orig_mod')
+
+    result = task(x, target)
+    for key, value in expected.items():
+        torch.testing.assert_close(result[key], value)
+    result['loss'].backward()
+    assert student.head.weight.grad is not None
+    assert student.head_dist.weight.grad is not None
+    assert all(param.grad is None for param in teacher.parameters())
+    assert all(not module.training for module in teacher.modules())
+
+
+def test_token_distillation_named_teacher_checkpoint(tmp_path):
+    from timm import create_model
+
+    teacher_name = 'vit_tiny_patch16_224'
+    source = create_model(teacher_name, pretrained=False, num_classes=3)
+    checkpoint_path = tmp_path / 'teacher.pth'
+    torch.save(source.state_dict(), checkpoint_path)
+    overlay = dict(mean=(0.5,) * 3, std=(0.25,) * 3)
+
+    task = TokenDistillationTask(
+        _create_tiny_distilled_student(),
+        teacher_name,
+        teacher_pretrained_path=str(checkpoint_path),
+        teacher_pretrained_cfg_overlay=overlay,
+        verbose=False,
+    )
+
+    teacher_state = task.teacher.model.state_dict()
+    for key, value in source.state_dict().items():
+        assert torch.equal(teacher_state[key], value), key
+    torch.testing.assert_close(task.teacher.mean_kd.flatten(), torch.tensor(overlay['mean']))
+    torch.testing.assert_close(task.teacher.std_kd.flatten(), torch.tensor(overlay['std']))
 
 
 def test_task_checkpoint_omits_empty_task_state_and_keeps_legacy_paths(tmp_path):

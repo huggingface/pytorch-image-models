@@ -24,7 +24,7 @@ def _factored_dims(
         shape: Tuple[int, ...],
         factored: bool,
         min_dim_size_to_factor: int
-) -> Optional[tuple[int, int]]:
+) -> Optional[Tuple[int, int]]:
     """Whether to use a factored second moment estimator.
 
     This function returns a tuple with the two largest axes to reduce over.
@@ -272,10 +272,10 @@ def _single_tensor_adafactor(
             exp_avg_sq.lerp_(grad_sqr, one_minus_beta2_t)
             update = grad * exp_avg_sq.rsqrt()
 
-        # Clip by RMS value
+        # Clip by RMS value, update / max(1, rms(update) / clipping_threshold) as in big_vision / optax
         if clipping_threshold is not None:
-            denom = (update.norm(2) / ((update.numel() ** 0.5) / clipping_threshold)).clamp_(max=1.0)
-            update.div_(denom)
+            update_rms = update.norm(2) / (update.numel() ** 0.5)
+            update.div_((update_rms / clipping_threshold).clamp_(min=1.0))
 
         # Apply momentum (in different dtype)
         if momentum is not None and exp_avg is not None:

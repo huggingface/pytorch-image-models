@@ -172,6 +172,8 @@ def init_distributed_device_so(
 
     if device.startswith('cuda:'):
         torch.cuda.set_device(device)
+    elif device.startswith('npu:'):
+        torch.npu.set_device(device)
 
     return dict(
         device=device,

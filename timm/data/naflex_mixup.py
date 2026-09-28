@@ -15,9 +15,12 @@ Hacked together by / Copyright 2025, Ross Wightman, Hugging Face
 """
 import math
 import random
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple
 
 import torch
+from torch.utils.data import default_collate
+
+from .mixup import mixup_target
 
 
 def mix_batch_variable_size(
@@ -131,25 +134,6 @@ def mix_batch_variable_size(
     return mixed_imgs, lam_list, pair_to
 
 
-def smoothed_sparse_target(
-        targets: torch.Tensor,
-        *,
-        num_classes: int,
-        smoothing: float = 0.0,
-) -> torch.Tensor:
-    off_val = smoothing / num_classes
-    on_val = 1.0 - smoothing + off_val
-
-    y_onehot = torch.full(
-        (targets.size(0), num_classes),
-        off_val,
-        dtype=torch.float32,
-        device=targets.device
-    )
-    y_onehot.scatter_(1, targets.unsqueeze(1), on_val)
-    return y_onehot
-
-
 def pairwise_mixup_target(
         targets: torch.Tensor,
         pair_to: Dict[int, int],
@@ -157,24 +141,26 @@ def pairwise_mixup_target(
         *,
         num_classes: int,
         smoothing: float = 0.0,
+        multi_label: bool = False,
 ) -> torch.Tensor:
     """Create soft targets that match the pixel‑level mixing performed.
 
     Args:
-        targets: (B,) tensor of integer class indices.
+        targets: (B,) class indices, or (B, num_classes) dense multi-label targets.
         pair_to: Mapping of sample index to its mixed partner as returned by mix_batch_variable_size().
         lam_list: Per‑sample fractions of own pixels, also from the mixer.
         num_classes: Total number of classes in the dataset.
         smoothing: Label‑smoothing value in the range [0, 1).
+        multi_label: Mix dense multi-label targets without one-hot conversion.
 
     Returns:
-        Tensor of shape (B, num_classes) whose rows sum to 1.
+        Tensor of shape (B, num_classes). Multi-label rows need not sum to 1.
     """
-    y_onehot = smoothed_sparse_target(targets, num_classes=num_classes, smoothing=smoothing)
-    targets = y_onehot.clone()
+    encoded = mixup_target(targets, num_classes, smoothing=smoothing, multi_label=multi_label)
+    targets = encoded.clone()
     for i, j in pair_to.items():
         lam = lam_list[i]
-        targets[i].mul_(lam).add_(y_onehot[j], alpha=1.0 - lam)
+        targets[i].mul_(lam).add_(encoded[j], alpha=1.0 - lam)
 
     return targets
 
@@ -193,6 +179,7 @@ class NaFlexMixup:
             local_shuffle: int = 4,
             label_smoothing: float = 0.0,
             mixup_off_epoch: int = 0,
+            multi_label: bool = False,
     ) -> None:
         """Configure the augmentation.
 
@@ -205,6 +192,7 @@ class NaFlexMixup:
             local_shuffle: Window size used to shuffle images after aspect sorting so pairings vary between epochs.
             label_smoothing: Label‑smoothing value. 0 disables smoothing.
             mixup_off_epoch: Disable mixing at this epoch and later. Zero keeps mixing enabled.
+            multi_label: Mix dense multi-label targets.
         """
         self.num_classes = num_classes
         self.mixup_alpha = mixup_alpha
@@ -214,6 +202,7 @@ class NaFlexMixup:
         self.local_shuffle = local_shuffle
         self.smoothing = label_smoothing
         self.mixup_off_epoch = mixup_off_epoch
+        self.multi_label = multi_label
         self.mixup_enabled = True
         self.set_epoch(0)
 
@@ -230,17 +219,18 @@ class NaFlexMixup:
 
         Args:
             imgs: List of already transformed images shaped (C, H, W).
-            targets: Hard labels with shape (B,).
+            targets: Class indices shaped (B,), or dense multi-label targets shaped (B, num_classes).
 
         Returns:
             mixed_imgs: List of mixed images in the same order and shapes as the input.
-            targets: Soft‑label tensor shaped (B, num_classes) suitable for cross‑entropy with soft targets.
+            targets: Per-image soft targets, each shaped (num_classes,).
         """
         if not isinstance(targets, torch.Tensor):
-            targets = torch.tensor(targets)
+            targets = default_collate(targets)
 
-        if not self.mixup_enabled or random.random() > self.prob:
-            targets = smoothed_sparse_target(targets, num_classes=self.num_classes, smoothing=self.smoothing)
+        if len(imgs) < 2 or not self.mixup_enabled or random.random() > self.prob:
+            targets = mixup_target(
+                targets, self.num_classes, smoothing=self.smoothing, multi_label=self.multi_label)
             return imgs, targets.unbind(0)
 
         mixed_imgs, lam_list, pair_to = mix_batch_variable_size(
@@ -257,5 +247,6 @@ class NaFlexMixup:
             lam_list,
             num_classes=self.num_classes,
             smoothing=self.smoothing,
+            multi_label=self.multi_label,
         )
         return mixed_imgs, targets.unbind(0)

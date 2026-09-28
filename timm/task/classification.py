@@ -1,49 +1,78 @@
 """Classification training task."""
 import logging
-from typing import Callable, Dict, Optional, Union
+from typing import Any, Callable, Dict, Optional, Union
 
 import torch
 import torch.nn as nn
+
+from timm.loss import create_classification_loss
 
 from .task import TrainingTask
 
 _logger = logging.getLogger(__name__)
 
 
+def resolve_classification_loss(
+        criterion: Optional[Union[nn.Module, Callable]],
+        device: torch.device,
+        multi_label: bool = False,
+        criterion_kwargs: Optional[Dict[str, Any]] = None,
+) -> Union[nn.Module, Callable]:
+    """Return an explicit criterion moved to device, or create one with create_classification_loss(**criterion_kwargs)."""
+    if criterion is None:
+        criterion = create_classification_loss(multi_label=multi_label, **(criterion_kwargs or {}))
+    elif criterion_kwargs:
+        raise ValueError(
+            f'Pass either an explicit criterion or criterion_kwargs, not both: {sorted(criterion_kwargs)}')
+    if isinstance(criterion, nn.Module):
+        criterion = criterion.to(device=device)
+    return criterion
+
+
 class ClassificationTask(TrainingTask):
     """Standard supervised classification task.
 
     Simple task that performs a forward pass through the model and computes
-    the classification loss.
+    the classification loss. The criterion is created by create_classification_loss()
+    unless one is passed explicitly.
 
     Args:
         model: The model to train
-        criterion: Loss function (e.g., CrossEntropyLoss)
+        criterion: Loss function. Created from criterion_kwargs when None.
+        criterion_kwargs: Arguments for create_classification_loss() when criterion is None.
         device: Device for task tensors/buffers
         dtype: Dtype for task tensors/buffers
         verbose: Enable info logging
 
     Example:
-        >>> task = ClassificationTask(model, nn.CrossEntropyLoss(), device=torch.device('cuda'))
+        >>> task = ClassificationTask(model, criterion_kwargs=dict(smoothing=0.1), device=torch.device('cuda'))
         >>> result = task(input, target)
         >>> result['loss'].backward()
     """
 
+    multi_label = False
+
     def __init__(
             self,
             model: nn.Module,
-            criterion: Union[nn.Module, Callable],
+            criterion: Optional[Union[nn.Module, Callable]] = None,
+            criterion_kwargs: Optional[Dict[str, Any]] = None,
             device: Optional[torch.device] = None,
             dtype: Optional[torch.dtype] = None,
             verbose: bool = True,
     ):
         super().__init__(device=device, dtype=dtype, verbose=verbose)
         self.trainable_module = model
-        self.criterion = criterion
+        self.criterion = resolve_classification_loss(
+            criterion,
+            self.device,
+            multi_label=self.multi_label,
+            criterion_kwargs=criterion_kwargs,
+        )
 
         if self.verbose:
-            loss_name = getattr(criterion, '__name__', None) or type(criterion).__name__
-            _logger.info(f"ClassificationTask: criterion={loss_name}")
+            loss_name = getattr(self.criterion, '__name__', None) or type(self.criterion).__name__
+            _logger.info(f"{type(self).__name__}: criterion={loss_name}")
 
     def prepare_distributed(
             self,
@@ -100,3 +129,66 @@ class ClassificationTask(TrainingTask):
             'loss': loss,
             'output': output,
         }
+
+
+class MultiLabelClassificationTask(ClassificationTask):
+    """Independent binary classification with dense float targets shaped (B, C).
+
+    The default criterion is BinaryCrossEntropy with dense-target smoothing, other losses are
+    selected with criterion_kwargs loss_type (see create_classification_loss). When
+    Mixup/CutMix are active they apply the smoothing while producing soft targets
+    and the criterion is created with soft_targets=True instead. Evaluation always
+    uses unsmoothed binary targets. Model, distributed, compilation, EMA, and
+    checkpoint handling are inherited.
+
+    Args:
+        model: The model to train
+        criterion: Loss function. Created from criterion_kwargs when None.
+        criterion_kwargs: Arguments for create_classification_loss() when criterion is None.
+        threshold: Sigmoid probability threshold for the evaluator's F1 metrics.
+        device: Device for task tensors/buffers
+        dtype: Dtype for task tensors/buffers
+        verbose: Enable info logging
+    """
+
+    multi_label = True
+
+    def __init__(
+            self,
+            model: nn.Module,
+            criterion: Optional[Union[nn.Module, Callable]] = None,
+            criterion_kwargs: Optional[Dict[str, Any]] = None,
+            threshold: float = 0.5,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+            verbose: bool = True,
+    ):
+        if not 0. < threshold < 1.:
+            raise ValueError('Multi-label prediction threshold must be between 0 and 1.')
+        super().__init__(
+            model, criterion, criterion_kwargs=criterion_kwargs, device=device, dtype=dtype, verbose=verbose)
+        self.threshold = threshold
+
+    def forward(
+            self,
+            input: torch.Tensor,
+            target: torch.Tensor,
+    ) -> Dict[str, torch.Tensor]:
+        """Forward pass through model and compute the multi-label loss.
+
+        Args:
+            input: Input tensor [B, C, H, W]
+            target: Dense float targets [B, num_classes]
+
+        Returns:
+            Dictionary containing:
+                - 'loss': Binary classification loss
+                - 'output': Model logits
+        """
+        if target.ndim != 2 or not target.is_floating_point():
+            raise ValueError('Multi-label training expects dense floating-point targets shaped (batch, num_classes).')
+        return super().forward(input, target)
+
+    def create_evaluator(self, **kwargs):
+        from .evaluator import MultiLabelClassificationEvaluator
+        return MultiLabelClassificationEvaluator(device=self.device, threshold=self.threshold, **kwargs)

@@ -14,6 +14,7 @@ from typing import Callable, Optional, Sequence, Tuple, Union
 
 import torch
 import torch.utils.data
+from torch.utils.data import default_collate
 import numpy as np
 
 from .constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
@@ -28,35 +29,35 @@ _logger = logging.getLogger(__name__)
 
 
 def fast_collate(batch):
-    """ A fast collation function optimized for uint8 images (np array or torch) and int64 targets (labels)"""
+    """Collate uint8 images with scalar class indices or dense target tensors."""
     assert isinstance(batch[0], tuple)
     batch_size = len(batch)
+    targets = default_collate([b[1] for b in batch])
+    if targets.ndim == 1:
+        targets = targets.long()  # scalar class indices, whatever the source dtype (int, bool, float)
     if isinstance(batch[0][0], tuple):
         # This branch 'deinterleaves' and flattens tuples of input tensors into one tensor ordered by position
         # such that all tuple of position n will end up in a torch.split(tensor, batch_size) in nth position
-        is_np = isinstance(batch[0][0], np.ndarray)
+        is_np = isinstance(batch[0][0][0], np.ndarray)
         inner_tuple_size = len(batch[0][0])
         flattened_batch_size = batch_size * inner_tuple_size
-        targets = torch.zeros(flattened_batch_size, dtype=torch.int64)
+        targets = targets.repeat((inner_tuple_size,) + (1,) * (targets.ndim - 1))
         tensor = torch.zeros((flattened_batch_size, *batch[0][0][0].shape), dtype=torch.uint8)
         for i in range(batch_size):
             assert len(batch[i][0]) == inner_tuple_size  # all input tensor tuples must be same length
             for j in range(inner_tuple_size):
-                targets[i + j * batch_size] = batch[i][1]
                 if is_np:
                     tensor[i + j * batch_size] += torch.from_numpy(batch[i][0][j])
                 else:
                     tensor[i + j * batch_size] += batch[i][0][j]
         return tensor, targets
     elif isinstance(batch[0][0], np.ndarray):
-        targets = torch.tensor([b[1] for b in batch], dtype=torch.int64)
         assert len(targets) == batch_size
         tensor = torch.zeros((batch_size, *batch[0][0].shape), dtype=torch.uint8)
         for i in range(batch_size):
             tensor[i] += torch.from_numpy(batch[i][0])
         return tensor, targets
     elif isinstance(batch[0][0], torch.Tensor):
-        targets = torch.tensor([b[1] for b in batch], dtype=torch.int64)
         assert len(targets) == batch_size
         tensor = torch.zeros((batch_size, *batch[0][0].shape), dtype=torch.uint8)
         for i in range(batch_size):
