@@ -70,7 +70,7 @@ def onnx_export(
     else:
         export_type = torch.onnx.OperatorExportTypes.ONNX
 
-    if use_dynamo:
+    if use_dynamo and hasattr(torch.onnx, 'dynamo_export'):
         export_options = torch.onnx.ExportOptions(dynamic_shapes=dynamic_size)
         export_output = torch.onnx.dynamo_export(
             model,
@@ -78,6 +78,18 @@ def onnx_export(
             export_options=export_options,
         )
         export_output.save(output_file)
+    elif use_dynamo:
+        # torch.onnx.dynamo_export was removed in PyTorch 2.9
+        torch.onnx.export(
+            model,
+            (example_input,),
+            output_file,
+            input_names=input_names,
+            output_names=output_names,
+            dynamic_axes=dynamic_axes,
+            opset_version=opset,
+            dynamo=True,
+        )
     else:
         torch.onnx.export(
             model,
