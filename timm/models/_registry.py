@@ -210,7 +210,7 @@ def register_model_deprecations(module_name: str, deprecation_map: Dict[str, Opt
     module_name = module_name_split[-1] if len(module_name_split) else ''
 
     for deprecated, current in deprecation_map.items():
-        if hasattr(mod, '__all__'):
+        if hasattr(mod, '__all__') and deprecated not in mod.__all__:
             mod.__all__.append(deprecated)
         current_fn = None
         current_tag = ''
