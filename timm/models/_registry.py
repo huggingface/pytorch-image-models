@@ -212,6 +212,10 @@ def list_models(
         include_filters = filter if isinstance(filter, (tuple, list)) else [filter]
     else:
         include_filters = []
+    if exclude_filters:
+        exclude_filters = exclude_filters if isinstance(exclude_filters, (tuple, list)) else [exclude_filters]
+    else:
+        exclude_filters = []
 
     if include_tags is None:
         # FIXME should this be default behaviour? or default to include_tags=True?
@@ -249,8 +253,6 @@ def list_models(
         models = all_models
 
     if exclude_filters:
-        if not isinstance(exclude_filters, (tuple, list)):
-            exclude_filters = [exclude_filters]
         for xf in exclude_filters:
             exclude_models = fnmatch.filter(models, xf)  # exclude these models
             if len(exclude_models):

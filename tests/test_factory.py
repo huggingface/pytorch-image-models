@@ -1,6 +1,8 @@
+import fnmatch
+
 import pytest
 
-from timm.models import parse_model_name, safe_model_name
+from timm.models import list_models, list_pretrained, parse_model_name, safe_model_name
 
 
 @pytest.mark.parametrize('model_name,expected', [
@@ -78,3 +80,25 @@ def test_safe_model_name():
     assert safe_model_name('resnet18.a1_in1k') == 'resnet18_a1_in1k'
     assert safe_model_name('hf-hub:timm/resnet18.a1_in1k') == 'timm_resnet18_a1_in1k'
     assert safe_model_name(r'local-dir:C:\##hf-repos\my_model') == 'C____hf_repos_my_model'
+
+
+@pytest.mark.parametrize('pretrained', [False, True])
+def test_list_models_exclude_filters_str(pretrained):
+    # a str exclude filter must behave like a one element list, also when pretrained tags are expanded
+    exclude = '*resnet*'
+    as_str = list_models('*res*', pretrained=pretrained, exclude_filters=exclude)
+    as_list = list_models('*res*', pretrained=pretrained, exclude_filters=[exclude])
+    assert as_str
+    assert as_str == as_list
+    assert not fnmatch.filter(as_str, exclude)
+
+
+def test_list_pretrained_exclude_filters_str():
+    names = list_pretrained('resnet*')
+    tag = names[0].split('.', 1)[1]
+    exclude = '*.' + tag
+    as_str = list_pretrained('resnet*', exclude_filters=exclude)
+    assert as_str
+    assert as_str == list_pretrained('resnet*', exclude_filters=[exclude])
+    assert not fnmatch.filter(as_str, exclude)
+    assert fnmatch.filter(names, exclude)
