@@ -9,7 +9,7 @@ import warnings
 from collections import defaultdict, deque
 from copy import deepcopy
 from dataclasses import replace
-from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Sequence, Union, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Union, Tuple
 
 from ._pretrained import PretrainedCfg, DefaultCfg
 
@@ -31,16 +31,37 @@ _deprecated_models: Dict[str, Optional[str]] = {}
 
 
 def split_model_name_tag(model_name: str, no_tag: str = '') -> Tuple[str, str]:
+    """ Split a model name into architecture and pretrained tag (ie 'resnet50.a1_in1k' -> 'resnet50', 'a1_in1k').
+
+    Args:
+        model_name: Model name, with or without a pretrained tag.
+        no_tag: Value to return for the tag if the model name has none.
+
+    Returns:
+        Tuple of (architecture name, pretrained tag).
+    """
     model_name, *tag_list = model_name.split('.', 1)
     tag = tag_list[0] if tag_list else no_tag
     return model_name, tag
 
 
 def get_arch_name(model_name: str) -> str:
+    """ Get the architecture name from a model name, stripping any pretrained tag."""
     return split_model_name_tag(model_name)[0]
 
 
 def generate_default_cfgs(cfgs: Dict[str, Union[Dict[str, Any], PretrainedCfg]]):
+    """ Group 'arch.tag' keyed pretrained cfgs into a DefaultCfg per architecture.
+
+    The first tag w/ weights becomes the default for its architecture, unless an untagged key w/ weights or
+    a tag ending in '*' explicitly marks the default.
+
+    Args:
+        cfgs: Pretrained cfgs (as dicts or PretrainedCfg) keyed by 'arch' or 'arch.tag'.
+
+    Returns:
+        Dict of DefaultCfg keyed by architecture name.
+    """
     out = defaultdict(DefaultCfg)
     default_set = set()  # no tag and tags ending with * are prioritized as default
 
@@ -72,7 +93,35 @@ def generate_default_cfgs(cfgs: Dict[str, Union[Dict[str, Any], PretrainedCfg]])
     return out
 
 
+def _clear_model_entries(model_name: str):
+    """ Remove all registry entries for a model name, used when an existing registration is overwritten."""
+    old_module = _model_to_module.pop(model_name, None)
+    if old_module is not None:
+        old_models = _module_to_models.get(old_module)
+        if old_models is not None:
+            old_models.discard(model_name)
+            if not old_models:
+                del _module_to_models[old_module]  # don't list modules left w/o models
+        if old_module in _module_to_deprecated_models:
+            _module_to_deprecated_models[old_module].pop(model_name, None)
+    for name in _model_with_tags.pop(model_name, []) + [model_name]:
+        _model_pretrained_cfgs.pop(name, None)
+        _model_has_pretrained.discard(name)
+    _model_default_cfgs.pop(model_name, None)
+    _deprecated_models.pop(model_name, None)
+
+
 def register_model(fn: Callable[..., Any]) -> Callable[..., Any]:
+    """ Decorator that registers a model entrypoint fn and any pretrained cfgs in its module's default_cfgs.
+
+    Registering a name that already exists overwrites the previous registration and its pretrained cfgs.
+
+    Args:
+        fn: Model entrypoint fn, registered under its __name__.
+
+    Returns:
+        The unmodified entrypoint fn.
+    """
     # lookup containing module
     mod = sys.modules[fn.__module__]
     module_name_split = fn.__module__.split('.')
@@ -81,7 +130,8 @@ def register_model(fn: Callable[..., Any]) -> Callable[..., Any]:
     # add model to __all__ in module
     model_name = fn.__name__
     if hasattr(mod, '__all__'):
-        mod.__all__.append(model_name)
+        if model_name not in mod.__all__:
+            mod.__all__.append(model_name)
     else:
         mod.__all__ = [model_name]  # type: ignore
 
@@ -92,6 +142,8 @@ def register_model(fn: Callable[..., Any]) -> Callable[..., Any]:
             'registered conflicts with an existing name. Please check if this is not expected.',
             stacklevel=2,
         )
+        # remove stale module, tag, and pretrained cfg entries of the previous registration
+        _clear_model_entries(model_name)
     _model_entrypoints[model_name] = fn
     _model_to_module[model_name] = module_name
     _module_to_models[module_name].add(model_name)
@@ -147,6 +199,12 @@ def _deprecated_model_shim(deprecated_name: str, current_fn: Callable = None, cu
 
 
 def register_model_deprecations(module_name: str, deprecation_map: Dict[str, Optional[str]]):
+    """ Register deprecated model names that map to current models (w/ a warning) or error if removed.
+
+    Args:
+        module_name: Name of the module (ie __name__) containing the current model entrypoints.
+        deprecation_map: Mapping of deprecated name to current 'arch' or 'arch.tag' name, None if removed.
+    """
     mod = sys.modules[module_name]
     module_name_split = module_name.split('.')
     module_name = module_name_split[-1] if len(module_name_split) else ''
@@ -161,6 +219,8 @@ def register_model_deprecations(module_name: str, deprecation_map: Dict[str, Opt
             current_fn = getattr(mod, current_name)
         deprecated_entrypoint_fn = _deprecated_model_shim(deprecated, current_fn, current_tag)
         setattr(mod, deprecated, deprecated_entrypoint_fn)
+        if deprecated in _model_entrypoints:
+            _clear_model_entries(deprecated)
         _model_entrypoints[deprecated] = deprecated_entrypoint_fn
         _model_to_module[deprecated] = module_name
         _module_to_models[module_name].add(deprecated)
@@ -174,7 +234,7 @@ def _natural_key(string_: str) -> List[Union[int, str]]:
 
 
 def _expand_filter(filter: str):
-    """ expand a 'base_filter' to 'base_filter.*' if no tag portion"""
+    """ Expand a 'base_filter' to ['base_filter.*', 'base_filter'] if it has no tag portion."""
     filter_base, filter_tag = split_model_name_tag(filter)
     if not filter_tag:
         return ['.'.join([filter_base, '*']), filter]
@@ -182,58 +242,61 @@ def _expand_filter(filter: str):
         return [filter]
 
 
+def _to_str_list(value: Union[str, Iterable[str], None]) -> List[str]:
+    """ Normalize a single str or an iterable of str to a list (empty for '' or None)."""
+    if not value:
+        return []
+    if isinstance(value, str):
+        return [value]
+    return list(value)
+
+
 def list_models(
-        filter: Union[str, List[str]] = '',
-        module: Union[str, List[str]] = '',
+        filter: Union[str, Iterable[str]] = '',
+        module: Union[str, Iterable[str]] = '',
         pretrained: bool = False,
-        exclude_filters: Union[str, List[str]] = '',
+        exclude_filters: Union[str, Iterable[str]] = '',
         name_matches_cfg: bool = False,
         include_tags: Optional[bool] = None,
 ) -> List[str]:
-    """ Return list of available model names, sorted alphabetically
+    """ Return list of available model names, sorted naturally.
 
     Args:
-        filter - Wildcard filter string that works with fnmatch
-        module - Limit model selection to a specific submodule (ie 'vision_transformer')
-        pretrained - Include only models with valid pretrained weights if True
-        exclude_filters - Wildcard filters to exclude models after including them with filter
-        name_matches_cfg - Include only models w/ model_name matching default_cfg name (excludes some aliases)
-        include_tags - Include pretrained tags in model names (model.tag). If None, defaults
-            set to True when pretrained=True else False (default: None)
+        filter: Wildcard filter(s) that work with fnmatch.
+        module: Limit model selection to specific submodule(s) (ie 'vision_transformer').
+        pretrained: Include only models with valid pretrained weights if True.
+        exclude_filters: Wildcard filter(s) to exclude models after including them with filter.
+        name_matches_cfg: Include only models w/ model_name matching default_cfg name (excludes some aliases).
+        include_tags: Include pretrained tags in model names (model.tag). If None, set to the value of pretrained.
 
     Returns:
-        models - The sorted list of models
+        The sorted list of model names.
 
     Example:
-        model_list('gluon_resnet*') -- returns all models starting with 'gluon_resnet'
-        model_list('*resnext*, 'resnet') -- returns all models with 'resnext' in 'resnet' module
+        list_models('gluon_resnet*') -- returns all models starting with 'gluon_resnet'
+        list_models('*resnext*', 'resnet') -- returns all models with 'resnext' in 'resnet' module
     """
-    if filter:
-        include_filters = filter if isinstance(filter, (tuple, list)) else [filter]
-    else:
-        include_filters = []
+    include_filters = _to_str_list(filter)
+    exclude_filters = _to_str_list(exclude_filters)
+    modules = _to_str_list(module)
 
     if include_tags is None:
         # FIXME should this be default behaviour? or default to include_tags=True?
         include_tags = pretrained
 
-    if not module:
+    if not modules:
         all_models: Set[str] = set(_model_entrypoints.keys())
     else:
-        if isinstance(module, str):
-            all_models: Set[str] = _module_to_models[module]
-        else:
-            assert isinstance(module, Sequence)
-            all_models: Set[str] = set()
-            for m in module:
-                all_models.update(_module_to_models[m])
+        all_models: Set[str] = set()
+        for m in modules:
+            all_models.update(_module_to_models.get(m, ()))
     all_models = all_models - _deprecated_models.keys()  # remove deprecated models from listings
 
     if include_tags:
         # expand model names to include names w/ pretrained tags
         models_with_tags: Set[str] = set()
         for m in all_models:
-            models_with_tags.update(_model_with_tags[m])
+            models_with_tags.update(_model_with_tags.get(m) or (m,))  # no cfgs registered, keep untagged name
         all_models = models_with_tags
         # expand include and exclude filters to include a '.*' for proper match if no tags in filter
         include_filters = [ef for f in include_filters for ef in _expand_filter(f)]
@@ -249,8 +312,6 @@ def list_models(
         models = all_models
 
     if exclude_filters:
-        if not isinstance(exclude_filters, (tuple, list)):
-            exclude_filters = [exclude_filters]
         for xf in exclude_filters:
             exclude_models = fnmatch.filter(models, xf)  # exclude these models
             if len(exclude_models):
@@ -266,9 +327,18 @@ def list_models(
 
 
 def list_pretrained(
-        filter: Union[str, List[str]] = '',
-        exclude_filters: str = '',
+        filter: Union[str, Iterable[str]] = '',
+        exclude_filters: Union[str, Iterable[str]] = '',
 ) -> List[str]:
+    """ Return list of pretrained model names (w/ tags), sorted naturally.
+
+    Args:
+        filter: Wildcard filter(s) that work with fnmatch.
+        exclude_filters: Wildcard filter(s) to exclude models after including them with filter.
+
+    Returns:
+        The sorted list of model names.
+    """
     return list_models(
         filter=filter,
         pretrained=True,
@@ -277,20 +347,34 @@ def list_pretrained(
     )
 
 
-def get_deprecated_models(module: str = '') -> Dict[str, str]:
-    all_deprecated = _module_to_deprecated_models[module] if module else _deprecated_models
+def get_deprecated_models(module: str = '') -> Dict[str, Optional[str]]:
+    """ Get deprecated model names mapped to their current names (None if removed).
+
+    Args:
+        module: Limit to deprecations registered in a specific submodule, all if empty.
+
+    Returns:
+        Dict of deprecated name to current name.
+    """
+    all_deprecated = _module_to_deprecated_models.get(module, {}) if module else _deprecated_models
     return deepcopy(all_deprecated)
 
 
 def is_model(model_name: str) -> bool:
-    """ Check if a model name exists
-    """
+    """ Check if a model architecture is registered, ignoring any pretrained tag."""
     arch_name = get_arch_name(model_name)
     return arch_name in _model_entrypoints
 
 
 def model_entrypoint(model_name: str, module_filter: Optional[str] = None) -> Callable[..., Any]:
-    """Fetch a model entrypoint for specified model name
+    """ Fetch the model entrypoint fn for a model name, ignoring any pretrained tag.
+
+    Args:
+        model_name: Model name, with or without a pretrained tag.
+        module_filter: If set, raise if the model isn't in this submodule.
+
+    Returns:
+        The model entrypoint fn.
     """
     arch_name = get_arch_name(model_name)
     if module_filter and arch_name not in _module_to_models.get(module_filter, {}):
@@ -299,31 +383,42 @@ def model_entrypoint(model_name: str, module_filter: Optional[str] = None) -> Ca
 
 
 def list_modules() -> List[str]:
-    """ Return list of module names that contain models / model entrypoints
-    """
+    """ Return sorted list of module names that contain model entrypoints."""
     modules = _module_to_models.keys()
     return sorted(modules)
 
 
 def is_model_in_modules(
-        model_name: str, module_names: Union[Tuple[str, ...], List[str], Set[str]]
+        model_name: str, module_names: Union[str, Iterable[str]]
 ) -> bool:
-    """Check if a model exists within a subset of modules
+    """ Check if a model exists within a subset of modules.
 
     Args:
-        model_name - name of model to check
-        module_names - names of modules to search in
+        model_name: Model name to check, with or without a pretrained tag.
+        module_names: Name(s) of modules to search in.
     """
     arch_name = get_arch_name(model_name)
-    assert isinstance(module_names, (tuple, list, set))
-    return any(arch_name in _module_to_models[n] for n in module_names)
+    return any(arch_name in _module_to_models.get(n, ()) for n in _to_str_list(module_names))
 
 
 def is_model_pretrained(model_name: str) -> bool:
+    """ Check if a model name (w/ or w/o tag) has pretrained weights registered."""
     return model_name in _model_has_pretrained
 
 
 def get_pretrained_cfg(model_name: str, allow_unregistered: bool = True) -> Optional[PretrainedCfg]:
+    """ Get a copy of the pretrained cfg for a model name, the default tag is used if none specified.
+
+    Args:
+        model_name: Model name, with or without a pretrained tag.
+        allow_unregistered: Return None instead of raising if the architecture has no pretrained cfgs.
+
+    Returns:
+        The pretrained cfg, or None if unregistered and allowed.
+
+    Raises:
+        RuntimeError: If the tag is invalid for the architecture, or it has no cfgs and allow_unregistered is False.
+    """
     if model_name in _model_pretrained_cfgs:
         return deepcopy(_model_pretrained_cfgs[model_name])
     arch_name, tag = split_model_name_tag(model_name)
@@ -337,16 +432,25 @@ def get_pretrained_cfg(model_name: str, allow_unregistered: bool = True) -> Opti
 
 
 def get_pretrained_cfg_value(model_name: str, cfg_key: str) -> Optional[Any]:
-    """ Get a specific model default_cfg value by key. None if key doesn't exist.
+    """ Get a specific pretrained cfg value by key for a model name, None if the key doesn't exist.
+
+    Raises:
+        RuntimeError: If the model has no pretrained cfg registered or the tag is invalid.
     """
     cfg = get_pretrained_cfg(model_name, allow_unregistered=False)
     return getattr(cfg, cfg_key, None)
 
 
 def get_arch_pretrained_cfgs(model_name: str) -> Dict[str, PretrainedCfg]:
-    """ Get all pretrained cfgs for a given architecture.
+    """ Get copies of all pretrained cfgs for a model architecture.
+
+    Args:
+        model_name: Model name, any pretrained tag is ignored.
+
+    Returns:
+        Dict of pretrained cfgs keyed by model name w/ tag, empty if the architecture is unknown.
     """
     arch_name, _ = split_model_name_tag(model_name)
-    model_names = _model_with_tags[arch_name]
-    cfgs = {m: _model_pretrained_cfgs[m] for m in model_names}
+    model_names = _model_with_tags.get(arch_name, [])
+    cfgs = {m: deepcopy(_model_pretrained_cfgs[m]) for m in model_names}
     return cfgs
