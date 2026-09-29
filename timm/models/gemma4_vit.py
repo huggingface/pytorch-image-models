@@ -269,7 +269,7 @@ class Gemma4PatchEmbed(nn.Module):
     def _position_embeddings(
             self,
             position_ids: torch.Tensor,
-            padding_positions: torch.Tensor,
+            padding_positions: Optional[torch.Tensor],
     ) -> torch.Tensor:
         """Compute position embeddings via one-hot matmul against the 2D table.
 
@@ -281,9 +281,10 @@ class Gemma4PatchEmbed(nn.Module):
         # (B, 2, N, pos_size) @ (2, pos_size, embed_dim) -> (B, 2, N, embed_dim)
         position_embeddings = one_hot @ self.position_embedding_table
         position_embeddings = position_embeddings.sum(dim=1)  # (B, N, embed_dim)
-        position_embeddings = torch.where(
-            padding_positions.unsqueeze(-1), 0.0, position_embeddings,
-        )
+        if padding_positions is not None:
+            position_embeddings = torch.where(
+                padding_positions.unsqueeze(-1), 0.0, position_embeddings,
+            )
         return position_embeddings
 
     def forward(
@@ -291,7 +292,7 @@ class Gemma4PatchEmbed(nn.Module):
             x: Union[torch.Tensor, Dict[str, torch.Tensor]],
             patch_coord: Optional[torch.Tensor] = None,
             patch_valid: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
         """Normalize inputs, patchify / project / position-embed.
 
         Accepts external NaFlex ``patch_coord`` (y, x) / ``patch_valid`` inputs
@@ -300,7 +301,7 @@ class Gemma4PatchEmbed(nn.Module):
         Returns:
             embeddings: (B, N, embed_dim) patch embeddings with position info added.
             position_ids: (B, N, 2) Gemma4-internal (x, y) coords.
-            padding_positions: (B, N) True for padding tokens.
+            padding_positions: (B, N) True for padding tokens, None if all tokens are valid.
         """
         if isinstance(x, dict):
             patch_coord = x.get('patch_coord', patch_coord)
@@ -308,11 +309,16 @@ class Gemma4PatchEmbed(nn.Module):
             x = x['patches']
 
         ph, pw = self.patch_size
+        default_grid = False
         if x.ndim == 4:
             # Raw (B, C, H, W): patchify to C-Ph-Pw (Gemma4 native layout).
             B, _, H, W = x.shape
             if patch_coord is None:
-                patch_coord, patch_valid = self._default_patch_coord(B, H // ph, W // pw, x.device)
+                # Dense default grid, all tokens valid. Keep padding_positions None so no
+                # data-dependent mask checks are needed (e.g. for torch.export).
+                patch_coord, _ = self._default_patch_coord(B, H // ph, W // pw, x.device)
+                patch_valid = None
+                default_grid = True
             x, _ = batch_patchify(x, (ph, pw), pad=False, channels_last=False)  # (B, N, C*Ph*Pw)
         elif x.ndim == 5:
             # (B, N, Ph, Pw, C) pre-patchified unflattened (NaFlex loader convention).
@@ -332,14 +338,10 @@ class Gemma4PatchEmbed(nn.Module):
         if patch_coord is None:
             raise ValueError("patch_coord is required for pre-patchified input.")
 
-        if patch_valid is None:
+        if patch_valid is None and not default_grid:
             sentinel = (patch_coord == -1).all(dim=-1)
             if sentinel.any():
                 patch_valid = ~sentinel
-            else:
-                patch_valid = torch.ones(
-                    patch_coord.shape[:2], dtype=torch.bool, device=patch_coord.device,
-                )
 
         # Scale [0, 1] pixels to [-1, 1] (matches original Gemma4's `2 * (pixel_values - 0.5)`)
         x = 2 * (x - 0.5)
@@ -347,7 +349,7 @@ class Gemma4PatchEmbed(nn.Module):
 
         # Convert once to the internal (x, y) form used by rotary / pooler / table lookup.
         position_ids = patch_coord.flip(dims=(-1,))
-        padding_positions = ~patch_valid
+        padding_positions = ~patch_valid if patch_valid is not None else None
         x = x + self._position_embeddings(position_ids, padding_positions)
 
         return x, position_ids, padding_positions
@@ -591,11 +593,17 @@ class Gemma4VisionPooler(nn.Module):
         output_length = N // k_squared
 
         clamped_positions = position_ids.clamp(min=0)
-        max_x = clamped_positions[..., 0].max(dim=-1, keepdim=True)[0] + 1
+        grid_size = clamped_positions.max(dim=1)[0] + 1  # (B, 2) per-sample (x, y) grid extent
+        # Both grid dims must be divisible by k, otherwise pool cells silently overlap or overflow. Checked
+        # without a host sync (raises on CPU, device-side assert on CUDA).
+        torch._assert_async((grid_size % k == 0).all())
+        max_x = grid_size[:, :1]
         kernel_idxs = torch.div(clamped_positions, k, rounding_mode='floor')
         kernel_idxs = kernel_idxs[..., 0] + (max_x // k) * kernel_idxs[..., 1]
 
-        weights = F.one_hot(kernel_idxs.long(), output_length).float() / k_squared
+        # one-hot via arange compare rather than F.one_hot, keeps output_length symbolic for torch.export
+        cell_idxs = torch.arange(output_length, device=kernel_idxs.device)
+        weights = (kernel_idxs.long().unsqueeze(-1) == cell_idxs).float() / k_squared
         output = weights.transpose(1, 2) @ hidden_states.float()
         mask = torch.logical_not((weights == 0).all(dim=1))
         return output.to(hidden_states.dtype), mask
@@ -604,20 +612,21 @@ class Gemma4VisionPooler(nn.Module):
             self,
             hidden_states: torch.Tensor,
             position_ids: torch.Tensor,
-            padding_positions: torch.Tensor,
+            padding_positions: Optional[torch.Tensor],
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Spatial pool with ``pooling_kernel_size × pooling_kernel_size`` cells.
 
         Args:
             hidden_states: (B, N, D) encoder output.
             position_ids: (B, N, 2) Gemma4-internal ``(x, y)`` coords.
-            padding_positions: (B, N) True for padding tokens.
+            padding_positions: (B, N) True for padding tokens, None if all tokens are valid.
 
         Returns:
             pooled hidden states (B, N // k^2, D) and validity mask (B, N // k^2).
         """
         # Zero out padding tokens so they contribute nothing to their pool cell.
-        hidden_states = hidden_states.masked_fill(padding_positions.unsqueeze(-1), 0.0)
+        if padding_positions is not None:
+            hidden_states = hidden_states.masked_fill(padding_positions.unsqueeze(-1), 0.0)
         hidden_states, pooler_mask = self._avg_pool_by_positions(hidden_states, position_ids)
         hidden_states = hidden_states * self.root_hidden_size
         return hidden_states, pooler_mask
@@ -831,7 +840,7 @@ class Gemma4VitEncoder(nn.Module):
             self,
             x: torch.Tensor,
             position_ids: torch.Tensor,
-            padding_positions: torch.Tensor,
+            padding_positions: Optional[torch.Tensor],
             block_callback: Optional[Callable[[int, torch.Tensor], None]] = None,
             max_block_index: Optional[int] = None,
     ) -> torch.Tensor:
@@ -840,7 +849,7 @@ class Gemma4VitEncoder(nn.Module):
         rope_cos, rope_sin = self.rotary_emb(x, position_ids)
 
         attn_mask: Optional[torch.Tensor] = None
-        if padding_positions.any():
+        if padding_positions is not None and padding_positions.any():
             # Column-only additive mask broadcast over heads: (B, 1, 1, N) -> (B, heads, q, N).
             attn_mask = torch.zeros(B, 1, 1, N, device=x.device, dtype=x.dtype)
             attn_mask.masked_fill_(padding_positions[:, None, None, :], float('-inf'))
@@ -899,7 +908,7 @@ class Gemma4VitEncoder(nn.Module):
             # (B, num_soft_tokens, D).
         elif self.global_pool == 'avg':
             # Masked mean over patch tokens; skips the pooler's √D scale.
-            if padding_positions.any():
+            if padding_positions is not None and padding_positions.any():
                 x = x.masked_fill(padding_positions.unsqueeze(-1), 0.0)
                 x = x.sum(dim=1) / (~padding_positions).sum(dim=1, keepdim=True).clamp(min=1)
             else:
@@ -976,7 +985,10 @@ class Gemma4VitEncoder(nn.Module):
             result_dict: Dict[str, Any] = {'image_intermediates': intermediates}
             if not intermediates_only:
                 result_dict['image_features'] = x
-            result_dict['patch_valid'] = ~padding_positions
+            if padding_positions is not None:
+                result_dict['patch_valid'] = ~padding_positions
+            else:
+                result_dict['patch_valid'] = torch.ones(x.shape[:2], dtype=torch.bool, device=x.device)
             return result_dict
 
         if intermediates_only:
