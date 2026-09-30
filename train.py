@@ -1438,8 +1438,8 @@ def train_one_epoch(
     update_sample_count = 0
     for batch_idx, (input, target) in enumerate(loader):
         last_batch = batch_idx == last_batch_idx
-        need_update = last_batch or (batch_idx + 1) % accum_steps == 0
-        update_idx = batch_idx // accum_steps
+        need_update = last_batch or (batch_idx + 1) % args.grad_accum_steps == 0
+        update_idx = batch_idx // args.grad_accum_steps
         if batch_idx >= last_batch_idx_to_accum:
             accum_steps = last_accum_steps
 

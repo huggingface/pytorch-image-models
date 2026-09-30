@@ -307,3 +307,42 @@ def test_compiled_eval_checkpoint_load_uses_unwrapped_state_dict_target():
     assert hasattr(task.get_eval_model(), '_orig_mod')
 
     task.load_checkpoint_state(state_dict)
+
+
+@pytest.mark.parametrize('num_batches,accum_steps', [(13, 5), (11, 4), (10, 4), (12, 4)])
+def test_train_one_epoch_grad_accum_remainder_is_one_update(num_batches, accum_steps):
+    import argparse
+    import train
+
+    class _CountingSGD(torch.optim.SGD):
+        steps = 0
+
+        def step(self, closure=None):
+            self.steps += 1
+            return super().step(closure)
+
+    class _Scheduler:
+        def __init__(self):
+            self.num_updates = []
+
+        def step_update(self, num_updates, metric=None):
+            self.num_updates.append(num_updates)
+
+    torch.manual_seed(0)
+    loader = [(torch.randn(2, 3, 4, 4), torch.randint(0, 3, (2,))) for _ in range(num_batches)]
+    task = ClassificationTask(TinyClassifier(), nn.CrossEntropyLoss(), verbose=False)
+    optimizer = _CountingSGD(task.get_trainable_module().parameters(), lr=0.1)
+    scheduler = _Scheduler()
+    args = argparse.Namespace(
+        mixup_off_epoch=0, prefetcher=False, distributed=False, grad_accum_steps=accum_steps,
+        channels_last=False, clip_grad=None, clip_mode='norm', log_interval=1000, save_images=False,
+        recovery_interval=0, synchronize_step=False, world_size=1, rank=0,
+    )
+    train.train_one_epoch(
+        0, task.get_trainable_module(), loader, optimizer, args, task=task,
+        device=torch.device('cpu'), lr_scheduler=scheduler,
+    )
+
+    updates_per_epoch = -(-num_batches // accum_steps)
+    assert optimizer.steps == updates_per_epoch
+    assert scheduler.num_updates == list(range(1, updates_per_epoch + 1))
