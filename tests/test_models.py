@@ -495,6 +495,23 @@ def test_convit_dtype_change_after_forward():
     assert out.dtype == torch.bfloat16
 
 
+@pytest.mark.base
+@pytest.mark.parametrize('model_name,kwargs,feat_shape', [
+    ('volo_d1_224', dict(use_aux_head=False), (2, 197, 384)),
+    ('legacy_xception', {}, (2, 2048, 7, 7)),
+])
+def test_head_dropout_applied_in_train_mode(model_name, kwargs, feat_shape):
+    """drop_rate must reach the classifier input in train mode and be a no-op in eval mode."""
+    torch.manual_seed(0)
+    model = create_model(model_name, pretrained=False, drop_rate=0.5, **kwargs)
+    x = torch.randn(feat_shape)
+    with torch.no_grad():
+        model.eval()
+        torch.testing.assert_close(model.forward_head(x), model.forward_head(x))
+        model.train()
+        assert not torch.allclose(model.forward_head(x), model.forward_head(x))
+
+
 @pytest.mark.torchscript
 @pytest.mark.timeout(timeout120)
 @pytest.mark.parametrize(
