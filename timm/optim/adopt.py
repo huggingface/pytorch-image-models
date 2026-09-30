@@ -419,9 +419,24 @@ def _multi_tensor_adopt(
             else:
                 device_grads = torch._foreach_add(device_grads, device_params, alpha=weight_decay)
 
-        if device_state_steps[0] == 1:
-            torch._foreach_addcmul_(device_exp_avg_sqs, device_grads, device_grads)
-            continue
+        # Params that had no gradient in some steps (frozen for a while, an expert without tokens) lag behind in
+        # their step count, so the first-step initialization and the clip value are decided per param rather
+        # than from device_state_steps[0].
+        first_step = [i for i, step in enumerate(device_state_steps) if step == 1]
+        if first_step:
+            torch._foreach_addcmul_(
+                [device_exp_avg_sqs[i] for i in first_step],
+                [device_grads[i] for i in first_step],
+                [device_grads[i] for i in first_step],
+            )
+            if len(first_step) == len(device_params):
+                continue
+            later_step = [i for i, step in enumerate(device_state_steps) if step != 1]
+            device_params = [device_params[i] for i in later_step]
+            device_grads = [device_grads[i] for i in later_step]
+            device_exp_avgs = [device_exp_avgs[i] for i in later_step]
+            device_exp_avg_sqs = [device_exp_avg_sqs[i] for i in later_step]
+            device_state_steps = [device_state_steps[i] for i in later_step]
 
         if weight_decay != 0 and decoupled:
             wd_scale = lr ** 2 / max_lr if max_lr is not None else lr
@@ -433,9 +448,12 @@ def _multi_tensor_adopt(
         normed_grad = torch._foreach_div(device_grads, exp_avg_sq_sqrt)
 
         if clip_exp is not None:
-            clip_val = (device_state_steps[0] - 1) ** clip_exp
-            torch._foreach_maximum_(normed_grad, -clip_val)
-            torch._foreach_minimum_(normed_grad, clip_val)
+            if capturable:
+                clip_vals = torch._foreach_pow(torch._foreach_sub(device_state_steps, 1), clip_exp)
+            else:
+                clip_vals = [(_get_value(step) - 1) ** clip_exp for step in device_state_steps]
+            torch._foreach_maximum_(normed_grad, [-clip_val for clip_val in clip_vals])
+            torch._foreach_minimum_(normed_grad, clip_vals)
 
         torch._foreach_lerp_(device_exp_avgs, normed_grad, 1 - beta1)
 
