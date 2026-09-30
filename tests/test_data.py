@@ -225,3 +225,15 @@ def test_augmix_basic_mixes_non_square_and_single_band_images(size, mode):
 
     assert out.size == img.size
     assert out.mode == img.mode
+
+
+@pytest.mark.parametrize('img_size', [(224, 224), (224, 320), (320, 224)])
+@pytest.mark.parametrize('interpolation', ['bilinear', 'bicubic', 'nearest'])
+def test_eval_transform_center_crop_uses_requested_interpolation(img_size, interpolation):
+    # non-square sizes resize with ResizeKeepRatio, which was built without the interpolation argument
+    # and fell back to its bilinear default
+    from timm.data.transforms import str_to_interp_mode
+
+    transform = create_transform(input_size=(3, *img_size), interpolation=interpolation, crop_pct=0.875)
+    resize = transform.transforms[0]
+    assert resize.interpolation == str_to_interp_mode(interpolation)
