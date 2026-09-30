@@ -20,6 +20,7 @@ from torch.jit import Final
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import (
+    resize_rel_pos_bias_table,
     get_device_dtype,
     PatchEmbed,
     Mlp,
@@ -397,6 +398,25 @@ class VisionTransformerRelPos(nn.Module):
         if self.fix_init:
             self.fix_init_weight()
 
+    def set_input_size(
+            self,
+            img_size: Optional[Tuple[int, int]] = None,
+            patch_size: Optional[Tuple[int, int]] = None,
+    ) -> None:
+        """Update the input image resolution and patch size (and so the relative position biases).
+
+        Args:
+            img_size: New input resolution, if None current resolution is used.
+            patch_size: New patch size, if None existing patch size is used.
+        """
+        self.patch_embed.set_input_size(img_size=img_size, patch_size=patch_size)
+        feat_size = self.patch_embed.grid_size
+        if self.shared_rel_pos is not None:
+            self.shared_rel_pos.set_window_size(feat_size)
+        for blk in self.blocks:
+            if blk.attn.rel_pos is not None:
+                blk.attn.rel_pos.set_window_size(feat_size)
+
     @torch.jit.ignore
     def no_weight_decay(self):
         return {'cls_token'}
@@ -537,10 +557,27 @@ class VisionTransformerRelPos(nn.Module):
         return x
 
 
+def checkpoint_filter_fn(state_dict, model):
+    """ Resize relative position bias tables when loading weights at a different image / feature size. """
+    out_dict = {}
+    for k, v in state_dict.items():
+        if k.endswith('relative_position_bias_table'):
+            m = model.get_submodule(k[:-29])
+            if v.shape != m.relative_position_bias_table.shape or m.window_size[0] != m.window_size[1]:
+                v = resize_rel_pos_bias_table(
+                    v,
+                    new_window_size=m.window_size,
+                    new_bias_shape=m.relative_position_bias_table.shape,
+                )
+        out_dict[k] = v
+    return out_dict
+
+
 def _create_vision_transformer_relpos(variant, pretrained=False, **kwargs):
     out_indices = kwargs.pop('out_indices', 3)
     model = build_model_with_cfg(
         VisionTransformerRelPos, variant, pretrained,
+        pretrained_filter_fn=checkpoint_filter_fn,
         feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
         **kwargs,
     )

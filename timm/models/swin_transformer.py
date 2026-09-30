@@ -182,6 +182,7 @@ class WindowAttention(nn.Module):
         window_size = to_2tuple(window_size)
         if window_size == self.window_size:
             return
+        old_window_size = self.window_size
         self.window_size = window_size
         win_h, win_w = self.window_size
         self.window_area = win_h * win_w
@@ -192,7 +193,10 @@ class WindowAttention(nn.Module):
                     self.relative_position_bias_table,
                     new_window_size=self.window_size,
                     new_bias_shape=new_bias_shape,
-            ))
+                    old_window_size=old_window_size,
+                ),
+                requires_grad=self.relative_position_bias_table.requires_grad,
+            )
             self.register_buffer(
                 "relative_position_index",
                 get_relative_position_index(win_h, win_w, device=self.relative_position_bias_table.device),
@@ -363,8 +367,8 @@ class SwinTransformerBlock(nn.Module):
                 H, W = self.input_resolution
                 device = device
                 dtype = dtype
-            H = math.ceil(H / self.window_size[0]) * self.window_size[0]
-            W = math.ceil(W / self.window_size[1]) * self.window_size[1]
+                H = math.ceil(H / self.window_size[0]) * self.window_size[0]
+                W = math.ceil(W / self.window_size[1]) * self.window_size[1]
             img_mask = torch.zeros((1, H, W, 1), dtype=dtype, device=device)  # 1 H W 1
             cnt = 0
             for h in (
@@ -426,13 +430,7 @@ class SwinTransformerBlock(nn.Module):
         self.window_size, self.shift_size = self._calc_window_shift(window_size)
         self.window_area = self.window_size[0] * self.window_size[1]
         self.attn.set_window_size(self.window_size)
-        device = self.attn_mask.device if self.attn_mask is not None else None
-        dtype = self.attn_mask.dtype if self.attn_mask is not None else None
-        self.register_buffer(
-            "attn_mask",
-            None if self.dynamic_mask else self.get_attn_mask(device=device, dtype=dtype),
-            persistent=False,
-        )
+        self._init_buffers()
 
     def _attn(self, x):
         B, H, W, C = x.shape
@@ -853,7 +851,7 @@ class SwinTransformer(nn.Module):
         """
         if img_size is not None or patch_size is not None:
             self.patch_embed.set_input_size(img_size=img_size, patch_size=patch_size)
-            patch_grid = self.patch_embed.grid_size
+        patch_grid = self.patch_embed.grid_size
 
         if window_size is None:
             window_size = tuple([pg // window_ratio for pg in patch_grid])

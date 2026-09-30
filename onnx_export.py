@@ -88,6 +88,12 @@ def main():
     if args.reparam:
         model = reparameterize_model(model)
 
+    # With --dynamo --dynamic-size, windowed models (Swin, MaxViT, TinyViT, EfficientViT)
+    # may need a larger export example, e.g. --img-size 448 or --input-size 3 512 512,
+    # compatible with the model's strides/windows. A single window/partition at a stage
+    # can make Dynamo specialize intermediate size-1 dimensions despite dynamic H/W.
+    # Choose a size with multiple windows at the deepest stage and validate the intended
+    # runtime shapes; a larger example does not remove other model/exporter constraints.
     if args.input_size is not None:
         assert len(args.input_size) == 3, 'input-size should be N H W (channels, height, width)'
         input_size = args.input_size

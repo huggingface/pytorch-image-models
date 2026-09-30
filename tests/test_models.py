@@ -1394,13 +1394,26 @@ def test_mobile_model_fusion_features(model_name, kwargs):
         assert getter.model(x).shape == (2, 7)
 
 
+_SWIN_FAMILY = [
+    ('swin_tiny_patch4_window7_224', 224),
+    ('swinv2_tiny_window8_256', 256),
+    ('swinv2_cr_tiny_224', 224),
+]
+_SWIN_KWARGS = dict(embed_dim=16, depths=(2, 2, 2, 2), num_heads=(1, 1, 1, 1), num_classes=5)
+
+
+def _swin_blocks(model):
+    stages = model.layers if hasattr(model, 'layers') else model.stages
+    return [b for s in stages for b in s.blocks]
+
+
 @pytest.mark.base
-def test_swinv2_attn_mask_init_after_to_empty():
+@pytest.mark.parametrize('model_name,img_size', _SWIN_FAMILY)
+def test_swin_family_reinit_after_to_empty(model_name, img_size):
     from timm.models._manipulate import reinit_non_persistent_buffers
 
-    kwargs = dict(embed_dim=16, depths=(2, 2, 2, 2), num_heads=(1, 1, 1, 1), num_classes=5)
-    model = create_model('swinv2_tiny_window8_256', **kwargs).eval()
-    meta_model = create_model('swinv2_tiny_window8_256', device='meta', **kwargs).to_empty(device='cpu').eval()
+    model = create_model(model_name, **_SWIN_KWARGS).eval()
+    meta_model = create_model(model_name, device='meta', **_SWIN_KWARGS).to_empty(device='cpu').eval()
     # Poison storage so a buffer that is never recomputed cannot pass by chance.
     with torch.no_grad():
         for tensor in meta_model.buffers():
@@ -1408,21 +1421,147 @@ def test_swinv2_attn_mask_init_after_to_empty():
                 tensor.fill_(float('nan'))
     meta_model.load_state_dict(model.state_dict())
     reinit_non_persistent_buffers(meta_model)
-    x = torch.randn(1, 3, 256, 256)
+    x = torch.randn(1, 3, img_size, img_size)
     with torch.no_grad():
         torch.testing.assert_close(meta_model(x), model(x))
 
 
 @pytest.mark.base
-def test_swinv2_cr_set_input_size():
-    kwargs = dict(embed_dim=16, depths=(1, 1, 1, 1), num_heads=(1, 1, 1, 1), num_classes=5)
-    model = create_model('swinv2_cr_tiny_224', **kwargs).eval()
-    model.set_input_size(img_size=(448, 448))
-    expected = create_model('swinv2_cr_tiny_224', img_size=(448, 448), **kwargs).eval()
+@pytest.mark.parametrize('model_name,img_size', _SWIN_FAMILY)
+def test_swin_family_set_input_size(model_name, img_size):
+    new_size = (img_size * 2, img_size * 2)
+    new_window = img_size * 2 // 32
+    # resize a model that has already been cast, the recomputed buffers / params must follow the model dtype
+    model = create_model(model_name, **_SWIN_KWARGS).to(torch.bfloat16).eval()
+    model.set_input_size(img_size=new_size, window_size=new_window)
+    for name, buf in model.named_buffers():
+        if name.endswith('attn_mask'):
+            assert buf.dtype == torch.bfloat16, name
+    # compare outputs in float32 against a model created at the new size (bf16 forward is covered by dtype check)
+    model = model.float()
+    expected = create_model(model_name, img_size=new_size, window_size=new_window, **_SWIN_KWARGS).eval()
     expected.load_state_dict(model.state_dict())
-    x = torch.randn(1, 3, 448, 448)
+    x = torch.randn(1, 3, *new_size)
     with torch.no_grad():
         torch.testing.assert_close(model(x), expected(x))
+
+    # window size only, feat size (last stage) now exceeds window so shifted blocks gain a mask
+    model.set_input_size(window_size=4)
+    assert all(b.window_size == (4, 4) for b in _swin_blocks(model))
+    with torch.no_grad():
+        model(x)
+
+    # always_partition forces shifting even when the window covers the whole feature map
+    model = create_model(model_name, **_SWIN_KWARGS).eval()
+    assert not any(_swin_blocks(model)[-1].shift_size)
+    model.set_input_size(img_size=(img_size, img_size), always_partition=True)
+    assert any(_swin_blocks(model)[-1].shift_size)
+    with torch.no_grad():
+        model(torch.randn(1, 3, img_size, img_size))
+
+
+_RELPOS_FAMILY = [
+    # model, ctor kwargs, base img size, resized img size
+    ('maxvit_nano_rw_256', dict(), 256, 320),  # RelPosBias, window / grid partition attn
+    ('maxvit_rmlp_nano_rw_256', dict(), 256, 320),  # RelPosMlp
+    ('maxvit_tiny_tf_224', dict(), 224, 288),  # RelPosBiasTf
+    ('coatnet_nano_rw_224', dict(), 224, 288),  # full attn transformer stages w/ RelPosBias
+    ('maxvit_tiny_pm_256', dict(), 256, 320),  # parallel partition attn
+    ('beit_base_patch16_224', dict(embed_dim=64, depth=2, num_heads=2), 224, 256),
+    ('beit_base_patch16_224', dict(embed_dim=64, depth=2, num_heads=2, use_shared_rel_pos_bias=True), 224, 256),
+    ('vit_relpos_small_patch16_224', dict(), 224, 256),  # RelPosMlp
+    ('vit_relpos_small_patch16_224', dict(rel_pos_type='bias'), 224, 256),
+    ('vit_srelpos_small_patch16_224', dict(), 224, 256),  # shared rel pos
+    ('efficientvit_m0', dict(), 224, 256),
+    ('efficientvit_m0', dict(), 224, 160),  # last stage feature size drops below the window size
+]
+
+
+_RELPOS_NON_SQUARE = [
+    ('maxvit_nano_rw_256', dict()),
+    ('maxvit_tiny_tf_224', dict()),
+    ('coatnet_nano_rw_224', dict()),
+    ('beit_base_patch16_224', dict(embed_dim=64, depth=2, num_heads=2)),
+    ('vit_relpos_small_patch16_224', dict(rel_pos_type='bias')),
+    ('swin_tiny_patch4_window7_224', dict(embed_dim=16, depths=(1, 1, 1, 1), num_heads=(1, 1, 1, 1))),
+]
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name,kwargs', _RELPOS_NON_SQUARE)
+def test_relpos_non_square_checkpoint_reload(model_name, kwargs):
+    # a checkpoint saved at a non-square size (non-square windows / rel pos tables) must load unchanged through the
+    # pretrained checkpoint filter into a model created at that same size
+    import importlib
+    kwargs = dict(kwargs, num_classes=5, img_size=(224, 288))
+    model = create_model(model_name, **kwargs).eval()
+    filter_fn = importlib.import_module(type(model).__module__).checkpoint_filter_fn
+    reloaded = create_model(model_name, **kwargs).eval()
+    reloaded.load_state_dict(filter_fn(model.state_dict(), reloaded))
+    x = torch.randn(1, 3, 224, 288)
+    with torch.no_grad():
+        torch.testing.assert_close(reloaded(x), model(x))
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name,kwargs', _RELPOS_NON_SQUARE)
+def test_relpos_non_square_set_input_size(model_name, kwargs):
+    # resizing away from a non-square size must interpolate from the current (non-square) rel pos table
+    model = create_model(model_name, num_classes=5, **kwargs).eval()
+    for size in [(224, 288), (288, 224), (224, 224)]:
+        model.set_input_size(img_size=size)
+        with torch.no_grad():
+            assert torch.isfinite(model(torch.randn(1, 3, *size))).all()
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name,kwargs,img_size,new_size', _RELPOS_FAMILY)
+def test_relpos_family_set_input_size(model_name, kwargs, img_size, new_size):
+    import importlib
+    kwargs = dict(kwargs, num_classes=5)
+    model = create_model(model_name, **kwargs).eval()
+    filter_fn = importlib.import_module(type(model).__module__).checkpoint_filter_fn
+    # construct at the new size & load resized weights via the checkpoint filter, as a pretrained load would
+    expected = create_model(model_name, img_size=new_size, **kwargs).eval()
+    expected.load_state_dict(filter_fn(model.state_dict(), expected))
+    model.set_input_size(img_size=(new_size, new_size))
+    x = torch.randn(1, 3, new_size, new_size)
+    with torch.no_grad():
+        torch.testing.assert_close(model(x), expected(x))
+
+    # resize back on an already cast model, recomputed params / buffers must follow the model dtype
+    model = model.to(torch.bfloat16)
+    model.set_input_size(img_size=img_size)
+    for name, t in list(model.named_parameters()) + list(model.named_buffers()):
+        if t.is_floating_point():
+            assert t.dtype == torch.bfloat16, name
+    with torch.no_grad():
+        model(torch.randn(1, 3, img_size, img_size).to(torch.bfloat16))
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name', [m for m, _ in _SWIN_FAMILY])
+def test_swin_family_window_padding(model_name):
+    # 224 with window 8 -> 28x28 stage is not a window multiple, static mask must match the padded dynamic mask
+    kwargs = dict(img_size=224, window_size=8, **_SWIN_KWARGS)
+    static = create_model(model_name, **kwargs).eval()
+    dynamic = create_model(model_name, strict_img_size=False, **kwargs).eval()
+    dynamic.load_state_dict(static.state_dict())
+    assert any(b.attn_mask is not None for b in _swin_blocks(static))
+    x = torch.randn(1, 3, 224, 224)
+    with torch.no_grad():
+        torch.testing.assert_close(static(x), dynamic(x))
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name,img_size', _SWIN_FAMILY)
+def test_swin_family_dynamic_mask_trace(model_name, img_size):
+    # the dynamic mask size must stay traceable (legacy ONNX export), trace at one size & run at another
+    model = create_model(model_name, strict_img_size=False, **_SWIN_KWARGS).eval()
+    traced = torch.jit.trace(model, torch.randn(1, 3, img_size, img_size), check_trace=False)
+    x = torch.randn(1, 3, 224, 320)
+    with torch.no_grad():
+        torch.testing.assert_close(traced(x), model(x))
 
 
 @pytest.mark.base
