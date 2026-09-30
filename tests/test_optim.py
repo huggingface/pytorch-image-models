@@ -945,6 +945,37 @@ def test_sgdw_multi_tensor_weight_decay_matches_single_tensor():
     torch.testing.assert_close(multi64, single64)
 
 
+@pytest.mark.parametrize('lag_index', [0, 1])
+@pytest.mark.parametrize('clip_exp', [None, 0.333])
+def test_adopt_multi_tensor_lagging_step_matches_single_tensor(lag_index, clip_exp):
+    # A param without a gradient in some steps (frozen for a while, an expert that got no tokens) lags behind
+    # the other params of its group in state['step']. The foreach path took the first-step initialization and
+    # the clip value from device_state_steps[0] for the whole group, so a lagging param never got its
+    # exp_avg_sq initialized (or the whole group was re-initialized and skipped an update when the lagging
+    # param came first) and was clipped with the wrong step. Compare against the single-tensor reference.
+    from timm.optim.adopt import Adopt
+
+    grads = [torch.randn(2, 5, 4, generator=torch.Generator().manual_seed(step)) for step in range(12)]
+
+    def run(foreach):
+        params = [Parameter(torch.full((5, 4), 1.0 + i)) for i in range(2)]
+        optimizer = Adopt(params, lr=1e-3, clip_exp=clip_exp, foreach=foreach)
+        for step, step_grads in enumerate(grads):
+            for i, p in enumerate(params):
+                p.grad = None if (i == lag_index and step < 4) else step_grads[i].clone()
+            optimizer.step()
+        return params, [optimizer.state[p] for p in params]
+
+    multi_params, multi_state = run(True)
+    single_params, single_state = run(False)
+    for multi, single in zip(multi_params, single_params):
+        torch.testing.assert_close(multi, single)
+    for multi, single in zip(multi_state, single_state):
+        assert multi['step'] == single['step']
+        torch.testing.assert_close(multi['exp_avg'], single['exp_avg'])
+        torch.testing.assert_close(multi['exp_avg_sq'], single['exp_avg_sq'])
+
+
 def test_mars_last_grad_is_copied_not_aliased():
     # Mars keeps the previous gradient in state['last_grad'] for its variance reduction term. It used
     # to store a reference to p.grad instead of a copy. With zero_grad(set_to_none=False) the gradient
