@@ -60,7 +60,11 @@ parser.add_argument('--training', default=False, action='store_true',
 parser.add_argument('--verbose', default=False, action='store_true',
                     help='Extra stdout output')
 parser.add_argument('--dynamo', default=False, action='store_true',
-                    help='Use torch dynamo export.')
+                    help='Use torch.export (dynamo) based ONNX exporter instead of TorchScript exporter.')
+parser.add_argument('--external-data', default=None, action='store_true',
+                    help='Save weights to separate external data file (dynamo only, default: only if > 2GB).')
+parser.add_argument('--no-optimize', dest='optimize', default=True, action='store_false',
+                    help='Disable ONNX graph optimization after export (dynamo only).')
 
 def main():
     args = parser.parse_args()
@@ -103,6 +107,8 @@ def main():
         training=args.training,
         verbose=args.verbose,
         use_dynamo=args.dynamo,
+        external_data=args.external_data,
+        optimize=args.optimize,
         input_size=input_size,
         batch_size=args.batch_size,
     )
