@@ -257,7 +257,7 @@ class Xception(nn.Module):
     def forward_head(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
         if self.drop_rate:
-            F.dropout(x, self.drop_rate, training=self.training)
+            x = F.dropout(x, self.drop_rate, training=self.training)
         return x if pre_logits else self.fc(x)
 
     def forward(self, x):

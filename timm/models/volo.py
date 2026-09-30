@@ -1187,6 +1187,7 @@ class VOLO(nn.Module):
             out = x[:, 0]
         else:
             out = x
+        out = self.head_drop(out)
         x = self.head_drop(x)
         if pre_logits:
             return out
