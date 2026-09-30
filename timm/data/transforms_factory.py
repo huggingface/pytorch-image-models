@@ -356,7 +356,7 @@ def transforms_imagenet_eval(
                 ]
             else:
                 # resize the shortest edge to matching target dim for non-square target
-                tfl += [ResizeKeepRatio(scale_size)]
+                tfl += [ResizeKeepRatio(scale_size, interpolation=interpolation)]
             tfl += [transforms.CenterCrop(img_size)]
 
     if use_prefetcher:
