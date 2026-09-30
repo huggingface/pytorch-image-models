@@ -61,6 +61,7 @@ from timm.layers import (
     resample_abs_pos_embed,
     resize_rel_pos_bias_table,
     ndgrid,
+    to_2tuple,
 )
 
 from ._builder import build_model_with_cfg
@@ -274,6 +275,38 @@ class Attention(nn.Module):
         """Initialize non-persistent buffers."""
         self._init_buffers()
 
+    def set_window_size(self, window_size: Tuple[int, int]) -> None:
+        """Update window size, resize the relative position bias table & regenerate the position index.
+
+        Args:
+            window_size: New window size (height, width).
+        """
+        if self.window_size is None:
+            return
+        window_size = to_2tuple(window_size)
+        if window_size == tuple(self.window_size):
+            return
+        old_window_size = self.window_size
+        self.window_size = window_size
+        self.num_relative_distance = (2 * window_size[0] - 1) * (2 * window_size[1] - 1) + 3
+        window_area = window_size[0] * window_size[1]
+        with torch.no_grad():
+            self.relative_position_bias_table = nn.Parameter(
+                resize_rel_pos_bias_table(
+                    self.relative_position_bias_table,
+                    new_window_size=window_size,
+                    new_bias_shape=(self.num_relative_distance, self.num_heads),
+                    old_window_size=old_window_size,
+                ),
+                requires_grad=self.relative_position_bias_table.requires_grad,
+            )
+        self.register_buffer(
+            "relative_position_index",
+            self.relative_position_index.new_empty((window_area + 1, window_area + 1)),
+            persistent=False,
+        )
+        self._init_buffers()
+
 
 class Block(nn.Module):
     """Transformer block with attention and MLP.
@@ -433,6 +466,37 @@ class RelativePositionBias(nn.Module):
 
     def init_non_persistent_buffers(self) -> None:
         """Initialize non-persistent buffers."""
+        self._init_buffers()
+
+    def set_window_size(self, window_size: Tuple[int, int]) -> None:
+        """Update window size, resize the relative position bias table & regenerate the position index.
+
+        Args:
+            window_size: New window size (height, width).
+        """
+        window_size = to_2tuple(window_size)
+        if window_size == tuple(self.window_size):
+            return
+        num_heads = self.relative_position_bias_table.shape[-1]
+        old_window_size = self.window_size
+        self.window_size = window_size
+        self.window_area = window_size[0] * window_size[1]
+        num_relative_distance = (2 * window_size[0] - 1) * (2 * window_size[1] - 1) + 3
+        with torch.no_grad():
+            self.relative_position_bias_table = nn.Parameter(
+                resize_rel_pos_bias_table(
+                    self.relative_position_bias_table,
+                    new_window_size=window_size,
+                    new_bias_shape=(num_relative_distance, num_heads),
+                    old_window_size=old_window_size,
+                ),
+                requires_grad=self.relative_position_bias_table.requires_grad,
+            )
+        self.register_buffer(
+            "relative_position_index",
+            self.relative_position_index.new_empty((self.window_area + 1, self.window_area + 1)),
+            persistent=False,
+        )
         self._init_buffers()
 
     def forward(self) -> torch.Tensor:
@@ -618,6 +682,36 @@ class Beit(nn.Module):
                 nn.init.constant_(m.bias, 0)
         elif needs_reset and hasattr(m, 'reset_parameters'):
             m.reset_parameters()
+
+    def set_input_size(
+            self,
+            img_size: Optional[Tuple[int, int]] = None,
+            patch_size: Optional[Tuple[int, int]] = None,
+    ) -> None:
+        """Update the input image resolution and patch size (and so the position embeddings / biases).
+
+        Args:
+            img_size: New input resolution, if None current resolution is used.
+            patch_size: New patch size, if None existing patch size is used.
+        """
+        prev_grid_size = self.patch_embed.grid_size
+        self.patch_embed.set_input_size(img_size=img_size, patch_size=patch_size)
+        grid_size = self.patch_embed.grid_size
+        if self.pos_embed is not None and grid_size != prev_grid_size:
+            self.pos_embed = nn.Parameter(
+                resample_abs_pos_embed(
+                    self.pos_embed,
+                    new_size=grid_size,
+                    old_size=prev_grid_size,
+                    num_prefix_tokens=self.num_prefix_tokens,
+                    verbose=True,
+                ),
+                requires_grad=self.pos_embed.requires_grad,
+            )
+        if self.rel_pos_bias is not None:
+            self.rel_pos_bias.set_window_size(grid_size)
+        for blk in self.blocks:
+            blk.attn.set_window_size(grid_size)
 
     @torch.jit.ignore
     def no_weight_decay(self) -> Set[str]:

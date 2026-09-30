@@ -486,6 +486,22 @@ class TransformerBlock2d(nn.Module):
     def init_weights(self, scheme: str = '') -> None:
         named_apply(partial(_init_transformer, scheme=scheme), self)
 
+    def set_input_size(
+            self,
+            feat_size: Tuple[int, int],
+            window_size: Optional[Tuple[int, int]] = None,
+            grid_size: Optional[Tuple[int, int]] = None,
+    ) -> None:
+        """Update the (output) feature size, the relative position bias covers the full feature map.
+
+        Args:
+            feat_size: New output feature size.
+            window_size: Unused, for interface compatibility w/ partition blocks.
+            grid_size: Unused, for interface compatibility w/ partition blocks.
+        """
+        if self.attn.rel_pos is not None:
+            self.attn.rel_pos.set_window_size(feat_size)
+
     def forward(self, x: torch.Tensor, shared_rel_pos: Optional[torch.Tensor] = None) -> torch.Tensor:
         x = self.shortcut(x) + self.drop_path1(self.ls1(self.attn(self.norm1(x), shared_rel_pos=shared_rel_pos)))
         x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
@@ -842,6 +858,16 @@ class PartitionAttentionCl(nn.Module):
         self.ls2 = LayerScale(dim, init_values=cfg.init_values, **dd) if cfg.init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
+    def set_partition_size(self, partition_size: Tuple[int, int]) -> None:
+        """Update the partition (window or grid) size and the relative position bias.
+
+        Args:
+            partition_size: New partition size (height, width).
+        """
+        self.partition_size = to_2tuple(partition_size)
+        if self.attn.rel_pos is not None:
+            self.attn.rel_pos.set_window_size(self.partition_size)
+
     def _partition_attn(self, x):
         img_size = x.shape[1:3]
         if self.partition_block:
@@ -930,6 +956,17 @@ class ParallelPartitionAttention(nn.Module):
         )
         self.ls2 = LayerScale(dim, init_values=cfg.init_values, **dd) if cfg.init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
+    def set_partition_size(self, partition_size: Tuple[int, int]) -> None:
+        """Update the partition (window & grid) size and the relative position biases.
+
+        Args:
+            partition_size: New partition size (height, width).
+        """
+        self.partition_size = to_2tuple(partition_size)
+        for attn in (self.attn_block, self.attn_grid):
+            if attn.rel_pos is not None:
+                attn.rel_pos.set_window_size(self.partition_size)
 
     def _partition_attn(self, x: torch.Tensor) -> torch.Tensor:
         img_size = x.shape[1:3]
@@ -1047,6 +1084,16 @@ class PartitionAttention2d(nn.Module):
         self.ls2 = LayerScale2d(dim, init_values=cfg.init_values, **dd) if cfg.init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
+    def set_partition_size(self, partition_size: Tuple[int, int]) -> None:
+        """Update the partition (window or grid) size and the relative position bias.
+
+        Args:
+            partition_size: New partition size (height, width).
+        """
+        self.partition_size = to_2tuple(partition_size)
+        if self.attn.rel_pos is not None:
+            self.attn.rel_pos.set_window_size(self.partition_size)
+
     def _partition_attn(self, x: torch.Tensor) -> torch.Tensor:
         img_size = x.shape[-2:]
         if self.partition_block:
@@ -1110,6 +1157,23 @@ class MaxxVitBlock(nn.Module):
         named_apply(partial(_init_transformer, scheme=scheme), self.attn_grid)
         named_apply(partial(_init_conv, scheme=scheme), self.conv)
 
+    def set_input_size(
+            self,
+            feat_size: Tuple[int, int],
+            window_size: Tuple[int, int],
+            grid_size: Tuple[int, int],
+    ) -> None:
+        """Update window (block) and grid partition sizes.
+
+        Args:
+            feat_size: New output feature size (unused, partition attention is feature size independent).
+            window_size: New block partition (window) size.
+            grid_size: New grid partition size.
+        """
+        if self.attn_block is not None:
+            self.attn_block.set_partition_size(window_size)
+        self.attn_grid.set_partition_size(grid_size)
+
     def forward(self, x):
         # NCHW format
         x = self.conv(x)
@@ -1167,6 +1231,22 @@ class ParallelMaxxVitBlock(nn.Module):
     def init_weights(self, scheme: str = '') -> None:
         named_apply(partial(_init_transformer, scheme=scheme), self.attn)
         named_apply(partial(_init_conv, scheme=scheme), self.conv)
+
+    def set_input_size(
+            self,
+            feat_size: Tuple[int, int],
+            window_size: Tuple[int, int],
+            grid_size: Tuple[int, int],
+    ) -> None:
+        """Update partition size (window and grid size must match for this block).
+
+        Args:
+            feat_size: New output feature size (unused, partition attention is feature size independent).
+            window_size: New block partition (window) size.
+            grid_size: New grid partition size.
+        """
+        assert to_2tuple(window_size) == to_2tuple(grid_size)
+        self.attn.set_partition_size(window_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.conv(x)
@@ -1257,6 +1337,23 @@ class MaxxVitStage(nn.Module):
                 )]
             in_chs = out_chs
         self.blocks = nn.Sequential(*blocks)
+
+    def set_input_size(
+            self,
+            feat_size: Tuple[int, int],
+            window_size: Tuple[int, int],
+            grid_size: Tuple[int, int],
+    ) -> None:
+        """Update feature size and partition sizes of all blocks in the stage.
+
+        Args:
+            feat_size: New output feature size of the stage.
+            window_size: New block partition (window) size.
+            grid_size: New grid partition size.
+        """
+        for block in self.blocks:
+            if hasattr(block, 'set_input_size'):
+                block.set_input_size(feat_size=feat_size, window_size=window_size, grid_size=grid_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.grad_checkpointing and not torch.jit.is_scripting():
@@ -1383,6 +1480,8 @@ class MaxxVit(nn.Module):
         if kwargs:
             cfg = _overlay_kwargs(cfg, **kwargs)
         transformer_cfg = cfg_window_size(cfg.transformer_cfg, img_size)
+        self.img_size = img_size
+        self.partition_ratio = transformer_cfg.partition_ratio
         self.num_classes = num_classes
         self.in_chans = in_chans
         self.global_pool = global_pool
@@ -1472,6 +1571,35 @@ class MaxxVit(nn.Module):
         return {
             k for k, _ in self.named_parameters()
             if any(n in k for n in ["relative_position_bias_table", "rel_pos.mlp"])}
+
+    def set_input_size(
+            self,
+            img_size: Optional[Tuple[int, int]] = None,
+            window_size: Optional[Tuple[int, int]] = None,
+            grid_size: Optional[Tuple[int, int]] = None,
+            partition_ratio: Optional[int] = None,
+    ) -> None:
+        """Update the image resolution and window / grid partition sizes (and so the relative position biases).
+
+        Args:
+            img_size: New input resolution, if None current resolution is used.
+            window_size: New block partition (window) size, if None derived from img_size // partition_ratio.
+            grid_size: New grid partition size, if None derived from img_size // partition_ratio.
+            partition_ratio: Divisor for deriving partition sizes from img_size, if None current ratio is used.
+        """
+        if img_size is not None:
+            self.img_size = to_2tuple(img_size)
+        if partition_ratio is not None:
+            self.partition_ratio = partition_ratio
+        if window_size is None or grid_size is None:
+            partition_size = tuple([s // self.partition_ratio for s in self.img_size])
+            window_size = partition_size if window_size is None else to_2tuple(window_size)
+            grid_size = partition_size if grid_size is None else to_2tuple(grid_size)
+
+        feat_size = tuple([i // s for i, s in zip(self.img_size, to_2tuple(self.stem.stride))])
+        for stage in self.stages:
+            feat_size = tuple([(r - 1) // 2 + 1 for r in feat_size])
+            stage.set_input_size(feat_size=feat_size, window_size=window_size, grid_size=grid_size)
 
     @torch.jit.ignore
     def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:

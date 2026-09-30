@@ -375,10 +375,17 @@ class SwinTransformerV2CrBlock(nn.Module):
         # Make masks for shift case
         if any(self.shift_size):
             # calculate attention mask for SW-MSA
-            if x is None:
-                img_mask = torch.zeros((1, *self.feat_size, 1), device=device, dtype=dtype)  # 1 H W 1
+            if x is not None:
+                H, W = x.shape[1], x.shape[2]
+                device = x.device
+                dtype = x.dtype
             else:
-                img_mask = torch.zeros((1, x.shape[1], x.shape[2], 1), device=x.device, dtype=x.dtype)  # 1 H W 1
+                # static mask must cover the padded (window multiple) size used in _shifted_window_attn, a dynamic mask is
+                # created from the already padded x (no python rounding, keeps the size traceable)
+                H, W = self.feat_size
+                H = math.ceil(H / self.window_size[0]) * self.window_size[0]
+                W = math.ceil(W / self.window_size[1]) * self.window_size[1]
+            img_mask = torch.zeros((1, H, W, 1), device=device, dtype=dtype)  # 1 H W 1
             cnt = 0
             for h in (
                     (0, -self.window_size[0]),
@@ -400,25 +407,27 @@ class SwinTransformerV2CrBlock(nn.Module):
             attn_mask = None
         return attn_mask
 
-    def set_input_size(self, feat_size: Tuple[int, int], window_size: Tuple[int, int]) -> None:
+    def set_input_size(
+            self,
+            feat_size: Tuple[int, int],
+            window_size: Tuple[int, int],
+            always_partition: Optional[bool] = None,
+    ) -> None:
         """Method updates the image resolution to be processed and window size and so the pair-wise relative positions.
 
         Args:
             feat_size (Tuple[int, int]): New input resolution
             window_size (int): New window size
+            always_partition: Change always_partition attribute if not None
         """
         # Update input resolution
         self.feat_size: Tuple[int, int] = feat_size
+        if always_partition is not None:
+            self.always_partition = always_partition
         self.window_size, self.shift_size = self._calc_window_shift(to_2tuple(window_size))
         self.window_area = self.window_size[0] * self.window_size[1]
         self.attn.set_window_size(self.window_size)
-        device = self.attn_mask.device if self.attn_mask is not None else None
-        dtype = self.attn_mask.dtype if self.attn_mask is not None else None
-        self.register_buffer(
-            "attn_mask",
-            None if self.dynamic_mask else self.get_attn_mask(device=device, dtype=dtype),
-            persistent=False,
-        )
+        self._init_buffers()
 
     def _shifted_window_attn(self, x):
         B, H, W, C = x.shape
@@ -696,6 +705,7 @@ class SwinTransformerV2CrStage(nn.Module):
             block.set_input_size(
                 feat_size=self.feat_size,
                 window_size=window_size,
+                always_partition=always_partition,
             )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -875,7 +885,7 @@ class SwinTransformerV2Cr(nn.Module):
         """
         if img_size is not None:
             self.patch_embed.set_input_size(img_size=img_size)
-            grid_size = self.patch_embed.grid_size
+        grid_size = self.patch_embed.grid_size
 
         if window_size is None and window_ratio is not None:
             window_size = tuple([s // window_ratio for s in grid_size])

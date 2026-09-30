@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .grid import ndgrid
+from .helpers import to_2tuple
 from .interpolate import RegularGridInterpolator
 from .mlp import Mlp
 from .weight_init import trunc_normal_
@@ -147,7 +148,7 @@ def resize_rel_pos_bias_table_levit(
             antialias=antialias,
         )
         relative_position_bias_table_resized = relative_position_bias_table_resized.view(nH2, L2).permute(1, 0)
-        relative_position_bias_table_resized.to(orig_dtype)
+        relative_position_bias_table_resized = relative_position_bias_table_resized.to(orig_dtype)
         return relative_position_bias_table_resized
     else:
         return position_bias_table
@@ -157,6 +158,7 @@ def resize_rel_pos_bias_table(
         rel_pos_bias,
         new_window_size: Tuple[int, int],
         new_bias_shape: Tuple[int, ...],
+        old_window_size: Optional[Tuple[int, int]] = None,
 ):
     """ Resize relative position bias table using more advanced interpolation.
 
@@ -168,6 +170,9 @@ def resize_rel_pos_bias_table(
         rel_pos_bias:
         new_window_size:
         new_bias_shape:
+        old_window_size: Window size of the source table, needed for non-square flat tables. If None (as for
+            checkpoint loading), a square source window is assumed unless the table size can't be square, in which
+            case it must match the destination window.
 
     Returns:
 
@@ -190,12 +195,26 @@ def resize_rel_pos_bias_table(
         dst_num_pos, _ = new_bias_shape
         src_num_pos, num_attn_heads = rel_pos_bias.shape
         num_extra_tokens = dst_num_pos - (dst_size[0] * dst_size[1])
-        src_size = int((src_num_pos - num_extra_tokens) ** 0.5)
-        src_size = (src_size, src_size)
+        if old_window_size is not None:
+            src_size = (old_window_size[0] * 2 - 1, old_window_size[1] * 2 - 1)
+        else:
+            # source window unknown (checkpoint), assume square unless the table size rules that out, in which
+            # case a table matching the destination size is assumed to be for the same (non-square) window
+            src_num_pos_no_extra = src_num_pos - num_extra_tokens
+            src_size = int(src_num_pos_no_extra ** 0.5)
+            if src_size * src_size == src_num_pos_no_extra:
+                src_size = (src_size, src_size)
+            elif src_num_pos_no_extra == dst_size[0] * dst_size[1]:
+                src_size = dst_size
+            else:
+                raise ValueError(
+                    f'Cannot infer non-square source window for a relative position table of size {src_num_pos}, '
+                    f'pass old_window_size.')
         has_flat_shape = True
 
     if src_size[0] != dst_size[0] or src_size[1] != dst_size[1]:
         # print("Interpolating position from %dx%d to %dx%d" % (src_size[0], src_size[1], dst_size[0], dst_size[1]))
+        orig_dtype = rel_pos_bias.dtype
         if num_extra_tokens:
             extra_tokens = rel_pos_bias[-num_extra_tokens:, :]
             rel_pos_bias = rel_pos_bias[:-num_extra_tokens, :]
@@ -237,10 +256,11 @@ def resize_rel_pos_bias_table(
 
         all_rel_pos_bias = []
         for i in range(num_attn_heads):
+            # interpolation helpers are CPU only, values are moved back to the source device below
             if has_flat_shape:
-                z = rel_pos_bias[:, i].view(src_size[0], src_size[1]).float()
+                z = rel_pos_bias[:, i].view(src_size[0], src_size[1]).float().cpu()
             else:
-                z = rel_pos_bias[i, :, :].float()
+                z = rel_pos_bias[i, :, :].float().cpu()
 
             if _USE_SCIPY:
                 # Original beit code uses scipy w/ cubic interpolation
@@ -260,11 +280,12 @@ def resize_rel_pos_bias_table(
         if has_flat_shape:
             rel_pos_bias = torch.cat(all_rel_pos_bias, dim=-1)
         else:
-            rel_pos_bias = torch.cat(all_rel_pos_bias, dim=0)
+            rel_pos_bias = torch.stack(all_rel_pos_bias, dim=0)
 
         if extra_tokens is not None:
             assert has_flat_shape
             rel_pos_bias = torch.cat((rel_pos_bias, extra_tokens), dim=0)
+        rel_pos_bias = rel_pos_bias.to(orig_dtype)
 
     return rel_pos_bias
 
@@ -316,6 +337,39 @@ class RelPosBias(nn.Module):
                 device=self.relative_position_index.device,
             ).view(-1)
         )
+
+    def set_window_size(self, window_size: Tuple[int, int]) -> None:
+        """Update window size, resize the bias table & regenerate the position index.
+
+        Args:
+            window_size: New window size (height, width).
+        """
+        window_size = to_2tuple(window_size)
+        if window_size == tuple(self.window_size):
+            return
+        num_heads = self.relative_position_bias_table.shape[-1]
+        old_window_size = self.window_size
+        self.window_size = window_size
+        self.window_area = window_size[0] * window_size[1]
+        self.bias_shape = (self.window_area + self.prefix_tokens,) * 2 + (num_heads,)
+        num_relative_distance = (2 * window_size[0] - 1) * (2 * window_size[1] - 1) + 3 * self.prefix_tokens
+        with torch.no_grad():
+            self.relative_position_bias_table = nn.Parameter(
+                resize_rel_pos_bias_table(
+                    self.relative_position_bias_table,
+                    new_window_size=window_size,
+                    new_bias_shape=(num_relative_distance, num_heads),
+                    old_window_size=old_window_size,
+                ),
+                requires_grad=self.relative_position_bias_table.requires_grad,
+            )
+        index_size = (self.window_area + self.prefix_tokens) ** 2
+        self.register_buffer(
+            "relative_position_index",
+            self.relative_position_index.new_empty(index_size),
+            persistent=False,
+        )
+        self._init_buffers()
 
     def get_bias(self) -> torch.Tensor:
         relative_position_bias = self.relative_position_bias_table[self.relative_position_index]
@@ -443,6 +497,31 @@ class RelPosMlp(nn.Module):
         """Initialize parameters and buffers."""
         self._init_buffers()
 
+    def set_window_size(self, window_size: Tuple[int, int]) -> None:
+        """Update window size & regenerate the position index and log coordinates (MLP weights are unchanged).
+
+        Args:
+            window_size: New window size (height, width).
+        """
+        window_size = to_2tuple(window_size)
+        if window_size == tuple(self.window_size):
+            return
+        self.window_size = window_size
+        self.window_area = window_size[0] * window_size[1]
+        self.bias_shape = (self.window_area,) * 2 + (self.num_heads,)
+        rel_coords_shape = (2 * window_size[0] - 1, 2 * window_size[1] - 1, 2)
+        self.register_buffer(
+            "relative_position_index",
+            self.relative_position_index.new_empty(self.window_area ** 2),
+            persistent=False,
+        )
+        self.register_buffer(
+            "rel_coords_log",
+            self.rel_coords_log.new_empty(rel_coords_shape),
+            persistent=False,
+        )
+        self._init_buffers()
+
     def _init_buffers(self) -> None:
         """Compute and fill non-persistent buffer values."""
         device = self.relative_position_index.device
@@ -568,6 +647,41 @@ class RelPosBiasTf(nn.Module):
         dtype = self.height_lookup.dtype
         self.height_lookup.copy_(generate_lookup_tensor(self.window_size[0], device=device, dtype=dtype))
         self.width_lookup.copy_(generate_lookup_tensor(self.window_size[1], device=device, dtype=dtype))
+
+    def set_window_size(self, window_size: Tuple[int, int]) -> None:
+        """Update window size, resize the bias table & regenerate the lookup tensors.
+
+        Args:
+            window_size: New window size (height, width).
+        """
+        window_size = to_2tuple(window_size)
+        if window_size == tuple(self.window_size):
+            return
+        self.window_size = window_size
+        self.window_area = window_size[0] * window_size[1]
+        vocab_height = 2 * window_size[0] - 1
+        vocab_width = 2 * window_size[1] - 1
+        self.bias_shape = (self.num_heads, vocab_height, vocab_width)
+        with torch.no_grad():
+            self.relative_position_bias_table = nn.Parameter(
+                resize_rel_pos_bias_table(
+                    self.relative_position_bias_table,
+                    new_window_size=window_size,
+                    new_bias_shape=self.bias_shape,
+                ),
+                requires_grad=self.relative_position_bias_table.requires_grad,
+            )
+        self.register_buffer(
+            'height_lookup',
+            self.height_lookup.new_empty((window_size[0], window_size[0], vocab_height)),
+            persistent=False,
+        )
+        self.register_buffer(
+            'width_lookup',
+            self.width_lookup.new_empty((window_size[1], window_size[1], vocab_width)),
+            persistent=False,
+        )
+        self._init_buffers()
 
     def get_bias(self) -> torch.Tensor:
         # FIXME change to not use one-hot/einsum?

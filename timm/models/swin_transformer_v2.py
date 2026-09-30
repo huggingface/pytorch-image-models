@@ -368,22 +368,21 @@ class SwinTransformerV2Block(nn.Module):
         self.norm2 = norm_layer(dim, **dd)
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-        self.register_buffer(
-            "attn_mask",
-            None if self.dynamic_mask else self.get_attn_mask(**dd),
-            persistent=False,
-        )
+        # Register buffer as None initially, computed in _init_buffers if needed
+        self.register_buffer("attn_mask", None, persistent=False)
+        self._init_buffers()
 
-    def init_non_persistent_buffers(self) -> None:
-        """Initialize non-persistent buffers."""
+    def _init_buffers(self) -> None:
+        """Compute and fill non-persistent buffer values."""
         if not self.dynamic_mask:
             device = self.norm1.weight.device
             dtype = self.norm1.weight.dtype
-            self.register_buffer(
-                "attn_mask",
-                self.get_attn_mask(device=device, dtype=dtype),
-                persistent=False,
-            )
+            attn_mask = self.get_attn_mask(device=device, dtype=dtype)
+            self.register_buffer("attn_mask", attn_mask, persistent=False)
+
+    def init_non_persistent_buffers(self) -> None:
+        """Initialize non-persistent buffers."""
+        self._init_buffers()
 
     def get_attn_mask(
             self,
@@ -401,10 +400,17 @@ class SwinTransformerV2Block(nn.Module):
         """
         if any(self.shift_size):
             # calculate attention mask for SW-MSA
-            if x is None:
-                img_mask = torch.zeros((1, *self.input_resolution, 1), device=device, dtype=dtype)  # 1 H W 1
+            if x is not None:
+                H, W = x.shape[1], x.shape[2]
+                device = x.device
+                dtype = x.dtype
             else:
-                img_mask = torch.zeros((1, x.shape[1], x.shape[2], 1), device=x.device, dtype=x.dtype)  # 1 H W 1
+                # static mask must cover the padded (window multiple) size used in _attn, a dynamic mask is
+                # created from the already padded x (no python rounding, keeps the size traceable)
+                H, W = self.input_resolution
+                H = math.ceil(H / self.window_size[0]) * self.window_size[0]
+                W = math.ceil(W / self.window_size[1]) * self.window_size[1]
+            img_mask = torch.zeros((1, H, W, 1), device=device, dtype=dtype)  # 1 H W 1
             cnt = 0
             for h in (
                     (0, -self.window_size[0]),
@@ -479,13 +485,7 @@ class SwinTransformerV2Block(nn.Module):
         self.window_size, self.shift_size = self._calc_window_shift(to_2tuple(window_size))
         self.window_area = self.window_size[0] * self.window_size[1]
         self.attn.set_window_size(self.window_size)
-        device = self.attn_mask.device if self.attn_mask is not None else None
-        dtype = self.attn_mask.dtype if self.attn_mask is not None else None
-        self.register_buffer(
-            "attn_mask",
-            None if self.dynamic_mask else self.get_attn_mask(device=device, dtype=dtype),
-            persistent=False,
-        )
+        self._init_buffers()
 
     def _attn(self, x: torch.Tensor) -> torch.Tensor:
         """Apply windowed attention with optional shift.
@@ -903,7 +903,7 @@ class SwinTransformerV2(nn.Module):
         """
         if img_size is not None or patch_size is not None:
             self.patch_embed.set_input_size(img_size=img_size, patch_size=patch_size)
-            grid_size = self.patch_embed.grid_size
+        grid_size = self.patch_embed.grid_size
 
         if window_size is None and window_ratio is not None:
             window_size = tuple([s // window_ratio for s in grid_size])
