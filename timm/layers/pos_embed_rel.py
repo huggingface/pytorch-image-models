@@ -214,6 +214,9 @@ def resize_rel_pos_bias_table(
 
     if src_size[0] != dst_size[0] or src_size[1] != dst_size[1]:
         # print("Interpolating position from %dx%d to %dx%d" % (src_size[0], src_size[1], dst_size[0], dst_size[1]))
+        if rel_pos_bias.is_meta:
+            # no values to interpolate on meta device, only the new shape matters
+            return rel_pos_bias.new_empty(new_bias_shape)
         orig_dtype = rel_pos_bias.dtype
         if num_extra_tokens:
             extra_tokens = rel_pos_bias[-num_extra_tokens:, :]
