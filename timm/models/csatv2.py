@@ -560,6 +560,7 @@ class CSATv2(nn.Module):
             dims: Tuple[int, ...] = (32, 72, 168, 386),
             depths: Tuple[int, ...] = (2, 2, 8, 6),
             transformer_depths: Tuple[int, ...] = (0, 0, 2, 2),
+            drop_rate: float = 0.0,
             drop_path_rate: float = 0.0,
             transformer_drop_path: bool = False,
             ls_init_value: Optional[float] = None,
@@ -618,7 +619,7 @@ class CSATv2(nn.Module):
             stages.append(nn.Sequential(*layers))
         self.stages = nn.Sequential(*stages)
 
-        self.head = NormMlpClassifierHead(dims[-1], num_classes, pool_type=global_pool, **dd)
+        self.head = NormMlpClassifierHead(dims[-1], num_classes, pool_type=global_pool, drop_rate=drop_rate, **dd)
 
         # TODO: skip init when on meta device when safe to do so
         self.init_weights(needs_reset=False)

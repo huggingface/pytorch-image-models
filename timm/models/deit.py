@@ -115,6 +115,8 @@ class VisionTransformerDistilled(VisionTransformer):
 
     def forward_head(self, x, pre_logits: bool = False) -> torch.Tensor:
         x, x_dist = x[:, 0], x[:, 1]
+        x = self.head_drop(x)
+        x_dist = self.head_drop(x_dist)
         if pre_logits:
             return (x + x_dist) / 2
         x = self.head(x)

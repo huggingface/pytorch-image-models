@@ -9,6 +9,7 @@ from typing import List, Optional, Tuple, Union, Callable, Type
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropPath, calculate_drop_path_rates, NormMlpClassifierHead, ClassifierHead, EffectiveSEModule, \
@@ -130,6 +131,8 @@ class DenseBlock(nn.Module):
             x = x.mul(self.gamma.reshape(1, -1, 1, 1))
 
         x = self.drop_path(x)
+        if self.drop_rate > 0:
+            x = F.dropout(x, p=self.drop_rate, training=self.training)
         return x
 
 
@@ -190,6 +193,7 @@ class RDNet(nn.Module):
             norm_layer: str = "layernorm2d",
             norm_eps: Optional[float] = None,
             drop_rate: float = 0.0,  # timm option [--drop: dropout ratio]
+            proj_drop_rate: float = 0.0,
             drop_path_rate: float = 0.0,  # timm option [--drop-path: drop-path ratio]
             device=None,
             dtype=None,
@@ -215,6 +219,7 @@ class RDNet(nn.Module):
             norm_layer: Normalization layer type.
             norm_eps: Small value to avoid division by zero in normalization.
             drop_rate: Head pre-classifier dropout rate.
+            proj_drop_rate: Dropout rate after each dense block.
             drop_path_rate: Stochastic depth drop rate.
         """
         super().__init__()
@@ -280,7 +285,7 @@ class RDNet(nn.Module):
                 num_input_features=num_features,
                 growth_rate=growth_rates[i],
                 bottleneck_width_ratio=bottleneck_width_ratio,
-                drop_rate=drop_rate,
+                drop_rate=proj_drop_rate,
                 drop_path_rates=dp_rates[i],
                 ls_init_value=ls_init_value,
                 block_type=block_type[i],

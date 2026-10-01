@@ -394,7 +394,7 @@ class Xcit(nn.Module):
             num_heads (int): number of attention heads
             mlp_ratio (int): ratio of mlp hidden dim to embedding dim
             qkv_bias (bool): enable bias for qkv if True
-            drop_rate (float): dropout rate after positional embedding, and in XCA/CA projection + MLP
+            drop_rate (float): head dropout rate
             pos_drop_rate: position embedding dropout rate
             proj_drop_rate (float): projection dropout rate
             attn_drop_rate (float): attention dropout rate
@@ -464,7 +464,7 @@ class Xcit(nn.Module):
                 num_heads=num_heads,
                 mlp_ratio=mlp_ratio,
                 qkv_bias=qkv_bias,
-                proj_drop=drop_rate,
+                proj_drop=proj_drop_rate,
                 attn_drop=attn_drop_rate,
                 act_layer=act_layer,
                 norm_layer=norm_layer,

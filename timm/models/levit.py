@@ -886,7 +886,8 @@ class LevitDistilled(Levit):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         dd = {'device': kwargs.get('device', None), 'dtype': kwargs.get('dtype', None)}
-        self.head_dist = NormLinear(self.num_features, self.num_classes, **dd) if self.num_classes > 0 else nn.Identity()
+        self.head_dist = NormLinear(
+            self.num_features, self.num_classes, drop=self.drop_rate, **dd) if self.num_classes > 0 else nn.Identity()
         self.distilled_training = False  # must set this True to train w/ distillation token
 
     @torch.jit.ignore
@@ -901,7 +902,8 @@ class LevitDistilled(Levit):
         self.head = NormLinear(
             self.num_features, num_classes, drop=self.drop_rate, **dd) if num_classes > 0 else nn.Identity()
         self.head.train(self.training)
-        self.head_dist = NormLinear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head_dist = NormLinear(
+            self.num_features, num_classes, drop=self.drop_rate, **dd) if num_classes > 0 else nn.Identity()
         self.head_dist.train(self.training)
 
     @torch.jit.ignore

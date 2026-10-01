@@ -181,7 +181,7 @@ class PoolingVisionTransformer(nn.Module):
             global_pool: str = 'token',
             distilled: bool = False,
             drop_rate: float = 0.,
-            pos_drop_drate: float = 0.,
+            pos_drop_rate: float = 0.,
             proj_drop_rate: float = 0.,
             attn_drop_rate: float = 0.,
             drop_path_rate: float = 0.,
@@ -204,7 +204,7 @@ class PoolingVisionTransformer(nn.Module):
         self.patch_embed = ConvEmbedding(in_chans, embed_dim, img_size, patch_size, stride, **dd)
         self.pos_embed = nn.Parameter(torch.randn(1, embed_dim, self.patch_embed.height, self.patch_embed.width, **dd))
         self.cls_token = nn.Parameter(torch.randn(1, self.num_tokens, embed_dim, **dd))
-        self.pos_drop = nn.Dropout(p=pos_drop_drate)
+        self.pos_drop = nn.Dropout(p=pos_drop_rate)
 
         transformers = []
         # stochastic depth decay rule
