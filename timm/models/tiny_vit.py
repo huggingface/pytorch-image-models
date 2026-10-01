@@ -522,6 +522,7 @@ class TinyVit(nn.Module):
             window_sizes: Tuple[int, ...] = (7, 7, 14, 7),
             mlp_ratio: float = 4.,
             drop_rate: float = 0.,
+            proj_drop_rate: float = 0.,
             drop_path_rate: float = 0.1,
             use_checkpoint: bool = False,
             mbconv_expand_ratio: float = 4.0,
@@ -575,7 +576,7 @@ class TinyVit(nn.Module):
                     num_heads=num_heads[stage_idx],
                     window_size=window_sizes[stage_idx],
                     mlp_ratio=self.mlp_ratio,
-                    drop=drop_rate,
+                    drop=proj_drop_rate,
                     local_conv_size=local_conv_size,
                     drop_path=drop_path_rate,
                     downsample=PatchMerging,
@@ -596,6 +597,7 @@ class TinyVit(nn.Module):
             num_classes,
             pool_type=global_pool,
             norm_layer=norm_layer_cf,
+            drop_rate=drop_rate,
             **dd,
         )
 

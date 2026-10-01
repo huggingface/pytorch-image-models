@@ -608,11 +608,10 @@ class MetaFormer(nn.Module):
 
         self.stages = nn.Sequential(*stages)
 
-        # if using MlpHead, dropout is handled by MlpHead
         if num_classes > 0:
             if self.use_mlp_head:
                 # FIXME not actually returning mlp hidden state right now as pre-logits.
-                final = MlpHead(self.num_features, num_classes, drop_rate=self.drop_rate, **dd)
+                final = MlpHead(self.num_features, num_classes, **dd)
                 self.head_hidden_size = self.num_features
             else:
                 final = nn.Linear(self.num_features, num_classes, **dd)
@@ -624,7 +623,7 @@ class MetaFormer(nn.Module):
             ('global_pool', SelectAdaptivePool2d(pool_type=global_pool)),
             ('norm', output_norm(self.num_features, **dd)),
             ('flatten', nn.Flatten(1) if global_pool else nn.Identity()),
-            ('drop', nn.Dropout(drop_rate) if self.use_mlp_head else nn.Identity()),
+            ('drop', nn.Dropout(drop_rate)),
             ('fc', final)
         ]))
 
@@ -656,7 +655,7 @@ class MetaFormer(nn.Module):
             self.head.flatten.train(self.head.training)
         if num_classes > 0:
             if self.use_mlp_head:
-                final = MlpHead(self.num_features, num_classes, drop_rate=self.drop_rate, **dd)
+                final = MlpHead(self.num_features, num_classes, **dd)
             else:
                 final = nn.Linear(self.num_features, num_classes, **dd)
         else:

@@ -354,6 +354,7 @@ class Sequencer2d(nn.Module):
             union: str = "cat",
             with_fc: bool = True,
             drop_rate: float = 0.,
+            proj_drop_rate: float = 0.,
             drop_path_rate: float = 0.,
             nlhb: bool = False,
             stem_norm: bool = False,
@@ -404,7 +405,7 @@ class Sequencer2d(nn.Module):
                 bidirectional=bidirectional,
                 union=union,
                 with_fc=with_fc,
-                drop=drop_rate,
+                drop=proj_drop_rate,
                 drop_path=drop_path_rate,
                 **dd,
             )]

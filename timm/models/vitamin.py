@@ -291,12 +291,16 @@ class GeGluMlp(nn.Module):
         self.w0 = nn.Linear(in_features, hidden_features, bias=bias, **dd)
         self.act = create_act_layer(act_layer)
         self.w1 = nn.Linear(in_features, hidden_features, bias=bias, **dd)
+        self.drop1 = nn.Dropout(drop)
         self.w2 = nn.Linear(hidden_features, in_features, bias=bias, **dd)
+        self.drop2 = nn.Dropout(drop)
 
     def forward(self, x):
         x = self.norm(x)
         x = self.act(self.w0(x)) * self.w1(x)
+        x = self.drop1(x)
         x = self.w2(x)
+        x = self.drop2(x)
         return x
 
 
