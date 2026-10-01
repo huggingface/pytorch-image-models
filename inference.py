@@ -363,7 +363,7 @@ def main():
         results_filename = os.path.join(args.results_dir, results_filename)
 
     for fmt in args.results_format:
-        save_results(df, results_filename, fmt)
+        save_results(df, results_filename, fmt, filename_col=args.filename_col)
 
     if not args.no_console_results:
         print(f'--result')
