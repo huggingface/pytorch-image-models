@@ -238,6 +238,7 @@ class CascadedGroupAttention(torch.nn.Module):
 
     def init_non_persistent_buffers(self) -> None:
         """Initialize non-persistent buffers."""
+        self.attention_bias_cache = {}
         self._init_buffers()
 
     def set_resolution(self, resolution: int) -> None:
