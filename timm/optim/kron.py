@@ -66,7 +66,7 @@ def precond_update_prob_schedule(
     but once the preconditioner is learned the update probability can drop low.
 
     This schedule is an exponential anneal with a flat start. Default settings keep
-    update probability at 1.0 for 200 steps then exponentially anneal down to
+    update probability at 1.0 for 500 steps then exponentially anneal down to
     `min_prob` by 4000 steps. Default settings work very well for most models and
     training regimes.
     """
@@ -283,12 +283,12 @@ class Kron(torch.optim.Optimizer):
                     exprs = self._param_exprs[p]
 
                 # update preconditioners all together deterministically
-                if update_prob is None:
-                    update_prob = precond_update_prob_schedule
-                if callable(update_prob):
-                    update_prob = update_prob(state["step"])
+                # resolve per param, params in a group can have different step counts
+                prob = precond_update_prob_schedule if update_prob is None else update_prob
+                if callable(prob):
+                    prob = prob(state["step"])
                 state["update_counter"] += 1
-                do_update = state["update_counter"] >= 1 / update_prob
+                do_update = state["update_counter"] >= 1 / prob
                 if do_update:
                     state["update_counter"] = 0
 
@@ -322,10 +322,10 @@ class Kron(torch.optim.Optimizer):
                     V = torch.randn(
                         debiased_momentum.shape,
                         generator=torch_rng,
-                        dtype=precond_dtype,
+                        dtype=debiased_momentum.dtype,  # precond_dtype if set, else param dtype
                         device=debiased_momentum.device,
                     )
-                    G = debiased_momentum if momentum_into_precond_update else grad
+                    G = debiased_momentum if momentum_into_precond_update else grad.to(debiased_momentum.dtype)
 
                     A, conjB = self._calc_A_and_conjB(exprA, G, Q, V)
 

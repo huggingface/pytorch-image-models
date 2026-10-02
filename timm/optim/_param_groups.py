@@ -140,6 +140,11 @@ def param_groups_layer_decay(
         # fallback
         layer_map = auto_group_layers(model)
     num_layers = max(layer_map.values()) + 1
+    if num_layers == 1:
+        _logger.warning(
+            'Layer-wise lr decay has no effect, all parameters were assigned to one layer. Models without a '
+            'group_matcher() need a pretrained_cfg["classifier"] for automatic layer grouping.'
+        )
     layer_max = num_layers - 1
     layer_scales = list(max(min_scale, layer_decay ** (layer_max - i)) for i in range(num_layers))
 

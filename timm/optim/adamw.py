@@ -269,6 +269,14 @@ def _single_tensor_adamw(
         exp_avg_sq = exp_avg_sqs[i]
         step_t = state_steps[i]
 
+        if torch.is_complex(param):
+            grad = torch.view_as_real(grad)
+            exp_avg = torch.view_as_real(exp_avg)
+            exp_avg_sq = torch.view_as_real(exp_avg_sq)
+            if amsgrad:
+                max_exp_avg_sqs[i] = torch.view_as_real(max_exp_avg_sqs[i])
+            param = torch.view_as_real(param)
+
         # Update step.
         step_t += 1
 
@@ -301,7 +309,9 @@ def _single_tensor_adamw(
 
             bias_correction2_sqrt = bias_correction2.sqrt()
 
-            denom = (denom_base.sqrt() / (bias_correction2_sqrt * step_size_neg)).add_(eps / step_size_neg)
+            # add eps before dividing by the (negative) step size, as in the non-capturable path. Dividing eps by
+            # the step size first gives 0 / 0 = NaN when lr == 0. NOTE eps must be representable in the param dtype.
+            denom = (denom_base.sqrt() / bias_correction2_sqrt).add_(eps).div_(step_size_neg)
 
             if caution:
                 # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
@@ -402,13 +412,11 @@ def _multi_tensor_adamw(
         else:
             denom_base = torch._foreach_sqrt(exp_avg_sqs)
 
-        torch._foreach_div_(
-            denom_base,
-            torch._foreach_mul(bias_correction2_sqrt, step_size)
-        )
-        eps_over_step_size = torch._foreach_div(step_size, eps)
-        torch._foreach_reciprocal_(eps_over_step_size)
-        denom = torch._foreach_add(denom_base, eps_over_step_size)
+        # add eps before dividing by the (negative) step size, as in the non-capturable path (see single-tensor)
+        torch._foreach_div_(denom_base, bias_correction2_sqrt)
+        torch._foreach_add_(denom_base, eps)
+        torch._foreach_div_(denom_base, step_size)
+        denom = denom_base
 
         if caution:
             # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085

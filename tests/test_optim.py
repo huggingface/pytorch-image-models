@@ -5,6 +5,7 @@ These tests were adapted from PyTorch' optimizer tests.
 """
 import functools
 import importlib
+import inspect
 import os
 from copy import deepcopy
 
@@ -1082,3 +1083,330 @@ def test_adamuon_update_rms(shape, conv_mode, normalize_spatial):
         assert opt.state[param]['use_muon']
         rms = (before - param.detach()).square().mean().sqrt()
         torch.testing.assert_close(rms, torch.tensor(expected_rms), rtol=1e-5, atol=1e-7)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason='capturable requires CUDA')
+@pytest.mark.parametrize('optimizer', ['adamwlegacy', 'nadamw'])
+@pytest.mark.parametrize('foreach', [False, True])
+@pytest.mark.parametrize('dtype,eps', [(torch.float32, 1e-8), (torch.bfloat16, 1e-8), (torch.float16, 1e-4)])
+def test_capturable_zero_lr(optimizer, foreach, dtype, eps):
+    # The capturable paths divided eps by the step size before adding it, 0 / 0 = NaN when lr == 0 (e.g. warmup
+    # from 0 or cooldown to 0 w/ an in-place updated tensor lr). Adding eps first, as the non-capturable paths do,
+    # gives a zero update at lr == 0 and matches the non-capturable result otherwise.
+    def run(lrs, capturable):
+        param = Parameter(torch.ones(8, 8, device='cuda', dtype=dtype))
+        lr = torch.tensor(lrs[0], device='cuda') if capturable else lrs[0]
+        opt = create_optimizer_v2(
+            [param], optimizer, lr=lr, eps=eps, weight_decay=0.05, capturable=capturable, foreach=foreach)
+        for i, step_lr in enumerate(lrs):
+            if capturable:
+                lr.fill_(step_lr)
+            else:
+                opt.param_groups[0]['lr'] = step_lr
+            grad = torch.randn(8, 8, device='cuda', dtype=dtype, generator=torch.Generator('cuda').manual_seed(i))
+            grad[0] = 0
+            param.grad = grad
+            before = param.detach().clone()
+            opt.step()
+            if step_lr == 0:
+                torch.testing.assert_close(param.detach(), before, rtol=0, atol=0)
+        return param.detach()
+
+    run([0., 0., 1e-3, 1e-3, 0., 0.], capturable=True)
+    torch.testing.assert_close(run([1e-3] * 4, capturable=True), run([1e-3] * 4, capturable=False))
+
+
+@pytest.mark.parametrize('dtype', [torch.bfloat16, torch.float16])
+@pytest.mark.parametrize('precond_dtype', [None, torch.float32])
+@pytest.mark.parametrize('momentum_into_precond_update', [True, False])
+def test_kron_low_precision_params(dtype, precond_dtype, momentum_into_precond_update):
+    # The random probe for the preconditioner update used precond_dtype directly, None gave a float32
+    # probe that failed to matmul with low precision Q.
+    from timm.optim.kron import Kron
+    generator = torch.Generator().manual_seed(0)
+    param = Parameter(torch.randn(16, 8, generator=generator).to(dtype))
+    opt = Kron(
+        [param],
+        lr=1e-3,
+        precond_dtype=precond_dtype,
+        momentum_into_precond_update=momentum_into_precond_update,
+    )
+    for _ in range(3):
+        param.grad = torch.randn(16, 8, generator=generator).to(dtype)
+        opt.step()
+    assert param.dtype == dtype
+    assert torch.isfinite(param).all()
+
+
+@pytest.mark.parametrize('optimizer', list_optimizers(exclude_filters=('fused*', 'bnb*')))
+def test_optim_factory_common_kwargs(optimizer):
+    # eps / betas / momentum passed to the factory must be forwarded to optimizers that accept them,
+    # and dropped (not crash) for those that don't.
+    info = get_optimizer_info(optimizer)
+    opt_args = inspect.signature(get_optimizer_class(optimizer, bind_defaults=False).__init__).parameters
+    assert info.has_eps == ('eps' in opt_args)
+    assert info.has_betas == ('betas' in opt_args)
+    assert info.has_momentum == ('momentum' in opt_args)
+    betas = (0.5, 0.6, 0.7)[:info.num_betas]
+    opt = create_optimizer_v2([Parameter(torch.ones(4, 4))], optimizer, lr=1e-3, eps=1e-6, betas=betas, momentum=0.5)
+    group = opt.param_groups[0]
+    if info.has_betas:
+        if 'betas' in group:
+            assert tuple(group['betas']) == betas
+        else:
+            assert group['beta1'] == betas[0]  # Adafactor
+    if info.has_momentum and 'momentum' in group:
+        assert group['momentum'] == 0.5
+
+
+def test_cadafactor_has_first_moment():
+    # Caution is applied to the first moment in Adafactor, cadafactor enables it by default.
+    def run(optimizer):
+        generator = torch.Generator().manual_seed(0)
+        param = Parameter(torch.ones(32, 32))
+        opt = create_optimizer_v2([param], optimizer, lr=1e-2)
+        for _ in range(3):
+            param.grad = torch.randn(32, 32, generator=generator)
+            opt.step()
+        return opt.param_groups[0]['beta1'], param.detach()
+
+    beta1, cautious = run('cadafactor')
+    assert beta1 == 0.9
+    _, plain = run('adafactor')
+    assert not torch.allclose(cautious, plain)
+
+
+def test_radam_legacy_param_group_lr():
+    # The step size was cached in a buffer shared across param groups, with the lr baked in, so groups
+    # used the lr of whichever group computed the step size first.
+    from timm.optim.radam import RAdamLegacy
+
+    def run(lrs):
+        params = [Parameter(torch.ones(4)) for _ in lrs]
+        opt = RAdamLegacy([{'params': [p], 'lr': lr} for p, lr in zip(params, lrs)])
+        for _ in range(10):
+            for p in params:
+                p.grad = torch.ones(4)
+            opt.step()
+        return [p.detach() for p in params]
+
+    both = run([1.0, 1e-3])
+    torch.testing.assert_close(both[0], run([1.0])[0])
+    torch.testing.assert_close(both[1], run([1e-3])[0])
+
+
+def _adahessian_steps(opt, param, num_steps):
+    for _ in range(num_steps):
+        opt.zero_grad()
+        (param ** 3).sum().backward(create_graph=True)
+        opt.step()
+
+
+def test_lookahead_second_order():
+    opt = create_optimizer_v2([Parameter(torch.ones(4))], 'lookahead_adahessian', lr=1e-2)
+    assert opt.is_second_order
+    assert not create_optimizer_v2([Parameter(torch.ones(4))], 'lookahead_adamw', lr=1e-2).is_second_order
+
+
+def test_lookahead_load_base_state_dict():
+    # Resuming a checkpoint saved without lookahead must not drop the lookahead group keys.
+    from timm.optim import Lookahead
+    param = Parameter(torch.ones(4))
+    base = torch.optim.AdamW([param], lr=1e-2)
+    param.grad = torch.ones(4)
+    base.step()
+
+    opt = Lookahead(torch.optim.AdamW([param], lr=1e-2), k=2)
+    opt.load_state_dict(base.state_dict())
+    for _ in range(2):
+        param.grad = torch.ones(4)
+        opt.step()
+    assert opt.param_groups[0]['lookahead_step'] == 2
+
+
+def test_adahessian_resume_update_each():
+    # p.hess is not part of the state_dict, resuming at a step where the hessian is not recomputed
+    # (update_each > 1) failed as p.hess was still the initial float.
+    from timm.optim.adahessian import Adahessian
+    param = Parameter(torch.linspace(-1, 1, 8))
+    opt = Adahessian([param], lr=1e-2, update_each=2)
+    _adahessian_steps(opt, param, 3)
+
+    param2 = Parameter(param.detach().clone())
+    opt2 = Adahessian([param2], lr=1e-2, update_each=2)
+    opt2.load_state_dict(opt.state_dict())
+    _adahessian_steps(opt2, param2, 2)
+    assert torch.isfinite(param2).all()
+
+
+def test_adahessian_closure():
+    from timm.optim.adahessian import Adahessian
+    param = Parameter(torch.linspace(-1, 1, 8))
+    opt = Adahessian([param], lr=1e-2)
+
+    def closure():
+        opt.zero_grad()
+        loss = (param ** 3).sum()
+        loss.backward(create_graph=True)
+        return loss
+
+    before = param.detach().clone()
+    opt.step(closure)
+    assert not torch.equal(param.detach(), before)
+
+
+def _laprop_run(param, opt, grads):
+    for grad in grads:
+        param.grad = grad.clone()
+        opt.step()
+
+
+def test_laprop_low_precision_resume():
+    # Optimizer.load_state_dict casts state to the param dtype, the lr EMA scalar was left in bf16
+    # where it stops increasing well short of 1.0, permanently shrinking the update.
+    from timm.optim.laprop import LaProp
+    generator = torch.Generator().manual_seed(0)
+    grads = [torch.randn(8, generator=generator).bfloat16() for _ in range(20)]
+
+    param = Parameter(torch.ones(8, dtype=torch.bfloat16))
+    opt = LaProp([param], lr=1e-2)
+    _laprop_run(param, opt, grads)
+
+    param2 = Parameter(torch.ones(8, dtype=torch.bfloat16))
+    opt2 = LaProp([param2], lr=1e-2)
+    _laprop_run(param2, opt2, grads[:10])
+    opt3 = LaProp([param2], lr=1e-2)
+    opt3.load_state_dict(opt2.state_dict())
+    assert opt3.state[param2]['exp_avg_lr_2'].dtype == torch.float32
+    _laprop_run(param2, opt3, grads[10:])
+    torch.testing.assert_close(param2, param)
+
+
+@pytest.mark.parametrize('tensor_lr', [False, True])
+def test_laprop_zero_lr(tensor_lr):
+    # lr is folded into the momentum, with lr == 0 the update must be zero.
+    from timm.optim.laprop import LaProp
+    generator = torch.Generator().manual_seed(0)
+    lr = torch.tensor(1e-2) if tensor_lr else 1e-2
+    param = Parameter(torch.ones(8))
+    opt = LaProp([param], lr=lr)
+    _laprop_run(param, opt, [torch.randn(8, generator=generator) for _ in range(5)])
+    opt.param_groups[0]['lr'] = torch.tensor(0.) if tensor_lr else 0.
+    before = param.detach().clone()
+    _laprop_run(param, opt, [torch.randn(8, generator=generator) for _ in range(5)])
+    torch.testing.assert_close(param.detach(), before)
+
+
+@pytest.mark.parametrize('optimizer', ['nmuon', 'nadamuon'])
+def test_muon_nesterov_grad_unchanged(optimizer):
+    generator = torch.Generator().manual_seed(0)
+    param = Parameter(torch.randn(16, 8, generator=generator))
+    opt = create_optimizer_v2([param], optimizer, lr=1e-2)
+    for _ in range(2):
+        param.grad = torch.randn(16, 8, generator=generator)
+        grad = param.grad.clone()
+        opt.step()
+        torch.testing.assert_close(param.grad, grad)
+
+
+def test_muon_load_adamw_lr_state_dict():
+    # Checkpoints from before fallback_lr_scale stored an absolute adamw_lr, the scale must be relative to
+    # the un-scheduled lr, not the lr at the time of saving (e.g. mid warmup).
+    from timm.optim.muon import Muon
+    param = Parameter(torch.ones(4))
+    opt = Muon([param], lr=0.02)
+    state_dict = opt.state_dict()
+    for adamw_lr, expected in ((0.02, 1.0), (0.01, 0.5), (None, 1.0)):
+        group = state_dict['param_groups'][0]
+        group.pop('fallback_lr_scale', None)
+        group['lr'] = 2e-4
+        group['initial_lr'] = 0.02
+        group.pop('adamw_lr', None)
+        if adamw_lr is not None:
+            group['adamw_lr'] = adamw_lr
+        opt.load_state_dict(state_dict)
+        assert opt.param_groups[0]['fallback_lr_scale'] == pytest.approx(expected)
+
+
+def test_lamb_no_grads():
+    opt = create_optimizer_v2([Parameter(torch.ones(4))], 'lamb', lr=1e-2)
+    opt.step()
+
+
+def test_adafactor_bv_param_group_options():
+    # Per param group options must be used for state init, not the optimizer defaults.
+    from timm.optim.adafactor_bv import AdafactorBigVision
+    p_factor = Parameter(torch.ones(32, 64))
+    p_full = Parameter(torch.ones(32, 64))
+    opt = AdafactorBigVision([
+        {'params': [p_factor]},
+        {'params': [p_full], 'min_dim_size_to_factor': 128, 'momentum': None},
+    ], lr=1e-2)
+    for p in (p_factor, p_full):
+        p.grad = torch.ones(32, 64)
+    opt.step()
+    assert 'exp_avg_sq_r' in opt.state[p_factor] and 'exp_avg' in opt.state[p_factor]
+    assert 'exp_avg_sq' in opt.state[p_full] and 'exp_avg' not in opt.state[p_full]
+
+
+def test_adafactor_bv_decay_offset():
+    # beta2 schedule is offset by decay_offset steps, before that the second moment is replaced each step.
+    from timm.optim.adafactor_bv import AdafactorBigVision
+    generator = torch.Generator().manual_seed(0)
+    param = Parameter(torch.ones(8))
+    opt = AdafactorBigVision([param], lr=1e-2, decay_offset=3, eps=1e-30)
+    for _ in range(3):
+        grad = torch.randn(8, generator=generator)
+        param.grad = grad
+        opt.step()
+    torch.testing.assert_close(opt.state[param]['exp_avg_sq'], grad.square() + 1e-30)
+
+
+def test_kron_update_prob_per_param():
+    # The update probability schedule is evaluated per param, params in a group can be at different steps.
+    from timm.optim.kron import Kron
+    generator = torch.Generator().manual_seed(0)
+    p_old, p_new = Parameter(torch.ones(4, 4)), Parameter(torch.ones(4, 4))
+    opt = Kron([p_old, p_new], lr=1e-3, preconditioner_update_probability=lambda n: 1.0 if n < 3 else 1e-6)
+    for _ in range(5):
+        p_old.grad = torch.randn(4, 4, generator=generator)
+        opt.step()
+    p_old.grad = torch.randn(4, 4, generator=generator)
+    p_new.grad = torch.randn(4, 4, generator=generator)
+    opt.step()
+    assert opt.state[p_new]['update_counter'] == 0  # updated on first step (prob 1.0)
+    assert opt.state[p_old]['update_counter'] > 0
+
+
+def test_mars_first_step_clipped():
+    # c_t is clipped to unit norm on every step, including the first.
+    from timm.optim.mars import Mars
+    param = Parameter(torch.ones(4, 4))
+    opt = Mars([param], lr=1e-3, betas=(0.9, 0.99))
+    grad = torch.full((4, 4), 2.)  # norm 8
+    param.grad = grad.clone()
+    opt.step()
+    torch.testing.assert_close(opt.state[param]['exp_avg'], 0.1 * grad / grad.norm())
+    torch.testing.assert_close(param.grad, grad)
+
+
+@pytest.mark.parametrize('optimizer', ['adamwlegacy', 'nadamw', 'laprop'])
+@pytest.mark.parametrize('foreach', [False, True])
+def test_complex_param_matches_real_view(optimizer, foreach):
+    # Complex params are optimized as their real view, |g|^2 not g^2 for the second moment.
+    if optimizer == 'laprop' and foreach:
+        pytest.skip('LaProp has no foreach impl')
+    generator = torch.Generator().manual_seed(0)
+    grads = [torch.randn(4, 4, dtype=torch.complex64, generator=generator) for _ in range(3)]
+    kwargs = dict(lr=1e-2) if optimizer == 'laprop' else dict(lr=1e-2, foreach=foreach)
+
+    p_complex = Parameter(torch.ones(4, 4, dtype=torch.complex64))
+    p_real = Parameter(torch.view_as_real(p_complex.detach().clone()).clone())
+    opt_complex = create_optimizer_v2([p_complex], optimizer, **kwargs)
+    opt_real = create_optimizer_v2([p_real], optimizer, **kwargs)
+    for grad in grads:
+        p_complex.grad = grad.clone()
+        p_real.grad = torch.view_as_real(grad).clone()
+        opt_complex.step()
+        opt_real.step()
+    torch.testing.assert_close(torch.view_as_real(p_complex.detach()), p_real.detach())
