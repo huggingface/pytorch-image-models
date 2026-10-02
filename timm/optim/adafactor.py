@@ -27,8 +27,10 @@ class Adafactor(torch.optim.Optimizer):
     Note that this optimizer internally adjusts the learning rate depending on the
     *scale_parameter*, *relative_step* and *warmup_init* options.
 
-    To use a manual (external) learning rate schedule you should set `scale_parameter=False` and
-    `relative_step=False`.
+    A manual (external) learning rate schedule is used when `lr` is set (`relative_step` is then False).
+    Note that in this implementation `scale_parameter` and `warmup_init` only apply to the relative step
+    learning rate (`lr=None`), unlike fairseq / HF Transformers, the parameter RMS scaling is not applied
+    to an external learning rate.
 
     Ags:
         params: iterable of parameters to optimize or dicts defining parameter groups
@@ -39,7 +41,7 @@ class Adafactor(torch.optim.Optimizer):
         decay_rate: coefficient used to compute running averages of square gradient
         beta1: coefficient used for computing running averages of gradient
         weight_decay: weight decay
-        scale_parameter: if True, learning rate is scaled by root-mean-square of parameter
+        scale_parameter: if True, relative step learning rate is scaled by root-mean-square of parameter
         warmup_init: time-dependent learning rate computation depends on whether warm-up initialization is being used
     """
 

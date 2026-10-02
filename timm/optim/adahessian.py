@@ -95,7 +95,8 @@ class Adahessian(torch.optim.Optimizer):
 
         params = []
         for p in filter(lambda p: p.grad is not None, self.get_params()):
-            if self.state[p]["hessian step"] % self.update_each == 0:  # compute the trace only each `update_each` step
+            # compute the trace only each `update_each` step, or if there is no trace yet (e.g. after resume)
+            if self.state[p]["hessian step"] % self.update_each == 0 or isinstance(p.hess, float):
                 params.append(p)
             self.state[p]["hessian step"] += 1
 
@@ -125,7 +126,8 @@ class Adahessian(torch.optim.Optimizer):
 
         loss = None
         if closure is not None:
-            loss = closure()
+            with torch.enable_grad():
+                loss = closure()
 
         self.zero_hessian()
         self.set_hessian()

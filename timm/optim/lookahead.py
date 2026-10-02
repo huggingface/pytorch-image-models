@@ -32,6 +32,10 @@ class Lookahead(Optimizer):
             for group in self._base_optimizer.param_groups:
                 group.setdefault(name, default)
 
+    @property
+    def is_second_order(self):
+        return getattr(self._base_optimizer, 'is_second_order', False)
+
     @torch.no_grad()
     def update_slow(self, group):
         for fast_p in group["params"]:
@@ -64,3 +68,7 @@ class Lookahead(Optimizer):
     def load_state_dict(self, state_dict):
         self._base_optimizer.load_state_dict(state_dict)
         self.param_groups = self._base_optimizer.param_groups
+        # state_dict may be from a base optimizer w/o lookahead, ensure lookahead group keys are present
+        for name in ('lookahead_alpha', 'lookahead_k', 'lookahead_step'):
+            for group in self.param_groups:
+                group.setdefault(name, self.defaults[name])

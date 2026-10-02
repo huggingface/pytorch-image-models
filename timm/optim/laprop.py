@@ -21,7 +21,7 @@ from typing import Tuple
 from torch.optim import Optimizer
 import torch
 
-from ._helpers import _add_scaled_, _init_scalar, _validate_scalar
+from ._helpers import _add_scaled_, _get_scalar_dtype, _init_scalar, _validate_scalar
 from ._types import ParamsT
 
 
@@ -74,7 +74,12 @@ class LaProp(Optimizer):
                         device=group['lr'].device,
                     )
                 if 'exp_avg_lr_2' in p_state:
-                    p_state['exp_avg_lr_2'] = _init_scalar(p_state['exp_avg_lr_2'], device='cpu')
+                    # Optimizer.load_state_dict casts state to the param dtype, restore full precision
+                    p_state['exp_avg_lr_2'] = _init_scalar(
+                        p_state['exp_avg_lr_2'],
+                        device='cpu',
+                        dtype=_get_scalar_dtype(),
+                    )
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -111,6 +116,12 @@ class LaProp(Optimizer):
                     state['exp_avg_sq'] = torch.zeros_like(p)
 
                 exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
+                param = p
+                if torch.is_complex(p):
+                    grad = torch.view_as_real(grad)
+                    exp_avg = torch.view_as_real(exp_avg)
+                    exp_avg_sq = torch.view_as_real(exp_avg_sq)
+                    param = torch.view_as_real(p)
                 beta1, beta2 = group['betas']
 
                 state['step'].add_(1)
@@ -123,18 +134,19 @@ class LaProp(Optimizer):
                 state['exp_avg_lr_1'] = state['exp_avg_lr_1'] * beta1 + one_minus_beta1 * group['lr']
                 state['exp_avg_lr_2'] = state['exp_avg_lr_2'] * beta2 + one_minus_beta2
 
-                # 1 - beta1 ** state['step']
-                if torch.is_tensor(group['lr']):
-                    lr_safe = torch.where(group['lr'] != 0., group['lr'], torch.ones_like(group['lr']))
-                    bias_correction1 = torch.where(
-                        group['lr'] != 0.,
-                        state['exp_avg_lr_1'] / lr_safe,
-                        torch.ones_like(group['lr']),
+                # step_size = 1 / bias_correction1, w/ bias_correction1 = exp_avg_lr_1 / lr (1 - beta1 ** step
+                # for a constant lr). Computed as lr / exp_avg_lr_1 so that step_size is 0 when lr == 0.
+                if torch.is_tensor(state['exp_avg_lr_1']):
+                    exp_avg_lr_1 = state['exp_avg_lr_1']
+                    exp_avg_lr_1_safe = torch.where(exp_avg_lr_1 != 0., exp_avg_lr_1, torch.ones_like(exp_avg_lr_1))
+                    step_size = torch.where(
+                        exp_avg_lr_1 != 0.,
+                        group['lr'] / exp_avg_lr_1_safe,
+                        torch.zeros_like(exp_avg_lr_1),
                     )
                 else:
-                    bias_correction1 = state['exp_avg_lr_1'] / group['lr'] if group['lr'] != 0. else 1.
+                    step_size = group['lr'] / state['exp_avg_lr_1'] if state['exp_avg_lr_1'] != 0. else 0.
                 bias_correction2 = state['exp_avg_lr_2']
-                step_size = 1 / bias_correction1
 
                 denom = exp_avg_sq.div(bias_correction2).sqrt_().add_(group['eps'])
                 step_of_this_grad = grad / denom
@@ -147,13 +159,13 @@ class LaProp(Optimizer):
                     mask.div_(mask.mean().clamp_(min=1e-3))
                     exp_avg = exp_avg * mask
 
-                _add_scaled_(p, exp_avg, -step_size)
+                _add_scaled_(param, exp_avg, -step_size)
 
                 if group['weight_decay'] != 0:
                     if group['corrected_weight_decay']:
                         wd_scale = group['lr'] ** 2 / self.defaults['lr']
                     else:
                         wd_scale = group['lr']
-                    _add_scaled_(p, p, -wd_scale * group['weight_decay'])
+                    _add_scaled_(param, param, -wd_scale * group['weight_decay'])
 
         return loss

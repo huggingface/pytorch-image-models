@@ -117,7 +117,7 @@ class AdafactorBigVision(Optimizer):
                     # FIXME this is a bit of a hack, optimizer.load_state_dict appears to upcast
                     # the momentum to float32 (it's half precision in the state_dict), need to
                     # look into this further. Better to override _process_value_according_to_param_policy?
-                    p_state['exp_avg'] = p_state['exp_avg'].to(dtype=self.defaults['momentum_dtype'])
+                    p_state['exp_avg'] = p_state['exp_avg'].to(dtype=group['momentum_dtype'])
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -154,7 +154,7 @@ class AdafactorBigVision(Optimizer):
                     factored_dims = _factored_dims(
                         shape,
                         factored=True,
-                        min_dim_size_to_factor=self.defaults['min_dim_size_to_factor']
+                        min_dim_size_to_factor=group['min_dim_size_to_factor']
                     )
 
                     if factored_dims is not None:
@@ -168,8 +168,8 @@ class AdafactorBigVision(Optimizer):
                     else:
                         state['exp_avg_sq'] = torch.zeros_like(p.grad, memory_format=torch.preserve_format)
 
-                    if self.defaults['momentum'] is not None:
-                        state['exp_avg'] = torch.zeros_like(p.grad, dtype=self.defaults['momentum_dtype'])
+                    if group['momentum'] is not None:
+                        state['exp_avg'] = torch.zeros_like(p.grad, dtype=group['momentum_dtype'])
 
                 state_steps.append(state['step'])
                 exp_avg_sq_rs.append(state.get('exp_avg_sq_r', None))
@@ -191,6 +191,7 @@ class AdafactorBigVision(Optimizer):
                 exp_avgs=exp_avgs,
                 state_steps=state_steps,
                 beta2_decay=group['decay_rate'],
+                beta2_decay_offset=group['decay_offset'],
                 beta2_cap=group['beta2_cap'],
                 min_dim_size_to_factor=group['min_dim_size_to_factor'],
                 eps=group['eps'],
@@ -217,6 +218,7 @@ def _single_tensor_adafactor(
         state_steps: List[Tensor],
         *,
         beta2_decay: float,
+        beta2_decay_offset: int,
         beta2_cap: float,
         min_dim_size_to_factor: int,
         eps: float,
@@ -243,11 +245,14 @@ def _single_tensor_adafactor(
         # Update step
         step_t.add_(1)
         step = _get_value(step_t)
+        # beta2 decay schedule is offset by decay_offset steps (as per big_vision / optax), clamped to step 1
         if torch.is_tensor(step):
+            decay_step = (step - beta2_decay_offset).clamp(min=1) if beta2_decay_offset else step
             beta2_cap_t = torch.tensor(beta2_cap, dtype=step.dtype, device=step.device)
-            beta2_t = torch.minimum(beta2_cap_t, 1.0 - torch.pow(step, -beta2_decay))
+            beta2_t = torch.minimum(beta2_cap_t, 1.0 - torch.pow(decay_step, -beta2_decay))
         else:
-            beta2_t = min(beta2_cap, 1.0 - step ** (-beta2_decay))
+            decay_step = max(step - beta2_decay_offset, 1)
+            beta2_t = min(beta2_cap, 1.0 - decay_step ** (-beta2_decay))
         one_minus_beta2_t = 1 - beta2_t
 
         grad_sqr = torch.square(grad) + eps
@@ -326,6 +331,7 @@ def _multi_tensor_adafactor(
         state_steps: List[Tensor],
         *,
         beta2_decay: float,
+        beta2_decay_offset: int,
         beta2_cap: float,
         min_dim_size_to_factor: int,
         eps: float,

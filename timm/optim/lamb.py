@@ -145,6 +145,8 @@ class Lamb(Optimizer):
                 if grad.is_sparse:
                     raise RuntimeError('Lamb does not support sparse gradients, consider SparseAdam instead.')
                 norms.append(torch.linalg.vector_norm(grad))
+        if not norms:
+            return None
         global_norm = torch.linalg.vector_norm(torch.stack(norms))
         clip_global_norm = (global_norm / max_grad_norm).clamp_(min=1.0)
         return clip_global_norm

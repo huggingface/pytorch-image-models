@@ -246,6 +246,12 @@ def _single_tensor_nadamw(
         exp_avg_sq = exp_avg_sqs[i]
         step_t = state_steps[i]
 
+        if torch.is_complex(param):
+            grad = torch.view_as_real(grad)
+            exp_avg = torch.view_as_real(exp_avg)
+            exp_avg_sq = torch.view_as_real(exp_avg_sq)
+            param = torch.view_as_real(param)
+
         # Update step.
         step_t += 1
 
@@ -274,7 +280,9 @@ def _single_tensor_nadamw(
             # The official PyTorch implementation of NAdam uses a different algorithm.
             exp_avg = exp_avg.mul(beta1).add_(grad, alpha=1 - beta1)
 
-            denom = (exp_avg_sq.sqrt() / (bias_correction2_sqrt * step_size_neg)).add_(eps / step_size_neg)
+            # add eps before dividing by the (negative) step size, as in the non-capturable path. Dividing eps by
+            # the step size first gives 0 / 0 = NaN when lr == 0. NOTE eps must be representable in the param dtype.
+            denom = (exp_avg_sq.sqrt() / bias_correction2_sqrt).add_(eps).div_(step_size_neg)
 
             if caution:
                 # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
@@ -372,14 +380,11 @@ def _multi_tensor_nadamw(
         exp_avgs = torch._foreach_mul(exp_avgs, beta1)
         torch._foreach_add_(exp_avgs, grads, alpha=1 - beta1)
 
-        exp_avg_sq_sqrt = torch._foreach_sqrt(exp_avg_sqs)
-        torch._foreach_div_(
-            exp_avg_sq_sqrt,
-            torch._foreach_mul(bias_correction2_sqrt, step_size)
-        )
-        eps_over_step_size = torch._foreach_div(step_size, eps)
-        torch._foreach_reciprocal_(eps_over_step_size)
-        denom = torch._foreach_add(exp_avg_sq_sqrt, eps_over_step_size)
+        # add eps before dividing by the (negative) step size, as in the non-capturable path (see single-tensor)
+        denom = torch._foreach_sqrt(exp_avg_sqs)
+        torch._foreach_div_(denom, bias_correction2_sqrt)
+        torch._foreach_add_(denom, eps)
+        torch._foreach_div_(denom, step_size)
 
         if caution:
             # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
