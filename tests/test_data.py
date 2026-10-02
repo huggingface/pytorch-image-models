@@ -1,8 +1,9 @@
 import numpy as np
 import pytest
 import torch
+from PIL import Image
 
-from timm.data import create_loader, create_naflex_loader, create_transform
+from timm.data import create_dataset, create_loader, create_naflex_loader, create_transform
 from timm.data.naflex_loader import NaFlexPrefetchLoader
 from timm.data.auto_augment import (
     _HPARAMS_DEFAULT,
@@ -14,6 +15,25 @@ from timm.data.auto_augment import (
     rand_augment_transform,
 )
 from timm.data.mixup import rand_bbox_minmax
+
+
+def test_hfds_sliced_imagefolder_split(tmp_path, monkeypatch):
+    datasets = pytest.importorskip('datasets')
+    for class_name, count in (('green', 1), ('red', 2)):
+        class_dir = tmp_path / 'train' / class_name
+        class_dir.mkdir(parents=True)
+        for index in range(count):
+            Image.new('RGB', (2, 2)).save(class_dir / f'{index}.png')
+
+    load_dataset = datasets.load_dataset
+    monkeypatch.setattr(datasets, 'load_dataset', lambda name, split, **kwargs: load_dataset(
+        'imagefolder', data_dir=str(tmp_path), split=split))
+    full = create_dataset('hfds/fixture', split='train')
+    sliced = create_dataset('hfds/fixture', split='train[:1]')
+
+    assert full.reader.num_samples == len(full) == 3
+    assert sliced.reader.num_samples == len(sliced) == 1
+    assert sliced[0][1] == 0
 
 
 @pytest.mark.parametrize('count', [None, 4])

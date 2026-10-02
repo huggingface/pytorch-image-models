@@ -722,6 +722,21 @@ def hf_dataset(monkeypatch):
     return dataset
 
 
+def test_hfds_split_expression_uses_loaded_sample_count(hf_dataset, monkeypatch):
+    datasets = pytest.importorskip('datasets')
+
+    def load_dataset(name, split, **kwargs):
+        return hf_dataset.select(range(2)) if split == 'train[:2]' else hf_dataset
+
+    monkeypatch.setattr(datasets, 'load_dataset', load_dataset)
+    full = create_dataset('hfds/fixture', split='train', target_key='labels')
+    assert full.reader.num_samples == 8
+
+    sliced = create_dataset('hfds/fixture', split='train[:2]', target_key='labels')
+    assert len(sliced) == sliced.reader.num_samples == 2
+    assert [sliced[index][1] for index in range(len(sliced))] == [[5, 1, 0], [2]]
+
+
 @pytest.mark.parametrize('reader', ['hfds', 'hfids'])
 @pytest.mark.parametrize('prefetch', [False, True])
 def test_hf_multilabel_readers_and_loader(hf_dataset, reader, prefetch):

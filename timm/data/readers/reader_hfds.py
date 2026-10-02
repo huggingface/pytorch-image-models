@@ -60,8 +60,8 @@ class ReaderHfds(Reader):
             self.remap_class = True
         else:
             self.class_to_idx = source_classes
-        self.split_info = self.dataset.info.splits[split]
-        self.num_samples = self.split_info.num_examples
+        self.split_info = self.dataset.info.splits.get(split) if self.dataset.info.splits else None
+        self.num_samples = len(self.dataset)
 
         if additional_features is not None:
             if isinstance(additional_features, list):
