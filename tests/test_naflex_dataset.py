@@ -1,10 +1,16 @@
+import csv
+import math
 import warnings
 from types import SimpleNamespace
 
+import pytest
 import torch
+from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
-from timm.data import NaFlexMapDatasetWrapper, NaFlexMixup
+from timm import create_model
+from timm.data import ImageDataset, NaFlexMapDatasetWrapper, NaFlexMixup, create_naflex_loader
+from timm.task.evaluator import ClassificationEvaluator
 
 
 class _TensorImageDataset(Dataset):
@@ -130,3 +136,92 @@ def test_naflex_epoch_prep_warnings_only_emitted_by_worker_zero(monkeypatch):
             warnings.simplefilter('always')
             list(dataset)
         assert len(caught) == expected_warnings
+
+
+def _create_image_folder(tmp_path):
+    root = tmp_path / 'images'
+    for class_id in range(2):
+        folder = root / str(class_id)
+        folder.mkdir(parents=True)
+        Image.new('RGB', (32, 32), color=(64 + 64 * class_id,) * 3).save(folder / 'image.png')
+    return root
+
+
+@pytest.mark.parametrize('dtype', [torch.float32, torch.bfloat16])
+@pytest.mark.parametrize('device', [
+    'cpu', pytest.param('cuda', marks=pytest.mark.skipif(not torch.cuda.is_available(), reason='requires CUDA')),
+])
+def test_naflex_validate_without_prefetch_preserves_metadata(tmp_path, device, dtype):
+    import train
+
+    loader = create_naflex_loader(
+        ImageDataset(str(_create_image_folder(tmp_path))), patch_size=16, max_seq_len=4,
+        batch_size=2, num_workers=0, use_prefetcher=False,
+    )
+    inputs, targets = next(iter(loader))
+    original = {k: v.clone() if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
+    model = create_model(
+        'naflexvit_base_patch16_gap', pretrained=False, embed_dim=32, depth=1, num_heads=4, num_classes=2,
+    ).to(device=device, dtype=dtype)
+
+    def check_input(_model, args):
+        actual = args[0]
+        for key, value in original.items():
+            if isinstance(value, torch.Tensor):
+                expected_dtype = dtype if key == 'patches' else value.dtype
+                assert actual[key].dtype == expected_dtype
+                assert actual[key].device.type == device
+                torch.testing.assert_close(actual[key], value.to(device=device, dtype=expected_dtype))
+            else:
+                assert actual[key] == value
+
+    model.register_forward_pre_hook(check_input)
+    args = SimpleNamespace(prefetcher=False, channels_last=False, tta=0, log_interval=1, distributed=False, rank=0)
+    evaluator = ClassificationEvaluator(device=device)
+    metrics = [train.validate(
+        model, [(inputs, targets)], evaluator, args, device=torch.device(device), model_dtype=dtype,
+    ) for _ in range(2)]
+    assert metrics[0] == metrics[1]
+    assert math.isfinite(metrics[0]['loss'])
+    for key, value in original.items():
+        if isinstance(value, torch.Tensor):
+            torch.testing.assert_close(inputs[key], value)
+        else:
+            assert inputs[key] == value
+
+
+@pytest.mark.parametrize('naflex', [False, True])
+@pytest.mark.parametrize('prefetch', [False, True])
+@pytest.mark.parametrize('channels_last', [False, True])
+@pytest.mark.usefixtures('isolate_cli_backend_flags')
+def test_naflex_train_and_validate_cli(monkeypatch, tmp_path, naflex, prefetch, channels_last):
+    import train
+    import validate
+
+    monkeypatch.setattr(torch.backends.cudnn, 'enabled', False, raising=False)
+    args = [
+        '--data-dir', str(_create_image_folder(tmp_path)), '--model', 'naflexvit_base_patch16_gap',
+        '--model-kwargs', 'embed_dim=32', 'depth=1', 'num_heads=4', '--num-classes', '2',
+        '--device', 'cpu', '--workers', '0', '--batch-size', '2', '--img-size', '32',
+    ]
+    if naflex:
+        args += ['--naflex-loader', '--naflex-max-seq-len', '4']
+    if not prefetch:
+        args.append('--no-prefetcher')
+    if channels_last:
+        args.append('--channels-last')
+    monkeypatch.setattr('sys.argv', [
+        'train.py', *args, '--naflex-train-seq-lens', '4', '--epochs', '1', '--warmup-epochs', '0',
+        '--opt', 'sgd', '--lr', '0.01', '--no-aug', '--output', str(tmp_path), '--experiment', 'smoke',
+    ])
+    train.main()
+    with (tmp_path / 'smoke' / 'summary.csv').open() as f:
+        summary = list(csv.DictReader(f))
+    assert len(summary) == 1
+    assert math.isfinite(float(summary[0]['train_loss']))
+    assert math.isfinite(float(summary[0]['eval_loss']))
+    checkpoint = tmp_path / 'smoke' / 'model_best.pth.tar'
+    assert checkpoint.is_file()
+    val_args = validate.parser.parse_args([*args, '--checkpoint', str(checkpoint)])
+    results = validate.validate(val_args)
+    assert results['top1'] == pytest.approx(float(summary[0]['eval_top1']), abs=1e-3)

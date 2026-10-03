@@ -391,8 +391,14 @@ def validate(args):
         for batch_idx, (input, target) in enumerate(loader):
             if args.no_prefetcher:
                 target = target.to(device=device)
-                input = input.to(device=device, dtype=model_dtype)
-            if args.channels_last:
+                if isinstance(input, dict):
+                    input = {
+                        k: v.to(device=device, dtype=model_dtype if k == 'patches' else None)
+                        if isinstance(v, torch.Tensor) else v for k, v in input.items()
+                    }
+                else:
+                    input = input.to(device=device, dtype=model_dtype)
+            if args.channels_last and not isinstance(input, dict):
                 input = input.contiguous(memory_format=torch.channels_last)
 
             # compute output

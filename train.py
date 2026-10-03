@@ -1443,10 +1443,17 @@ def train_one_epoch(
         batch_accum_steps = last_accum_steps if batch_idx >= last_batch_idx_to_accum else accum_steps
 
         if not args.prefetcher:
-            input, target = input.to(device=device, dtype=model_dtype), target.to(device=device)
+            if isinstance(input, dict):
+                input = {
+                    k: v.to(device=device, dtype=model_dtype if k == 'patches' else None)
+                    if isinstance(v, torch.Tensor) else v for k, v in input.items()
+                }
+            else:
+                input = input.to(device=device, dtype=model_dtype)
+            target = target.to(device=device)
             if mixup_fn is not None:
                 input, target = mixup_fn(input, target)
-        if args.channels_last:
+        if args.channels_last and not isinstance(input, dict):
             input = input.contiguous(memory_format=torch.channels_last)
 
         # multiply by accum steps to get equivalent for full update
@@ -1636,9 +1643,15 @@ def validate(
         for batch_idx, (input, target) in enumerate(loader):
             last_batch = batch_idx == last_idx
             if not args.prefetcher:
-                input = input.to(device=device, dtype=model_dtype)
+                if isinstance(input, dict):
+                    input = {
+                        k: v.to(device=device, dtype=model_dtype if k == 'patches' else None)
+                        if isinstance(v, torch.Tensor) else v for k, v in input.items()
+                    }
+                else:
+                    input = input.to(device=device, dtype=model_dtype)
                 target = target.to(device=device)
-            if args.channels_last:
+            if args.channels_last and not isinstance(input, dict):
                 input = input.contiguous(memory_format=torch.channels_last)
 
             with amp_autocast():
