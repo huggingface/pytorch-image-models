@@ -21,6 +21,7 @@ import torch
 from torch import Tensor
 from torch.optim.optimizer import Optimizer
 
+from ._helpers import _max_lr_snapshot
 from ._types import ParamsT
 
 __all__ = ["Adopt", "adopt"]
@@ -104,6 +105,7 @@ class Adopt(Optimizer):
             clip_exp=clip_exp,
             decoupled=decoupled,
             corrected_weight_decay=corrected_weight_decay,
+            max_lr_snapshot=_max_lr_snapshot(lr, corrected_weight_decay),
             caution=caution,
             maximize=maximize,
             foreach=foreach,
@@ -114,6 +116,7 @@ class Adopt(Optimizer):
 
     def __setstate__(self, state):
         super().__setstate__(state)
+        self.defaults.setdefault('max_lr_snapshot', _max_lr_snapshot(self.defaults['lr']))  # pickled pre-snapshot
         for group in self.param_groups:
             group.setdefault("maximize", False)
             group.setdefault("foreach", None)
@@ -122,6 +125,7 @@ class Adopt(Optimizer):
             group.setdefault("clip_exp", None)
             group.setdefault("caution", False)
             group.setdefault("corrected_weight_decay", False)
+            group.setdefault("max_lr_snapshot", self.defaults['max_lr_snapshot'])
             for p in group["params"]:
                 p_state = self.state.get(p, [])
                 if len(p_state) != 0 and not torch.is_tensor(p_state["step"]):
@@ -232,7 +236,7 @@ class Adopt(Optimizer):
                 lr=group["lr"],
                 weight_decay=group["weight_decay"],
                 clip_exp=group["clip_exp"],
-                max_lr=self.defaults['lr'] if group['corrected_weight_decay'] else None,
+                max_lr=group['max_lr_snapshot'] if group['corrected_weight_decay'] else None,
                 decoupled=group["decoupled"],
                 eps=group["eps"],
                 caution=group["caution"],

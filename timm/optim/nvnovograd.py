@@ -5,9 +5,13 @@ Paper: `Stochastic Gradient Methods with Layer-wise Adaptive Moments for Trainin
     - https://arxiv.org/abs/1905.11286
 """
 
+from typing import Any, Dict
+
 import torch
 from torch.optim.optimizer import Optimizer
 import math
+
+from ._helpers import _load_state_dict_preserving_dtypes, _max_lr_snapshot
 
 
 class NvNovoGrad(Optimizer):
@@ -27,6 +31,9 @@ class NvNovoGrad(Optimizer):
         amsgrad (boolean, optional): whether to use the AMSGrad variant of this
             algorithm from the paper `On the Convergence of Adam and Beyond`_
             (default: False)
+        decoupled_decay: apply weight decay directly to the weights (lr * weight_decay per step) instead of adding
+            it to the normalized gradient before the momentum update (as per the paper)
+        corrected_weight_decay: apply corrected weight decay (lr**2 / max_lr) when decoupled_decay is True
     """
 
     def __init__(
@@ -38,6 +45,8 @@ class NvNovoGrad(Optimizer):
             weight_decay=0,
             grad_averaging=False,
             amsgrad=False,
+            decoupled_decay=False,
+            corrected_weight_decay=False,
     ):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
@@ -54,14 +63,29 @@ class NvNovoGrad(Optimizer):
             weight_decay=weight_decay,
             grad_averaging=grad_averaging,
             amsgrad=amsgrad,
+            decoupled_decay=decoupled_decay,
+            corrected_weight_decay=corrected_weight_decay,
+            max_lr_snapshot=_max_lr_snapshot(lr, corrected_weight_decay),
         )
 
         super(NvNovoGrad, self).__init__(params, defaults)
 
     def __setstate__(self, state):
         super(NvNovoGrad, self).__setstate__(state)
+        self.defaults.setdefault('max_lr_snapshot', _max_lr_snapshot(self.defaults['lr']))  # pickled pre-snapshot
         for group in self.param_groups:
             group.setdefault('amsgrad', False)
+            group.setdefault('decoupled_decay', False)
+            group.setdefault('corrected_weight_decay', False)
+            group.setdefault('max_lr_snapshot', self.defaults['max_lr_snapshot'])
+
+    def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
+        _load_state_dict_preserving_dtypes(
+            self, state_dict, super().load_state_dict,
+            lambda group, param: {
+                key: torch.get_default_dtype() for key in ('exp_avg_sq', 'max_exp_avg_sq')
+            },
+        )
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -120,12 +144,20 @@ class NvNovoGrad(Optimizer):
                 else:
                     denom = exp_avg_sq.sqrt().add_(group['eps'])
 
-                grad.div_(denom)
+                # NOTE p.grad is left unmodified, the normalized gradient is a new tensor
+                update = grad / denom
                 if group['weight_decay'] != 0:
-                    grad.add_(p, alpha=group['weight_decay'])
+                    if group['decoupled_decay']:
+                        if group['corrected_weight_decay']:
+                            wd_scale = group['lr'] ** 2 / group['max_lr_snapshot']
+                        else:
+                            wd_scale = group['lr']
+                        p.mul_(1. - wd_scale * group['weight_decay'])
+                    else:
+                        update.add_(p, alpha=group['weight_decay'])
                 if group['grad_averaging']:
-                    grad.mul_(1 - beta1)
-                exp_avg.mul_(beta1).add_(grad)
+                    update.mul_(1 - beta1)
+                exp_avg.mul_(beta1).add_(update)
 
                 p.add_(exp_avg, alpha=-group['lr'])
 

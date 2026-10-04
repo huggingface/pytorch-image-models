@@ -25,7 +25,7 @@ from typing import List, Optional, Tuple
 import torch
 from torch.optim.optimizer import Optimizer
 
-from ._helpers import _add_scaled_, _validate_scalar
+from ._helpers import _add_scaled_, _max_lr_snapshot, _validate_scalar
 from ._types import ParamsT
 
 
@@ -65,6 +65,7 @@ class Lion(Optimizer):
             weight_decay=weight_decay,
             caution=caution,
             corrected_weight_decay=corrected_weight_decay,
+            max_lr_snapshot=_max_lr_snapshot(lr, corrected_weight_decay),
             foreach=foreach,
             maximize=maximize,
         )
@@ -72,9 +73,11 @@ class Lion(Optimizer):
 
     def __setstate__(self, state):
         super().__setstate__(state)
+        self.defaults.setdefault('max_lr_snapshot', _max_lr_snapshot(self.defaults['lr']))  # pickled pre-snapshot
         for group in self.param_groups:
             group.setdefault('caution', False)
             group.setdefault('corrected_weight_decay', False)
+            group.setdefault('max_lr_snapshot', self.defaults['max_lr_snapshot'])
             group.setdefault('maximize', False)
             group.setdefault('foreach', None)
 
@@ -126,7 +129,7 @@ class Lion(Optimizer):
                 caution=group['caution'],
                 maximize=group['maximize'],
                 foreach=group['foreach'],
-                max_lr=self.defaults['lr'] if group['corrected_weight_decay'] else None,
+                max_lr=group['max_lr_snapshot'] if group['corrected_weight_decay'] else None,
             )
 
         return loss

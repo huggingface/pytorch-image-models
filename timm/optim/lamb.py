@@ -60,7 +60,7 @@ from typing import Optional, Tuple
 import torch
 from torch.optim import Optimizer
 
-from ._helpers import _add_scaled_, _get_value, _init_scalar, _validate_scalar
+from ._helpers import _add_scaled_, _get_value, _init_scalar, _max_lr_snapshot, _validate_scalar
 from ._types import ParamsT
 
 
@@ -119,15 +119,18 @@ class Lamb(Optimizer):
             caution=caution,
             decoupled_decay=decoupled_decay,
             corrected_weight_decay=corrected_weight_decay,
+            max_lr_snapshot=_max_lr_snapshot(lr, corrected_weight_decay),
         )
         super().__init__(params, defaults)
 
     def __setstate__(self, state):
         super().__setstate__(state)
+        self.defaults.setdefault('max_lr_snapshot', _max_lr_snapshot(self.defaults['lr']))  # pickled pre-snapshot
         for group in self.param_groups:
             group.setdefault('caution', False)
             group.setdefault('decoupled_decay', False)
             group.setdefault('corrected_weight_decay', False)
+            group.setdefault('max_lr_snapshot', self.defaults['max_lr_snapshot'])
             if 'step' in group:
                 group['step'] = _init_scalar(group['step'], device='cpu')
 
@@ -194,7 +197,7 @@ class Lamb(Optimizer):
                 grad = p.grad
 
                 if clip_grad_norm is not None:
-                    grad.div_(clip_grad_norm)
+                    grad = grad / clip_grad_norm  # not in-place, leave p.grad unmodified
 
                 state = self.state[p]
 
@@ -224,7 +227,7 @@ class Lamb(Optimizer):
                 if weight_decay != 0:
                     if group.get('decoupled_decay', False):
                         if group['corrected_weight_decay']:
-                            wd_scale = group['lr'] ** 2 / self.defaults['lr']
+                            wd_scale = group['lr'] ** 2 / group['max_lr_snapshot']
                         else:
                             wd_scale = group['lr']
                         _add_scaled_(p, p, -wd_scale * weight_decay)

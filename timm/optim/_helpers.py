@@ -1,13 +1,76 @@
 """Small optimizer helpers shared by timm optimizer implementations."""
 
-from typing import List, Optional, Sequence, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 
 import torch
 from torch import Tensor
 
 
+def _load_state_dict_preserving_dtypes(
+        optimizer: torch.optim.Optimizer,
+        state_dict: Dict[str, Any],
+        load_state_dict: Callable[[Dict[str, Any]], None],
+        state_dtypes: Callable[[Dict[str, Any], Tensor], Dict[str, Optional[torch.dtype]]],
+) -> None:
+    """Load optimizer state, restoring selected tensors from the uncast checkpoint.
+
+    The dtype callback maps state keys to their target dtypes; None (or the param dtype) leaves a key to the
+    normal loader.
+    Tensor lists (e.g. Kron's Q) are restored elementwise. Copies avoid aliasing the saved tensors.
+    """
+    source = state_dict
+
+    def copy_value(value: Any, param: Tensor, dtype: torch.dtype) -> Any:
+        if isinstance(value, Tensor):
+            return value.to(device=param.device, dtype=dtype, copy=True)
+        return type(value)(copy_value(v, param, dtype) for v in value)
+
+    def capture_source(_optimizer: torch.optim.Optimizer, saved: Dict[str, Any]) -> None:
+        nonlocal source
+        source = saved
+
+    def restore(loaded: torch.optim.Optimizer) -> None:
+        for group, saved_group in zip(loaded.param_groups, source['param_groups']):
+            for param, param_id in zip(group['params'], saved_group['params']):
+                saved = source['state'].get(param_id, {})
+                for key, dtype in state_dtypes(group, param).items():
+                    # a target matching the param dtype is already handled (aliased if possible) by the normal loader
+                    if dtype is not None and dtype != param.dtype and key in saved:
+                        loaded.state[param][key] = copy_value(saved[key], param, dtype)
+
+    if (
+        hasattr(optimizer, 'register_load_state_dict_pre_hook')
+        and hasattr(optimizer, 'register_load_state_dict_post_hook')
+    ):
+        # Capture after user pre-hooks (which can remap params), and restore before user post-hooks.
+        pre_handle = optimizer.register_load_state_dict_pre_hook(capture_source)
+        post_handle = optimizer.register_load_state_dict_post_hook(restore, prepend=True)
+        try:
+            load_state_dict(state_dict)
+        finally:
+            pre_handle.remove()
+            post_handle.remove()
+    else:
+        # Older PyTorch has no optimizer load hooks.
+        load_state_dict(state_dict)
+        restore(optimizer)
+
+
 def _get_scalar_dtype() -> torch.dtype:
     return torch.float64 if torch.get_default_dtype() == torch.float64 else torch.float32
+
+
+def _max_lr_snapshot(lr: Union[float, Tensor], corrected_weight_decay: bool = False) -> float:
+    """Snapshot the constructor lr as the max lr for corrected weight decay (lr ** 2 / max_lr).
+
+    A float copy, so a tensor lr updated in place (e.g. for CUDA graphs) does not alias it.
+    """
+    max_lr = float(lr.detach()) if isinstance(lr, Tensor) else float(lr)
+    if corrected_weight_decay and max_lr <= 0:
+        raise ValueError(
+            f'Corrected weight decay requires a positive max lr, got {max_lr}. Construct the optimizer with the '
+            f'peak lr.')
+    return max_lr
 
 
 def _init_scalar(
@@ -31,6 +94,8 @@ def _zeros_scalar(device=None, dtype: Optional[torch.dtype] = None) -> Tensor:
 def _is_compiling() -> bool:
     if hasattr(torch, 'compiler') and hasattr(torch.compiler, 'is_compiling'):
         return torch.compiler.is_compiling()
+    if hasattr(torch, '_dynamo') and hasattr(torch._dynamo, 'is_compiling'):
+        return torch._dynamo.is_compiling()
     return False
 
 

@@ -13,7 +13,7 @@ import torch
 from torch import Tensor
 from torch.optim.optimizer import Optimizer
 
-from ._helpers import _check_capturable_devices, _get_value, _init_scalar
+from ._helpers import _check_capturable_devices, _get_value, _init_scalar, _is_compiling, _max_lr_snapshot
 from ._types import ParamsT
 
 
@@ -76,6 +76,7 @@ class AdamWLegacy(Optimizer):
             amsgrad=amsgrad,
             caution=caution,
             corrected_weight_decay=corrected_weight_decay,
+            max_lr_snapshot=_max_lr_snapshot(lr, corrected_weight_decay),
             foreach=foreach,
             maximize=maximize,
             capturable=capturable,
@@ -84,10 +85,12 @@ class AdamWLegacy(Optimizer):
 
     def __setstate__(self, state):
         super(AdamWLegacy, self).__setstate__(state)
+        self.defaults.setdefault('max_lr_snapshot', _max_lr_snapshot(self.defaults['lr']))  # pickled pre-snapshot
         for group in self.param_groups:
             group.setdefault('amsgrad', False)
             group.setdefault('caution', False)
             group.setdefault('corrected_weight_decay', False)
+            group.setdefault('max_lr_snapshot', self.defaults['max_lr_snapshot'])
             group.setdefault('foreach', None)
             group.setdefault('maximize', False)
             group.setdefault('capturable', False)
@@ -171,7 +174,7 @@ class AdamWLegacy(Optimizer):
                 caution=group['caution'],
                 maximize=group['maximize'],
                 capturable=group['capturable'],
-                max_lr=self.defaults['lr'] if group['corrected_weight_decay'] else None,
+                max_lr=group['max_lr_snapshot'] if group['corrected_weight_decay'] else None,
             )
 
         return loss
@@ -311,7 +314,11 @@ def _single_tensor_adamw(
 
             # add eps before dividing by the (negative) step size, as in the non-capturable path. Dividing eps by
             # the step size first gives 0 / 0 = NaN when lr == 0. NOTE eps must be representable in the param dtype.
-            denom = (denom_base.sqrt() / bias_correction2_sqrt).add_(eps).div_(step_size_neg)
+            denom = (denom_base.sqrt() / bias_correction2_sqrt).add_(eps)
+            if denom.dtype == torch.float16:
+                # avoid FP16 overflow when folding in small step sizes
+                denom = denom.float()
+            denom.div_(step_size_neg)
 
             if caution:
                 # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
@@ -415,6 +422,9 @@ def _multi_tensor_adamw(
         # add eps before dividing by the (negative) step size, as in the non-capturable path (see single-tensor)
         torch._foreach_div_(denom_base, bias_correction2_sqrt)
         torch._foreach_add_(denom_base, eps)
+        # Promote FP16 to avoid overflow with small step sizes. Mixed dtypes make eager _foreach_addcdiv_
+        # fall back to per-tensor kernels; Inductor can fuse the cast and update under torch.compile.
+        denom_base = [d.float() if d.dtype == torch.float16 else d for d in denom_base]
         torch._foreach_div_(denom_base, step_size)
         denom = denom_base
 
@@ -430,6 +440,7 @@ def _multi_tensor_adamw(
 
         torch._foreach_addcdiv_(params, exp_avgs, denom)
     else:
+        lr = _get_value(lr)
         bias_correction1 = [1 - beta1 ** _get_value(step) for step in state_steps]
         bias_correction2 = [1 - beta2 ** _get_value(step) for step in state_steps]
 
@@ -458,8 +469,11 @@ def _multi_tensor_adamw(
             torch._foreach_div_(masks, mask_scale)
             exp_avgs = torch._foreach_mul(exp_avgs, masks)
 
-        # Fold the step sizes into the denominator. _foreach_div_ accepts the list
-        # of scalar tensors produced under torch.compile, while the ScalarList
-        # overload of _foreach_addcdiv_ does not.
-        torch._foreach_div_(denom, step_size)
-        torch._foreach_addcdiv_(params, exp_avgs, denom)
+        if _is_compiling():
+            # ScalarList addcdiv does not accept tensor step sizes under torch.compile.
+            # Promote FP16 to avoid overflow when folding in small step sizes; Inductor can fuse the cast.
+            denom = [d.float() if d.dtype == torch.float16 else d for d in denom]
+            torch._foreach_div_(denom, step_size)
+            torch._foreach_addcdiv_(params, exp_avgs, denom)
+        else:
+            torch._foreach_addcdiv_(params, exp_avgs, denom, step_size)

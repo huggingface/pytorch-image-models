@@ -133,7 +133,7 @@ class MADGRAD(torch.optim.Optimizer):
                     else:
                         if grad.is_sparse:
                             raise RuntimeError("weight_decay option is not compatible with sparse gradients")
-                        grad.add_(p, alpha=weight_decay)
+                        grad = grad.add(p, alpha=weight_decay)  # not in-place, leave p.grad unmodified
 
                 if grad.is_sparse:
                     grad = grad.coalesce()

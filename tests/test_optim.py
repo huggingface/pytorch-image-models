@@ -422,28 +422,37 @@ def test_adam(optimizer):
 @pytest.mark.skipif(not hasattr(torch, 'compile'), reason='requires torch.compile')
 @pytest.mark.parametrize('optimizer_name', ['adamwlegacy', 'nadamw'])
 @pytest.mark.parametrize('foreach', [None, False, True])
-def test_compiled_foreach_adam_optimizers(optimizer_name, foreach):
+@pytest.mark.parametrize('dtype,lr,eps', [(torch.float32, 1e-3, 1e-8), (torch.float16, 1e-5, 1e-4)])
+@pytest.mark.parametrize('tensor_lr', [False, True])
+def test_compiled_foreach_adam_optimizers(optimizer_name, foreach, dtype, lr, eps, tensor_lr):
     from timm.optim.adamw import AdamWLegacy
     from timm.optim.nadamw import NAdamW
 
     optimizer_cls = AdamWLegacy if optimizer_name == 'adamwlegacy' else NAdamW
-    param = Parameter(torch.ones(4))
+    lr = torch.tensor(lr) if tensor_lr else lr
+    param = Parameter(torch.full((4,), 0.01, dtype=dtype))
+    eager_param = Parameter(param.detach().clone())
     reference_param = Parameter(param.detach().clone())
-    optimizer = optimizer_cls([param], lr=1e-3, foreach=foreach)
-    reference_optimizer = optimizer_cls([reference_param], lr=1e-3, foreach=False)
+    optimizer = optimizer_cls([param], lr=lr, eps=eps, foreach=foreach)
+    eager_optimizer = optimizer_cls([eager_param], lr=lr, eps=eps, foreach=foreach)
+    reference_optimizer = optimizer_cls([reference_param], lr=lr, eps=eps, foreach=False)
     compiled_step = torch.compile(optimizer.step, backend='eager')
 
     before = param.detach().clone()
-    for _ in range(2):
+    # Small positive LR must keep updating FP16 parameters as bias correction approaches one.
+    for _ in range(30):
         param.grad = torch.ones_like(param)
+        eager_param.grad = torch.ones_like(eager_param)
         reference_param.grad = torch.ones_like(reference_param)
         compiled_step()
+        eager_optimizer.step()
         reference_optimizer.step()
 
     assert torch.isfinite(param).all()
     assert not torch.equal(param, before)
     torch.testing.assert_close(param, reference_param)
-    assert optimizer.state[param]['step'] == 2
+    torch.testing.assert_close(eager_param, reference_param)
+    assert optimizer.state[param]['step'] == 30
 
 
 @pytest.mark.parametrize('optimizer',  ['kron'])
@@ -1116,6 +1125,26 @@ def test_capturable_zero_lr(optimizer, foreach, dtype, eps):
     torch.testing.assert_close(run([1e-3] * 4, capturable=True), run([1e-3] * 4, capturable=False))
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason='capturable requires CUDA')
+@pytest.mark.parametrize('optimizer', ['adamwlegacy', 'nadamw'])
+@pytest.mark.parametrize('foreach', [False, True])
+def test_capturable_fp16_small_lr(optimizer, foreach):
+    # Folding a small step size into an FP16 denominator overflowed to inf, so the capturable paths stopped updating
+    # FP16 params as bias correction approached one. Compare against the non-capturable path.
+    def run(capturable):
+        param = Parameter(torch.full((4,), 0.01, device='cuda', dtype=torch.float16))
+        lr = torch.tensor(1e-5, device='cuda') if capturable else 1e-5
+        opt = create_optimizer_v2([param], optimizer, lr=lr, eps=1e-4, capturable=capturable, foreach=foreach)
+        for _ in range(30):
+            param.grad = torch.ones_like(param)
+            before = param.detach().clone()
+            opt.step()
+        assert not torch.equal(param.detach(), before)
+        return param.detach()
+
+    torch.testing.assert_close(run(True), run(False))
+
+
 @pytest.mark.parametrize('dtype', [torch.bfloat16, torch.float16])
 @pytest.mark.parametrize('precond_dtype', [None, torch.float32])
 @pytest.mark.parametrize('momentum_into_precond_update', [True, False])
@@ -1410,3 +1439,210 @@ def test_complex_param_matches_real_view(optimizer, foreach):
         opt_complex.step()
         opt_real.step()
     torch.testing.assert_close(torch.view_as_real(p_complex.detach()), p_real.detach())
+
+
+_CORRECTED_WD_OPTIMIZERS = [
+    n for n in list_optimizers(exclude_filters=('fused*', 'bnb*'))
+    if (get_optimizer_info(n).defaults or {}).get('corrected_weight_decay')
+]
+
+
+def _corrected_wd_run(optimizer, lr, lrs, tensor_lr):
+    torch.manual_seed(0)
+    param = Parameter(torch.ones(8, 8))
+    lr = torch.tensor(lr) if tensor_lr else lr
+    opt = create_optimizer_v2([param], optimizer, lr=lr, weight_decay=0.1)
+    for i, step_lr in enumerate(lrs):
+        if tensor_lr:
+            lr.fill_(step_lr)
+        else:
+            opt.param_groups[0]['lr'] = step_lr
+        param.grad = torch.randn(8, 8, generator=torch.Generator().manual_seed(i))
+        opt.step()
+    return param.detach(), opt
+
+
+@pytest.mark.parametrize('optimizer', _CORRECTED_WD_OPTIMIZERS)
+def test_corrected_weight_decay_tensor_lr(optimizer):
+    # The max lr for corrected weight decay (lr ** 2 / max_lr) is snapshot at construction. It used to alias a tensor
+    # lr, so in-place lr updates silently disabled the correction and lr == 0 gave 0 / 0 = NaN.
+    lrs = [1e-3, 5e-4, 0., 0., 2e-4]
+    param_float, opt_float = _corrected_wd_run(optimizer, 1e-3, lrs, tensor_lr=False)
+    param_tensor, opt_tensor = _corrected_wd_run(optimizer, 1e-3, lrs, tensor_lr=True)
+    assert torch.isfinite(param_tensor).all()
+    torch.testing.assert_close(param_tensor, param_float)
+    for opt in (opt_float, opt_tensor):
+        assert opt.param_groups[0]['corrected_weight_decay'] is True
+        assert opt.param_groups[0]['max_lr_snapshot'] == pytest.approx(1e-3)
+
+
+@pytest.mark.parametrize('optimizer', _CORRECTED_WD_OPTIMIZERS)
+@pytest.mark.parametrize('saved', ['old_enabled', 'old_disabled', 'new'])
+def test_corrected_weight_decay_state_dict(optimizer, saved):
+    # Older checkpoints have no max_lr_snapshot, it is backfilled w/ the constructor lr (the max lr used before).
+    # Newer checkpoints restore the snapshot as saved.
+    _, opt = _corrected_wd_run(optimizer, 2e-3, [2e-3] * 2, tensor_lr=False)
+    state_dict = deepcopy(opt.state_dict())
+    if saved != 'new':
+        for group in state_dict['param_groups']:
+            del group['max_lr_snapshot']
+            group['corrected_weight_decay'] = saved == 'old_enabled'
+    resumed = create_optimizer_v2([Parameter(torch.ones(8, 8))], optimizer, lr=1e-3, weight_decay=0.1)
+    resumed.load_state_dict(state_dict)
+    for group in resumed.param_groups:
+        assert group['corrected_weight_decay'] is (saved != 'old_disabled')
+        assert group['max_lr_snapshot'] == pytest.approx(2e-3 if saved == 'new' else 1e-3)
+
+
+@pytest.mark.parametrize('optimizer', _CORRECTED_WD_OPTIMIZERS)
+def test_corrected_weight_decay_zero_lr_raises(optimizer):
+    with pytest.raises(ValueError):
+        create_optimizer_v2([Parameter(torch.ones(4))], optimizer, lr=0.)
+
+
+@pytest.mark.parametrize('copy_fn', ['pickle', 'deepcopy'])
+def test_kron_pickle_deepcopy(copy_fn):
+    # Optimizer.__getstate__ only keeps defaults / state / param_groups, Kron's other attributes (deterministic,
+    # compiled fns) must survive or be rebuilt so a copy can keep stepping.
+    import pickle
+    from timm.optim.kron import Kron
+
+    def step(param, opt, start, num):
+        for i in range(start, start + num):
+            param.grad = torch.randn(16, 8, generator=torch.Generator().manual_seed(i))
+            opt.step()
+        return param.detach().clone()
+
+    param = Parameter(torch.ones(16, 8))
+    opt = Kron([param], lr=1e-3, weight_decay=0.1, decoupled_decay=True, deterministic=True)
+    step(param, opt, 0, 3)
+    if copy_fn == 'pickle':
+        param_copy, opt_copy = pickle.loads(pickle.dumps((param, opt)))
+    else:
+        param_copy, opt_copy = deepcopy((param, opt))
+    assert opt_copy.deterministic
+    torch.testing.assert_close(step(param_copy, opt_copy, 3, 3), step(param, opt, 3, 3), rtol=0, atol=0)
+
+
+@pytest.mark.parametrize('optimizer,kwargs', [
+    ('adabelief', {}),
+    ('adabelief', dict(amsgrad=True)),
+    ('radabelief', {}),
+    ('novograd', {}),
+    ('novograd', dict(amsgrad=True)),
+    ('kron', dict(precond_dtype=torch.float32, deterministic=True)),
+    ('kron', dict(mu_dtype=torch.float32, precond_dtype=torch.float32, deterministic=True)),
+    ('kron', dict(mu_dtype=torch.float32, deterministic=True)),
+])
+@pytest.mark.parametrize('dtype', [torch.float16, torch.bfloat16])
+def test_low_precision_state_dtype_resume(optimizer, kwargs, dtype):
+    # Higher precision state must survive loading exactly; casting back after a downcast loses values.
+    def step(param, opt, start, num):
+        for i in range(start, start + num):
+            param.grad = torch.randn(16, 8, generator=torch.Generator().manual_seed(i)).to(dtype)
+            opt.step()
+
+    param = Parameter(torch.ones(16, 8, dtype=dtype))
+    opt = create_optimizer_v2([param], optimizer, lr=1e-3, **kwargs)
+    step(param, opt, 0, 3)
+    saved = deepcopy(opt.state_dict())
+
+    param_copy = Parameter(param.detach().clone())
+    resumed = create_optimizer_v2([param_copy], optimizer, lr=1e-3, **kwargs)
+
+    def check_loaded(loaded):
+        torch.testing.assert_close(loaded.state[param_copy], opt.state[param], rtol=0, atol=0)
+
+    if hasattr(resumed, 'register_load_state_dict_pre_hook'):
+        # Honor user pre-hook remapping, and restore full precision before user post-hooks inspect state.
+        def remap_ids(loaded, state_dict):
+            state_dict = deepcopy(state_dict)
+            state_dict['state'][100] = state_dict['state'].pop(0)
+            state_dict['param_groups'][0]['params'] = [100]
+            return state_dict
+
+        resumed.register_load_state_dict_pre_hook(remap_ids)
+        resumed.register_load_state_dict_post_hook(check_loaded)
+
+    resumed.load_state_dict(saved)
+    check_loaded(resumed)
+    torch.testing.assert_close(saved['state'][0], opt.state[param], rtol=0, atol=0)
+    step(param, opt, 3, 3)
+    step(param_copy, resumed, 3, 3)
+    torch.testing.assert_close(param_copy, param, rtol=0, atol=0)
+    torch.testing.assert_close(resumed.state[param_copy], opt.state[param], rtol=0, atol=0)
+    assert torch.isfinite(param_copy).all()
+
+
+def test_adafactor_bv_default_eps_per_param():
+    # The dtype dependent default eps was resolved once from the first param, a FP16 param after a FP32 one got
+    # an eps that underflows in FP16 and NaN on zero gradients.
+    from timm.optim.adafactor_bv import AdafactorBigVision
+    params = [Parameter(torch.ones(32, 32)), Parameter(torch.ones(32, 32, dtype=torch.float16))]
+    opt = AdafactorBigVision(params, lr=1e-2)
+    for p in params:
+        p.grad = torch.zeros_like(p)
+    opt.step()
+    assert all(torch.isfinite(p).all() for p in params)
+
+
+def test_adafactor_zero_lr():
+    # lr=0 is a manual lr, only lr=None enables the relative step lr schedule.
+    from timm.optim.adafactor import Adafactor
+    param = Parameter(torch.ones(8, 8))
+    opt = Adafactor([param], lr=0.)
+    param.grad = torch.ones(8, 8)
+    opt.step()
+    assert not opt.param_groups[0]['relative_step']
+    torch.testing.assert_close(param.detach(), torch.ones(8, 8), rtol=0, atol=0)
+    assert Adafactor([Parameter(torch.ones(2))]).param_groups[0]['relative_step']
+
+
+_GRAD_UNCHANGED_SKIP = ('fused*', 'bnb*', 'adahessian')
+
+
+@pytest.mark.parametrize('optimizer', list_optimizers(exclude_filters=_GRAD_UNCHANGED_SKIP))
+def test_optimizer_grad_unchanged(optimizer):
+    # Optimizers must not modify p.grad, code reading gradients after step() (e.g. grad norm logging) would see
+    # the modified values. The foreach SGD nesterov paths (torch.optim.SGD, SGDW) intentionally update grads
+    # in place to avoid allocating a full set of temporaries, matching PyTorch, they're excluded via foreach=False.
+    opt_args = inspect.signature(get_optimizer_class(optimizer, bind_defaults=False).__init__).parameters
+    configs = [{}]
+    if 'decoupled_decay' in opt_args:
+        configs = [dict(decoupled_decay=False), dict(decoupled_decay=True)]
+    for config in configs:
+        if 'foreach' in opt_args:
+            config['foreach'] = False
+        weight = Parameter(torch.randn(16, 8, generator=torch.Generator().manual_seed(0)))
+        bias = Parameter(torch.randn(8, generator=torch.Generator().manual_seed(1)))
+        opt = create_optimizer_v2([weight, bias], optimizer, lr=1e-2, weight_decay=0.1, **config)
+        for i in range(2):
+            # scaled so the global grad norm exceeds LAMB's default max_grad_norm clipping threshold
+            grads = [3 * torch.randn(p.shape, generator=torch.Generator().manual_seed(10 * i + j))
+                     for j, p in enumerate((weight, bias))]
+            weight.grad, bias.grad = grads[0].clone(), grads[1].clone()
+            opt.step()
+            torch.testing.assert_close(weight.grad, grads[0], rtol=0, atol=0)
+            torch.testing.assert_close(bias.grad, grads[1], rtol=0, atol=0)
+
+
+@pytest.mark.parametrize('grad_averaging', [False, True])
+@pytest.mark.parametrize('corrected', [False, True])
+def test_novograd_decoupled_weight_decay(grad_averaging, corrected):
+    # Decoupled decay shrinks the weights by lr * weight_decay (lr ** 2 / max_lr * weight_decay if corrected) every
+    # step. It does not go through the momentum, where the paper form ramps up to ~lr * weight_decay / (1 - beta1),
+    # and it does not depend on grad_averaging.
+    from timm.optim.nvnovograd import NvNovoGrad
+    lr, max_lr, wd = 1e-2, 2e-2, 0.1
+    param = Parameter(torch.ones(4))
+    opt = NvNovoGrad(
+        [param], lr=max_lr, weight_decay=wd, grad_averaging=grad_averaging,
+        decoupled_decay=True, corrected_weight_decay=corrected,
+    )
+    opt.param_groups[0]['lr'] = lr
+    wd_scale = lr ** 2 / max_lr if corrected else lr
+    for _ in range(5):
+        before = param.detach().clone()
+        param.grad = torch.zeros(4)
+        opt.step()
+        torch.testing.assert_close(param.detach(), before * (1 - wd_scale * wd))

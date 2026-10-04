@@ -1,6 +1,10 @@
 import math
+from typing import Any, Dict
+
 import torch
 from torch.optim.optimizer import Optimizer
+
+from ._helpers import _load_state_dict_preserving_dtypes
 
 
 class AdaBelief(Optimizer):
@@ -85,6 +89,15 @@ class AdaBelief(Optimizer):
         for group in self.param_groups:
             group.setdefault('amsgrad', False)
 
+    def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
+        _load_state_dict_preserving_dtypes(
+            self, state_dict, super().load_state_dict,
+            lambda group, param: {
+                key: torch.float32 if param.dtype in {torch.float16, torch.bfloat16} else None
+                for key in ('exp_avg', 'exp_avg_var', 'max_exp_avg_var')
+            },
+        )
+
     @torch.no_grad()
     def reset(self):
         for group in self.param_groups:
@@ -152,7 +165,7 @@ class AdaBelief(Optimizer):
                         p_fp32.mul_(1.0 - group['weight_decay'])
                 else:
                     if group['weight_decay'] != 0:
-                        grad.add_(p_fp32, alpha=group['weight_decay'])
+                        grad = grad.add(p_fp32, alpha=group['weight_decay'])  # not in-place, leave p.grad unmodified
 
                 # get current state variable
                 exp_avg, exp_avg_var = state['exp_avg'], state['exp_avg_var']

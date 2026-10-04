@@ -620,6 +620,13 @@ def _register_corrected_decay_optimizers(registry: OptimizerRegistry) -> None:
             defaults={'alpha': 0.9, 'decoupled_decay': True, 'corrected_weight_decay': True}
         ),
         OptimInfo(
+            name='novogradc',
+            opt_class=NvNovoGrad,
+            description='NovoGrad with corrected decoupled weight decay (lr²/max_lr scaling)',
+            has_betas=True,
+            defaults={'decoupled_decay': True, 'corrected_weight_decay': True}
+        ),
+        OptimInfo(
             name='adafactorbvc',
             opt_class=AdafactorBigVision,
             description='Adafactor Big Vision with corrected weight decay (lr²/max_lr or lr/max_lr scaling)',
@@ -949,6 +956,13 @@ def _register_other_optimizers(registry: OptimizerRegistry) -> None:
             opt_class=NvNovoGrad,
             description='Normalized Adam with L2 norm gradient normalization',
             has_betas=True
+        ),
+        OptimInfo(
+            name='novogradw',
+            opt_class=NvNovoGrad,
+            description='NovoGrad with decoupled weight decay',
+            has_betas=True,
+            defaults={'decoupled_decay': True}
         ),
         OptimInfo(
             name='rmsprop',

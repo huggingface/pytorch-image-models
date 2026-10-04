@@ -47,7 +47,7 @@ try:
 except AttributeError:
     has_dynamo = False
 
-from ._helpers import _add_scaled_, _validate_scalar
+from ._helpers import _add_scaled_, _load_state_dict_preserving_dtypes, _max_lr_snapshot, _validate_scalar
 from ._types import ParamsT
 
 _logger = logging.getLogger(__name__)
@@ -154,6 +154,7 @@ class Kron(torch.optim.Optimizer):
             precond_dtype=precond_dtype,
             decoupled_decay=decoupled_decay,
             corrected_weight_decay=corrected_weight_decay,
+            max_lr_snapshot=_max_lr_snapshot(lr, corrected_weight_decay),
             flatten=flatten,
             flatten_start_dim=flatten_start_dim,
             flatten_end_dim=flatten_end_dim,
@@ -162,10 +163,13 @@ class Kron(torch.optim.Optimizer):
         super(Kron, self).__init__(params, defaults)
 
         self._param_exprs = {}  # cache for einsum expr
-        self._tiny = torch.finfo(torch.bfloat16).tiny
         self.rng = random.Random(1337)
         self.deterministic = deterministic
+        self._init_fns()
 
+    def _init_fns(self):
+        # non-picklable / constant attributes, (re)created on init and unpickle
+        self._tiny = torch.finfo(torch.bfloat16).tiny
         # make compile optional (for bwd compat)
         if has_dynamo:
             self._calc_A_and_conjB = torch.compile(_calc_A_and_conjB, fullgraph=True, dynamic=False)
@@ -180,13 +184,21 @@ class Kron(torch.optim.Optimizer):
 
     def __setstate__(self, state):
         super().__setstate__(state)
+        self.defaults.setdefault('max_lr_snapshot', _max_lr_snapshot(self.defaults['lr']))  # pickled pre-snapshot
         self._param_exprs = {}
+        if not hasattr(self, '_calc_A_and_conjB'):
+            # unpickle / deepcopy, __getstate__ only keeps defaults, state, param_groups, rng, deterministic
+            self.__dict__.setdefault('rng', random.Random(1337))
+            self.__dict__.setdefault('deterministic', False)
+            self._init_fns()
         for group in self.param_groups:
             group.setdefault('corrected_weight_decay', False)
+            group.setdefault('max_lr_snapshot', self.defaults['max_lr_snapshot'])
 
     def __getstate__(self):
         _dict = super().__getstate__()
         _dict["rng"] = self.rng
+        _dict["deterministic"] = self.deterministic
         return _dict
 
     def state_dict(self) -> Dict[str, Any]:
@@ -198,18 +210,19 @@ class Kron(torch.optim.Optimizer):
         return optimizer_state
 
     def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
-        # Extract and remove the RNG state from the state dict
-        rng_states = {}
-        if 'rng_state' in state_dict:
-            rng_states['rng_state'] = state_dict.pop('rng_state')
-            
-        # Load the optimizer state
-        super().load_state_dict(state_dict)
-        state_dict.update(rng_states)  # add back
+        state_dict = state_dict.copy()
+        rng_state = state_dict.pop('rng_state', None)
+        _load_state_dict_preserving_dtypes(
+            self, state_dict, super().load_state_dict,
+            lambda group, param: {
+                'momentum_buffer': group.get('mu_dtype'),
+                'Q': group.get('precond_dtype'),
+            },
+        )
 
         # Restore the RNG state if it exists
-        if 'rng_state' in rng_states:
-            self.rng.setstate(rng_states['rng_state'])
+        if rng_state is not None:
+            self.rng.setstate(rng_state)
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -241,6 +254,9 @@ class Kron(torch.optim.Optimizer):
                     grad = safe_flatten(grad, group["flatten_start_dim"], group["flatten_end_dim"])
                     flattened = True
 
+                # preconditioner (and debiased momentum) dtype, the param dtype if not set
+                param_precond_dtype = precond_dtype or grad.dtype
+
                 if len(state) == 0:
                     state["step"] = 0
                     state["update_counter"] = 0
@@ -252,7 +268,7 @@ class Kron(torch.optim.Optimizer):
                         group["max_size_triangular"],
                         group["min_ndim_triangular"],
                         group["memory_save_mode"],
-                        dtype=precond_dtype,
+                        dtype=param_precond_dtype,
                     )
                     self._param_exprs[p] = exprs
 
@@ -274,7 +290,7 @@ class Kron(torch.optim.Optimizer):
                         group["max_size_triangular"],
                         group["min_ndim_triangular"],
                         group["memory_save_mode"],
-                        dtype=precond_dtype,
+                        dtype=param_precond_dtype,
                         init_q=False,
                     )
                     self._param_exprs[p] = exprs
@@ -303,7 +319,7 @@ class Kron(torch.optim.Optimizer):
                 # Restore momentum dtype
                 if mu_dtype is not None:
                     momentum_buffer.copy_(momentum_buffer.to(dtype=mu_dtype))
-                debiased_momentum = (momentum_buffer / bias_correction).to(dtype=precond_dtype)
+                debiased_momentum = (momentum_buffer / bias_correction).to(dtype=param_precond_dtype)
 
                 # Balance preconditioners roughly every 100 updates
                 balance = self.rng.random() < 0.01 and do_update
@@ -363,7 +379,7 @@ class Kron(torch.optim.Optimizer):
 
                     if group["decoupled_decay"]:
                         if group['corrected_weight_decay']:
-                            wd_scale = group["lr"] ** 2 / self.defaults['lr']
+                            wd_scale = group["lr"] ** 2 / group["max_lr_snapshot"]
                         else:
                             wd_scale = group["lr"]
                         p.mul_(1. - wd_scale * weight_decay)
