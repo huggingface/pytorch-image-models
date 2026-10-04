@@ -17,6 +17,7 @@ try:
 except ImportError:
     has_recent_pt = False
 
+from ._helpers import _max_lr_snapshot
 from ._types import ParamsT
 
 __all__ = ['SGDW', 'sgdw']
@@ -53,6 +54,7 @@ class SGDW(Optimizer):
             nesterov=nesterov,
             caution=caution,
             corrected_weight_decay=corrected_weight_decay,
+            max_lr_snapshot=_max_lr_snapshot(lr, corrected_weight_decay),
             maximize=maximize,
             foreach=foreach,
             differentiable=differentiable,
@@ -63,9 +65,11 @@ class SGDW(Optimizer):
 
     def __setstate__(self, state):
         super().__setstate__(state)
+        self.defaults.setdefault('max_lr_snapshot', _max_lr_snapshot(self.defaults['lr']))  # pickled pre-snapshot
         for group in self.param_groups:
             group.setdefault('caution', False)
             group.setdefault('corrected_weight_decay', False)
+            group.setdefault('max_lr_snapshot', self.defaults['max_lr_snapshot'])
             group.setdefault('nesterov', False)
             group.setdefault('maximize', False)
             group.setdefault('foreach', None)
@@ -124,7 +128,7 @@ class SGDW(Optimizer):
                 maximize=group['maximize'],
                 has_sparse_grad=has_sparse_grad,
                 foreach=group['foreach'],
-                max_lr=self.defaults['lr'] if group['corrected_weight_decay'] else None,
+                max_lr=group['max_lr_snapshot'] if group['corrected_weight_decay'] else None,
             )
 
             # update momentum_buffers in state

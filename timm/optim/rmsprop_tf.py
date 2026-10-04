@@ -14,7 +14,7 @@ Modifications Copyright 2021 Ross Wightman
 import torch
 from torch.optim import Optimizer
 
-from ._helpers import _add_scaled_, _addcdiv_scaled_, _init_scalar, _validate_scalar
+from ._helpers import _add_scaled_, _addcdiv_scaled_, _init_scalar, _max_lr_snapshot, _validate_scalar
 from ._types import ParamsT
 
 
@@ -79,6 +79,7 @@ class RMSpropTF(Optimizer):
             weight_decay=weight_decay,
             decoupled_decay=decoupled_decay,
             corrected_weight_decay=corrected_weight_decay,
+            max_lr_snapshot=_max_lr_snapshot(lr, corrected_weight_decay),
             lr_in_momentum=lr_in_momentum,
             caution=caution,
         )
@@ -86,11 +87,13 @@ class RMSpropTF(Optimizer):
 
     def __setstate__(self, state):
         super(RMSpropTF, self).__setstate__(state)
+        self.defaults.setdefault('max_lr_snapshot', _max_lr_snapshot(self.defaults['lr']))  # pickled pre-snapshot
         for group in self.param_groups:
             group.setdefault('momentum', 0)
             group.setdefault('centered', False)
             group.setdefault('caution', False)
             group.setdefault('corrected_weight_decay', False)
+            group.setdefault('max_lr_snapshot', self.defaults['max_lr_snapshot'])
             for p in group['params']:
                 p_state = self.state.get(p, {})
                 if p_state and 'step' in p_state:
@@ -135,7 +138,7 @@ class RMSpropTF(Optimizer):
                 if group['weight_decay'] != 0:
                     if group['decoupled_decay']:
                         if group['corrected_weight_decay']:
-                            wd_scale = group['lr'] ** 2 / self.defaults['lr']
+                            wd_scale = group['lr'] ** 2 / group['max_lr_snapshot']
                         else:
                             wd_scale = group['lr']
                         p.mul_(1. - wd_scale * group['weight_decay'])

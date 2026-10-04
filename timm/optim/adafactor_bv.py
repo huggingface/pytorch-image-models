@@ -16,7 +16,7 @@ import torch
 from torch import Tensor
 from torch.optim import Optimizer
 
-from ._helpers import _get_value, _init_scalar, _validate_scalar
+from ._helpers import _get_value, _init_scalar, _max_lr_snapshot, _validate_scalar
 from ._types import ParamsT
 
 
@@ -98,15 +98,18 @@ class AdafactorBigVision(Optimizer):
             unscaled_wd=unscaled_wd,
             caution=caution,
             corrected_weight_decay=corrected_weight_decay,
+            max_lr_snapshot=_max_lr_snapshot(lr, corrected_weight_decay),
             foreach=foreach,
         )
         super().__init__(params, defaults)
 
     def __setstate__(self, state):
         super().__setstate__(state)
+        self.defaults.setdefault('max_lr_snapshot', _max_lr_snapshot(self.defaults['lr']))  # pickled pre-snapshot
         for group in self.param_groups:
             group.setdefault('caution', False)
             group.setdefault('corrected_weight_decay', False)
+            group.setdefault('max_lr_snapshot', self.defaults['max_lr_snapshot'])
             group.setdefault('foreach', None)
             for p in group['params']:
                 p_state = self.state.get(p, {})
@@ -202,7 +205,7 @@ class AdafactorBigVision(Optimizer):
                 clipping_threshold=group['clipping_threshold'],
                 unscaled_wd=group['unscaled_wd'],
                 caution=group['caution'],
-                max_lr=self.defaults['lr'] if group['corrected_weight_decay'] else None,
+                max_lr=group['max_lr_snapshot'] if group['corrected_weight_decay'] else None,
             )
 
         return loss
@@ -238,9 +241,8 @@ def _single_tensor_adafactor(
         exp_avg_sq = exp_avg_sqs[i]
         exp_avg = exp_avgs[i]
         step_t = state_steps[i]
-        if eps is None:
-            # default eps for avoiding div by zero, diff from float type eps
-            eps = 1e-7 if grad.dtype == torch.float16 else 1e-30
+        # default eps for avoiding div by zero, diff from float type eps, resolved per param (dtype may differ)
+        param_eps = eps if eps is not None else (1e-7 if grad.dtype == torch.float16 else 1e-30)
 
         # Update step
         step_t.add_(1)
@@ -255,7 +257,7 @@ def _single_tensor_adafactor(
             beta2_t = min(beta2_cap, 1.0 - decay_step ** (-beta2_decay))
         one_minus_beta2_t = 1 - beta2_t
 
-        grad_sqr = torch.square(grad) + eps
+        grad_sqr = torch.square(grad) + param_eps
         # NOTE application of eps (epsilon1) mirrors the optax/big vision/t5x approach
         if exp_avg_sq is None:
             # factorized second moment

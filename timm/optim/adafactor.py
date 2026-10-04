@@ -60,7 +60,7 @@ class Adafactor(torch.optim.Optimizer):
             min_dim_size_to_factor: int = 16,
             caution: bool = False,
     ):
-        relative_step = not lr
+        relative_step = lr is None
         if warmup_init and not relative_step:
             raise ValueError('warmup_init requires relative_step=True')
 

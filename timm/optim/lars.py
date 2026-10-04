@@ -112,8 +112,7 @@ class Lars(Optimizer):
                     )
                     if group['trust_clip']:
                         trust_ratio = torch.clamp(trust_ratio / group['lr'], max=1.0)
-                    grad.add_(p, alpha=weight_decay)
-                    grad.mul_(trust_ratio)
+                    grad = grad.add(p, alpha=weight_decay).mul_(trust_ratio)  # not in-place, leave p.grad unmodified
 
                 # apply SGD update https://github.com/pytorch/pytorch/blob/1.7/torch/optim/sgd.py#L100
                 if momentum != 0:
