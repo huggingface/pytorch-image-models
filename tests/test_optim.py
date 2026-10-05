@@ -19,6 +19,7 @@ from torch.testing._internal.common_utils import TestCase
 
 from timm.optim import create_optimizer_v2, list_optimizers, get_optimizer_class, get_optimizer_info, OptimInfo
 from timm.optim import param_groups_layer_decay, param_groups_weight_decay
+import timm.optim._helpers as optim_helpers
 
 torch_backend = os.environ.get('TORCH_BACKEND')
 if torch_backend is not None:
@@ -985,11 +986,9 @@ def test_mars_first_step_clipped():
 @pytest.mark.parametrize('foreach', [False, True])
 def test_complex_param_matches_real_view(optimizer, foreach):
     # Complex params are optimized as their real view, |g|^2 not g^2 for the second moment.
-    if optimizer == 'laprop' and foreach:
-        pytest.skip('LaProp has no foreach impl')
     generator = torch.Generator().manual_seed(0)
     grads = [torch.randn(4, 4, dtype=torch.complex64, generator=generator) for _ in range(3)]
-    kwargs = dict(lr=1e-2) if optimizer == 'laprop' else dict(lr=1e-2, foreach=foreach)
+    kwargs = dict(lr=1e-2, foreach=foreach)
 
     p_complex = Parameter(torch.ones(4, 4, dtype=torch.complex64))
     p_real = Parameter(torch.view_as_real(p_complex.detach().clone()).clone())
@@ -1284,52 +1283,132 @@ def test_optimizer_low_precision(config, dtype):
     for p in _run_steps(params, opt, range(3)):
         assert p.dtype == dtype
         assert torch.isfinite(p).all()
+    if hasattr(opt, 'reset'):
+        # state re-created by reset() must work w/ low precision params as lazily initialized state does
+        opt.reset()
+        for p in _run_steps(params, opt, range(3, 5)):
+            assert p.dtype == dtype
+            assert torch.isfinite(p).all()
 
 
-@pytest.mark.parametrize('optimizer', [
+_FOREACH_OPTIMIZERS = [
     n for n in _REGISTRY_OPTIMIZERS
     if get_optimizer_class(n, bind_defaults=False).__module__.startswith('timm') and 'foreach' in _opt_args(n)
-])
-def test_optimizer_foreach_parity(optimizer):
-    # The foreach (multi-tensor) impl matches the single tensor impl, incl a param lagging behind in steps (no grad
-    # for a while) and params spanning more than one (device, dtype) group. torch.optim impls are tested upstream.
-    _skip_unsupported_registry_defaults(optimizer)
+]
+_FOREACH_CONFIGS = [(n, {}) for n in _FOREACH_OPTIMIZERS] + [
+    ('rmsproptf', dict(centered=True)),
+    ('rmsproptf', dict(lr_in_momentum=False)),
+    ('rmsproptf', dict(momentum=0.)),
+    ('rmsproptf', dict(centered=True, lr_in_momentum=False)),
+    ('lamb', dict(always_adapt=True)),
+    ('lamb', dict(bias_correction=False, grad_averaging=False)),
+    ('lars', dict(momentum=0.)),
+    ('lars', dict(dampening=0.1, always_adapt=True)),
+    ('adabelief', dict(amsgrad=True)),
+    ('adabelief', dict(decoupled_decay=False)),
+    ('adabelief', dict(fixed_decay=True)),
+    ('radabelief', dict(amsgrad=True)),
+    ('radabelief', dict(degenerated_to_sgd=False)),
+]
+
+
+def _skip_unsupported_foreach(optimizer):
+    # timm foreach (multi-tensor) impls only, torch.optim impls are tested upstream
+    if optimizer not in _FOREACH_OPTIMIZERS:
+        pytest.skip('no timm foreach impl')
     _skip_property_exceptions('foreach_parity', optimizer)
     if (get_optimizer_info(optimizer).defaults or {}).get('caution') and \
             'Scalar' not in torch.ops.aten._foreach_maximum_.overloads():
         pytest.skip('Cautious foreach impls require a newer PyTorch (Scalar _foreach_maximum_)')
     if 'adopt' in optimizer and not hasattr(torch.optim.Optimizer, '_group_tensors_by_device_and_dtype'):
         pytest.skip('Adopt foreach (multi-tensor) impl requires a newer PyTorch')
+
+
+@pytest.mark.parametrize('config', _FOREACH_CONFIGS, ids=_config_id)
+def test_optimizer_foreach_parity(config):
+    # The foreach (multi-tensor) impl matches the single tensor impl, incl a param lagging behind in steps (no grad
+    # for a while) and params spanning more than one (device, dtype) group. torch.optim impls are tested upstream.
+    # Both impls compiled (dynamo) match too, state derived Python values (e.g. Adopt's first step flags for the
+    # lagging param) must not be baked into the graph.
+    optimizer, kwargs = config
+    _skip_unsupported_registry_defaults(optimizer)
+    _skip_unsupported_foreach(optimizer)
+    variants = [(False, False), (True, False)]
+    if hasattr(torch, 'compile'):
+        variants += [(False, True), (True, True)]
     results = []
-    for foreach in (False, True):
+    for foreach, compiled in variants:
+        if compiled:
+            torch._dynamo.reset()
         params = [
             Parameter(torch.randn(16, 8, generator=torch.Generator().manual_seed(0))),
             Parameter(torch.randn(8, generator=torch.Generator().manual_seed(1))),
             Parameter(torch.randn(16, 8, generator=torch.Generator().manual_seed(2), dtype=torch.float64)),
         ]
-        opt = _create_optimizer(optimizer, params, foreach=foreach)
+        opt = _create_optimizer(optimizer, params, kwargs, foreach=foreach)
+        opt_step = torch.compile(opt.step, backend='eager') if compiled else opt.step
+        for step in range(6):
+            for i, (p, g) in enumerate(zip(params, _step_grads(params, step))):
+                p.grad = None if (i == 1 and step < 3) else g
+            opt_step()
+        results.append([p.detach().clone() for p in params])
+    for (_, compiled), result in zip(variants[1:], results[1:]):
+        # compiled step scalars (e.g. bias corrections) are computed in the step tensor dtype (float32), not as
+        # Python floats, so the float64 param only matches to ~float32 precision
+        tol = dict(rtol=1e-5, atol=1e-6) if compiled else {}
+        for a, e in zip(result, results[0]):
+            torch.testing.assert_close(a, e, **tol)
+
+
+@pytest.mark.skipif(not optim_helpers._HAS_L2_CACHE_SIZE, reason='foreach chunking requires PyTorch >= 2.5')
+@pytest.mark.parametrize('config', _FOREACH_CONFIGS, ids=_config_id)
+def test_optimizer_foreach_chunked(config, monkeypatch):
+    # Running the foreach impl in chunks of params is bitwise identical to running all params at once.
+    optimizer, kwargs = config
+    _skip_unsupported_registry_defaults(optimizer)
+    _skip_property_exceptions('foreach_parity', optimizer)
+    results = []
+    for chunk_size in (0, 136):  # 0 = don't chunk, 136 elements = chunks of [128, 8], [128], [64, 64]
+        monkeypatch.setattr(optim_helpers, '_FOREACH_CHUNK_OVERRIDE', chunk_size)
+        params = [
+            Parameter(torch.randn(16, 8, generator=torch.Generator().manual_seed(0))),
+            Parameter(torch.randn(8, generator=torch.Generator().manual_seed(1))),
+            Parameter(torch.randn(16, 8, generator=torch.Generator().manual_seed(2))),
+            Parameter(torch.randn(8, 8, generator=torch.Generator().manual_seed(3))),
+            Parameter(torch.randn(64, generator=torch.Generator().manual_seed(4))),
+        ]
+        opt = _create_optimizer(optimizer, params, kwargs, foreach=True)
         for step in range(6):
             for i, (p, g) in enumerate(zip(params, _step_grads(params, step))):
                 p.grad = None if (i == 1 and step < 3) else g
             opt.step()
         results.append([p.detach().clone() for p in params])
+    # LaProp and RAdaBelief foreach apply a shared step size as a single scalar when all params in the list have
+    # the same one, chunks w/o the lagging param do, rounding differently than per param scalars
+    bitwise = not any(fnmatch.fnmatch(optimizer, pat) for pat in ('*laprop*', 'radabelief'))
     for a, e in zip(*results):
-        torch.testing.assert_close(a, e)
+        if bitwise:
+            assert torch.equal(a, e)
+        else:
+            torch.testing.assert_close(a, e)
 
 
+@pytest.mark.parametrize('foreach', [False, True])
 @pytest.mark.parametrize('optimizer', _REGISTRY_OPTIMIZERS)
-def test_optimizer_grad_unchanged(optimizer):
+def test_optimizer_grad_unchanged(optimizer, foreach):
     # Optimizers must not modify p.grad, code reading gradients after step() (e.g. grad norm logging) would see
-    # the modified values. The foreach SGD nesterov paths (torch.optim.SGD, SGDW) intentionally update grads
-    # in place to avoid allocating a full set of temporaries, matching PyTorch, they're excluded via foreach=False.
+    # the modified values. The foreach SGD nesterov path of torch.optim.SGD updates grads in place (not tested
+    # here, the timm foreach impls are, see _skip_unsupported_foreach).
     _skip_unsupported_registry_defaults(optimizer)
+    if foreach:
+        _skip_unsupported_foreach(optimizer)
     opt_args = _opt_args(optimizer)
     configs = [{}]
     if 'decoupled_decay' in opt_args:
         configs = [dict(decoupled_decay=False), dict(decoupled_decay=True)]
     for config in configs:
         if 'foreach' in opt_args:
-            config['foreach'] = False
+            config['foreach'] = foreach
         weight = Parameter(torch.randn(16, 8, generator=torch.Generator().manual_seed(0)))
         bias = Parameter(torch.randn(8, generator=torch.Generator().manual_seed(1)))
         opt = create_optimizer_v2([weight, bias], optimizer, lr=1e-2, weight_decay=0.1, **config)

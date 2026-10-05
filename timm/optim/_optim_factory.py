@@ -978,6 +978,13 @@ def _register_other_optimizers(registry: OptimizerRegistry) -> None:
             has_momentum=True,
             defaults={'alpha': 0.9}
         ),
+        OptimInfo(
+            name='rmsproptfw',
+            opt_class=RMSpropTF,
+            description='TensorFlow-style RMSprop with decoupled weight decay',
+            has_momentum=True,
+            defaults={'alpha': 0.9, 'decoupled_decay': True}
+        ),
     ]
     for opt in other_optimizers:
         registry.register(opt)

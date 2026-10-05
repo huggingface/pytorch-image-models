@@ -1,9 +1,15 @@
 """Small optimizer helpers shared by timm optimizer implementations."""
 
+import functools
+import os
 from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 
 import torch
 from torch import Tensor
+try:
+    from torch.optim.optimizer import _default_to_fused_or_foreach
+except ImportError:
+    _default_to_fused_or_foreach = None
 
 
 def _load_state_dict_preserving_dtypes(
@@ -104,6 +110,148 @@ def _is_compiling() -> bool:
     if hasattr(torch, '_dynamo') and hasattr(torch._dynamo, 'is_compiling'):
         return torch._dynamo.is_compiling()
     return False
+
+
+# _foreach_maximum_(TensorList, Scalar) overload used by cautious foreach impls, checked once (not traceable by dynamo)
+try:
+    _HAS_FOREACH_MAXIMUM_SCALAR = 'Scalar' in torch.ops.aten._foreach_maximum_.overloads()
+except Exception:
+    _HAS_FOREACH_MAXIMUM_SCALAR = False
+
+
+def _resolve_foreach(
+        foreach: Optional[bool],
+        caution: bool = False,
+        lr: Union[float, Tensor, None] = None,
+        params: Optional[List[Tensor]] = None,
+) -> bool:
+    """Resolve foreach=None (default) for timm optimizers w/ single and multi-tensor impls."""
+    if foreach is not None:
+        return foreach
+    if caution and not _HAS_FOREACH_MAXIMUM_SCALAR:
+        # cannot do foreach if this overload doesn't exist when caution enabled
+        return False
+    if torch.is_tensor(lr):
+        # a tensor lr is supported by the single tensor path
+        return False
+    if params is None:
+        return True
+    # match PyTorch, default to foreach for devices w/ foreach (multi-tensor) kernels (e.g. CUDA, not CPU or XLA)
+    if _default_to_fused_or_foreach is not None:
+        return _default_to_fused_or_foreach(params, differentiable=False, use_fused=False)[1]
+    return all(type(p) in (torch.Tensor, torch.nn.Parameter) and p.is_cuda for p in params)
+
+
+def _foreach_trust_ratios(w_norms: List[Tensor], g_norms: List[Tensor], fn) -> List[Tensor]:
+    """Compute per param (layer-wise) trust ratios fn(w_norm, g_norm) w/ one vectorized op per (device, dtype)."""
+    ratios: List[Optional[Tensor]] = [None] * len(w_norms)
+    groups = {}
+    for i, w in enumerate(w_norms):
+        groups.setdefault((w.device, w.dtype), []).append(i)
+    for idx in groups.values():
+        r = fn(torch.stack([w_norms[i] for i in idx]), torch.stack([g_norms[i] for i in idx]))
+        for i, ri in zip(idx, r.unbind(0)):
+            ratios[i] = ri
+    return ratios
+
+
+# foreach (multi-tensor) step fns are run in chunks of params sized to keep a chunk's working set in the L2 cache,
+# processing all params per op would stream every tensor from memory for each op. Max elements per chunk override,
+# None = derive from the device L2 cache size, 0 = don't chunk.
+_FOREACH_CHUNK_OVERRIDE: Optional[int] = (
+    int(os.environ['TIMM_FOREACH_CHUNK_SIZE']) if 'TIMM_FOREACH_CHUNK_SIZE' in os.environ else None)
+# the chunk size is derived from the device L2 cache size, available in PyTorch >= 2.5
+_HAS_L2_CACHE_SIZE = hasattr(getattr(torch._C, '_CudaDeviceProperties', None), 'L2_cache_size')
+_L2_CACHE_SIZE = {}
+
+
+def _foreach_chunk_elements(device: torch.device, element_size: int) -> Optional[int]:
+    """Max elements per foreach chunk so a chunk's ~4 tensor streams stay in the L2 cache, None = don't chunk."""
+    if _FOREACH_CHUNK_OVERRIDE is not None:
+        return _FOREACH_CHUNK_OVERRIDE or None
+    if device.type != 'cuda':
+        return None
+    if device not in _L2_CACHE_SIZE:
+        _L2_CACHE_SIZE[device] = torch.cuda.get_device_properties(device).L2_cache_size
+    return max(_L2_CACHE_SIZE[device] // (4 * element_size), 2 ** 20)
+
+
+def _foreach_chunks(params: List[Tensor]) -> List[List[int]]:
+    """Consecutive param index chunks w/ total numel <= chunk size, a larger tensor forms its own chunk."""
+    budget = _foreach_chunk_elements(params[0].device, params[0].element_size()) if params else None
+    if budget is None:
+        return [list(range(len(params)))]
+    chunks, cur, total = [], [], 0
+    for i, p in enumerate(params):
+        if cur and total + p.numel() > budget:
+            chunks.append(cur)
+            cur, total = [], 0
+        cur.append(i)
+        total += p.numel()
+    return chunks + [cur] if cur else chunks
+
+
+def _foreach_chunked(num_per_param_args: int, writeback: Sequence[int] = ()):
+    """Decorator, run a foreach (multi-tensor) step fn per chunk of params, see _foreach_chunks.
+
+    Args:
+        num_per_param_args: the first num_per_param_args positional args are per param lists (sliced per chunk).
+        writeback: indices of per param lists the step fn assigns elements of (e.g. new momentum buffers), those
+            elements are written back to the caller's list.
+    """
+    def decorator(fn):
+        if not _HAS_L2_CACHE_SIZE:
+            return fn  # chunking unsupported by this PyTorch, use the multi-tensor fn as is
+
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            per_param, rest = args[:num_per_param_args], args[num_per_param_args:]
+            chunks = _foreach_chunks(per_param[0])
+            if len(chunks) <= 1:
+                return fn(*args, **kwargs)
+            for idx in chunks:
+                chunk_args = [[v[i] for i in idx] if v else v for v in per_param]
+                fn(*chunk_args, *rest, **kwargs)
+                for a in writeback:
+                    for j, i in enumerate(idx):
+                        per_param[a][i] = chunk_args[a][j]
+        return wrapper
+    return decorator
+
+
+def _foreach_lerp_(tensors: List[Tensor], ends: List[Tensor], weight: float) -> None:
+    """In-place foreach lerp (EMA update), w/ a mul + add fallback for PyTorch < 2.0."""
+    if hasattr(torch, '_foreach_lerp_'):
+        torch._foreach_lerp_(tensors, ends, weight)
+    else:
+        torch._foreach_mul_(tensors, 1. - weight)
+        torch._foreach_add_(tensors, ends, alpha=weight)
+
+
+def _foreach_lerp(tensors: List[Tensor], ends: List[Tensor], weight: float) -> List[Tensor]:
+    """Out-of-place foreach lerp (EMA update), w/ a mul + add fallback for PyTorch < 2.0."""
+    if hasattr(torch, '_foreach_lerp'):
+        return torch._foreach_lerp(tensors, ends, weight)
+    out = torch._foreach_mul(tensors, 1. - weight)
+    torch._foreach_add_(out, ends, alpha=weight)
+    return out
+
+
+# _foreach_add_(TensorList, Tensor, alpha) overload is available in PyTorch >= 2.2
+try:
+    _HAS_FOREACH_ADD_TENSOR = 'Tensor' in torch.ops.aten._foreach_add_.overloads()
+except Exception:
+    _HAS_FOREACH_ADD_TENSOR = False
+
+
+def _foreach_increment_steps(state_steps: List[Tensor]) -> None:
+    """Increment step counts. CPU steps use the slow path of foreach, wrapping a 1 for each step tensor, a pre-wrapped
+    scalar (w/ alpha to select the right overload) avoids that.
+    """
+    if not _is_compiling() and state_steps and state_steps[0].is_cpu and _HAS_FOREACH_ADD_TENSOR:
+        torch._foreach_add_(state_steps, torch.tensor(1.0, device='cpu'), alpha=1.0)
+    else:
+        torch._foreach_add_(state_steps, 1)
 
 
 def _get_value(x):

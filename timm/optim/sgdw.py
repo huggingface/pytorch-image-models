@@ -17,7 +17,7 @@ try:
 except ImportError:
     has_recent_pt = False
 
-from ._helpers import _max_lr_snapshot
+from ._helpers import _foreach_chunked, _max_lr_snapshot
 from ._types import ParamsT
 
 __all__ = ['SGDW', 'sgdw']
@@ -242,6 +242,7 @@ def _single_tensor_sgdw(
         param.add_(grad, alpha=-lr)
 
 
+@_foreach_chunked(3, writeback=(2,))
 def _multi_tensor_sgdw(
         params: List[Tensor],
         grads: List[Tensor],
@@ -310,7 +311,8 @@ def _multi_tensor_sgdw(
                 device_grads = torch._foreach_mul(bufs, masks)
             else:
                 if nesterov:
-                    torch._foreach_add_(device_grads, bufs, alpha=momentum)
+                    # not in-place, leave p.grad unmodified (in-place also miscompiles w/ inductor, as in torch SGD)
+                    device_grads = torch._foreach_add(device_grads, bufs, alpha=momentum)
                 else:
                     device_grads = bufs
 

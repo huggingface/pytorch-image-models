@@ -206,8 +206,8 @@ class Adafactor(torch.optim.Optimizer):
                     exp_avg_sq_row = state['exp_avg_sq_row']
                     exp_avg_sq_col = state['exp_avg_sq_col']
 
-                    exp_avg_sq_row.mul_(beta2t).add_(update.mean(dim=dim_row), alpha=1.0 - beta2t)
-                    exp_avg_sq_col.mul_(beta2t).add_(update.mean(dim=dim_col), alpha=1.0 - beta2t)
+                    exp_avg_sq_row.lerp_(update.mean(dim=dim_row), 1.0 - beta2t)
+                    exp_avg_sq_col.lerp_(update.mean(dim=dim_col), 1.0 - beta2t)
 
                     # Approximation of exponential moving average of square of gradient
                     update = self._approx_sq_grad(exp_avg_sq_row, exp_avg_sq_col, dim_col, dim_row)
@@ -215,7 +215,7 @@ class Adafactor(torch.optim.Optimizer):
                 else:
                     exp_avg_sq = state['exp_avg_sq']
 
-                    exp_avg_sq.mul_(beta2t).add_(update, alpha=1.0 - beta2t)
+                    exp_avg_sq.lerp_(update, 1.0 - beta2t)
                     update = exp_avg_sq.rsqrt().mul_(grad)
 
                 update.div_((self._rms(update) / group['clip_threshold']).clamp_(min=1.0))
@@ -223,7 +223,7 @@ class Adafactor(torch.optim.Optimizer):
 
                 if use_first_moment:
                     exp_avg = state['exp_avg']
-                    exp_avg.mul_(group['beta1']).add_(update, alpha=1 - group['beta1'])
+                    exp_avg.lerp_(update, 1 - group['beta1'])
                     if group['caution']:
                         # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
                         mask = (exp_avg * grad > 0).to(grad.dtype)
