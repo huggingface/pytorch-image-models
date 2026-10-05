@@ -3,11 +3,14 @@
 These tests were adapted from PyTorch' optimizer tests.
 
 """
+import fnmatch
 import functools
 import importlib
 import inspect
 import os
+import pickle
 from copy import deepcopy
+from typing import Optional, Tuple
 
 import pytest
 import torch
@@ -16,7 +19,6 @@ from torch.testing._internal.common_utils import TestCase
 
 from timm.optim import create_optimizer_v2, list_optimizers, get_optimizer_class, get_optimizer_info, OptimInfo
 from timm.optim import param_groups_layer_decay, param_groups_weight_decay
-from timm.scheduler import PlateauLRScheduler
 
 torch_backend = os.environ.get('TORCH_BACKEND')
 if torch_backend is not None:
@@ -29,11 +31,17 @@ torch_tc = TestCase()
 
 # Older PyTorch is missing CPU kernels for many FP16 / BF16 ops (eye, baddbmm, sqrt, lerp, ...)
 _old_cpu_low_precision = torch_version < (2, 1)
+# Older PyTorch optimizers / ops have limited support for a tensor lr (e.g. as a Tensor alpha)
+_old_tensor_lr = torch_version < (2, 1)
+
+
+def _opt_args(optimizer):
+    return inspect.signature(get_optimizer_class(optimizer, bind_defaults=False).__init__).parameters
 
 
 def _skip_unsupported_registry_defaults(optimizer):
     # Registry defaults can rely on args of newer PyTorch optimizers (e.g. radamw -> RAdam(decoupled_weight_decay))
-    opt_args = inspect.signature(get_optimizer_class(optimizer, bind_defaults=False).__init__).parameters
+    opt_args = _opt_args(optimizer)
     if any(arg.kind == arg.VAR_KEYWORD for arg in opt_args.values()):
         return
     unsupported = [k for k in (get_optimizer_info(optimizer).defaults or {}) if k not in opt_args]
@@ -41,14 +49,11 @@ def _skip_unsupported_registry_defaults(optimizer):
         pytest.skip(f'{optimizer} defaults {unsupported} not supported by this PyTorch version')
 
 
-def _test_basic_cases_template(weight, bias, input, constructor, scheduler_constructors):
+def _test_basic_cases_template(weight, bias, input, constructor):
     weight = Parameter(weight)
     bias = Parameter(bias)
     input = Parameter(input)
     optimizer = constructor(weight, bias)
-    schedulers = []
-    for scheduler_constructor in scheduler_constructors:
-        schedulers.append(scheduler_constructor(optimizer))
 
     # to check if the optimizer can be printed as a string
     optimizer.__repr__()
@@ -64,12 +69,6 @@ def _test_basic_cases_template(weight, bias, input, constructor, scheduler_const
 
     initial_value = fn().item()
     for _i in range(200):
-        for scheduler in schedulers:
-            if isinstance(scheduler, PlateauLRScheduler):
-                val_loss = fn()
-                scheduler.step(val_loss)
-            else:
-                scheduler.step()
         optimizer.step(fn)
 
     assert fn().item() < initial_value
@@ -181,9 +180,7 @@ def _test_state_dict(weight, bias, input, constructor):
         assert cos_sim > 0.9, f'update direction diverged (cosine similarity {cos_sim:.3f})'
 
 
-def _test_basic_cases(constructor, scheduler_constructors=None):
-    if scheduler_constructors is None:
-        scheduler_constructors = []
+def _test_basic_cases(constructor):
     _test_state_dict(
         torch.randn(10, 5),
         torch.randn(10),
@@ -194,16 +191,14 @@ def _test_basic_cases(constructor, scheduler_constructors=None):
         torch.randn(10, 5),
         torch.randn(10),
         torch.randn(5),
-        constructor,
-        scheduler_constructors
+        constructor
     )
     # non-contiguous parameters
     _test_basic_cases_template(
         torch.randn(10, 5, 2)[..., 0],
         torch.randn(10, 2)[..., 0],
         torch.randn(5),
-        constructor,
-        scheduler_constructors
+        constructor
     )
     # CUDA
     if torch_device == 'cpu':
@@ -215,8 +210,7 @@ def _test_basic_cases(constructor, scheduler_constructors=None):
         torch.randn(10, 5).to(torch_device),
         torch.randn(10).to(torch_device),
         torch.randn(5).to(torch_device),
-        constructor,
-        scheduler_constructors
+        constructor
     )
 
 
@@ -267,16 +261,11 @@ def drosenbrock(tensor):
     return torch.tensor((-400 * x * (y - x ** 2) - 2 * (1 - x), 200 * (y - x ** 2)))
 
 
-def _test_rosenbrock(constructor, scheduler_constructors=None):
-    if scheduler_constructors is None:
-        scheduler_constructors = []
+def _test_rosenbrock(constructor):
     params_t = torch.tensor([1.5, 1.5])
 
     params = Parameter(params_t)
     optimizer = constructor([params])
-    schedulers = []
-    for scheduler_constructor in scheduler_constructors:
-        schedulers.append(scheduler_constructor(optimizer))
 
     solution = torch.tensor([1, 1])
     initial_dist = params.clone().detach().dist(solution)
@@ -319,11 +308,6 @@ def _test_rosenbrock(constructor, scheduler_constructors=None):
         # Do cyclic coordinate descent
         w = i % 2
         optimizer.step(functools.partial(eval, params, True, w))
-        for scheduler in schedulers:
-            if isinstance(scheduler, PlateauLRScheduler):
-                scheduler.step(rosenbrock(params))
-            else:
-                scheduler.step()
 
     torch_tc.assertLessEqual(params.clone().detach().dist(solution), initial_dist)
 
@@ -338,6 +322,7 @@ def _build_params_dict_single(weight, bias, **kwargs):
 
 @pytest.mark.parametrize('optimizer', list_optimizers(exclude_filters=('fused*', 'bnb*', 'kron*')))
 def test_optim_factory(optimizer):
+    _skip_unsupported_registry_defaults(optimizer)
     assert issubclass(get_optimizer_class(optimizer, bind_defaults=False), torch.optim.Optimizer)
 
     opt_info = get_optimizer_info(optimizer)
@@ -349,87 +334,75 @@ def test_optim_factory(optimizer):
     elif optimizer in ('cmars',):
         lr = (1e-4,) * 4
 
-    try:
-        if not opt_info.second_order:  # basic tests don't support second order right now
-            # test basic cases that don't need specific tuning via factory test
-            _test_basic_cases(
-                lambda weight, bias: create_optimizer_v2([weight, bias], optimizer, lr=lr[0])
-            )
-            _test_basic_cases(
-                lambda weight, bias: create_optimizer_v2(
-                    _build_params_dict(weight, bias, lr=lr[1]),
-                    optimizer,
-                    lr=lr[1] / 10)
-            )
-            _test_basic_cases(
-                lambda weight, bias: create_optimizer_v2(
-                    _build_params_dict_single(weight, bias, lr=lr[2]),
-                    optimizer,
-                    lr=lr[2] / 10)
-            )
-            _test_basic_cases(
-                lambda weight, bias: create_optimizer_v2(
-                    _build_params_dict_single(weight, bias, lr=lr[3]),
-                    optimizer)
-            )
-    except TypeError as e:
-        if 'radamw' in optimizer:
-            pytest.skip("Expected for 'radamw' (decoupled decay) to fail in older PyTorch versions.")
-        else:
-            raise e
+    if not opt_info.second_order:  # basic tests don't support second order right now
+        # test basic cases that don't need specific tuning via factory test
+        _test_basic_cases(
+            lambda weight, bias: create_optimizer_v2([weight, bias], optimizer, lr=lr[0])
+        )
+        _test_basic_cases(
+            lambda weight, bias: create_optimizer_v2(
+                _build_params_dict(weight, bias, lr=lr[1]),
+                optimizer,
+                lr=lr[1] / 10)
+        )
+        _test_basic_cases(
+            lambda weight, bias: create_optimizer_v2(
+                _build_params_dict_single(weight, bias, lr=lr[2]),
+                optimizer,
+                lr=lr[2] / 10)
+        )
+        _test_basic_cases(
+            lambda weight, bias: create_optimizer_v2(
+                _build_params_dict_single(weight, bias, lr=lr[3]),
+                optimizer)
+        )
 
 
-
-#@pytest.mark.parametrize('optimizer', ['sgd', 'momentum'])
-# FIXME momentum variant frequently fails in GitHub runner, but never local after many attempts
-@pytest.mark.parametrize('optimizer', ['sgd'])
-def test_sgd(optimizer):
-    # _test_basic_cases(
-    #     lambda weight, bias: create_optimizer_v2([weight, bias], optimizer, lr=1e-3),
-    #     [lambda opt: StepLR(opt, gamma=0.9, step_size=10)]
-    # )
-    # _test_basic_cases(
-    #     lambda weight, bias: create_optimizer_v2([weight, bias], optimizer, lr=1e-3),
-    #     [lambda opt: WarmUpLR(opt, warmup_factor=0.4, warmup_iters=4, warmup_method="linear")]
-    # )
-    # _test_basic_cases(
-    #     lambda weight, bias: optimizer([weight, bias], lr=1e-3),
-    #     [lambda opt: WarmUpLR(opt, warmup_factor=0.4, warmup_iters=4, warmup_method="constant")]
-    # )
-    # _test_basic_cases(
-    #     lambda weight, bias: optimizer([weight, bias], lr=1e-3),
-    #     [lambda opt: StepLR(opt, gamma=0.9, step_size=10),
-    #      lambda opt: WarmUpLR(opt, warmup_factor=0.4, warmup_iters=4)]
-    # )
-    # _test_basic_cases(
-    #     lambda weight, bias: optimizer([weight, bias], lr=1e-3),
-    #     [lambda opt: StepLR(opt, gamma=0.9, step_size=10),
-    #      lambda opt: ReduceLROnPlateau(opt)]
-    # )
-    # _test_basic_cases(
-    #     lambda weight, bias: optimizer([weight, bias], lr=1e-3),
-    #     [lambda opt: StepLR(opt, gamma=0.99, step_size=10),
-    #      lambda opt: ExponentialLR(opt, gamma=0.99),
-    #      lambda opt: ReduceLROnPlateau(opt)]
-    # )
-    _test_basic_cases(
-        lambda weight, bias: create_optimizer_v2([weight, bias], optimizer, lr=3e-3, momentum=1)
-    )
-    _test_basic_cases(
-        lambda weight, bias: create_optimizer_v2([weight, bias], optimizer, lr=3e-3, momentum=1, weight_decay=.1)
-    )
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=1e-3)
-    )
-    _test_model(optimizer, dict(lr=1e-3))
+def _conv(rosenbrock_lr, model=None, after_step=0, basic=()):
+    return dict(rosenbrock_lr=rosenbrock_lr, model=model, after_step=after_step, basic=basic)
 
 
-@pytest.mark.parametrize('optimizer',  ['adamw', 'adam', 'nadam', 'adamax', 'nadamw', 'adamwlegacy', 'adamc'])
-def test_adam(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=5e-2)
-    )
-    _test_model(optimizer, dict(lr=5e-2))
+# Convergence smoke tests, registry name -> rosenbrock lr, model test kwargs (None to skip), steps before the model
+# loss must decrease (some optimizers don't improve on the first step), extra basic case kwargs.
+# NOTE the 'momentum' SGD variant frequently fails in the GitHub runner, but never locally.
+_CONVERGENCE_CFGS = {
+    'sgd': _conv(1e-3, dict(lr=1e-3), basic=(dict(lr=3e-3, momentum=1), dict(lr=3e-3, momentum=1, weight_decay=.1))),
+    **dict.fromkeys(
+        ['adamw', 'adam', 'nadam', 'adamax', 'nadamw', 'adamwlegacy', 'adamc', 'adamp', 'cadamp'],
+        _conv(5e-2, dict(lr=5e-2)),
+    ),
+    'kron': _conv(1e-3, dict(lr=1e-3)),
+    **dict.fromkeys(
+        ['muon', 'nmuon', 'adamuon', 'nadamuon', 'laprop', 'madgrad', 'madgradw'],
+        _conv(1e-2, dict(lr=1e-2)),
+    ),
+    **dict.fromkeys(['adopt', 'adoptw'], _conv(3e-3, dict(lr=5e-2), after_step=1)),
+    **dict.fromkeys(['adan', 'adanw', 'mars'], _conv(1e-3, dict(lr=5e-2), after_step=1)),
+    'adabelief': _conv(5e-2, dict(lr=5e-2), basic=(dict(lr=1e-3, weight_decay=1),)),
+    **dict.fromkeys(
+        ['radam', 'radabelief', 'lamb', 'lambc', 'lars', 'larc', 'nlars', 'nlarc', 'novograd', 'sgdp'],
+        _conv(1e-3, dict(lr=1e-3)),
+    ),
+    **dict.fromkeys(['adadelta', 'adagrad'], _conv(1e-1, dict(lr=5e-2), basic=(dict(lr=1e-3, weight_decay=1),))),
+    **dict.fromkeys(['adafactor', 'adafactorbv'], _conv(5e-2, dict(lr=5e-2), basic=(dict(lr=1e-3, weight_decay=1),))),
+    **dict.fromkeys(['rmsprop', 'rmsproptf'], _conv(1e-2, dict(lr=1e-2))),
+    **dict.fromkeys(['csgdp', 'csgdw'], _conv(5e-4, dict(lr=5e-4))),
+    **dict.fromkeys(['lookahead_sgd', 'lookahead_momentum'], _conv(1e-3)),
+    **dict.fromkeys(['lookahead_adamw', 'lookahead_adam'], _conv(5e-2)),
+    'lookahead_radam': _conv(1e-4),
+}
+
+
+@pytest.mark.parametrize('optimizer', list(_CONVERGENCE_CFGS))
+def test_optimizer_convergence(optimizer):
+    cfg = _CONVERGENCE_CFGS[optimizer]
+    for kwargs in cfg['basic']:
+        _test_basic_cases(lambda weight, bias: create_optimizer_v2([weight, bias], optimizer, **kwargs))
+    _test_rosenbrock(lambda params: create_optimizer_v2(params, optimizer, lr=cfg['rosenbrock_lr']))
+    if cfg['model'] is not None:
+        _test_model(optimizer, cfg['model'], after_step=cfg['after_step'])
+
+
 
 
 @pytest.mark.skipif(not hasattr(torch, 'compile'), reason='requires torch.compile')
@@ -468,74 +441,6 @@ def test_compiled_foreach_adam_optimizers(optimizer_name, foreach, dtype, lr, ep
     assert optimizer.state[param]['step'] == 30
 
 
-@pytest.mark.parametrize('optimizer',  ['kron'])
-def test_kron(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=1e-3)
-    )
-    _test_model(optimizer, dict(lr=1e-3))
-
-
-@pytest.mark.parametrize('saved_corrected_weight_decay', [None, False, True])
-def test_kron_load_state_dict_corrected_weight_decay(saved_corrected_weight_decay):
-    # Loading must clear cached expressions and back-fill missing defaults without overwriting saved values.
-    from timm.optim.kron import Kron
-
-    def make():
-        weight = Parameter(torch.ones(4, 3))
-        bias = Parameter(torch.ones(4))
-        return Kron(
-            [{'params': [weight]}, {'params': [bias]}], lr=1e-3, weight_decay=0.1,
-            decoupled_decay=True, corrected_weight_decay=True, deterministic=True)
-
-    def step(optimizer):
-        for group in optimizer.param_groups:
-            for p in group['params']:
-                p.grad = torch.ones_like(p)
-        optimizer.step()
-
-    optimizer = make()
-    step(optimizer)
-    assert optimizer._param_exprs
-
-    state_dict = deepcopy(optimizer.state_dict())
-    for group in state_dict['param_groups']:
-        if saved_corrected_weight_decay is None:
-            del group['corrected_weight_decay']
-        else:
-            group['corrected_weight_decay'] = saved_corrected_weight_decay
-
-    optimizer.load_state_dict(deepcopy(state_dict))
-    assert optimizer._param_exprs == {}
-
-    resumed = make()
-    resumed.load_state_dict(deepcopy(state_dict))
-    for source_group, resumed_group in zip(optimizer.param_groups, resumed.param_groups):
-        for source, dest in zip(source_group['params'], resumed_group['params']):
-            with torch.no_grad():
-                dest.copy_(source)
-
-    expected = saved_corrected_weight_decay if saved_corrected_weight_decay is not None else False
-    for opt in (optimizer, resumed):
-        for group in opt.param_groups:
-            assert group['corrected_weight_decay'] is expected
-            group['lr'] *= 0.5  # Exercise corrected decay at an LR different from the initial value.
-        step(opt)
-        assert opt._param_exprs
-    for source_group, resumed_group in zip(optimizer.param_groups, resumed.param_groups):
-        for source, dest in zip(source_group['params'], resumed_group['params']):
-            assert torch.isfinite(dest).all()
-            torch.testing.assert_close(source, dest)
-
-
-@pytest.mark.parametrize('optimizer',  ['muon', 'nmuon'])
-def test_muon(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=1e-2)
-    )
-    _test_model(optimizer, dict(lr=1e-2))
-
-
 @pytest.mark.skipif(not hasattr(torch, 'compile'), reason='requires torch.compile')
 @pytest.mark.parametrize('nesterov', [False, True])
 def test_compiled_muon_fallback(nesterov):
@@ -561,231 +466,36 @@ def test_compiled_muon_fallback(nesterov):
     assert optimizer.state[param]['step'] == 2
 
 
-@pytest.mark.parametrize('optimizer',  ['adamuon', 'nadamuon'])
-def test_adamuon(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=1e-2)
-    )
-    _test_model(optimizer, dict(lr=1e-2))
-
-
-@pytest.mark.parametrize('optimizer',  ['adopt', 'adoptw'])
-def test_adopt(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=3e-3)
-    )
-    _test_model(optimizer, dict(lr=5e-2), after_step=1)  # note no convergence in first step for ADOPT
-
-
-@pytest.mark.parametrize('optimizer',  ['adan', 'adanw'])
-def test_adan(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=1e-3)
-    )
-    _test_model(optimizer, dict(lr=5e-2), after_step=1)  # note no convergence in first step for ADOPT
-
-
-@pytest.mark.parametrize('optimizer',  ['adabelief'])
-def test_adabelief(optimizer):
-    _test_basic_cases(
-        lambda weight, bias: create_optimizer_v2([weight, bias], optimizer, lr=1e-3, weight_decay=1)
-    )
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=5e-2)
-    )
-    _test_model(optimizer, dict(lr=5e-2))
-
-
-@pytest.mark.parametrize('optimizer',  ['radam', 'radabelief'])
-def test_rectified(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=1e-3)
-    )
-    _test_model(optimizer, dict(lr=1e-3))
-
-
-@pytest.mark.parametrize('optimizer',   ['adadelta', 'adagrad'])
-def test_adaother(optimizer):
-    _test_basic_cases(
-        lambda weight, bias: create_optimizer_v2([weight, bias], optimizer, lr=1e-3, weight_decay=1)
-    )
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=1e-1)
-    )
-    _test_model(optimizer, dict(lr=5e-2))
-
-
-@pytest.mark.parametrize('optimizer',   ['adafactor', 'adafactorbv'])
-def test_adafactor(optimizer):
-    _test_basic_cases(
-        lambda weight, bias: create_optimizer_v2([weight, bias], optimizer, lr=1e-3, weight_decay=1)
-    )
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=5e-2)
-    )
-    _test_model(optimizer, dict(lr=5e-2))
-
-
-@pytest.mark.parametrize('optimizer',  ['lamb', 'lambc'])
-def test_lamb(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=1e-3)
-    )
-    _test_model(optimizer, dict(lr=1e-3))
-
-
-@pytest.mark.parametrize('optimizer', ['laprop'])
-def test_laprop(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=1e-2)
-    )
-    _test_model(optimizer, dict(lr=1e-2))
-
-
-@pytest.mark.parametrize('optimizer',  ['lars', 'larc', 'nlars', 'nlarc'])
-def test_lars(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=1e-3)
-    )
-    _test_model(optimizer, dict(lr=1e-3))
-
-
-@pytest.mark.parametrize('optimizer',  ['madgrad', 'madgradw'])
-def test_madgrad(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=1e-2)
-    )
-    _test_model(optimizer, dict(lr=1e-2))
-
-
-@pytest.mark.parametrize('optimizer',  ['mars'])
-def test_mars(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=1e-3)
-    )
-    _test_model(optimizer, dict(lr=5e-2), after_step=1)  # note no convergence in first step for ADOPT
-
-
-@pytest.mark.parametrize('optimizer',  ['novograd'])
-def test_novograd(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=1e-3)
-    )
-    _test_model(optimizer, dict(lr=1e-3))
-
-
-@pytest.mark.parametrize('optimizer', ['rmsprop', 'rmsproptf'])
-def test_rmsprop(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=1e-2)
-    )
-    _test_model(optimizer, dict(lr=1e-2))
-
-
-@pytest.mark.parametrize('optimizer', ['adamp'])
-def test_adamp(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=5e-2)
-    )
-    _test_model(optimizer, dict(lr=5e-2))
-
-
-@pytest.mark.parametrize('optimizer', ['sgdp'])
-def test_sgdp(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=1e-3)
-    )
-    _test_model(optimizer, dict(lr=1e-3))
-
-
-@pytest.mark.parametrize('optimizer', ['lookahead_sgd', 'lookahead_momentum'])
-def test_lookahead_sgd(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=1e-3)
-    )
-
-
-@pytest.mark.parametrize('optimizer', ['lookahead_adamw', 'lookahead_adam'])
-def test_lookahead_adam(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=5e-2)
-    )
-
-
-@pytest.mark.parametrize('optimizer', ['lookahead_radam'])
-def test_lookahead_radam(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=1e-4)
-    )
-
-
-def test_param_groups_layer_decay_with_min():
-    model = torch.nn.Sequential(
-        torch.nn.Linear(10, 5),
-        torch.nn.ReLU(),
-        torch.nn.Linear(5, 2)
-    )
-    
-    param_groups = param_groups_layer_decay(
-        model,
-        weight_decay=0.05,
-        layer_decay=0.75,
-        min_scale=0.5,
-        verbose=True
-    )
-    
-    assert len(param_groups) > 0
-    # Verify layer scaling is applied with a min scale
-    for group in param_groups:
-        assert 'lr_scale' in group
-        assert group['lr_scale'] <= 1.0
-        assert group['lr_scale'] >= 0.5
-
-
-def test_registry_create_optimizer_layer_decay_default_min_scale():
-    # The registry create_optimizer must handle layer_decay when the min scale is left at its
-    # default: it used to default layer_decay_min_scale to None, which crashed in
-    # param_groups_layer_decay's max(min_scale, ...). create_optimizer_v2 passed 0.0 and was fine.
+@pytest.mark.parametrize('use_matcher,min_scale,expected_scales', [
+    (False, None, (0.5, 0.5, 1.0)),  # registry default, automatic trunk / head grouping
+    (True, 0.0, (0.25, 0.5, 1.0)),
+    (True, 0.375, (0.375, 0.5, 1.0)),  # clamp only the earliest layer
+])
+def test_param_groups_layer_decay(
+        use_matcher: bool,
+        min_scale: Optional[float],
+        expected_scales: Tuple[float, ...],
+) -> None:
     from timm.optim._optim_factory import default_registry
 
-    model = torch.nn.Sequential(
-        torch.nn.Linear(10, 5),
-        torch.nn.ReLU(),
-        torch.nn.Linear(5, 2),
-    )
-    optimizer = default_registry.create_optimizer(
-        model, 'adamw', lr=1e-3, weight_decay=0.05, layer_decay=0.75,
-    )
-    assert len(optimizer.param_groups) > 0
-    for group in optimizer.param_groups:
-        assert 'lr_scale' in group
-        assert 0.0 <= group['lr_scale'] <= 1.0
-
-
-def test_param_groups_layer_decay_with_matcher():
-    class ModelWithMatcher(torch.nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.layer1 = torch.nn.Linear(10, 5)
-            self.layer2 = torch.nn.Linear(5, 2)
-            
-        def group_matcher(self, coarse=False):
-            return lambda name: int(name.split('.')[0][-1])
-            
-    model = ModelWithMatcher()
-    param_groups = param_groups_layer_decay(
-        model,
-        weight_decay=0.05,
-        layer_decay=0.75,
-        verbose=True
-    )
-    
-    assert len(param_groups) > 0
-    # Verify layer scaling is applied
-    for group in param_groups:
-        assert 'lr_scale' in group
-        assert 'weight_decay' in group
-        assert len(group['params']) > 0
+    model = torch.nn.Sequential(*(torch.nn.Linear(4, 4) for _ in range(3)))
+    if use_matcher:
+        model.group_matcher = lambda coarse=False: lambda name: int(name.split('.')[0])
+    else:
+        model.pretrained_cfg = {'classifier': '2'}
+    if min_scale is None:
+        # Exercise the registry's omitted min scale: it used to pass None instead of 0.0.
+        groups = default_registry.create_optimizer(
+            model, 'adamw', lr=1e-3, weight_decay=0.05, layer_decay=0.5,
+        ).param_groups
+    else:
+        groups = param_groups_layer_decay(model, weight_decay=0.05, layer_decay=0.5, min_scale=min_scale)
+    param_to_group = {p: group for group in groups for p in group['params']}
+    assert set(param_to_group) == set(model.parameters())
+    for name, param in model.named_parameters():
+        group = param_to_group[param]
+        assert group['lr_scale'] == expected_scales[int(name.split('.')[0])]
+        assert group['weight_decay'] == (0.05 if param.ndim > 1 else 0.)
 
 
 @pytest.mark.parametrize('model_name', ['eva', 'vit'])
@@ -868,30 +578,8 @@ def test_param_groups_weight_decay():
         else:
             assert param in decay_params
 
-@pytest.mark.parametrize('optimizer', ['cadamp'])
-def test_cadamp(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=5e-2)
-    )
-    _test_model(optimizer, dict(lr=5e-2))
 
-@pytest.mark.parametrize('optimizer', ['csgdp'])
-def test_csgdp(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=5e-4)
-    )
-    _test_model(optimizer, dict(lr=5e-4))
-
-@pytest.mark.parametrize('optimizer', ['csgdw'])
-def test_csgdw(optimizer):
-    _test_rosenbrock(
-        lambda params: create_optimizer_v2(params, optimizer, lr=5e-4)
-    )
-    _test_model(optimizer, dict(lr=5e-4))
-
-
-@pytest.mark.parametrize('shape', [(30, 20), (20, 30)])
-def test_adafactor_bv_factored_row_normalization(shape):
+def test_adafactor_bv_factored_row_normalization():
     # AdafactorBigVision factorizes the second moment for 2D params, so the update must be
     # transpose-equivariant: stepping W and W.T with transposed grads must give transposed updates.
     # A wrong axis in the row-factor reduction silently collapsed row_factor to 1 (dropping the row
@@ -899,7 +587,7 @@ def test_adafactor_bv_factored_row_normalization(shape):
     from timm.optim.adafactor_bv import AdafactorBigVision
 
     generator = torch.Generator().manual_seed(0)
-    grad = torch.randn(shape, dtype=torch.double, generator=generator)
+    grad = torch.randn(30, 20, dtype=torch.double, generator=generator)
 
     def one_step(g):
         param = Parameter(torch.zeros(g.shape, dtype=torch.double))
@@ -945,62 +633,6 @@ def test_adafactor_bv_clipping_threshold(clipping_threshold, shape):
         torch.testing.assert_close(update_clip, update_ref / max(1.0, rms_ref / clipping_threshold))
         rms_clip = (update_clip.norm(2) / update_clip.numel() ** 0.5).item()
         assert rms_clip <= min(rms_ref, clipping_threshold) + 1e-9
-
-
-def test_sgdw_multi_tensor_weight_decay_matches_single_tensor():
-    # The foreach path groups params by (device, dtype) and iterates the groups. Decoupled weight
-    # decay must be applied to each group's params, otherwise params spanning more than one partition
-    # (e.g. mixed dtypes) are decayed once per partition instead of once. Compare foreach against the
-    # single-tensor reference with two dtypes so there are two partitions.
-    from timm.optim.sgdw import SGDW
-
-    def run(foreach):
-        p32 = Parameter(torch.tensor([1.0, 2.0], dtype=torch.float32))
-        p64 = Parameter(torch.tensor([1.0, 2.0], dtype=torch.float64))
-        for p in (p32, p64):
-            p.grad = torch.ones_like(p)
-        SGDW([p32, p64], lr=0.1, momentum=0.0, weight_decay=0.5, foreach=foreach).step()
-        return p32.detach().clone(), p64.detach().clone()
-
-    multi32, multi64 = run(True)
-    single32, single64 = run(False)
-    torch.testing.assert_close(multi32, single32)
-    torch.testing.assert_close(multi64, single64)
-
-
-@pytest.mark.skipif(
-    not hasattr(torch.optim.Optimizer, '_group_tensors_by_device_and_dtype'),
-    reason='Adopt foreach (multi-tensor) impl requires a newer PyTorch',
-)
-@pytest.mark.parametrize('lag_index', [0, 1])
-@pytest.mark.parametrize('clip_exp', [None, 0.333])
-def test_adopt_multi_tensor_lagging_step_matches_single_tensor(lag_index, clip_exp):
-    # A param without a gradient in some steps (frozen for a while, an expert that got no tokens) lags behind
-    # the other params of its group in state['step']. The foreach path took the first-step initialization and
-    # the clip value from device_state_steps[0] for the whole group, so a lagging param never got its
-    # exp_avg_sq initialized (or the whole group was re-initialized and skipped an update when the lagging
-    # param came first) and was clipped with the wrong step. Compare against the single-tensor reference.
-    from timm.optim.adopt import Adopt
-
-    grads = [torch.randn(2, 5, 4, generator=torch.Generator().manual_seed(step)) for step in range(12)]
-
-    def run(foreach):
-        params = [Parameter(torch.full((5, 4), 1.0 + i)) for i in range(2)]
-        optimizer = Adopt(params, lr=1e-3, clip_exp=clip_exp, foreach=foreach)
-        for step, step_grads in enumerate(grads):
-            for i, p in enumerate(params):
-                p.grad = None if (i == lag_index and step < 4) else step_grads[i].clone()
-            optimizer.step()
-        return params, [optimizer.state[p] for p in params]
-
-    multi_params, multi_state = run(True)
-    single_params, single_state = run(False)
-    for multi, single in zip(multi_params, single_params):
-        torch.testing.assert_close(multi, single)
-    for multi, single in zip(multi_state, single_state):
-        assert multi['step'] == single['step']
-        torch.testing.assert_close(multi['exp_avg'], single['exp_avg'])
-        torch.testing.assert_close(multi['exp_avg_sq'], single['exp_avg_sq'])
 
 
 def test_mars_last_grad_is_copied_not_aliased():
@@ -1085,8 +717,11 @@ def test_adamuon_conv_batched_matches_repeated_2d(adjust_lr_fn, normalize_spatia
         torch.testing.assert_close(param_conv, expected)
 
 
-@pytest.mark.parametrize('shape', [(8, 36), (8, 4, 3), (8, 4, 3, 3), (8, 4, 2, 3, 3)])
-@pytest.mark.parametrize('conv_mode,normalize_spatial', [('flatten', True), ('batched', False), ('batched', True)])
+@pytest.mark.parametrize('shape,conv_mode,normalize_spatial', [((8, 36), 'flatten', True)] + [
+    (shape, mode, normalize)
+    for shape in [(8, 4, 3), (8, 4, 3, 3), (8, 4, 2, 3, 3)]
+    for mode, normalize in [('flatten', True), ('batched', False), ('batched', True)]
+])
 def test_adamuon_update_rms(shape, conv_mode, normalize_spatial):
     # RMS alignment uses the whole tensor, with optional 1/sqrt(spatial_size) scaling in batched mode.
     from timm.optim.muon import Muon
@@ -1111,19 +746,39 @@ def test_adamuon_update_rms(shape, conv_mode, normalize_spatial):
         torch.testing.assert_close(rms, torch.tensor(expected_rms), rtol=1e-5, atol=1e-7)
 
 
+# timm optimizers w/ a capturable (CUDA graph safe) impl, torch.optim capturable impls are tested upstream
+_CAPTURABLE_OPTIMIZERS = [
+    n for n in list_optimizers(exclude_filters=('fused*', 'bnb*'))
+    if get_optimizer_class(n, bind_defaults=False).__module__.startswith('timm') and 'capturable' in _opt_args(n)
+]
+
+
+def _capturable_kwargs(optimizer, foreach, **kwargs):
+    opt_args = _opt_args(optimizer)
+    if 'foreach' in opt_args:
+        kwargs['foreach'] = foreach
+    elif foreach:
+        pytest.skip(f'{optimizer} has no foreach impl')
+    if 'eps' not in opt_args:
+        kwargs.pop('eps', None)
+    return kwargs
+
+
 @pytest.mark.skipif(not torch.cuda.is_available(), reason='capturable requires CUDA')
-@pytest.mark.parametrize('optimizer', ['adamwlegacy', 'nadamw'])
+@pytest.mark.parametrize('optimizer', _CAPTURABLE_OPTIMIZERS)
 @pytest.mark.parametrize('foreach', [False, True])
 @pytest.mark.parametrize('dtype,eps', [(torch.float32, 1e-8), (torch.bfloat16, 1e-8), (torch.float16, 1e-4)])
 def test_capturable_zero_lr(optimizer, foreach, dtype, eps):
-    # The capturable paths divided eps by the step size before adding it, 0 / 0 = NaN when lr == 0 (e.g. warmup
-    # from 0 or cooldown to 0 w/ an in-place updated tensor lr). Adding eps first, as the non-capturable paths do,
-    # gives a zero update at lr == 0 and matches the non-capturable result otherwise.
+    # Capturable paths must give a zero update at lr == 0 (e.g. warmup from 0 or cooldown to 0 w/ an in-place
+    # updated tensor lr) and match the non-capturable result otherwise. AdamW / NAdamW used to divide eps by the
+    # step size before adding it, 0 / 0 = NaN when lr == 0.
+    kwargs = _capturable_kwargs(optimizer, foreach, eps=eps)
+
     def run(lrs, capturable):
         param = Parameter(torch.ones(8, 8, device='cuda', dtype=dtype))
-        lr = torch.tensor(lrs[0], device='cuda') if capturable else lrs[0]
-        opt = create_optimizer_v2(
-            [param], optimizer, lr=lr, eps=eps, weight_decay=0.05, capturable=capturable, foreach=foreach)
+        # construct w/ the peak lr (required for corrected weight decay), each step's lr is set below
+        lr = torch.tensor(max(lrs), device='cuda') if capturable else max(lrs)
+        opt = create_optimizer_v2([param], optimizer, lr=lr, weight_decay=0.05, capturable=capturable, **kwargs)
         for i, step_lr in enumerate(lrs):
             if capturable:
                 lr.fill_(step_lr)
@@ -1143,15 +798,17 @@ def test_capturable_zero_lr(optimizer, foreach, dtype, eps):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason='capturable requires CUDA')
-@pytest.mark.parametrize('optimizer', ['adamwlegacy', 'nadamw'])
+@pytest.mark.parametrize('optimizer', _CAPTURABLE_OPTIMIZERS)
 @pytest.mark.parametrize('foreach', [False, True])
 def test_capturable_fp16_small_lr(optimizer, foreach):
-    # Folding a small step size into an FP16 denominator overflowed to inf, so the capturable paths stopped updating
-    # FP16 params as bias correction approached one. Compare against the non-capturable path.
+    # Capturable paths must keep updating FP16 params w/ a small lr, and match the non-capturable path. AdamW /
+    # NAdamW folded the step size into an FP16 denominator that overflowed to inf as bias correction approached one.
+    kwargs = _capturable_kwargs(optimizer, foreach, eps=1e-4)
+
     def run(capturable):
         param = Parameter(torch.full((4,), 0.01, device='cuda', dtype=torch.float16))
         lr = torch.tensor(1e-5, device='cuda') if capturable else 1e-5
-        opt = create_optimizer_v2([param], optimizer, lr=lr, eps=1e-4, capturable=capturable, foreach=foreach)
+        opt = create_optimizer_v2([param], optimizer, lr=lr, capturable=capturable, **kwargs)
         for _ in range(30):
             param.grad = torch.ones_like(param)
             before = param.detach().clone()
@@ -1162,39 +819,20 @@ def test_capturable_fp16_small_lr(optimizer, foreach):
     torch.testing.assert_close(run(True), run(False))
 
 
-@pytest.mark.skipif(_old_cpu_low_precision, reason='Older PyTorch lacks FP16 / BF16 CPU kernels used by Kron')
-@pytest.mark.parametrize('dtype', [torch.bfloat16, torch.float16])
-@pytest.mark.parametrize('precond_dtype', [None, torch.float32])
-@pytest.mark.parametrize('momentum_into_precond_update', [True, False])
-def test_kron_low_precision_params(dtype, precond_dtype, momentum_into_precond_update):
-    # The random probe for the preconditioner update used precond_dtype directly, None gave a float32
-    # probe that failed to matmul with low precision Q.
-    from timm.optim.kron import Kron
-    generator = torch.Generator().manual_seed(0)
-    param = Parameter(torch.randn(16, 8, generator=generator).to(dtype))
-    opt = Kron(
-        [param],
-        lr=1e-3,
-        precond_dtype=precond_dtype,
-        momentum_into_precond_update=momentum_into_precond_update,
-    )
-    for _ in range(3):
-        param.grad = torch.randn(16, 8, generator=generator).to(dtype)
-        opt.step()
-    assert param.dtype == dtype
-    assert torch.isfinite(param).all()
-
-
 @pytest.mark.parametrize('optimizer', list_optimizers(exclude_filters=('fused*', 'bnb*')))
 def test_optim_factory_common_kwargs(optimizer):
     _skip_unsupported_registry_defaults(optimizer)
     # eps / betas / momentum passed to the factory must be forwarded to optimizers that accept them,
     # and dropped (not crash) for those that don't.
     info = get_optimizer_info(optimizer)
-    opt_args = inspect.signature(get_optimizer_class(optimizer, bind_defaults=False).__init__).parameters
+    opt_args = _opt_args(optimizer)
     assert info.has_eps == ('eps' in opt_args)
     assert info.has_betas == ('betas' in opt_args)
     assert info.has_momentum == ('momentum' in opt_args)
+    if optimizer == 'cadafactor':
+        # Caution needs a first moment; check the registry default before overriding betas below.
+        opt = create_optimizer_v2([Parameter(torch.ones(4, 4))], optimizer, lr=1e-3)
+        assert opt.param_groups[0]['beta1'] == 0.9
     betas = (0.5, 0.6, 0.7)[:info.num_betas]
     opt = create_optimizer_v2([Parameter(torch.ones(4, 4))], optimizer, lr=1e-3, eps=1e-6, betas=betas, momentum=0.5)
     group = opt.param_groups[0]
@@ -1205,42 +843,6 @@ def test_optim_factory_common_kwargs(optimizer):
             assert group['beta1'] == betas[0]  # Adafactor
     if info.has_momentum and 'momentum' in group:
         assert group['momentum'] == 0.5
-
-
-def test_cadafactor_has_first_moment():
-    # Caution is applied to the first moment in Adafactor, cadafactor enables it by default.
-    def run(optimizer):
-        generator = torch.Generator().manual_seed(0)
-        param = Parameter(torch.ones(32, 32))
-        opt = create_optimizer_v2([param], optimizer, lr=1e-2)
-        for _ in range(3):
-            param.grad = torch.randn(32, 32, generator=generator)
-            opt.step()
-        return opt.param_groups[0]['beta1'], param.detach()
-
-    beta1, cautious = run('cadafactor')
-    assert beta1 == 0.9
-    _, plain = run('adafactor')
-    assert not torch.allclose(cautious, plain)
-
-
-def test_radam_legacy_param_group_lr():
-    # The step size was cached in a buffer shared across param groups, with the lr baked in, so groups
-    # used the lr of whichever group computed the step size first.
-    from timm.optim.radam import RAdamLegacy
-
-    def run(lrs):
-        params = [Parameter(torch.ones(4)) for _ in lrs]
-        opt = RAdamLegacy([{'params': [p], 'lr': lr} for p, lr in zip(params, lrs)])
-        for _ in range(10):
-            for p in params:
-                p.grad = torch.ones(4)
-            opt.step()
-        return [p.detach() for p in params]
-
-    both = run([1.0, 1e-3])
-    torch.testing.assert_close(both[0], run([1.0])[0])
-    torch.testing.assert_close(both[1], run([1e-3])[0])
 
 
 def _adahessian_steps(opt, param, num_steps):
@@ -1303,60 +905,6 @@ def test_adahessian_closure():
     assert not torch.equal(param.detach(), before)
 
 
-def _laprop_run(param, opt, grads):
-    for grad in grads:
-        param.grad = grad.clone()
-        opt.step()
-
-
-def test_laprop_low_precision_resume():
-    # Optimizer.load_state_dict casts state to the param dtype, the lr EMA scalar was left in bf16
-    # where it stops increasing well short of 1.0, permanently shrinking the update.
-    from timm.optim.laprop import LaProp
-    generator = torch.Generator().manual_seed(0)
-    grads = [torch.randn(8, generator=generator).bfloat16() for _ in range(20)]
-
-    param = Parameter(torch.ones(8, dtype=torch.bfloat16))
-    opt = LaProp([param], lr=1e-2)
-    _laprop_run(param, opt, grads)
-
-    param2 = Parameter(torch.ones(8, dtype=torch.bfloat16))
-    opt2 = LaProp([param2], lr=1e-2)
-    _laprop_run(param2, opt2, grads[:10])
-    opt3 = LaProp([param2], lr=1e-2)
-    opt3.load_state_dict(opt2.state_dict())
-    assert opt3.state[param2]['exp_avg_lr_2'].dtype == torch.float32
-    _laprop_run(param2, opt3, grads[10:])
-    torch.testing.assert_close(param2, param)
-
-
-@pytest.mark.parametrize('tensor_lr', [False, True])
-def test_laprop_zero_lr(tensor_lr):
-    # lr is folded into the momentum, with lr == 0 the update must be zero.
-    from timm.optim.laprop import LaProp
-    generator = torch.Generator().manual_seed(0)
-    lr = torch.tensor(1e-2) if tensor_lr else 1e-2
-    param = Parameter(torch.ones(8))
-    opt = LaProp([param], lr=lr)
-    _laprop_run(param, opt, [torch.randn(8, generator=generator) for _ in range(5)])
-    opt.param_groups[0]['lr'] = torch.tensor(0.) if tensor_lr else 0.
-    before = param.detach().clone()
-    _laprop_run(param, opt, [torch.randn(8, generator=generator) for _ in range(5)])
-    torch.testing.assert_close(param.detach(), before)
-
-
-@pytest.mark.parametrize('optimizer', ['nmuon', 'nadamuon'])
-def test_muon_nesterov_grad_unchanged(optimizer):
-    generator = torch.Generator().manual_seed(0)
-    param = Parameter(torch.randn(16, 8, generator=generator))
-    opt = create_optimizer_v2([param], optimizer, lr=1e-2)
-    for _ in range(2):
-        param.grad = torch.randn(16, 8, generator=generator)
-        grad = param.grad.clone()
-        opt.step()
-        torch.testing.assert_close(param.grad, grad)
-
-
 def test_muon_load_adamw_lr_state_dict():
     # Checkpoints from before fallback_lr_scale stored an absolute adamw_lr, the scale must be relative to
     # the un-scheduled lr, not the lr at the time of saving (e.g. mid warmup).
@@ -1374,11 +922,6 @@ def test_muon_load_adamw_lr_state_dict():
             group['adamw_lr'] = adamw_lr
         opt.load_state_dict(state_dict)
         assert opt.param_groups[0]['fallback_lr_scale'] == pytest.approx(expected)
-
-
-def test_lamb_no_grads():
-    opt = create_optimizer_v2([Parameter(torch.ones(4))], 'lamb', lr=1e-2)
-    opt.step()
 
 
 def test_adafactor_bv_param_group_options():
@@ -1466,47 +1009,19 @@ _CORRECTED_WD_OPTIMIZERS = [
 ]
 
 
-def _corrected_wd_run(optimizer, lr, lrs, tensor_lr):
-    torch.manual_seed(0)
-    param = Parameter(torch.ones(8, 8))
-    lr = torch.tensor(lr) if tensor_lr else lr
-    opt = create_optimizer_v2([param], optimizer, lr=lr, weight_decay=0.1)
-    for i, step_lr in enumerate(lrs):
-        if tensor_lr:
-            lr.fill_(step_lr)
-        else:
-            opt.param_groups[0]['lr'] = step_lr
-        param.grad = torch.randn(8, 8, generator=torch.Generator().manual_seed(i))
-        opt.step()
-    return param.detach(), opt
-
-
-@pytest.mark.parametrize('optimizer', _CORRECTED_WD_OPTIMIZERS)
-def test_corrected_weight_decay_tensor_lr(optimizer):
-    # The max lr for corrected weight decay (lr ** 2 / max_lr) is snapshot at construction. It used to alias a tensor
-    # lr, so in-place lr updates silently disabled the correction and lr == 0 gave 0 / 0 = NaN.
-    lrs = [1e-3, 5e-4, 0., 0., 2e-4]
-    param_float, opt_float = _corrected_wd_run(optimizer, 1e-3, lrs, tensor_lr=False)
-    param_tensor, opt_tensor = _corrected_wd_run(optimizer, 1e-3, lrs, tensor_lr=True)
-    assert torch.isfinite(param_tensor).all()
-    torch.testing.assert_close(param_tensor, param_float)
-    for opt in (opt_float, opt_tensor):
-        assert opt.param_groups[0]['corrected_weight_decay'] is True
-        assert opt.param_groups[0]['max_lr_snapshot'] == pytest.approx(1e-3)
-
-
 @pytest.mark.parametrize('optimizer', _CORRECTED_WD_OPTIMIZERS)
 @pytest.mark.parametrize('saved', ['old_enabled', 'old_disabled', 'new'])
 def test_corrected_weight_decay_state_dict(optimizer, saved):
     # Older checkpoints have no max_lr_snapshot, it is backfilled w/ the constructor lr (the max lr used before).
     # Newer checkpoints restore the snapshot as saved.
-    _, opt = _corrected_wd_run(optimizer, 2e-3, [2e-3] * 2, tensor_lr=False)
+    params, opt = _make_optimizer(optimizer, lr=2e-3, weight_decay=0.1)
+    _run_steps(params, opt, range(2))
     state_dict = deepcopy(opt.state_dict())
     if saved != 'new':
         for group in state_dict['param_groups']:
             del group['max_lr_snapshot']
             group['corrected_weight_decay'] = saved == 'old_enabled'
-    resumed = create_optimizer_v2([Parameter(torch.ones(8, 8))], optimizer, lr=1e-3, weight_decay=0.1)
+    _, resumed = _make_optimizer(optimizer, lr=1e-3, weight_decay=0.1)
     resumed.load_state_dict(state_dict)
     for group in resumed.param_groups:
         assert group['corrected_weight_decay'] is (saved != 'old_disabled')
@@ -1517,82 +1032,6 @@ def test_corrected_weight_decay_state_dict(optimizer, saved):
 def test_corrected_weight_decay_zero_lr_raises(optimizer):
     with pytest.raises(ValueError):
         create_optimizer_v2([Parameter(torch.ones(4))], optimizer, lr=0.)
-
-
-@pytest.mark.parametrize('copy_fn', ['pickle', 'deepcopy'])
-def test_kron_pickle_deepcopy(copy_fn):
-    # Optimizer.__getstate__ only keeps defaults / state / param_groups, Kron's other attributes (deterministic,
-    # compiled fns) must survive or be rebuilt so a copy can keep stepping.
-    import pickle
-    from timm.optim.kron import Kron
-
-    def step(param, opt, start, num):
-        for i in range(start, start + num):
-            param.grad = torch.randn(16, 8, generator=torch.Generator().manual_seed(i))
-            opt.step()
-        return param.detach().clone()
-
-    param = Parameter(torch.ones(16, 8))
-    opt = Kron([param], lr=1e-3, weight_decay=0.1, decoupled_decay=True, deterministic=True)
-    step(param, opt, 0, 3)
-    if copy_fn == 'pickle':
-        param_copy, opt_copy = pickle.loads(pickle.dumps((param, opt)))
-    else:
-        param_copy, opt_copy = deepcopy((param, opt))
-    assert opt_copy.deterministic
-    torch.testing.assert_close(step(param_copy, opt_copy, 3, 3), step(param, opt, 3, 3), rtol=0, atol=0)
-
-
-@pytest.mark.parametrize('optimizer,kwargs', [
-    ('adabelief', {}),
-    ('adabelief', dict(amsgrad=True)),
-    ('radabelief', {}),
-    ('novograd', {}),
-    ('novograd', dict(amsgrad=True)),
-    ('kron', dict(precond_dtype=torch.float32, deterministic=True)),
-    ('kron', dict(mu_dtype=torch.float32, precond_dtype=torch.float32, deterministic=True)),
-    ('kron', dict(mu_dtype=torch.float32, deterministic=True)),
-])
-@pytest.mark.parametrize('dtype', [torch.float16, torch.bfloat16])
-def test_low_precision_state_dtype_resume(optimizer, kwargs, dtype):
-    if optimizer == 'kron' and _old_cpu_low_precision:
-        pytest.skip('Older PyTorch lacks FP16 / BF16 CPU kernels used by Kron')
-    # Higher precision state must survive loading exactly; casting back after a downcast loses values.
-    def step(param, opt, start, num):
-        for i in range(start, start + num):
-            param.grad = torch.randn(16, 8, generator=torch.Generator().manual_seed(i)).to(dtype)
-            opt.step()
-
-    param = Parameter(torch.ones(16, 8, dtype=dtype))
-    opt = create_optimizer_v2([param], optimizer, lr=1e-3, **kwargs)
-    step(param, opt, 0, 3)
-    saved = deepcopy(opt.state_dict())
-
-    param_copy = Parameter(param.detach().clone())
-    resumed = create_optimizer_v2([param_copy], optimizer, lr=1e-3, **kwargs)
-
-    def check_loaded(loaded):
-        torch.testing.assert_close(loaded.state[param_copy], opt.state[param], rtol=0, atol=0)
-
-    if hasattr(resumed, 'register_load_state_dict_pre_hook'):
-        # Honor user pre-hook remapping, and restore full precision before user post-hooks inspect state.
-        def remap_ids(loaded, state_dict):
-            state_dict = deepcopy(state_dict)
-            state_dict['state'][100] = state_dict['state'].pop(0)
-            state_dict['param_groups'][0]['params'] = [100]
-            return state_dict
-
-        resumed.register_load_state_dict_pre_hook(remap_ids)
-        resumed.register_load_state_dict_post_hook(check_loaded)
-
-    resumed.load_state_dict(saved)
-    check_loaded(resumed)
-    torch.testing.assert_close(saved['state'][0], opt.state[param], rtol=0, atol=0)
-    step(param, opt, 3, 3)
-    step(param_copy, resumed, 3, 3)
-    torch.testing.assert_close(param_copy, param, rtol=0, atol=0)
-    torch.testing.assert_close(resumed.state[param_copy], opt.state[param], rtol=0, atol=0)
-    assert torch.isfinite(param_copy).all()
 
 
 @pytest.mark.skipif(_old_cpu_low_precision, reason='Older PyTorch lacks FP16 CPU kernels used by AdafactorBigVision')
@@ -1620,35 +1059,6 @@ def test_adafactor_zero_lr():
     assert Adafactor([Parameter(torch.ones(2))]).param_groups[0]['relative_step']
 
 
-_GRAD_UNCHANGED_SKIP = ('fused*', 'bnb*', 'adahessian')
-
-
-@pytest.mark.parametrize('optimizer', list_optimizers(exclude_filters=_GRAD_UNCHANGED_SKIP))
-def test_optimizer_grad_unchanged(optimizer):
-    _skip_unsupported_registry_defaults(optimizer)
-    # Optimizers must not modify p.grad, code reading gradients after step() (e.g. grad norm logging) would see
-    # the modified values. The foreach SGD nesterov paths (torch.optim.SGD, SGDW) intentionally update grads
-    # in place to avoid allocating a full set of temporaries, matching PyTorch, they're excluded via foreach=False.
-    opt_args = inspect.signature(get_optimizer_class(optimizer, bind_defaults=False).__init__).parameters
-    configs = [{}]
-    if 'decoupled_decay' in opt_args:
-        configs = [dict(decoupled_decay=False), dict(decoupled_decay=True)]
-    for config in configs:
-        if 'foreach' in opt_args:
-            config['foreach'] = False
-        weight = Parameter(torch.randn(16, 8, generator=torch.Generator().manual_seed(0)))
-        bias = Parameter(torch.randn(8, generator=torch.Generator().manual_seed(1)))
-        opt = create_optimizer_v2([weight, bias], optimizer, lr=1e-2, weight_decay=0.1, **config)
-        for i in range(2):
-            # scaled so the global grad norm exceeds LAMB's default max_grad_norm clipping threshold
-            grads = [3 * torch.randn(p.shape, generator=torch.Generator().manual_seed(10 * i + j))
-                     for j, p in enumerate((weight, bias))]
-            weight.grad, bias.grad = grads[0].clone(), grads[1].clone()
-            opt.step()
-            torch.testing.assert_close(weight.grad, grads[0], rtol=0, atol=0)
-            torch.testing.assert_close(bias.grad, grads[1], rtol=0, atol=0)
-
-
 @pytest.mark.parametrize('grad_averaging', [False, True])
 @pytest.mark.parametrize('corrected', [False, True])
 def test_novograd_decoupled_weight_decay(grad_averaging, corrected):
@@ -1669,3 +1079,287 @@ def test_novograd_decoupled_weight_decay(grad_averaging, corrected):
         param.grad = torch.zeros(4)
         opt.step()
         torch.testing.assert_close(param.detach(), before * (1 - wd_scale * wd))
+
+
+# Registry-wide optimizer property tests. Each property should hold for every optimizer in the registry, intended
+# deviations are listed (w/ reason) in _PROPERTY_EXCEPTIONS.
+_REGISTRY_OPTIMIZERS = list_optimizers(exclude_filters=('fused*', 'bnb*', 'adahessian'))  # adahessian is 2nd order
+
+# Non-default configs the low precision and resume property tests also run, (registry name, kwargs).
+_REGISTRY_CONFIGS = [(name, {}) for name in _REGISTRY_OPTIMIZERS] + [
+    ('adabelief', dict(amsgrad=True)),
+    ('novograd', dict(amsgrad=True)),
+    ('kron', dict(precond_dtype=torch.float32)),
+    ('kron', dict(mu_dtype=torch.float32)),
+    ('kron', dict(mu_dtype=torch.float32, precond_dtype=torch.float32)),
+    ('kron', dict(precond_dtype=torch.float32, momentum_into_precond_update=False)),
+]
+
+_PROPERTY_EXCEPTIONS = {
+    'param_group_independent': {
+        '*lamb*': 'global grad norm clipping spans all param groups',
+        'kron*': 'the preconditioner update / balance RNG is shared across params',
+    },
+    'zero_lr_no_update': {
+        'madgrad*': 'lr is folded into the dual averaged update (as per reference)',
+        '*rmsproptf*': 'lr is folded into the momentum (lr_in_momentum, as per TF)',
+        'cadafactor': 'momentum accumulates lr scaled updates (as per fairseq / HF Adafactor)',
+    },
+    'foreach_parity': {
+        '*adafactorbv*': 'no foreach impl',
+    },
+    'resume_bfloat16': {
+        'nadam': 'torch.optim.NAdam keeps mu_product in fp32, cast to the param dtype by Optimizer.load_state_dict',
+    },
+}
+
+def _skip_property_exceptions(prop, optimizer):
+    for pattern, reason in _PROPERTY_EXCEPTIONS.get(prop, {}).items():
+        if fnmatch.fnmatch(optimizer, pattern):
+            pytest.skip(reason)
+
+
+def _config_id(config):
+    name, kwargs = config
+    return name + ''.join(f'-{k}={str(v).replace("torch.", "")}' for k, v in kwargs.items())
+
+
+def _create_optimizer(optimizer, params, kwargs=None, lr=1e-2, weight_decay=0.01, **extra):
+    kwargs = {**(kwargs or {}), **extra}
+    if optimizer.startswith('kron'):
+        kwargs.setdefault('deterministic', True)  # bitwise comparable across copies / resume
+    return create_optimizer_v2(params, optimizer, lr=lr, weight_decay=weight_decay, **kwargs)
+
+
+def _make_optimizer(optimizer, kwargs=None, dtype=torch.float32, **opt_kwargs):
+    weight = Parameter(torch.randn(16, 8, generator=torch.Generator().manual_seed(0)).to(dtype))
+    bias = Parameter(torch.randn(8, generator=torch.Generator().manual_seed(1)).to(dtype))
+    params = [weight, bias]
+    return params, _create_optimizer(optimizer, params, kwargs, **opt_kwargs)
+
+
+def _step_grads(params, step):
+    return [
+        torch.randn(p.shape, generator=torch.Generator().manual_seed(100 * step + i)).to(p.dtype)
+        for i, p in enumerate(params)
+    ]
+
+
+def _run_steps(params, opt, steps, lr_fn=None):
+    for step in steps:
+        if lr_fn is not None:
+            lr_fn(step)
+        for p, g in zip(params, _step_grads(params, step)):
+            p.grad = g
+        opt.step()
+    return [p.detach().clone() for p in params]
+
+
+def _assert_equal(actual, expected):
+    for a, e in zip(actual, expected):
+        torch.testing.assert_close(a, e, rtol=0, atol=0)
+
+
+def _state_dtypes(state):
+    dtypes = {}
+    for k, v in state.items():
+        if torch.is_tensor(v) and v.is_floating_point():
+            dtypes[k] = v.dtype
+        elif isinstance(v, (list, tuple)) and v and all(torch.is_tensor(t) for t in v):
+            dtypes[k] = tuple(t.dtype for t in v)
+    return dtypes
+
+
+@pytest.mark.parametrize('optimizer', _REGISTRY_OPTIMIZERS)
+def test_optimizer_no_grad_step(optimizer):
+    # A step without any grads is a no-op.
+    _skip_unsupported_registry_defaults(optimizer)
+    params, opt = _make_optimizer(optimizer)
+    before = [p.detach().clone() for p in params]
+    opt.step()
+    _assert_equal(params, before)
+
+
+@pytest.mark.parametrize('copy_fn', ['pickle', 'deepcopy'])
+@pytest.mark.parametrize('optimizer', _REGISTRY_OPTIMIZERS)
+def test_optimizer_copy(optimizer, copy_fn):
+    # A pickled / deep copied optimizer (w/ its params) continues exactly as the original.
+    _skip_unsupported_registry_defaults(optimizer)
+    params, opt = _make_optimizer(optimizer)
+    _run_steps(params, opt, range(2))
+    copy_fn = (lambda x: pickle.loads(pickle.dumps(x))) if copy_fn == 'pickle' else deepcopy
+    params_copy, opt_copy = copy_fn((params, opt))
+    _assert_equal(_run_steps(params_copy, opt_copy, range(2, 4)), _run_steps(params, opt, range(2, 4)))
+
+
+@pytest.mark.parametrize('optimizer', _REGISTRY_OPTIMIZERS)
+def test_optimizer_param_group_independent(optimizer):
+    # A param group's update does not depend on other param groups (e.g. via state or lr shared across groups).
+    _skip_unsupported_registry_defaults(optimizer)
+    _skip_property_exceptions('param_group_independent', optimizer)
+    other = Parameter(torch.randn(16, 8, generator=torch.Generator().manual_seed(0)))
+    weight = Parameter(torch.randn(16, 8, generator=torch.Generator().manual_seed(1)))
+    weight_alone = Parameter(weight.detach().clone())
+    opt = create_optimizer_v2([{'params': [other], 'lr': 1e-2}, {'params': [weight], 'lr': 1e-4}], optimizer, lr=1e-2)
+    opt_alone = create_optimizer_v2([weight_alone], optimizer, lr=1e-4)
+    for step in range(4):
+        other.grad, weight.grad = _step_grads([other, weight], step)
+        weight_alone.grad = weight.grad.clone()
+        opt.step()
+        opt_alone.step()
+    torch.testing.assert_close(weight.detach(), weight_alone.detach())
+
+
+@pytest.mark.parametrize('tensor_lr', [False, True])
+@pytest.mark.parametrize('optimizer', _REGISTRY_OPTIMIZERS)
+def test_optimizer_zero_lr(optimizer, tensor_lr):
+    # Params must not change w/ lr == 0 (e.g. warmup from or cooldown to 0).
+    _skip_unsupported_registry_defaults(optimizer)
+    _skip_property_exceptions('zero_lr_no_update', optimizer)
+    if tensor_lr and _old_tensor_lr:
+        pytest.skip('Older PyTorch has limited tensor lr support')
+    lr = torch.tensor(1e-2) if tensor_lr else 1e-2
+    params, opt = _make_optimizer(optimizer, lr=lr)
+    _run_steps(params, opt, range(3))
+    if tensor_lr:
+        lr.fill_(0.)
+    else:
+        opt.param_groups[0]['lr'] = 0.
+    before = [p.detach().clone() for p in params]
+    _assert_equal(_run_steps(params, opt, range(3, 6)), before)
+
+
+@pytest.mark.parametrize('optimizer', _REGISTRY_OPTIMIZERS)
+def test_optimizer_tensor_lr(optimizer):
+    # An in-place updated tensor lr (as used w/ torch.compile / CUDA graphs) matches a float lr, incl lr == 0.
+    _skip_unsupported_registry_defaults(optimizer)
+    if _old_tensor_lr:
+        pytest.skip('Older PyTorch has limited tensor lr support')
+    lrs = [1e-2, 5e-3, 0., 0., 2e-3]
+    params, opt = _make_optimizer(optimizer, weight_decay=0.1)
+    expected = _run_steps(params, opt, range(5), lambda step: opt.param_groups[0].__setitem__('lr', lrs[step]))
+    lr = torch.tensor(lrs[0])
+    params, opt = _make_optimizer(optimizer, lr=lr, weight_decay=0.1)
+    actual = _run_steps(params, opt, range(5), lambda step: lr.fill_(lrs[step]))
+    for a, e in zip(actual, expected):
+        assert torch.isfinite(a).all()
+        torch.testing.assert_close(a, e)
+
+
+@pytest.mark.parametrize('dtype', [torch.float32, torch.bfloat16])
+@pytest.mark.parametrize('config', _REGISTRY_CONFIGS, ids=_config_id)
+def test_optimizer_resume(config, dtype):
+    # Resuming from a state_dict continues exactly as an uninterrupted run, w/ state dtypes preserved (e.g. the
+    # higher precision state some optimizers keep for low precision params).
+    optimizer, kwargs = config
+    _skip_unsupported_registry_defaults(optimizer)
+    if dtype != torch.float32:
+        if _old_cpu_low_precision:
+            pytest.skip('Older PyTorch lacks low precision CPU kernels')
+        _skip_property_exceptions(f'resume_{str(dtype)[6:]}', optimizer)
+    params, opt = _make_optimizer(optimizer, kwargs, dtype=dtype)
+    _run_steps(params, opt, range(3))
+    state_dict = deepcopy(opt.state_dict())
+    resumed_params = [Parameter(p.detach().clone()) for p in params]
+    expected_dtypes = [_state_dtypes(opt.state[p]) for p in params]
+    expected = _run_steps(params, opt, range(3, 6))
+
+    resumed = _create_optimizer(optimizer, resumed_params, kwargs)
+    resumed.load_state_dict(state_dict)
+    _assert_equal(_run_steps(resumed_params, resumed, range(3, 6)), expected)
+    assert [_state_dtypes(resumed.state[p]) for p in resumed_params] == expected_dtypes
+
+
+@pytest.mark.parametrize('dtype', [torch.bfloat16, torch.float16])
+@pytest.mark.parametrize('config', _REGISTRY_CONFIGS, ids=_config_id)
+def test_optimizer_low_precision(config, dtype):
+    # Optimizing low precision params runs, stays finite and keeps the param dtype.
+    optimizer, kwargs = config
+    _skip_unsupported_registry_defaults(optimizer)
+    if _old_cpu_low_precision:
+        pytest.skip('Older PyTorch lacks low precision CPU kernels')
+    if dtype == torch.float16 and 'eps' in _opt_args(optimizer):
+        kwargs = dict(kwargs, eps=1e-4)  # the default eps of many optimizers (e.g. 1e-8) underflows in FP16
+    params, opt = _make_optimizer(optimizer, kwargs, dtype=dtype)
+    for p in _run_steps(params, opt, range(3)):
+        assert p.dtype == dtype
+        assert torch.isfinite(p).all()
+
+
+@pytest.mark.parametrize('optimizer', [
+    n for n in _REGISTRY_OPTIMIZERS
+    if get_optimizer_class(n, bind_defaults=False).__module__.startswith('timm') and 'foreach' in _opt_args(n)
+])
+def test_optimizer_foreach_parity(optimizer):
+    # The foreach (multi-tensor) impl matches the single tensor impl, incl a param lagging behind in steps (no grad
+    # for a while) and params spanning more than one (device, dtype) group. torch.optim impls are tested upstream.
+    _skip_unsupported_registry_defaults(optimizer)
+    _skip_property_exceptions('foreach_parity', optimizer)
+    if (get_optimizer_info(optimizer).defaults or {}).get('caution') and \
+            'Scalar' not in torch.ops.aten._foreach_maximum_.overloads():
+        pytest.skip('Cautious foreach impls require a newer PyTorch (Scalar _foreach_maximum_)')
+    if 'adopt' in optimizer and not hasattr(torch.optim.Optimizer, '_group_tensors_by_device_and_dtype'):
+        pytest.skip('Adopt foreach (multi-tensor) impl requires a newer PyTorch')
+    results = []
+    for foreach in (False, True):
+        params = [
+            Parameter(torch.randn(16, 8, generator=torch.Generator().manual_seed(0))),
+            Parameter(torch.randn(8, generator=torch.Generator().manual_seed(1))),
+            Parameter(torch.randn(16, 8, generator=torch.Generator().manual_seed(2), dtype=torch.float64)),
+        ]
+        opt = _create_optimizer(optimizer, params, foreach=foreach)
+        for step in range(6):
+            for i, (p, g) in enumerate(zip(params, _step_grads(params, step))):
+                p.grad = None if (i == 1 and step < 3) else g
+            opt.step()
+        results.append([p.detach().clone() for p in params])
+    for a, e in zip(*results):
+        torch.testing.assert_close(a, e)
+
+
+@pytest.mark.parametrize('optimizer', _REGISTRY_OPTIMIZERS)
+def test_optimizer_grad_unchanged(optimizer):
+    # Optimizers must not modify p.grad, code reading gradients after step() (e.g. grad norm logging) would see
+    # the modified values. The foreach SGD nesterov paths (torch.optim.SGD, SGDW) intentionally update grads
+    # in place to avoid allocating a full set of temporaries, matching PyTorch, they're excluded via foreach=False.
+    _skip_unsupported_registry_defaults(optimizer)
+    opt_args = _opt_args(optimizer)
+    configs = [{}]
+    if 'decoupled_decay' in opt_args:
+        configs = [dict(decoupled_decay=False), dict(decoupled_decay=True)]
+    for config in configs:
+        if 'foreach' in opt_args:
+            config['foreach'] = False
+        weight = Parameter(torch.randn(16, 8, generator=torch.Generator().manual_seed(0)))
+        bias = Parameter(torch.randn(8, generator=torch.Generator().manual_seed(1)))
+        opt = create_optimizer_v2([weight, bias], optimizer, lr=1e-2, weight_decay=0.1, **config)
+        for i in range(2):
+            # scaled so the global grad norm exceeds LAMB's default max_grad_norm clipping threshold
+            grads = [3 * torch.randn(p.shape, generator=torch.Generator().manual_seed(10 * i + j))
+                     for j, p in enumerate((weight, bias))]
+            weight.grad, bias.grad = grads[0].clone(), grads[1].clone()
+            opt.step()
+            torch.testing.assert_close(weight.grad, grads[0], rtol=0, atol=0)
+            torch.testing.assert_close(bias.grad, grads[1], rtol=0, atol=0)
+
+
+@pytest.mark.parametrize('dtype', [torch.float16, torch.bfloat16, torch.float32, torch.float64])
+def test_laprop_load_legacy_float_state(dtype):
+    # Older checkpoints store LaProp's bias correction EMA as a Python float, it must load (to a full precision
+    # scalar tensor) w/o the dtype preserving loader trying to restore it as a tensor. The checkpoint is created w/
+    # FP32 params (low precision CPU math is unsupported in older PyTorch), only loading uses the param dtype.
+    from timm.optim.laprop import LaProp
+    param = Parameter(torch.ones(8, 4))
+    opt = LaProp([param], lr=1e-2)
+    for i in range(2):
+        param.grad = torch.randn(8, 4, generator=torch.Generator().manual_seed(i))
+        opt.step()
+    state_dict = deepcopy(opt.state_dict())
+    exp_avg_lr_2 = float(state_dict['state'][0]['exp_avg_lr_2'])
+    state_dict['state'][0]['exp_avg_lr_2'] = exp_avg_lr_2
+    resumed_param = Parameter(torch.ones(8, 4, dtype=dtype))
+    resumed = LaProp([resumed_param], lr=1e-2)
+    resumed.load_state_dict(state_dict)
+    loaded = resumed.state[resumed_param]['exp_avg_lr_2']
+    assert torch.is_tensor(loaded) and loaded.dtype == torch.float32 and loaded.device.type == 'cpu'
+    assert loaded.item() == pytest.approx(exp_avg_lr_2, rel=1e-6)

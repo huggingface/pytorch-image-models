@@ -5,8 +5,12 @@ Paper: `On the Variance of the Adaptive Learning Rate and Beyond` - https://arxi
 NOTE: This impl has been deprecated in favour of torch.optim.RAdam and remains as a reference
 """
 import math
+from typing import Any, Dict
+
 import torch
 from torch.optim.optimizer import Optimizer
+
+from ._helpers import _load_state_dict_preserving_dtypes
 
 
 class RAdamLegacy(Optimizer):
@@ -32,6 +36,13 @@ class RAdamLegacy(Optimizer):
 
     def __setstate__(self, state):
         super(RAdamLegacy, self).__setstate__(state)
+
+    def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
+        # state is always kept in fp32
+        _load_state_dict_preserving_dtypes(
+            self, state_dict, super().load_state_dict,
+            lambda group, param: {key: torch.float32 for key in ('exp_avg', 'exp_avg_sq')},
+        )
 
     @torch.no_grad()
     def step(self, closure=None):

@@ -16,12 +16,15 @@ References for added functionality:
     Why Gradients Rapidly Increase Near the End of Training: https://arxiv.org/abs/2506.02285
 
 """
-from typing import Tuple
+from typing import Any, Dict, Tuple
 
 from torch.optim import Optimizer
 import torch
 
-from ._helpers import _add_scaled_, _get_scalar_dtype, _init_scalar, _max_lr_snapshot, _validate_scalar
+from ._helpers import (
+    _add_scaled_, _get_scalar_dtype, _init_scalar, _load_state_dict_preserving_dtypes, _max_lr_snapshot,
+    _validate_scalar,
+)
 from ._types import ParamsT
 
 
@@ -83,6 +86,15 @@ class LaProp(Optimizer):
                         device='cpu',
                         dtype=_get_scalar_dtype(),
                     )
+
+    def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
+        _load_state_dict_preserving_dtypes(
+            self, state_dict, super().load_state_dict,
+            lambda group, param: {
+                'exp_avg_lr_1': (group['lr'].dtype, group['lr'].device) if torch.is_tensor(group['lr']) else None,
+                'exp_avg_lr_2': (_get_scalar_dtype(), torch.device('cpu')),
+            },
+        )
 
     @torch.no_grad()
     def step(self, closure=None):
