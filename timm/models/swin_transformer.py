@@ -759,6 +759,9 @@ class SwinTransformer(nn.Module):
         elif len(window_size) == 2:
             window_size = (window_size,) * self.num_layers
         assert len(window_size) == self.num_layers
+        # window size of each stage relative to the smallest one, only differs from 1 for the S3 models
+        min_window_size = min(to_2tuple(w)[0] for w in window_size)
+        self.stage_window_scale = tuple(to_2tuple(w)[0] / min_window_size for w in window_size)
         mlp_ratio = to_ntuple(self.num_layers)(mlp_ratio)
         dpr = calculate_drop_path_rates(drop_path_rate, depths, stagewise=True)
         layers = []
@@ -845,7 +848,8 @@ class SwinTransformer(nn.Module):
         Args:
             img_size: New input resolution, if None current resolution is used.
             patch_size: New patch size, if None use current patch size.
-            window_size: New window size, if None based on new_img_size // window_div.
+            window_size: New window size for all stages, if None based on new_img_size // window_div with the
+                relative window sizes of the stages kept.
             window_ratio: Divisor for calculating window size from grid size.
             always_partition: Always partition into windows and shift (even if window size < feat size).
         """
@@ -855,12 +859,14 @@ class SwinTransformer(nn.Module):
 
         if window_size is None:
             window_size = tuple([pg // window_ratio for pg in patch_grid])
+        else:
+            self.stage_window_scale = (1.,) * len(self.layers)
 
         for index, stage in enumerate(self.layers):
             stage_scale = 2 ** max(index - 1, 0)
             stage.set_input_size(
                 feat_size=(patch_grid[0] // stage_scale, patch_grid[1] // stage_scale),
-                window_size=window_size,
+                window_size=tuple([round(w * self.stage_window_scale[index]) for w in to_2tuple(window_size)]),
                 always_partition=always_partition,
             )
 

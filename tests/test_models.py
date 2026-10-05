@@ -1460,6 +1460,19 @@ def test_swin_family_set_input_size(model_name, img_size):
         model(torch.randn(1, 3, img_size, img_size))
 
 
+@pytest.mark.base
+def test_swin_s3_set_input_size_keeps_stage_windows():
+    # S3 models use a different window size per stage, a resize without a window size must keep that pattern
+    model = create_model('swin_s3_tiny_224', **_SWIN_KWARGS).eval()
+    x = torch.randn(1, 3, 224, 224)
+    with torch.no_grad():
+        expected = model(x)
+        model.set_input_size(img_size=(224, 224))
+        torch.testing.assert_close(model(x), expected)
+    model.set_input_size(img_size=(448, 448))
+    assert [s.blocks[0].window_size for s in model.layers] == [(14, 14), (14, 14), (28, 28), (14, 14)]
+
+
 _RELPOS_FAMILY = [
     # model, ctor kwargs, base img size, resized img size
     ('maxvit_nano_rw_256', dict(), 256, 320),  # RelPosBias, window / grid partition attn
