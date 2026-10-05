@@ -27,6 +27,19 @@ torch_version = tuple(int(v) for v in torch.__version__.split('.')[:2])
 # HACK relying on internal PyTorch test functionality for comparisons that I don't want to write
 torch_tc = TestCase()
 
+# Older PyTorch is missing CPU kernels for many FP16 / BF16 ops (eye, baddbmm, sqrt, lerp, ...)
+_old_cpu_low_precision = torch_version < (2, 1)
+
+
+def _skip_unsupported_registry_defaults(optimizer):
+    # Registry defaults can rely on args of newer PyTorch optimizers (e.g. radamw -> RAdam(decoupled_weight_decay))
+    opt_args = inspect.signature(get_optimizer_class(optimizer, bind_defaults=False).__init__).parameters
+    if any(arg.kind == arg.VAR_KEYWORD for arg in opt_args.values()):
+        return
+    unsupported = [k for k in (get_optimizer_info(optimizer).defaults or {}) if k not in opt_args]
+    if unsupported:
+        pytest.skip(f'{optimizer} defaults {unsupported} not supported by this PyTorch version')
+
 
 def _test_basic_cases_template(weight, bias, input, constructor, scheduler_constructors):
     weight = Parameter(weight)
@@ -955,6 +968,10 @@ def test_sgdw_multi_tensor_weight_decay_matches_single_tensor():
     torch.testing.assert_close(multi64, single64)
 
 
+@pytest.mark.skipif(
+    not hasattr(torch.optim.Optimizer, '_group_tensors_by_device_and_dtype'),
+    reason='Adopt foreach (multi-tensor) impl requires a newer PyTorch',
+)
 @pytest.mark.parametrize('lag_index', [0, 1])
 @pytest.mark.parametrize('clip_exp', [None, 0.333])
 def test_adopt_multi_tensor_lagging_step_matches_single_tensor(lag_index, clip_exp):
@@ -1145,6 +1162,7 @@ def test_capturable_fp16_small_lr(optimizer, foreach):
     torch.testing.assert_close(run(True), run(False))
 
 
+@pytest.mark.skipif(_old_cpu_low_precision, reason='Older PyTorch lacks FP16 / BF16 CPU kernels used by Kron')
 @pytest.mark.parametrize('dtype', [torch.bfloat16, torch.float16])
 @pytest.mark.parametrize('precond_dtype', [None, torch.float32])
 @pytest.mark.parametrize('momentum_into_precond_update', [True, False])
@@ -1169,6 +1187,7 @@ def test_kron_low_precision_params(dtype, precond_dtype, momentum_into_precond_u
 
 @pytest.mark.parametrize('optimizer', list_optimizers(exclude_filters=('fused*', 'bnb*')))
 def test_optim_factory_common_kwargs(optimizer):
+    _skip_unsupported_registry_defaults(optimizer)
     # eps / betas / momentum passed to the factory must be forwarded to optimizers that accept them,
     # and dropped (not crash) for those that don't.
     info = get_optimizer_info(optimizer)
@@ -1536,6 +1555,8 @@ def test_kron_pickle_deepcopy(copy_fn):
 ])
 @pytest.mark.parametrize('dtype', [torch.float16, torch.bfloat16])
 def test_low_precision_state_dtype_resume(optimizer, kwargs, dtype):
+    if optimizer == 'kron' and _old_cpu_low_precision:
+        pytest.skip('Older PyTorch lacks FP16 / BF16 CPU kernels used by Kron')
     # Higher precision state must survive loading exactly; casting back after a downcast loses values.
     def step(param, opt, start, num):
         for i in range(start, start + num):
@@ -1574,6 +1595,7 @@ def test_low_precision_state_dtype_resume(optimizer, kwargs, dtype):
     assert torch.isfinite(param_copy).all()
 
 
+@pytest.mark.skipif(_old_cpu_low_precision, reason='Older PyTorch lacks FP16 CPU kernels used by AdafactorBigVision')
 def test_adafactor_bv_default_eps_per_param():
     # The dtype dependent default eps was resolved once from the first param, a FP16 param after a FP32 one got
     # an eps that underflows in FP16 and NaN on zero gradients.
@@ -1603,6 +1625,7 @@ _GRAD_UNCHANGED_SKIP = ('fused*', 'bnb*', 'adahessian')
 
 @pytest.mark.parametrize('optimizer', list_optimizers(exclude_filters=_GRAD_UNCHANGED_SKIP))
 def test_optimizer_grad_unchanged(optimizer):
+    _skip_unsupported_registry_defaults(optimizer)
     # Optimizers must not modify p.grad, code reading gradients after step() (e.g. grad norm logging) would see
     # the modified values. The foreach SGD nesterov paths (torch.optim.SGD, SGDW) intentionally update grads
     # in place to avoid allocating a full set of temporaries, matching PyTorch, they're excluded via foreach=False.
