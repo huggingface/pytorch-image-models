@@ -11,10 +11,11 @@ Original header/copyright below.
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 import math
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import torch
 
+from ._helpers import _load_state_dict_preserving_dtypes
 from ._types import ParamsT
 
 
@@ -86,6 +87,16 @@ class Adafactor(torch.optim.Optimizer):
         for group in self.param_groups:
             group.setdefault('caution', False)
             group.setdefault('min_dim_size_to_factor', 16)
+
+    def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
+        # state is kept in fp32 for low precision params (RMS is recomputed every step)
+        _load_state_dict_preserving_dtypes(
+            self, state_dict, super().load_state_dict,
+            lambda group, param: {
+                key: torch.float32 if param.dtype in {torch.float16, torch.bfloat16} else None
+                for key in ('exp_avg', 'exp_avg_sq', 'exp_avg_sq_row', 'exp_avg_sq_col')
+            },
+        )
 
     @staticmethod
     def _get_lr(param_group, param_state):

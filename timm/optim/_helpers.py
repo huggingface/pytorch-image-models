@@ -10,20 +10,26 @@ def _load_state_dict_preserving_dtypes(
         optimizer: torch.optim.Optimizer,
         state_dict: Dict[str, Any],
         load_state_dict: Callable[[Dict[str, Any]], None],
-        state_dtypes: Callable[[Dict[str, Any], Tensor], Dict[str, Optional[torch.dtype]]],
+        state_dtypes: Callable[[Dict[str, Any], Tensor], Dict[str, Any]],
 ) -> None:
     """Load optimizer state, restoring selected tensors from the uncast checkpoint.
 
-    The dtype callback maps state keys to their target dtypes; None (or the param dtype) leaves a key to the
-    normal loader.
-    Tensor lists (e.g. Kron's Q) are restored elementwise. Copies avoid aliasing the saved tensors.
+    The dtype callback maps state keys to their target dtypes, or (dtype, device) for state that does not live on
+    the param device; None (or the param dtype) leaves a key to the normal loader.
+    Tensor lists (e.g. Kron's Q) are restored elementwise. Copies avoid aliasing the saved tensors. Non-tensor
+    values (e.g. Python scalars in older checkpoints) are left to the normal loader / __setstate__.
     """
     source = state_dict
 
-    def copy_value(value: Any, param: Tensor, dtype: torch.dtype) -> Any:
+    def is_tensor_value(value: Any) -> bool:
         if isinstance(value, Tensor):
-            return value.to(device=param.device, dtype=dtype, copy=True)
-        return type(value)(copy_value(v, param, dtype) for v in value)
+            return True
+        return isinstance(value, (list, tuple)) and len(value) > 0 and all(isinstance(v, Tensor) for v in value)
+
+    def copy_value(value: Any, device: torch.device, dtype: torch.dtype) -> Any:
+        if isinstance(value, Tensor):
+            return value.to(device=device, dtype=dtype, copy=True)
+        return type(value)(copy_value(v, device, dtype) for v in value)
 
     def capture_source(_optimizer: torch.optim.Optimizer, saved: Dict[str, Any]) -> None:
         nonlocal source
@@ -33,10 +39,11 @@ def _load_state_dict_preserving_dtypes(
         for group, saved_group in zip(loaded.param_groups, source['param_groups']):
             for param, param_id in zip(group['params'], saved_group['params']):
                 saved = source['state'].get(param_id, {})
-                for key, dtype in state_dtypes(group, param).items():
+                for key, target in state_dtypes(group, param).items():
+                    dtype, device = target if isinstance(target, tuple) else (target, param.device)
                     # a target matching the param dtype is already handled (aliased if possible) by the normal loader
-                    if dtype is not None and dtype != param.dtype and key in saved:
-                        loaded.state[param][key] = copy_value(saved[key], param, dtype)
+                    if dtype is not None and dtype != param.dtype and is_tensor_value(saved.get(key)):
+                        loaded.state[param][key] = copy_value(saved[key], device, dtype)
 
     if (
         hasattr(optimizer, 'register_load_state_dict_pre_hook')
