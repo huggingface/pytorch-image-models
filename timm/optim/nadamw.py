@@ -13,7 +13,10 @@ from typing import List, Optional, Tuple
 import torch
 from torch import Tensor
 
-from ._helpers import _check_capturable_devices, _get_value, _init_scalar, _is_compiling, _max_lr_snapshot
+from ._helpers import (
+    _check_capturable_devices, _foreach_chunked, _foreach_increment_steps, _foreach_lerp, _foreach_lerp_, _get_value,
+    _init_scalar, _is_compiling, _max_lr_snapshot, _resolve_foreach,
+)
 from ._types import ParamsT
 
 
@@ -190,15 +193,8 @@ def nadamw(
             'API has changed, `state_steps` argument must contain a list of' +
             ' singleton tensors')
 
-    if foreach is None:
-        try:
-            # cannot do foreach if this overload doesn't exist when caution enabled
-            foreach = not caution or 'Scalar' in torch.ops.aten._foreach_maximum_.overloads()
-            # Match native PyTorch: tensor lr without capturable mode is supported by the single-tensor path.
-            if foreach and torch.is_tensor(lr) and not capturable:
-                foreach = False
-        except Exception:
-            foreach = False
+    # Match native PyTorch: tensor lr without capturable mode is supported by the single-tensor path.
+    foreach = _resolve_foreach(foreach, caution, lr=None if capturable else lr, params=params)
 
     if foreach and not torch.jit.is_scripting():
         func = _multi_tensor_nadamw
@@ -263,7 +259,7 @@ def _single_tensor_nadamw(
         param.mul_(1. - wd_scale * weight_decay)
 
         # Decay the first and second moment running average coefficient.
-        exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
+        exp_avg.lerp_(grad, 1 - beta1)
         exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
 
         if capturable:
@@ -281,7 +277,7 @@ def _single_tensor_nadamw(
 
             # Only difference between NAdamW and AdamW in this implementation.
             # The official PyTorch implementation of NAdam uses a different algorithm.
-            exp_avg = exp_avg.mul(beta1).add_(grad, alpha=1 - beta1)
+            exp_avg = exp_avg.lerp(grad, 1 - beta1)
 
             # add eps before dividing by the (negative) step size, as in the non-capturable path. Dividing eps by
             # the step size first gives 0 / 0 = NaN when lr == 0. NOTE eps must be representable in the param dtype.
@@ -308,7 +304,7 @@ def _single_tensor_nadamw(
 
             # Apply Nesterov. Only difference between NAdamW and AdamW in this implementation.
             # The official PyTorch implementation of NAdam uses a different algorithm.
-            exp_avg = exp_avg.mul(beta1).add_(grad, alpha=1 - beta1)
+            exp_avg = exp_avg.lerp(grad, 1 - beta1)
             denom = (exp_avg_sq.sqrt() / bias_correction2_sqrt).add_(eps)
 
             if caution:
@@ -320,6 +316,7 @@ def _single_tensor_nadamw(
             param.addcdiv_(exp_avg, denom, value=-step_size)
 
 
+@_foreach_chunked(5)
 def _multi_tensor_nadamw(
         params: List[Tensor],
         grads: List[Tensor],
@@ -352,15 +349,14 @@ def _multi_tensor_nadamw(
     params = [torch.view_as_real(x) if torch.is_complex(x) else x for x in params]
 
     # update steps
-    torch._foreach_add_(state_steps, 1)
+    _foreach_increment_steps(state_steps)
 
     # Perform stepweight decay
     wd_scale = lr if max_lr is None else lr ** 2 / max_lr
     torch._foreach_mul_(params, 1 -  wd_scale * weight_decay)
 
     # Decay the first and second moment running average coefficient
-    torch._foreach_mul_(exp_avgs, beta1)
-    torch._foreach_add_(exp_avgs, grads, alpha=1 - beta1)
+    _foreach_lerp_(exp_avgs, grads, 1 - beta1)
 
     torch._foreach_mul_(exp_avg_sqs, beta2)
     torch._foreach_addcmul_(exp_avg_sqs, grads, grads, 1 - beta2)
@@ -384,8 +380,7 @@ def _multi_tensor_nadamw(
 
         # Only difference between NAdamW and AdamW in this implementation.
         # The official PyTorch implementation of NAdam uses a different algorithm.
-        exp_avgs = torch._foreach_mul(exp_avgs, beta1)
-        torch._foreach_add_(exp_avgs, grads, alpha=1 - beta1)
+        exp_avgs = _foreach_lerp(exp_avgs, grads, 1 - beta1)
 
         # add eps before dividing by the (negative) step size, as in the non-capturable path (see single-tensor)
         denom = torch._foreach_sqrt(exp_avg_sqs)
@@ -418,8 +413,7 @@ def _multi_tensor_nadamw(
 
         # Apply Nesterov. Only difference between NAdamW and AdamW in this implementation.
         # The official PyTorch implementation of NAdam uses a different algorithm.
-        exp_avgs = torch._foreach_mul(exp_avgs, beta1)
-        torch._foreach_add_(exp_avgs, grads, alpha=1 - beta1)
+        exp_avgs = _foreach_lerp(exp_avgs, grads, 1 - beta1)
 
         exp_avg_sq_sqrt = torch._foreach_sqrt(exp_avg_sqs)
         torch._foreach_div_(exp_avg_sq_sqrt, bias_correction2_sqrt)

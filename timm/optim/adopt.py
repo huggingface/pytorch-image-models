@@ -21,7 +21,7 @@ import torch
 from torch import Tensor
 from torch.optim.optimizer import Optimizer
 
-from ._helpers import _max_lr_snapshot
+from ._helpers import _add_scaled_, _foreach_chunked, _max_lr_snapshot
 from ._types import ParamsT
 
 __all__ = ["Adopt", "adopt"]
@@ -140,7 +140,9 @@ class Adopt(Optimizer):
                         else torch.tensor(step_val, dtype=_get_scalar_dtype())
                     )
 
-    def _init_group(
+    # NOTE: not named _init_group, dynamo special-cases that name, running it eagerly when tracing and treating
+    # its outputs as constants, which would bake the per-param first step flags into the compiled graph.
+    def _collect_group(
             self,
             group,
             params_with_grad,
@@ -148,6 +150,7 @@ class Adopt(Optimizer):
             exp_avgs,
             exp_avg_sqs,
             state_steps,
+            first_steps,
     ):
         has_complex = False
         for p in group["params"]:
@@ -160,6 +163,8 @@ class Adopt(Optimizer):
             grads.append(p.grad)
 
             state = self.state[p]
+            # Params get state (and their first step) on their first grad, known here w/o reading the step tensor
+            first_steps.append(len(state) == 0)
             # Lazy state initialization
             if len(state) == 0:
                 # note(crcrpar): [special device hosting for step]
@@ -213,15 +218,17 @@ class Adopt(Optimizer):
             exp_avgs: List[Tensor] = []
             exp_avg_sqs: List[Tensor] = []
             state_steps: List[Tensor] = []
+            first_steps: List[bool] = []
             beta1, beta2 = group["betas"]
 
-            has_complex = self._init_group(
+            has_complex = self._collect_group(
                 group,
                 params_with_grad,
                 grads,
                 exp_avgs,
                 exp_avg_sqs,
                 state_steps,
+                first_steps,
             )
 
             adopt(
@@ -231,6 +238,7 @@ class Adopt(Optimizer):
                 exp_avg_sqs,
                 state_steps,
                 has_complex=has_complex,
+                first_steps=first_steps,
                 beta1=beta1,
                 beta2=beta2,
                 lr=group["lr"],
@@ -257,6 +265,7 @@ def _single_tensor_adopt(
         exp_avgs: List[Tensor],
         exp_avg_sqs: List[Tensor],
         state_steps: List[Tensor],
+        first_steps: Optional[List[bool]],
         grad_scale: Optional[Tensor],
         found_inf: Optional[Tensor],
         *,
@@ -310,13 +319,13 @@ def _single_tensor_adopt(
             grad = grad.add(param, alpha=weight_decay)
 
         step = step_t if capturable or differentiable else _get_value(step_t)
-        if step == 1:
+        if first_steps[i] if first_steps is not None else step == 1:
             exp_avg_sq.addcmul_(grad, grad.conj())
             continue
 
         if weight_decay != 0 and decoupled:
             wd_scale = lr ** 2 / max_lr if max_lr is not None else lr
-            param.add_(param, alpha=-wd_scale * weight_decay)
+            _add_scaled_(param, param, -wd_scale * weight_decay)
 
         denom = torch.clamp(exp_avg_sq.sqrt(), eps)
         normed_grad = grad.div(denom)
@@ -333,17 +342,19 @@ def _single_tensor_adopt(
             mask.div_(mask.mean().clamp_(min=1e-3))
             exp_avg = exp_avg * mask
 
-        param.add_(exp_avg, alpha=-lr)
+        _add_scaled_(param, exp_avg, -lr)
 
         exp_avg_sq.mul_(beta2).addcmul_(grad, grad.conj(), value=1 - beta2)
 
 
+@_foreach_chunked(6)
 def _multi_tensor_adopt(
         params: List[Tensor],
         grads: List[Tensor],
         exp_avgs: List[Tensor],
         exp_avg_sqs: List[Tensor],
         state_steps: List[Tensor],
+        first_steps: Optional[List[bool]],
         grad_scale: Optional[Tensor],
         found_inf: Optional[Tensor],
         *,
@@ -385,7 +396,8 @@ def _multi_tensor_adopt(
     assert not differentiable, "_foreach ops don't support autograd"
 
     grouped_tensors = Optimizer._group_tensors_by_device_and_dtype(
-        [params, grads, exp_avgs, exp_avg_sqs, state_steps]  # type: ignore[list-item]
+        [params, grads, exp_avgs, exp_avg_sqs, state_steps],  # type: ignore[list-item]
+        with_indices=True,
     )
     for (
             device_params_,
@@ -393,7 +405,7 @@ def _multi_tensor_adopt(
             device_exp_avgs_,
             device_exp_avg_sqs_,
             device_state_steps_,
-    ), _ in grouped_tensors.values():
+    ), device_indices in grouped_tensors.values():
         device_params = cast(List[Tensor], device_params_)
         device_grads = cast(List[Tensor], device_grads_)
         device_exp_avgs = cast(List[Tensor], device_exp_avgs_)
@@ -426,7 +438,12 @@ def _multi_tensor_adopt(
         # Params that had no gradient in some steps (frozen for a while, an expert without tokens) lag behind in
         # their step count, so the first-step initialization and the clip value are decided per param rather
         # than from device_state_steps[0].
-        first_step = [i for i, step in enumerate(device_state_steps) if step == 1]
+        if first_steps is not None:
+            # avoids data-dependent branching on the step tensors (graph breaks w/ torch.compile, syncs if capturable)
+            is_first = [first_steps[j] for j in device_indices]
+        else:
+            is_first = [bool(step == 1) for step in device_state_steps]
+        first_step = [i for i, first in enumerate(is_first) if first]
         if first_step:
             torch._foreach_addcmul_(
                 [device_exp_avg_sqs[i] for i in first_step],
@@ -435,7 +452,7 @@ def _multi_tensor_adopt(
             )
             if len(first_step) == len(device_params):
                 continue
-            later_step = [i for i, step in enumerate(device_state_steps) if step != 1]
+            later_step = [i for i, first in enumerate(is_first) if not first]
             device_params = [device_params[i] for i in later_step]
             device_grads = [device_grads[i] for i in later_step]
             device_exp_avgs = [device_exp_avgs[i] for i in later_step]
@@ -444,7 +461,10 @@ def _multi_tensor_adopt(
 
         if weight_decay != 0 and decoupled:
             wd_scale = lr ** 2 / max_lr if max_lr is not None else lr
-            torch._foreach_add_(device_params, device_params, alpha=-wd_scale * weight_decay)
+            if torch.is_tensor(wd_scale):
+                torch._foreach_add_(device_params, torch._foreach_mul(device_params, -wd_scale * weight_decay))
+            else:
+                torch._foreach_add_(device_params, device_params, alpha=-wd_scale * weight_decay)
 
         exp_avg_sq_sqrt = torch._foreach_sqrt(device_exp_avg_sqs)
         torch._foreach_maximum_(exp_avg_sq_sqrt, eps)
@@ -470,7 +490,11 @@ def _multi_tensor_adopt(
             torch._foreach_div_(masks, mask_scale)
             device_exp_avgs = torch._foreach_mul(device_exp_avgs, masks)
 
-        torch._foreach_add_(device_params, device_exp_avgs, alpha=-lr)
+        if torch.is_tensor(lr):
+            # a tensor alpha would item() (sync, graph break), scale the update instead
+            torch._foreach_add_(device_params, torch._foreach_mul(device_exp_avgs, -lr))
+        else:
+            torch._foreach_add_(device_params, device_exp_avgs, alpha=-lr)
 
         torch._foreach_mul_(device_exp_avg_sqs, beta2)
         torch._foreach_addcmul_(device_exp_avg_sqs, device_grads, device_grads, value=1 - beta2)
@@ -491,6 +515,7 @@ def adopt(
         grad_scale: Optional[Tensor] = None,
         found_inf: Optional[Tensor] = None,
         has_complex: bool = False,
+        first_steps: Optional[List[bool]] = None,
         *,
         beta1: float,
         beta2: float,
@@ -530,6 +555,7 @@ def adopt(
         exp_avgs,
         exp_avg_sqs,
         state_steps,
+        first_steps,
         has_complex=has_complex,
         beta1=beta1,
         beta2=beta2,

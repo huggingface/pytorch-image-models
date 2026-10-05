@@ -13,7 +13,10 @@ import torch
 from torch import Tensor
 from torch.optim.optimizer import Optimizer
 
-from ._helpers import _check_capturable_devices, _get_value, _init_scalar, _is_compiling, _max_lr_snapshot
+from ._helpers import (
+    _check_capturable_devices, _foreach_chunked, _foreach_increment_steps, _foreach_lerp_, _get_value, _init_scalar,
+    _is_compiling, _max_lr_snapshot, _resolve_foreach,
+)
 from ._types import ParamsT
 
 
@@ -209,15 +212,8 @@ def adamw(
             'API has changed, `state_steps` argument must contain a list of' +
             ' singleton tensors')
 
-    if foreach is None:
-        try:
-            # cannot do foreach if this overload doesn't exist when caution enabled
-            foreach = not caution or 'Scalar' in torch.ops.aten._foreach_maximum_.overloads()
-            # Match native PyTorch: tensor lr without capturable mode is supported by the single-tensor path.
-            if foreach and torch.is_tensor(lr) and not capturable:
-                foreach = False
-        except Exception:
-            foreach = False
+    # Match native PyTorch: tensor lr without capturable mode is supported by the single-tensor path.
+    foreach = _resolve_foreach(foreach, caution, lr=None if capturable else lr, params=params)
 
     if foreach and not torch.jit.is_scripting():
         func = _multi_tensor_adamw
@@ -288,7 +284,7 @@ def _single_tensor_adamw(
         param.mul_(1. - wd_scale * weight_decay)
 
         # Decay the first and second moment running average coefficient.
-        exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
+        exp_avg.lerp_(grad, 1 - beta1)
         exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
 
         if amsgrad:
@@ -346,6 +342,7 @@ def _single_tensor_adamw(
             param.addcdiv_(exp_avg, denom, value=-step_size)
 
 
+@_foreach_chunked(6)
 def _multi_tensor_adamw(
         params: List[Tensor],
         grads: List[Tensor],
@@ -380,16 +377,14 @@ def _multi_tensor_adamw(
     params = [torch.view_as_real(x) if torch.is_complex(x) else x for x in params]
 
     # update steps
-    torch._foreach_add_(state_steps, 1)
+    _foreach_increment_steps(state_steps)
 
     # Perform stepweight decay
     wd_scale = lr if max_lr is None else lr ** 2 / max_lr
     torch._foreach_mul_(params, 1 -  wd_scale * weight_decay)
 
     # Decay the first and second moment running average coefficient
-    #torch._foreach_lerp_(exp_avgs, grads, 1 - beta1)
-    torch._foreach_mul_(exp_avgs, beta1)
-    torch._foreach_add_(exp_avgs, grads, alpha=1 - beta1)
+    _foreach_lerp_(exp_avgs, grads, 1 - beta1)
 
     torch._foreach_mul_(exp_avg_sqs, beta2)
     torch._foreach_addcmul_(exp_avg_sqs, grads, grads, 1 - beta2)

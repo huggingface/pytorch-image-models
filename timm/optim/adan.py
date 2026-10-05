@@ -26,6 +26,8 @@ import torch
 from torch import Tensor
 from torch.optim.optimizer import Optimizer
 
+from ._helpers import _foreach_chunked, _foreach_lerp_, _resolve_foreach
+
 
 class MultiTensorApply(object):
     available = False
@@ -122,11 +124,6 @@ class Adan(Optimizer):
             with torch.enable_grad():
                 loss = closure()
 
-        try:
-            has_scalar_maximum = 'Scalar' in torch.ops.aten._foreach_maximum_.overloads()
-        except Exception:
-            has_scalar_maximum = False
-
         for group in self.param_groups:
             params_with_grad = []
             grads = []
@@ -170,12 +167,7 @@ class Adan(Optimizer):
             if not params_with_grad:
                 continue
 
-            if group['foreach'] is None:
-                use_foreach = not group['caution'] or has_scalar_maximum
-            else:
-                use_foreach = group['foreach']
-
-            if use_foreach:
+            if _resolve_foreach(group['foreach'], group['caution'], params=params_with_grad):
                 func = _multi_tensor_adan
             else:
                 func = _single_tensor_adan
@@ -183,10 +175,10 @@ class Adan(Optimizer):
             func(
                 params_with_grad,
                 grads,
-                exp_avgs=exp_avgs,
-                exp_avg_sqs=exp_avg_sqs,
-                exp_avg_diffs=exp_avg_diffs,
-                neg_pre_grads=neg_pre_grads,
+                exp_avgs,
+                exp_avg_sqs,
+                exp_avg_diffs,
+                neg_pre_grads,
                 beta1=beta1,
                 beta2=beta2,
                 beta3=beta3,
@@ -233,7 +225,7 @@ def _single_tensor_adan(
         # for memory saving, we use `neg_grad_or_diff` to get some temp variable in an inplace way
         neg_grad_or_diff.add_(grad)
 
-        exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)  # m_t
+        exp_avg.lerp_(grad, 1 - beta1)  # m_t
         exp_avg_diff.mul_(beta2).add_(neg_grad_or_diff, alpha=1 - beta2)  # diff_t
 
         neg_grad_or_diff.mul_(beta2).add_(grad)
@@ -261,6 +253,7 @@ def _single_tensor_adan(
         neg_grad_or_diff.zero_().add_(grad, alpha=-1.0)
 
 
+@_foreach_chunked(6)
 def _multi_tensor_adan(
         params: List[Tensor],
         grads: List[Tensor],
@@ -287,8 +280,7 @@ def _multi_tensor_adan(
     # for memory saving, we use `neg_pre_grads` to get some temp variable in a inplace way
     torch._foreach_add_(neg_pre_grads, grads)
 
-    torch._foreach_mul_(exp_avgs, beta1)
-    torch._foreach_add_(exp_avgs, grads, alpha=1 - beta1)  # m_t
+    _foreach_lerp_(exp_avgs, grads, 1 - beta1)  # m_t
 
     torch._foreach_mul_(exp_avg_diffs, beta2)
     torch._foreach_add_(exp_avg_diffs, neg_pre_grads, alpha=1 - beta2)  # diff_t
