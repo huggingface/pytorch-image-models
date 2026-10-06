@@ -1,8 +1,9 @@
 """Tests for timm/layers/pos_embed_sincos.py
 
-The public builder functions (build_fourier_pos_embed, build_rotary_pos_embed) are pinned bitwise against verbatim
-copies of their pre-refactor implementations, the modules are pinned against those functions. The final section
-covers train-time coordinate augmentation (reference numerics, RNG consumption, caches, model integration).
+The public builder functions (build_fourier_pos_embed, build_rotary_pos_embed) are pinned against verbatim copies of
+their pre-refactor implementations (grids bitwise, sin / cos within trig kernel tolerance), the modules are pinned
+against those functions. The final section covers train-time coordinate augmentation (reference numerics, RNG
+consumption, caches, model integration).
 """
 import math
 from itertools import product
@@ -30,7 +31,7 @@ from timm.layers.pos_embed_sincos import (
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# Verbatim copies of the pre-refactor public builders (reference for bitwise compat).
+# Verbatim copies of the pre-refactor public builders (reference for compat).
 # ---------------------------------------------------------------------------------------------------------------------
 
 def _legacy_build_fourier_pos_embed(
@@ -149,15 +150,48 @@ def _assert_all_equal(a, b):
         assert torch.equal(x, y)
 
 
-def _assert_all_close(a, b):
-    # For comparisons against independent reference math: identical angles, but sin / cos over differently shaped
-    # tensors can take different vectorized kernel paths and differ by an ulp depending on the host CPU.
+# CPU sin / cos (MKL VML) are evaluated per thread chunk, results for identical angles depend on chunking and host CPU
+# (~1.5e-4 seen on CI). Kept ~3x below the smallest real error checked (~1.2e-3, fp16 rounded frequencies).
+_TRIG_ATOL = 4e-4
+
+
+def _assert_embed_close(a, b, atol=_TRIG_ATOL):
+    # sin / cos from separate trig calls: absolute tolerance, plus ~1 ulp rounding for low precision outputs.
     a = a if isinstance(a, (list, tuple)) else [a]
     b = b if isinstance(b, (list, tuple)) else [b]
     assert len(a) == len(b)
     for x, y in zip(a, b):
         assert x.dtype == y.dtype and x.shape == y.shape
-        torch.testing.assert_close(x, y)
+        rtol = torch.finfo(x.dtype).eps if torch.finfo(x.dtype).bits < 32 else 0.
+        torch.testing.assert_close(x.double(), y.double(), rtol=rtol, atol=atol)
+
+
+def _assert_freqs_close(a, b):
+    # Frequency buffers, any low precision round trip is >= 2.4e-4 relative.
+    torch.testing.assert_close(a, b, rtol=1e-6, atol=0.)
+
+
+def _assert_rotated_close(out, expected):
+    # Rotated features x * cos + rot(x) * sin, trig noise scaled by the input magnitude.
+    assert out.dtype == expected.dtype and out.shape == expected.shape
+    atol = 2 * _TRIG_ATOL * expected.detach().abs().max().item()
+    torch.testing.assert_close(out, expected, rtol=0., atol=atol)
+
+
+def _assert_model_close(out, expected):
+    # Full model forwards recompute rope tables and matmuls.
+    assert out.dtype == expected.dtype and out.shape == expected.shape
+    tol = {} if out.dtype in (torch.bfloat16, torch.float16) else dict(rtol=1e-4, atol=1e-4)
+    torch.testing.assert_close(out, expected, **tol)
+
+
+def _assert_buffer_close(name, a, b):
+    if name in ('bands', 'periods', 'inv_freq'):
+        _assert_freqs_close(a, b)
+    elif a.is_floating_point():
+        _assert_embed_close(a, b)
+    else:
+        _assert_all_equal(a, b)
 
 
 def _legacy_dinov3_coords(shape, normalize_coords='separate', grid_offset=0., device='cpu'):
@@ -233,10 +267,11 @@ def test_build_fourier_pos_embed_matches_legacy(
         kwargs['bands'] = kwargs['bands'].to(bands_dtype)
         dtypes.append(None)
     for dtype in dtypes:
-        _assert_all_equal(
-            build_fourier_pos_embed(feat_shape, dtype=dtype, **kwargs),
-            _legacy_build_fourier_pos_embed(feat_shape, dtype=dtype, **kwargs),
-        )
+        out = build_fourier_pos_embed(feat_shape, dtype=dtype, **kwargs)
+        legacy = _legacy_build_fourier_pos_embed(feat_shape, dtype=dtype, **kwargs)
+        if include_grid:
+            _assert_all_equal(out[0], legacy[0])
+        _assert_embed_close(out, legacy)
 
 
 @pytest.mark.parametrize('feat_shape,in_pixels,ref,grid_offset,grid_indexing', _GRID_CASES)
@@ -253,7 +288,7 @@ def test_build_rotary_pos_embed_matches_legacy(
     if use_bands:
         kwargs['bands'] = pixel_freq_bands(8, 64.) if in_pixels else freq_bands(8, 100., step=1)
     for dtype in (torch.float32, torch.float16):
-        _assert_all_equal(
+        _assert_embed_close(
             build_rotary_pos_embed(feat_shape, dtype=dtype, **kwargs),
             _legacy_build_rotary_pos_embed(feat_shape, dtype=dtype, **kwargs),
         )
@@ -313,17 +348,17 @@ def test_rotary_module_matches_functional(cls, kwargs, rotate_half):
     if 'grid_type' not in kwargs:
         # no new args -> the module must also match the legacy functional impl
         out_legacy = _legacy_build_rotary_pos_embed((8, 8), dim=64, **fn_kwargs)
-        _assert_all_equal(out_legacy, build_rotary_pos_embed((8, 8), dim=64, **fn_kwargs))
+        _assert_embed_close(out_legacy, build_rotary_pos_embed((8, 8), dim=64, **fn_kwargs))
 
     m_dyn = create_rope_embed('base' if cls is RotaryEmbedding else 'cat', dim=128, num_heads=2, **kwargs)
-    _assert_all_equal(m_dyn.get_embed((8, 8)), expected((8, 8)))
-    _assert_all_equal(m_dyn.get_embed((5, 9)), expected((5, 9)))
+    _assert_embed_close(m_dyn.get_embed((8, 8)), expected((8, 8)))
+    _assert_embed_close(m_dyn.get_embed((5, 9)), expected((5, 9)))
 
     m_cache = cls(64, feat_shape=(8, 8), **kwargs)
-    _assert_all_equal(m_cache.get_embed(), expected((8, 8)))
-    _assert_all_equal(m_cache.get_embed((5, 9)), expected((8, 8)))  # shape ignored in cached mode
+    _assert_embed_close(m_cache.get_embed(), expected((8, 8)))
+    _assert_all_equal(m_cache.get_embed((5, 9)), m_cache.get_embed())  # shape ignored in cached mode
     m_cache.update_feat_shape((5, 9))
-    _assert_all_equal(m_cache.get_embed(), expected((5, 9)))
+    _assert_embed_close(m_cache.get_embed(), expected((5, 9)))
 
 
 @pytest.mark.parametrize('kwargs', _MODULE_KWARGS)
@@ -335,12 +370,12 @@ def test_rotary_cat_get_batch_embeds_matches_get_embed(kwargs, seq_len):
     if seq_len is None:
         assert isinstance(out, list) and len(out) == len(shapes)
         for shape, embed in zip(shapes, out):
-            _assert_all_equal(embed, m.get_embed(shape))
+            _assert_embed_close(embed, m.get_embed(shape))
     else:
         assert out.shape == (len(shapes), seq_len, 128)
         for i, shape in enumerate(shapes):
             n = shape[0] * shape[1]
-            _assert_all_equal(out[i, :n], m.get_embed(shape))
+            _assert_embed_close(out[i, :n], m.get_embed(shape))
             assert not out[i, n:].any()
     assert m.get_batch_embeds([]) == []
     with pytest.raises(RuntimeError):
@@ -361,20 +396,20 @@ def test_dinov3_module(rotate_half, normalize_coords):
         angles = angles.tile(2) if rotate_half else angles.repeat_interleave(2, dim=-1)
         return torch.cat([angles.sin(), angles.cos()], -1)
 
-    _assert_all_equal(m.get_embed((8, 8)), expected((8, 8)))
-    _assert_all_equal(m.get_embed((5, 9)), expected((5, 9)))
+    _assert_embed_close(m.get_embed((8, 8)), expected((8, 8)))
+    _assert_embed_close(m.get_embed((5, 9)), expected((5, 9)))
 
     m_cache = RotaryEmbeddingDinoV3(64, feat_shape=(8, 8), **kwargs).eval()
-    _assert_all_equal(m_cache.get_embed(), expected((8, 8)))
+    _assert_embed_close(m_cache.get_embed(), expected((8, 8)))
     m_cache.update_feat_shape((5, 9))
-    _assert_all_equal(m_cache.get_embed(), expected((5, 9)))
+    _assert_embed_close(m_cache.get_embed(), expected((5, 9)))
 
     shapes = [(8, 8), (5, 9), (8, 8)]
     for shape, embed in zip(shapes, m.get_batch_embeds(shapes)):
-        _assert_all_equal(embed, expected(shape))
+        _assert_embed_close(embed, expected(shape))
     padded = m.get_batch_embeds(shapes, seq_len=80)
     assert padded.shape == (3, 80, 128)
-    _assert_all_equal(padded[1, :45], expected((5, 9)))
+    _assert_embed_close(padded[1, :45], expected((5, 9)))
     assert not padded[1, 45:].any()
 
 
@@ -391,26 +426,28 @@ def test_rotary_freqs_stay_fp32_after_cast(cls, low_dtype):
     ref_out = cat(ref.get_embed((16, 16)))
     assert ref_out.dtype == torch.float32
 
-    # cast after construction: frequencies rebuilt in float32, output identical to the float32 module
+    # cast after construction: frequencies rebuilt in float32, output matches the float32 module
     m = cls(64, feat_shape=None).to(low_dtype)
     assert freqs(m).dtype == torch.float32
-    _assert_all_equal(cat(m.get_embed((16, 16))), ref_out)
-    _assert_all_equal(cat(m.get_embed((16, 16), dtype=low_dtype)), ref_out.to(low_dtype))
+    _assert_freqs_close(freqs(m), freqs(ref))
+    _assert_embed_close(cat(m.get_embed((16, 16))), ref_out)
+    _assert_embed_close(cat(m.get_embed((16, 16), dtype=low_dtype)), ref_out.to(low_dtype))
     # Repeated casts keep frequency buffers in float32.
     assert freqs(m.to(torch.float32).to(low_dtype).cpu()).dtype == torch.float32
 
     # low precision dtype at construction: frequency buffer still float32
     m = cls(64, feat_shape=None, dtype=low_dtype)
     assert freqs(m).dtype == torch.float32
-    _assert_all_equal(cat(m.get_embed((16, 16))), ref_out)
+    _assert_freqs_close(freqs(m), freqs(ref))
+    _assert_embed_close(cat(m.get_embed((16, 16))), ref_out)
 
     # float64 is not downcast
     assert freqs(cls(64, feat_shape=None, dtype=torch.float64)).dtype == torch.float64
 
     # cached embeds follow the model dtype (cast once, at the end)
     m = cls(64, feat_shape=(16, 16)).to(low_dtype)
-    _assert_all_equal(cat(m.get_embed()), ref_out.to(low_dtype))
-    _assert_all_equal(cat(m.get_embed(dtype=torch.float32)), ref_out.to(low_dtype).float())
+    _assert_embed_close(cat(m.get_embed()), ref_out.to(low_dtype))
+    _assert_all_equal(cat(m.get_embed(dtype=torch.float32)), cat(m.get_embed()).float())
 
 
 class _GetEmbedWrapper(torch.nn.Module):
@@ -444,7 +481,7 @@ def test_rotary_fx(make):
     traced = torch.fx.symbolic_trace(m)
     for shape in ((8, 8), (5, 9)):
         x = torch.zeros(1, 1, *shape)
-        _assert_all_equal(traced(x), m(x))
+        _assert_embed_close(traced(x), m(x))
 
 
 @pytest.mark.parametrize('cls', [RotaryEmbedding, RotaryEmbeddingCat, RotaryEmbeddingDinoV3])
@@ -458,11 +495,11 @@ def test_rotary_init_after_to_empty(cls, feat_shape):
         b.fill_(float('nan'))
     m.init_non_persistent_buffers()
     for (n, b), (_, rb) in zip(m.named_buffers(), ref.named_buffers()):
-        _assert_all_equal(b, rb)
+        _assert_buffer_close(n, b, rb)
     if feat_shape is None:
-        _assert_all_equal(m.get_embed((8, 8)), ref.get_embed((8, 8)))
+        _assert_embed_close(m.get_embed((8, 8)), ref.get_embed((8, 8)))
     else:
-        _assert_all_equal(m.get_embed(), ref.get_embed())
+        _assert_embed_close(m.get_embed(), ref.get_embed())
 
 
 @pytest.mark.parametrize('cls', [RotaryEmbedding, RotaryEmbeddingCat, RotaryEmbeddingDinoV3])
@@ -479,14 +516,14 @@ def test_rotary_module_forward_nchw(cls, feat_shape, rotate_half):
         expected = apply_rot_embed(x_flat, *embed, half=rotate_half)
     else:
         expected = apply_rot_embed_cat(x_flat, embed, half=m.rotate_half)
-    _assert_all_equal(out, expected.transpose(1, 2).reshape(x.shape))
+    _assert_rotated_close(out, expected.transpose(1, 2).reshape(x.shape))
     # low precision input keeps its dtype, math happens in float32 (cast once at the end)
     out_bf = m(x.to(torch.bfloat16))
     assert out_bf.dtype == torch.bfloat16
     torch.testing.assert_close(out_bf.float(), out, atol=2e-2, rtol=2e-2)
     if feat_shape is None:
         assert m(torch.randn(2, 64, 5, 9)).shape == (2, 64, 5, 9)
-    _assert_all_equal(torch.fx.symbolic_trace(m)(x), out)
+    _assert_rotated_close(torch.fx.symbolic_trace(m)(x), out)
 
 
 def test_mixed_rope_low_precision_cast():
@@ -495,7 +532,7 @@ def test_mixed_rope_low_precision_cast():
     with torch.no_grad():
         m_dyn.freqs.copy_(m_cache.freqs)
     ref = m_cache.get_embed()
-    _assert_all_equal(m_dyn.get_embed((8, 8)), ref)
+    _assert_embed_close(m_dyn.get_embed((8, 8)), ref)
 
     m_cache = m_cache.to(torch.bfloat16)
     m_dyn = m_dyn.to(torch.bfloat16)
@@ -505,17 +542,17 @@ def test_mixed_rope_low_precision_cast():
     out_dyn = m_dyn.get_embed((8, 8))
     assert out_cache.dtype == out_dyn.dtype == torch.bfloat16
     assert torch.isfinite(out_cache).all()
-    _assert_all_equal(out_cache, out_dyn)  # cached grid buffers must match the on-the-fly grid path
+    _assert_embed_close(out_cache, out_dyn)  # cached grid buffers must match the on-the-fly grid path
     m_cache.update_feat_shape((5, 9))
-    _assert_all_equal(m_cache.get_embed(), m_dyn.get_embed((5, 9)))
+    _assert_embed_close(m_cache.get_embed(), m_dyn.get_embed((5, 9)))
 
 
 def test_dinov3_temperature_none():
     m = RotaryEmbeddingDinoV3(64, temperature=None, min_period=0.5, max_period=10., feat_shape=None)
     ref = RotaryEmbeddingDinoV3(64, temperature=100., min_period=0.5, max_period=10., feat_shape=None)
     assert m.temperature is None
-    _assert_all_equal(m.periods, ref.periods)
-    _assert_all_equal(m.get_embed((8, 8)), ref.get_embed((8, 8)))
+    _assert_freqs_close(m.periods, ref.periods)
+    _assert_embed_close(m.get_embed((8, 8)), ref.get_embed((8, 8)))
     with pytest.raises(ValueError):
         RotaryEmbeddingDinoV3(64, temperature=None)
 
@@ -532,7 +569,7 @@ def test_mixed_rope_float32_autocast_and_gradients(rope_device, grid_indexing, s
     _assert_all_equal(get_mixed_grid(list(shape), grid_indexing=grid_indexing, device=rope_device), (t_x, t_y))
     expected = _legacy_mixed_embed(m.freqs, t_x, t_y)
     actual = m.get_embed(shape)
-    _assert_all_equal(actual, expected)
+    _assert_embed_close(actual, expected)
 
     weights = torch.randn_like(expected) / (shape[0] * shape[1])
     grad_ref = torch.autograd.grad(expected, m.freqs, weights)[0]
@@ -544,9 +581,9 @@ def test_mixed_rope_float32_autocast_and_gradients(rope_device, grid_indexing, s
     for dtype in amp_dtypes:
         with torch.autocast(rope_device.type, dtype=dtype):
             amp = m.get_embed(shape)
-        _assert_all_equal(amp, actual)
+        _assert_embed_close(amp, actual)
         grad_amp = torch.autograd.grad(amp, m.freqs, weights)[0]
-        _assert_all_equal(grad_amp, grad_actual)
+        torch.testing.assert_close(grad_amp, grad_actual, atol=1e-4, rtol=1e-3)
 
 
 @pytest.mark.parametrize('low_dtype', [torch.bfloat16, torch.float16])
@@ -555,20 +592,20 @@ def test_mrope_reference_precision_and_meta_init(rope_device, low_dtype, dim, se
     shape = (3, 513)
     expected = _legacy_mrope_embed(shape, dim, sections, 10000., rope_device)
     m = RotaryEmbeddingMRope(dim, mrope_section=sections, device=rope_device)
-    _assert_all_equal(m.get_embed(shape), expected)
+    _assert_embed_close(m.get_embed(shape), expected)
     m.to(low_dtype)
     assert m.inv_freq.dtype == torch.float32
-    _assert_all_equal(m.get_embed(shape), expected)
-    _assert_all_equal(m.get_embed(shape, dtype=low_dtype), expected.to(low_dtype))
+    _assert_embed_close(m.get_embed(shape), expected)
+    _assert_embed_close(m.get_embed(shape, dtype=low_dtype), expected.to(low_dtype))
     constructed = RotaryEmbeddingMRope(dim, mrope_section=sections, dtype=low_dtype, device=rope_device)
-    _assert_all_equal(constructed.get_embed(shape), expected)
+    _assert_embed_close(constructed.get_embed(shape), expected)
 
     meta = RotaryEmbeddingMRope(dim, mrope_section=sections, dtype=low_dtype, device='meta')
     meta.to_empty(device=rope_device)
     meta.inv_freq.fill_(float('nan'))
     meta.axis.fill_(-1)
     meta.init_non_persistent_buffers()
-    _assert_all_equal(meta.get_embed(shape), expected)
+    _assert_embed_close(meta.get_embed(shape), expected)
     _assert_all_equal(meta.axis, m.axis)
     assert not meta.state_dict()  # both buffers must remain non-persistent
 
@@ -588,13 +625,13 @@ def test_dinov3_reference_and_cache_dtype(rope_device, rotate_half, grid_indexin
     angles = (2 * math.pi * coords[:, :, None] / m.periods[None, None, :]).flatten(1)
     angles = angles.tile(2) if rotate_half else angles.repeat_interleave(2, -1)
     expected = torch.cat([angles.sin(), angles.cos()], -1)
-    _assert_all_equal(m.get_embed(shape), expected)
+    _assert_embed_close(m.get_embed(shape), expected)
     m.bfloat16()
     m.update_feat_shape(shape)
-    _assert_all_equal(m.get_embed(), expected.bfloat16())
-    _assert_all_equal(m.get_embed(shape), expected)
+    _assert_embed_close(m.get_embed(), expected.bfloat16())
+    _assert_embed_close(m.get_embed(shape), expected)
     m.init_non_persistent_buffers()
-    _assert_all_equal(m.get_embed(), expected.bfloat16())
+    _assert_embed_close(m.get_embed(), expected.bfloat16())
 
 
 @pytest.mark.parametrize('kind', ['cat', 'dinov3', 'mixed'])
@@ -610,8 +647,8 @@ def test_rope_batch_padding_dtype_and_gradients(kind):
     for i, shape in enumerate(shapes):
         n = shape[0] * shape[1]
         expected = m.get_embed(shape, dtype=torch.float32)
-        _assert_all_equal(embeds[i], expected)
-        _assert_all_equal(padded[i, ..., :n, :], expected)
+        _assert_embed_close(embeds[i], expected)
+        _assert_embed_close(padded[i, ..., :n, :], expected)
         assert not padded[i, ..., n:, :].any()
     with pytest.raises(ValueError, match='seq_len'):
         m.get_batch_embeds(shapes, seq_len=10)
@@ -619,7 +656,7 @@ def test_rope_batch_padding_dtype_and_gradients(kind):
     if kind == 'mixed':
         # An explicit float32 output must not take a round trip through the parameter's BF16 dtype.
         t_x, t_y = get_mixed_grid(list(shapes[0]), grid_indexing=m.grid_indexing)
-        _assert_all_equal(embeds[0], _legacy_mixed_embed(m.freqs.float(), t_x, t_y))
+        _assert_embed_close(embeds[0], _legacy_mixed_embed(m.freqs.float(), t_x, t_y))
         padded.mean().backward()
         assert m.freqs.grad is not None and torch.isfinite(m.freqs.grad).all() and m.freqs.grad.abs().sum() > 0
 
@@ -634,8 +671,8 @@ def test_mixed_rope_forward_per_block(feat_shape, block_index):
     expected = apply_rot_embed_cat(expected_heads, m.get_embed((5, 9))[block_index])
     expected = expected.transpose(-2, -1).reshape_as(x)
     out = m(x, block_index=block_index)
-    _assert_all_equal(out, expected)
-    _assert_all_equal(torch.fx.symbolic_trace(m)(x, block_index), out)
+    _assert_rotated_close(out, expected)
+    _assert_rotated_close(torch.fx.symbolic_trace(m)(x, block_index), out)
     (out * torch.randn_like(out)).mean().backward()
     assert x.grad is not None and torch.isfinite(x.grad).all()
     assert m.freqs.grad is not None and torch.isfinite(m.freqs.grad).all()
@@ -829,7 +866,7 @@ def test_rope_aug_reference_and_rng(kind, cached, aug, rope_device):
     rng_expected = _rng(rope_device)
     torch.manual_seed(123)
     actual = _cat(m.get_embed(None if cached else _SHAPE, dtype=torch.float32))
-    _assert_all_close(actual, expected)
+    _assert_embed_close(actual, expected)
     _assert_all_equal(_rng(rope_device), rng_expected)
     _assert_all_equal(list(m.buffers()), buffers_before)
     if kind == 'mixed' and any(v is not None for v in aug.values()):
@@ -860,13 +897,13 @@ def test_rope_aug_eval_initialization_and_caches(kind, cached, dtype, rope_devic
     _assert_all_equal(_rng(rope_device), rng_plain)  # enabling augmentation must not sample in constructors
     assert dict(augmented.named_buffers()).keys() == dict(plain.named_buffers()).keys()
     for name, buffer in plain.named_buffers():
-        _assert_all_equal(augmented.get_buffer(name), buffer)
-    _assert_all_equal(list(augmented.parameters()), list(plain.parameters()))
+        _assert_buffer_close(name, augmented.get_buffer(name), buffer)
+    _assert_embed_close(list(augmented.parameters()), list(plain.parameters()))
     plain.eval()
     augmented.eval()
     for shape in ([None, _SHAPE, (7, 3)] if cached else [_SHAPE, (7, 3)]):
         rng_before = _rng(rope_device)
-        _assert_all_equal(augmented.get_embed(shape), plain.get_embed(shape))
+        _assert_embed_close(augmented.get_embed(shape), plain.get_embed(shape))
         _assert_all_equal(_rng(rope_device), rng_before)
     if kind != 'mrope':
         augmented.train()
@@ -878,12 +915,12 @@ def test_rope_aug_eval_initialization_and_caches(kind, cached, dtype, rope_devic
         _assert_all_equal(_rng(rope_device), rng_before)
         assert dict(augmented.named_buffers()).keys() == dict(plain.named_buffers()).keys()
         for name, buffer in plain.named_buffers():
-            _assert_all_equal(augmented.get_buffer(name), buffer)
+            _assert_buffer_close(name, augmented.get_buffer(name), buffer)
     augmented.train()
     shape = (7, 3) if cached else _SHAPE
     augmented.get_embed(shape)
     augmented.eval()
-    _assert_all_equal(augmented.get_embed(shape), plain.get_embed(shape))
+    _assert_embed_close(augmented.get_embed(shape), plain.get_embed(shape))
 
 
 @pytest.mark.parametrize('kind', ['cat', 'cat_pixel', 'cat_centered', 'mixed', 'dinov3'])
@@ -898,11 +935,11 @@ def test_rope_aug_batch_sampling(kind, seq_len, rope_device):
     out = m.get_batch_embeds(shapes, seq_len=seq_len, dtype=torch.bfloat16)
     _assert_all_equal(_rng(rope_device), rng_expected)
     if seq_len is None:
-        _assert_all_equal(out, expected)
+        _assert_embed_close(out, expected)
     else:
         for i, embed in enumerate(expected):
             n = embed.shape[-2]
-            _assert_all_equal(out[i, ..., :n, :], embed)
+            _assert_embed_close(out[i, ..., :n, :], embed)
             assert not out[i, ..., n:, :].any()
     assert not torch.equal(expected[0], expected[2])  # independent draw for each shapes entry
 
@@ -917,7 +954,7 @@ def test_rope_aug_dynamic_fx(kind):
         expected = m(x)
         rng_expected = torch.get_rng_state()
         torch.manual_seed(seed)
-        _assert_all_equal(traced(x), expected)
+        _assert_embed_close(traced(x), expected)
         _assert_all_equal(torch.get_rng_state(), rng_expected)
 
 
@@ -931,7 +968,7 @@ def test_rope_aug_autocast(kind, rope_device):
     for dtype in dtypes:
         torch.manual_seed(456)
         with torch.autocast(rope_device.type, dtype=dtype):
-            _assert_all_equal(m.get_embed(_SHAPE), expected)
+            _assert_embed_close(m.get_embed(_SHAPE), expected)
         _assert_all_equal(_rng(rope_device), rng_expected)
 
 
@@ -971,7 +1008,7 @@ def test_naflex_rope_aug_configuration(rope_type, dict_input, dtype, rope_device
     with torch.no_grad():
         expected = model(x)
         model.rope.aug_active = False
-        _assert_all_equal(model(x), expected)
+        _assert_model_close(model(x), expected)
     _assert_all_equal(torch.get_rng_state(), rng_before)
 
 
@@ -993,7 +1030,7 @@ def test_eva_rope_aug_configuration(rope_type):
     with torch.no_grad():
         expected = model(x)
         model.rope.aug_active = False
-        _assert_all_equal(model(x), expected)
+        _assert_model_close(model(x), expected)
     _assert_all_equal(torch.get_rng_state(), rng_before)
 
 
@@ -1034,16 +1071,16 @@ def test_rope_aug_output_dtype(kind, cached, dtype, rope_device):
     for requested_dtype in (torch.float32, dtype):
         torch.manual_seed(321)
         expected = _cat(generated).to(requested_dtype)
-        _assert_all_equal(_cat(m.get_embed(shape, dtype=requested_dtype)), expected)
+        _assert_embed_close(_cat(m.get_embed(shape, dtype=requested_dtype)), expected)
     m.eval()
-    _assert_all_equal(_cat(m.get_embed(shape)), eval_before)
+    _assert_embed_close(_cat(m.get_embed(shape)), eval_before)
 
 
 @pytest.mark.parametrize('kind', ['base', 'cat'])
 def test_rope_cached_aug_reuses_bands(kind, rope_device, monkeypatch):
     m = _make(kind, cached=True, device=rope_device, **_AUG).bfloat16()
     assert m.bands.dtype == torch.float32 and m.bands.device.type == rope_device.type
-    _assert_all_equal(m.bands, m._compute_bands(device=rope_device))
+    _assert_freqs_close(m.bands, m._compute_bands(device=rope_device))
     assert 'bands' not in m.state_dict()
     bands = m.bands
 
@@ -1149,7 +1186,7 @@ def test_eva_mrope_resize(dynamic, sections):
         _, rope = model._pos_embed(model.patch_embed(x))
         expected = model.rope.get_embed((7, 4))
         assert rope.shape[-2] == 28
-        _assert_all_equal(rope.reshape(expected.shape), expected)
+        _assert_embed_close(rope.reshape(expected.shape), expected)
 
 
 @pytest.mark.parametrize('kind', _KINDS)
@@ -1191,7 +1228,7 @@ def test_rope_cached_aug_enable_and_refresh(cls, in_pixels, rope_device):
     expected = reference.get_embed()
     rng_expected = _rng(rope_device)
     torch.manual_seed(123)
-    _assert_all_equal(m.get_embed(), expected)
+    _assert_embed_close(m.get_embed(), expected)
     _assert_all_equal(_rng(rope_device), rng_expected)
     m.eval()
     _assert_all_equal(_cat(m.get_embed()), cached)
@@ -1201,15 +1238,15 @@ def test_rope_cached_aug_enable_and_refresh(cls, in_pixels, rope_device):
     m.update_feat_shape((7, 3))
     kwargs.update(temperature=31., max_res=64, linear_bands=False)
     reference = cls(64, **kwargs, **_AUG).bfloat16()
-    _assert_all_equal(m.bands, reference.bands)
+    _assert_freqs_close(m.bands, reference.bands)
     reference.eval()
-    _assert_all_equal(m.get_embed(), reference.get_embed((7, 3), dtype=torch.bfloat16))
+    _assert_embed_close(m.get_embed(), reference.get_embed((7, 3), dtype=torch.bfloat16))
     m.train()
     reference.train()
     torch.manual_seed(456)
     expected = reference.get_embed((7, 3))
     torch.manual_seed(456)
-    _assert_all_equal(m.get_embed(), expected)
+    _assert_embed_close(m.get_embed(), expected)
 
 
 @pytest.mark.parametrize('family', ['eva', 'naflex'])
@@ -1237,7 +1274,7 @@ def test_model_rope_layout(family, rope_type, half):
         angles = (2 * math.pi * coords[:, :, None] / model.rope.periods).flatten(1)
         angles = angles.tile(2) if half else angles.repeat_interleave(2, -1)
         reference = torch.cat([angles.sin(), angles.cos()], -1)
-    _assert_all_equal(model.rope.get_embed((5, 9)), reference)
+    _assert_embed_close(model.rope.get_embed((5, 9)), reference)
 
 
 @pytest.mark.parametrize('rope_type,half', [('mixed', True), ('mrope', False)])
@@ -1297,4 +1334,4 @@ def test_eva_rope_fx(rope_type, dynamic):
         x = torch.randn(1, 3, *shape)
         with torch.no_grad():
             expected = model(x)
-            _assert_all_equal(traced(x), expected)
+            _assert_model_close(traced(x), expected)

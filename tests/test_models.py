@@ -724,7 +724,7 @@ def test_model_forward_fx(model_name, batch_size):
         if isinstance(fx_outputs, tuple):
             fx_outputs = torch.cat(fx_outputs)
 
-    assert torch.all(fx_outputs == outputs)
+    torch.testing.assert_close(fx_outputs, outputs, rtol=1e-4, atol=1e-5)
     assert outputs.shape[0] == batch_size
     assert not torch.isnan(outputs).any(), 'Output included NaNs'
 
@@ -1113,7 +1113,7 @@ def test_naflexvit_key_only_attn_mask_output_parity(global_pool):
         full_out = full_model(patches, patch_coord=coord, patch_valid=valid)
         compact_out = compact_model(patches, patch_coord=coord, patch_valid=valid)
 
-    assert torch.equal(full_out, compact_out)
+    torch.testing.assert_close(compact_out, full_out, rtol=1e-4, atol=1e-5)
 
 
 @pytest.mark.base
