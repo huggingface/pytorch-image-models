@@ -70,11 +70,6 @@ class AdaBelief(Optimizer):
         if not 0.0 <= betas[1] < 1.0:
             raise ValueError("Invalid beta parameter at index 1: {}".format(betas[1]))
 
-        if isinstance(params, (list, tuple)) and len(params) > 0 and isinstance(params[0], dict):
-            for param in params:
-                if 'betas' in param and (param['betas'][0] != betas[0] or param['betas'][1] != betas[1]):
-                    param['buffer'] = [[None, None, None] for _ in range(10)]
-
         defaults = dict(
             lr=lr,
             betas=betas,
@@ -85,7 +80,6 @@ class AdaBelief(Optimizer):
             decoupled_decay=decoupled_decay,
             rectify=rectify,
             fixed_decay=fixed_decay,
-            buffer=[[None, None, None] for _ in range(10)],
             foreach=foreach,
         )
         super(AdaBelief, self).__init__(params, defaults)
@@ -173,29 +167,23 @@ class AdaBelief(Optimizer):
                 bias_corrections1.append(1 - beta1 ** state['step'])
                 bias_corrections2.append(1 - beta2 ** state['step'])
                 if group['rectify']:
-                    # Rectified update, forked from RAdam, the (lr free) step size is cached per step
-                    buffered = group['buffer'][int(state['step'] % 10)]
-                    if state['step'] == buffered[0]:
-                        num_sma, step_size = buffered[1], buffered[2]
-                    else:
-                        buffered[0] = state['step']
-                        beta2_t = beta2 ** state['step']
-                        num_sma_max = 2 / (1 - beta2) - 1
-                        num_sma = num_sma_max - 2 * state['step'] * beta2_t / (1 - beta2_t)
-                        buffered[1] = num_sma
+                    # Rectified update, forked from RAdam. The (lr free) step size is computed per param, the original
+                    # impl cached it in a buffer shared across param groups w/ beta2 baked in.
+                    beta2_t = beta2 ** state['step']
+                    num_sma_max = 2 / (1 - beta2) - 1
+                    num_sma = num_sma_max - 2 * state['step'] * beta2_t / (1 - beta2_t)
 
-                        # more conservative since it's an approximated value
-                        if num_sma >= 5:
-                            step_size = math.sqrt(
-                                (1 - beta2_t) *
-                                (num_sma - 4) / (num_sma_max - 4) *
-                                (num_sma - 2) / num_sma *
-                                num_sma_max / (num_sma_max - 2)) / (1 - beta1 ** state['step'])
-                        elif group['degenerated_to_sgd']:
-                            step_size = 1.0 / (1 - beta1 ** state['step'])
-                        else:
-                            step_size = -1
-                        buffered[2] = step_size
+                    # more conservative since it's an approximated value
+                    if num_sma >= 5:
+                        step_size = math.sqrt(
+                            (1 - beta2_t) *
+                            (num_sma - 4) / (num_sma_max - 4) *
+                            (num_sma - 2) / num_sma *
+                            num_sma_max / (num_sma_max - 2)) / (1 - beta1 ** state['step'])
+                    elif group['degenerated_to_sgd']:
+                        step_size = 1.0 / (1 - beta1 ** state['step'])
+                    else:
+                        step_size = -1
                     rectified.append((num_sma, step_size))
 
                 params.append(p)

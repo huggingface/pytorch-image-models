@@ -47,8 +47,11 @@ def _load_state_dict_preserving_dtypes(
                 saved = source['state'].get(param_id, {})
                 for key, target in state_dtypes(group, param).items():
                     dtype, device = target if isinstance(target, tuple) else (target, param.device)
-                    # a target matching the param dtype is already handled (aliased if possible) by the normal loader
-                    if dtype is not None and dtype != param.dtype and is_tensor_value(saved.get(key)):
+                    # a target matching the param dtype and device is already handled (aliased if possible) by the
+                    # normal loader
+                    if dtype is None or (dtype == param.dtype and torch.device(device) == param.device):
+                        continue
+                    if is_tensor_value(saved.get(key)):
                         loaded.state[param][key] = copy_value(saved[key], device, dtype)
 
     if (
@@ -169,11 +172,14 @@ def _foreach_chunk_elements(device: torch.device, element_size: int) -> Optional
     """Max elements per foreach chunk so a chunk's ~4 tensor streams stay in the L2 cache, None = don't chunk."""
     if _FOREACH_CHUNK_OVERRIDE is not None:
         return _FOREACH_CHUNK_OVERRIDE or None
-    if device.type != 'cuda':
+    if device.type != 'cuda' or not _HAS_L2_CACHE_SIZE:
         return None
     if device not in _L2_CACHE_SIZE:
         _L2_CACHE_SIZE[device] = torch.cuda.get_device_properties(device).L2_cache_size
-    return max(_L2_CACHE_SIZE[device] // (4 * element_size), 2 ** 20)
+    budget = _L2_CACHE_SIZE[device] // (4 * element_size)
+    # small chunks (small L2 caches) cost more in per chunk launch overhead than the cache reuse saves,
+    # chunks < ~4M elements measured slower than no chunking for large models
+    return budget if budget >= 2 ** 22 else None
 
 
 def _foreach_chunks(params: List[Tensor]) -> List[List[int]]:
@@ -200,8 +206,8 @@ def _foreach_chunked(num_per_param_args: int, writeback: Sequence[int] = ()):
             elements are written back to the caller's list.
     """
     def decorator(fn):
-        if not _HAS_L2_CACHE_SIZE:
-            return fn  # chunking unsupported by this PyTorch, use the multi-tensor fn as is
+        if not _HAS_L2_CACHE_SIZE and not _FOREACH_CHUNK_OVERRIDE:
+            return fn  # no L2 cache size in this PyTorch to derive chunks from (and no override), use fn as is
 
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
