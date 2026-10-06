@@ -1098,6 +1098,7 @@ _PROPERTY_EXCEPTIONS = {
     'param_group_independent': {
         '*lamb*': 'global grad norm clipping spans all param groups',
         'kron*': 'the preconditioner update / balance RNG is shared across params',
+        'adagrad': 'torch.optim.Adagrad < 2.12 inits state in __init__, groups from add_param_group have none',
     },
     'zero_lr_no_update': {
         'madgrad*': 'lr is folded into the dual averaged update (as per reference)',
@@ -1199,9 +1200,14 @@ def test_optimizer_param_group_independent(optimizer):
     other = Parameter(torch.randn(16, 8, generator=torch.Generator().manual_seed(0)))
     weight = Parameter(torch.randn(16, 8, generator=torch.Generator().manual_seed(1)))
     weight_alone = Parameter(weight.detach().clone())
-    opt = create_optimizer_v2([{'params': [other], 'lr': 1e-2}, {'params': [weight], 'lr': 1e-4}], optimizer, lr=1e-2)
-    opt_alone = create_optimizer_v2([weight_alone], optimizer, lr=1e-4)
-    for step in range(4):
+    opt = create_optimizer_v2([other], optimizer, lr=1e-2)
+    group_kwargs = dict(lr=1e-4)
+    if opt.defaults.get('betas') is not None:
+        # different betas too, e.g. step size caches shared across groups (added via add_param_group) bake in betas
+        group_kwargs['betas'] = tuple(0.99 * b for b in opt.defaults['betas'])
+    opt.add_param_group(dict(params=[weight], **group_kwargs))
+    opt_alone = create_optimizer_v2([weight_alone], optimizer, **group_kwargs)
+    for step in range(8):
         other.grad, weight.grad = _step_grads([other, weight], step)
         weight_alone.grad = weight.grad.clone()
         opt.step()

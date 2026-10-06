@@ -372,7 +372,10 @@ def _single_tensor_lamb(
 
 
 # _foreach_div(TensorList, Tensor) overload, PyTorch >= 2.1
-_HAS_FOREACH_DIV_TENSOR = 'Tensor' in torch.ops.aten._foreach_div.overloads()
+try:
+    _HAS_FOREACH_DIV_TENSOR = 'Tensor' in torch.ops.aten._foreach_div.overloads()
+except Exception:
+    _HAS_FOREACH_DIV_TENSOR = False
 
 
 @_foreach_chunked(4)

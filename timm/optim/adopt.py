@@ -21,7 +21,7 @@ import torch
 from torch import Tensor
 from torch.optim.optimizer import Optimizer
 
-from ._helpers import _add_scaled_, _foreach_chunked, _max_lr_snapshot
+from ._helpers import _add_scaled_, _foreach_chunked, _max_lr_snapshot, _resolve_foreach
 from ._types import ParamsT
 
 __all__ = ["Adopt", "adopt"]
@@ -74,7 +74,7 @@ class Adopt(Optimizer):
             corrected_weight_decay: bool = False,
             *,
             caution: bool = False,
-            foreach: Optional[bool] = False,
+            foreach: Optional[bool] = None,
             maximize: bool = False,
             capturable: bool = False,
             differentiable: bool = False,
@@ -532,7 +532,9 @@ def adopt(
 
     """
     if foreach is None:
-        foreach = False
+        # the multi-tensor impl requires Optimizer._group_tensors_by_device_and_dtype (newer PyTorch)
+        foreach = hasattr(Optimizer, '_group_tensors_by_device_and_dtype') and _resolve_foreach(
+            None, caution, lr=None if capturable else lr, params=params)
 
     # this check is slow during compilation, so we skip it
     # if it's strictly needed we can add this check back in dynamo
