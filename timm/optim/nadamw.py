@@ -14,8 +14,9 @@ import torch
 from torch import Tensor
 
 from ._helpers import (
-    _check_capturable_devices, _foreach_chunked, _foreach_increment_steps, _foreach_lerp, _foreach_lerp_, _get_value,
-    _init_scalar, _is_compiling, _max_lr_snapshot, _resolve_foreach,
+    _check_capturable_devices, _foreach_chunked, _foreach_increment_steps, _foreach_lerp, _foreach_lerp_,
+    _foreach_rms_clip_denom_, _get_value, _init_scalar, _is_compiling, _max_lr_snapshot, _resolve_foreach,
+    _rms_clip_denom_,
 )
 from ._types import ParamsT
 
@@ -40,6 +41,15 @@ class NAdamW(torch.optim.Optimizer):
         weight_decay: weight decay coefficient
         caution: enable caution
         corrected_weight_decay: apply corrected weight decay (lr**2 / max_lr)
+        maximize: maximize the params based on the objective, instead of minimizing
+        foreach: whether foreach implementation of optimizer is used. If unspecified (None), the foreach
+            implementation is used on CUDA (devices w/ foreach kernels) since it is faster in general.
+        capturable: whether this instance is safe to capture in a CUDA graph
+        clipping_threshold: RMS update clipping threshold (StableAdamW, https://arxiv.org/abs/2304.13013), the
+            update is scaled by 1 / max(1, rms / clipping_threshold) w/ rms the RMS of grad / (sqrt(v_hat) + eps).
+            Damps the update of params w/ a sudden gradient increase relative to their second moment estimate.
+            1.0 as per the paper, None (default) disables. As in Adafactor, the decoupled weight decay is not clipped
+            (StableAdamW also scales the decay by the clipped lr).
     """
 
     def __init__(
@@ -54,6 +64,7 @@ class NAdamW(torch.optim.Optimizer):
             maximize: bool = False,
             foreach: Optional[bool] = None,
             capturable: bool = False,
+            clipping_threshold: Optional[float] = None,
     ):
         if not 0.0 <= lr:
             raise ValueError(f'Invalid learning rate: {lr}')
@@ -76,6 +87,7 @@ class NAdamW(torch.optim.Optimizer):
             foreach=foreach,
             maximize=maximize,
             capturable=capturable,
+            clipping_threshold=clipping_threshold,
         )
         super().__init__(params, defaults)
 
@@ -89,6 +101,7 @@ class NAdamW(torch.optim.Optimizer):
             group.setdefault('foreach', None)
             group.setdefault('maximize', False)
             group.setdefault('capturable', False)
+            group.setdefault('clipping_threshold', None)
             for p in group['params']:
                 p_state = self.state.get(p, {})
                 if p_state and 'step' in p_state:
@@ -161,6 +174,7 @@ class NAdamW(torch.optim.Optimizer):
                 maximize=group['maximize'],
                 capturable=group['capturable'],
                 max_lr=group['max_lr_snapshot'] if group['corrected_weight_decay'] else None,
+                clipping_threshold=group['clipping_threshold'],
             )
 
         return loss
@@ -183,6 +197,7 @@ def nadamw(
         caution: bool,
         maximize: bool,
         max_lr: Optional[float],
+        clipping_threshold: Optional[float] = None,
 ) -> None:
     r"""Functional API that performs NAdamW algorithm computation.
       See NAdamW class for details.
@@ -216,6 +231,7 @@ def nadamw(
         maximize=maximize,
         capturable=capturable,
         max_lr=max_lr,
+        clipping_threshold=clipping_threshold,
     )
 
 
@@ -235,6 +251,7 @@ def _single_tensor_nadamw(
         maximize: bool,
         capturable: bool,
         max_lr: Optional[float],
+        clipping_threshold: Optional[float] = None,
 ):
     if capturable:
         _check_capturable_devices(params, state_steps)
@@ -282,6 +299,8 @@ def _single_tensor_nadamw(
             # add eps before dividing by the (negative) step size, as in the non-capturable path. Dividing eps by
             # the step size first gives 0 / 0 = NaN when lr == 0. NOTE eps must be representable in the param dtype.
             denom = (exp_avg_sq.sqrt() / bias_correction2_sqrt).add_(eps)
+            if clipping_threshold is not None:
+                _rms_clip_denom_(denom, grad, clipping_threshold)
             if denom.dtype == torch.float16:
                 # avoid FP16 overflow when folding in small step sizes
                 denom = denom.float()
@@ -306,6 +325,8 @@ def _single_tensor_nadamw(
             # The official PyTorch implementation of NAdam uses a different algorithm.
             exp_avg = exp_avg.lerp(grad, 1 - beta1)
             denom = (exp_avg_sq.sqrt() / bias_correction2_sqrt).add_(eps)
+            if clipping_threshold is not None:
+                _rms_clip_denom_(denom, grad, clipping_threshold)
 
             if caution:
                 # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
@@ -333,6 +354,7 @@ def _multi_tensor_nadamw(
         maximize: bool,
         capturable: bool,
         max_lr: Optional[float],
+        clipping_threshold: Optional[float] = None,
 ):
     if len(params) == 0:
         return
@@ -386,6 +408,8 @@ def _multi_tensor_nadamw(
         denom = torch._foreach_sqrt(exp_avg_sqs)
         torch._foreach_div_(denom, bias_correction2_sqrt)
         torch._foreach_add_(denom, eps)
+        if clipping_threshold is not None:
+            _foreach_rms_clip_denom_(denom, grads, clipping_threshold)
         # Promote FP16 to avoid overflow with small step sizes. Mixed dtypes make eager _foreach_addcdiv_
         # fall back to per-tensor kernels; Inductor can fuse the cast and update under torch.compile.
         denom = [d.float() if d.dtype == torch.float16 else d for d in denom]
@@ -418,6 +442,8 @@ def _multi_tensor_nadamw(
         exp_avg_sq_sqrt = torch._foreach_sqrt(exp_avg_sqs)
         torch._foreach_div_(exp_avg_sq_sqrt, bias_correction2_sqrt)
         denom = torch._foreach_add(exp_avg_sq_sqrt, eps)
+        if clipping_threshold is not None:
+            _foreach_rms_clip_denom_(denom, grads, clipping_threshold)
 
         if caution:
             # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085

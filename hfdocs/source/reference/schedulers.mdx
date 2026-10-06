@@ -1,8 +1,130 @@
 # Learning Rate Schedulers
 
-This page contains the API reference documentation for learning rate schedulers included in `timm`.
+This page contains the API reference documentation for the learning rate schedulers included in `timm`, and an
+overview of how they are created and stepped.
 
-## Schedulers
+## Usage
+
+Schedulers are created by name with
+[`create_scheduler_v2`](#timm.scheduler.scheduler_factory.create_scheduler_v2), which returns the scheduler and the
+total number of epochs to train (including any warmup prefix, cycles and cooldown, see below).
+Unlike `torch.optim.lr_scheduler`, `timm` schedulers do not count steps themselves. The training loop passes the
+epoch or update count in explicitly:
+
+* `scheduler.step(epoch)` at the end of each epoch, with the index of the next epoch (`epoch + 1`)
+* `scheduler.step_update(num_updates)` after each optimizer update, with the number of updates so far
+
+A scheduler is stepped either per epoch or per update (`step_on_epochs`), the other call is a no-op, so a training
+loop can make both calls and support either.
+
+```python
+import timm
+from timm.optim import create_optimizer_v2
+from timm.scheduler import create_scheduler_v2
+
+model = timm.create_model('resnet50')
+optimizer = create_optimizer_v2(model, opt='adamw', lr=1e-3, weight_decay=0.05)
+updates_per_epoch = len(loader)  # optimizer updates per epoch
+
+# Cosine decay w/ 5 epochs of linear warmup, stepped per update for a smooth schedule.
+scheduler, num_epochs = create_scheduler_v2(
+    optimizer,
+    sched='cosine',
+    num_epochs=100,
+    warmup_epochs=5,
+    min_lr=1e-6,
+    step_on_epochs=False,
+    updates_per_epoch=updates_per_epoch,
+)
+
+num_updates = 0
+for epoch in range(num_epochs):
+    for batch in loader:
+        ...  # forward, backward, optimizer.step()
+        num_updates += 1
+        scheduler.step_update(num_updates=num_updates)
+    scheduler.step(epoch + 1)  # pass the eval metric too for 'plateau', scheduler.step(epoch + 1, metric)
+```
+
+Durations (`num_epochs`, `warmup_epochs`, `decay_epochs`, ...) are always given in epochs, the factory converts them
+to updates when `step_on_epochs=False`. Schedulers can also be constructed directly from their classes, durations are
+then in the unit they are stepped in (`t_in_epochs`).
+
+The training script (`train.py`) exposes the factory arguments as `--sched`, `--epochs`, `--warmup-epochs`,
+`--warmup-lr`, `--warmup-prefix`, `--min-lr`, `--decay-epochs`, `--decay-milestones`, `--decay-rate`,
+`--cooldown-epochs`, `--patience-epochs`, `--lr-noise*`, `--lr-cycle-*`, `--lr-k-decay`, `--lr-decay-fn` and
+`--lr-stable-timescale`. `--sched-on-updates` steps per update instead of per epoch.
+
+### Schedules
+
+| `sched` | Class | Schedule |
+|---|---|---|
+| `cosine` | [`CosineLRScheduler`](#timm.scheduler.cosine_lr.CosineLRScheduler) | Cosine annealing from the base lr to `min_lr` ([SGDR](https://arxiv.org/abs/1608.03983)), optional restarts (cycles) and k-decay |
+| `tanh` | [`TanhLRScheduler`](#timm.scheduler.tanh_lr.TanhLRScheduler) | Hyperbolic tangent decay ([paper](https://arxiv.org/abs/1806.01593)), optional restarts |
+| `poly` | [`PolyLRScheduler`](#timm.scheduler.poly_lr.PolyLRScheduler) | Polynomial decay to `min_lr`, the power is given by `decay_rate`, optional restarts and k-decay |
+| `step` | [`StepLRScheduler`](#timm.scheduler.step_lr.StepLRScheduler) | lr multiplied by `decay_rate` every `decay_epochs` |
+| `multistep` | [`MultiStepLRScheduler`](#timm.scheduler.multistep_lr.MultiStepLRScheduler) | lr multiplied by `decay_rate` at each of the `decay_milestones` epochs |
+| `plateau` | [`PlateauLRScheduler`](#timm.scheduler.plateau_lr.PlateauLRScheduler) | lr multiplied by `decay_rate` when the eval metric hasn't improved for `patience_epochs`, per epoch stepping only |
+| `wsd` | [`WSDLRScheduler`](#timm.scheduler.wsd_lr.WSDLRScheduler) | Warmup-stable-decay ([MiniCPM](https://arxiv.org/abs/2404.06395)), constant lr then a decay to `min_lr` over the final `decay_epochs`, `1-sqrt` decay by default ([paper](https://arxiv.org/abs/2405.18392)) |
+| `rsqrt` | [`WSDLRScheduler`](#timm.scheduler.wsd_lr.WSDLRScheduler) | Reciprocal square root decay w/ a linear cooldown over the final `decay_epochs` ([Big Vision](https://arxiv.org/abs/2106.04560)) |
+
+### Common options
+
+- **Warmup.** `warmup_epochs` of linear warmup from `warmup_lr` to the base lr, supported by all schedules.
+  - **`warmup_prefix`**: by default the warmup overlaps the start of the schedule (the schedule is computed from
+    epoch 0, warmup replaces its first epochs), so `num_epochs` is the total length. With `warmup_prefix=True` the
+    schedule starts after the warmup and the warmup is added to the total.
+  - For `wsd` and `rsqrt` the stable phase always starts after the warmup, w/o `warmup_prefix` the stable and decay
+    phases are fitted into `num_epochs - warmup_epochs` so `num_epochs` remains the total.
+- **`min_lr`**: the lr the decaying schedules (`cosine`, `tanh`, `poly`, `wsd`, `rsqrt`) reach at the end, and a
+  lower bound for `plateau`.
+- **`cooldown_epochs`**: epochs held at `min_lr` after the schedule ends (`cosine`, `tanh`, `poly`, `wsd`, `rsqrt`),
+  added to the returned `num_epochs`. As the schedule reaches `min_lr` one step after its last step, a cooldown
+  epoch is also a way to train at `min_lr` when stepping per epoch.
+- **Cycles** (`cosine`, `tanh`, `poly`): `cycle_limit > 1` restarts the schedule, each cycle `cycle_mul` times
+  longer and w/ its peak lr multiplied by `cycle_decay` relative to the previous. The returned `num_epochs` covers
+  all cycles.
+- **`k_decay`** (`cosine`, `poly`): [k-decay](https://arxiv.org/abs/2004.05909) changes the shape of the decay
+  (`t ** k`), `k > 1` keeps the lr high for longer.
+- **Noise**: `noise` adds random multiplicative lr noise over a range of the schedule, given as fractions of
+  `num_epochs` (a start, or a start and an end), limited by `noise_pct`.
+
+### WSD and rsqrt
+
+The [`WSDLRScheduler`](#timm.scheduler.wsd_lr.WSDLRScheduler) has three phases, a linear warmup, a stable phase and
+a decay to `min_lr` over the final `decay_epochs` (a value in (0, 1) is a fraction of the stable + decay length,
+20% by default). The decay function is selected w/ `decay_fn` (`--lr-decay-fn`): `1-sqrt` (default for `wsd`),
+`linear` (default for `rsqrt`), `cosine`, `power` or `exp`. The `rsqrt` stable phase decays as
+`(1 + t / timescale) ** -0.5` from the end of warmup, `stable_timescale` (`--lr-stable-timescale`, in epochs)
+defaults to the warmup length and must be set when there is no warmup. The class also supports a generalized
+`power` stable phase and custom decay functions.
+
+The final anneal is where WSD schedules get most of their benefit, so step per update (`--sched-on-updates`), or add
+a cooldown epoch, when the decay phase is only a few epochs long. Stepped per epoch, the last epoch of a short decay
+is noticeably above `min_lr` (~10% of the base lr for the last of 5 decay epochs w/ `1-sqrt`).
+
+```python
+# 300 epochs, 5 epoch warmup, constant lr, then a 1-sqrt decay over the final 20%
+scheduler, num_epochs = create_scheduler_v2(
+    optimizer, sched='wsd', num_epochs=300, warmup_epochs=5, decay_epochs=0.2,
+    step_on_epochs=False, updates_per_epoch=updates_per_epoch,
+)
+```
+
+### Parameter group lr scales
+
+Param groups w/ an `lr_scale` field (e.g. layer-wise lr decay groups from
+[`param_groups_layer_decay`](optimizers#timm.optim.param_groups_layer_decay)) get the scheduled lr multiplied by
+their scale. The base lr of each group is recorded as `initial_lr` in the group when the scheduler is created.
+
+### Resuming
+
+As the step counts are passed in, a scheduler for a resumed run is set up by creating it as for the original run
+and stepping it to the resume point, `scheduler.step(start_epoch)` or
+`scheduler.step_update(start_epoch * updates_per_epoch)`. `state_dict()` / `load_state_dict()` save and restore the
+scheduler's attributes.
+
+## API
 
 ### Factory functions
 
@@ -17,3 +139,4 @@ This page contains the API reference documentation for learning rate schedulers 
 [[autodoc]] timm.scheduler.poly_lr.PolyLRScheduler
 [[autodoc]] timm.scheduler.step_lr.StepLRScheduler
 [[autodoc]] timm.scheduler.tanh_lr.TanhLRScheduler
+[[autodoc]] timm.scheduler.wsd_lr.WSDLRScheduler

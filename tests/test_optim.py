@@ -1080,6 +1080,98 @@ def test_novograd_decoupled_weight_decay(grad_averaging, corrected):
         torch.testing.assert_close(param.detach(), before * (1 - wd_scale * wd))
 
 
+@pytest.mark.parametrize('optimizer', ['adamwlegacy', 'nadamw'])
+@pytest.mark.parametrize('foreach', [False, True])
+@pytest.mark.parametrize('capturable', [False, True])
+def test_adam_clipping_threshold(optimizer, foreach, capturable):
+    # RMS update clipping (StableAdamW), the update is scaled by 1 / max(1, rms / threshold) w/ rms the RMS of
+    # grad / (sqrt(v_hat) + eps). A gradient spike relative to the second moment estimate is damped, a normal step
+    # (rms ~ 1 on the first step) is unchanged.
+    if capturable and not torch.cuda.is_available():
+        pytest.skip('capturable requires CUDA')
+    device = 'cuda' if capturable else 'cpu'
+    threshold, eps, beta2 = 1.0, 1e-8, 0.999
+
+    def make(clipping_threshold):
+        params = [
+            Parameter(torch.randn(16, 8, generator=torch.Generator().manual_seed(0)).to(device)),
+            Parameter(torch.randn(8, generator=torch.Generator().manual_seed(1)).to(device)),
+        ]
+        opt = create_optimizer_v2(
+            params, optimizer, lr=1e-2, weight_decay=0., betas=(0.9, beta2), eps=eps, foreach=foreach,
+            capturable=capturable, clipping_threshold=clipping_threshold,
+        )
+        return params, opt
+
+    params, opt = make(threshold)
+    params_ref, opt_ref = make(None)
+    num_steps = 10
+    for step in range(num_steps):
+        # a 50x gradient spike on the last step, once the second moment estimate has settled
+        scale = 50. if step == num_steps - 1 else 1.
+        grads = [(g * scale).to(device) for g in _step_grads(params, step)]
+        for p, p_ref, g in zip(params, params_ref, grads):
+            p.grad, p_ref.grad = g, g.clone()
+        before = [p.detach().clone() for p in params]
+        before_ref = [p.detach().clone() for p in params_ref]
+        opt.step()
+        opt_ref.step()
+        for p, p_ref, b, b_ref in zip(params, params_ref, before, before_ref):
+            # clipping only scales the update (and w/o weight decay the update does not depend on the param value),
+            # the moments match the unclipped run so the expected clip factor can be computed from its state
+            v_hat = opt_ref.state[p_ref]['exp_avg_sq'] / (1 - beta2 ** (step + 1))
+            rms = (p_ref.grad / (v_hat.sqrt() + eps)).norm() / p_ref.numel() ** 0.5
+            clip = (rms / threshold).clamp(min=1.)
+            if step == num_steps - 1:
+                assert clip > 2.
+            torch.testing.assert_close(p.detach() - b, (p_ref.detach() - b_ref) / clip)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason='CUDA graph capture requires CUDA')
+@pytest.mark.parametrize('optimizer', ['adamwlegacy', 'nadamw'])
+@pytest.mark.parametrize('foreach', [False, True])
+def test_adam_clipping_threshold_cuda_graph(optimizer, foreach):
+    # A capturable step w/ RMS update clipping can be captured in a CUDA graph (no host syncs or host to device
+    # copies) and replays match eager steps.
+    def make():
+        params = [
+            Parameter(torch.randn(16, 8, generator=torch.Generator().manual_seed(0)).cuda()),
+            Parameter(torch.randn(8, generator=torch.Generator().manual_seed(1)).cuda()),
+        ]
+        opt = create_optimizer_v2(
+            params, optimizer, lr=1e-2, foreach=foreach, capturable=True, clipping_threshold=1.0)
+        return params, opt
+
+    grads = [[(g * (50. if step == 5 else 1.)).cuda() for g in _step_grads([torch.empty(16, 8), torch.empty(8)], step)]
+             for step in range(6)]
+    params, opt = make()
+    params_ref, opt_ref = make()
+    for p, g in zip(params, grads[0]):
+        p.grad = g.clone()
+    stream = torch.cuda.Stream()
+    stream.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(stream):
+        for step in range(3):
+            for p, g in zip(params, grads[step]):
+                p.grad.copy_(g)
+            opt.step()
+    torch.cuda.current_stream().wait_stream(stream)
+    graph = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(graph):
+        opt.step()
+    for step in range(6):
+        for p, g in zip(params_ref, grads[step]):
+            p.grad = g.clone()
+        opt_ref.step()
+        if step >= 3:
+            for p, g in zip(params, grads[step]):
+                p.grad.copy_(g)
+            graph.replay()
+    torch.cuda.synchronize()
+    for p, p_ref in zip(params, params_ref):
+        torch.testing.assert_close(p.detach(), p_ref.detach())
+
+
 # Registry-wide optimizer property tests. Each property should hold for every optimizer in the registry, intended
 # deviations are listed (w/ reason) in _PROPERTY_EXCEPTIONS.
 _REGISTRY_OPTIMIZERS = list_optimizers(exclude_filters=('fused*', 'bnb*', 'adahessian'))  # adahessian is 2nd order
@@ -1104,9 +1196,6 @@ _PROPERTY_EXCEPTIONS = {
         'madgrad*': 'lr is folded into the dual averaged update (as per reference)',
         '*rmsproptf*': 'lr is folded into the momentum (lr_in_momentum, as per TF)',
         'cadafactor': 'momentum accumulates lr scaled updates (as per fairseq / HF Adafactor)',
-    },
-    'foreach_parity': {
-        '*adafactorbv*': 'no foreach impl',
     },
     'resume_bfloat16': {
         'nadam': 'torch.optim.NAdam keeps mu_product in fp32, cast to the param dtype by Optimizer.load_state_dict',
@@ -1302,6 +1391,8 @@ _FOREACH_OPTIMIZERS = [
     if get_optimizer_class(n, bind_defaults=False).__module__.startswith('timm') and 'foreach' in _opt_args(n)
 ]
 _FOREACH_CONFIGS = [(n, {}) for n in _FOREACH_OPTIMIZERS] + [
+    ('adamwlegacy', dict(clipping_threshold=1.0)),
+    ('nadamw', dict(clipping_threshold=1.0)),
     ('rmsproptf', dict(centered=True)),
     ('rmsproptf', dict(lr_in_momentum=False)),
     ('rmsproptf', dict(momentum=0.)),

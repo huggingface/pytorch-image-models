@@ -119,7 +119,7 @@ class Scheduler(ABC):
         if self.noise_type == 'normal':
             while True:
                 # resample if noise out of percent limit, brute force but shouldn't spin much
-                noise = torch.randn(1, generator=g).item()
+                noise = torch.randn(1, generator=g).item() * self.noise_std
                 if abs(noise) < self.noise_pct:
                     return noise
         else:

@@ -14,8 +14,8 @@ from torch import Tensor
 from torch.optim.optimizer import Optimizer
 
 from ._helpers import (
-    _check_capturable_devices, _foreach_chunked, _foreach_increment_steps, _foreach_lerp_, _get_value, _init_scalar,
-    _is_compiling, _max_lr_snapshot, _resolve_foreach,
+    _check_capturable_devices, _foreach_chunked, _foreach_increment_steps, _foreach_lerp_, _foreach_rms_clip_denom_,
+    _get_value, _init_scalar, _is_compiling, _max_lr_snapshot, _resolve_foreach, _rms_clip_denom_,
 )
 from ._types import ParamsT
 
@@ -47,6 +47,11 @@ class AdamWLegacy(Optimizer):
         capturable: whether this instance is safe to capture in a CUDA graph.
             Passing True can impair ungraphed performance, so if you don't intend to
             graph capture this instance, leave it False
+        clipping_threshold: RMS update clipping threshold (StableAdamW, https://arxiv.org/abs/2304.13013), the
+            update is scaled by 1 / max(1, rms / clipping_threshold) w/ rms the RMS of grad / (sqrt(v_hat) + eps).
+            Damps the update of params w/ a sudden gradient increase relative to their second moment estimate.
+            1.0 as per the paper, None (default) disables. As in Adafactor, the decoupled weight decay is not clipped
+            (StableAdamW also scales the decay by the clipped lr).
     """
 
     def __init__(
@@ -62,6 +67,7 @@ class AdamWLegacy(Optimizer):
             maximize: bool = False,
             foreach: Optional[bool] = None,
             capturable: bool = False,
+            clipping_threshold: Optional[float] = None,
     ):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
@@ -83,6 +89,7 @@ class AdamWLegacy(Optimizer):
             foreach=foreach,
             maximize=maximize,
             capturable=capturable,
+            clipping_threshold=clipping_threshold,
         )
         super(AdamWLegacy, self).__init__(params, defaults)
 
@@ -97,6 +104,7 @@ class AdamWLegacy(Optimizer):
             group.setdefault('foreach', None)
             group.setdefault('maximize', False)
             group.setdefault('capturable', False)
+            group.setdefault('clipping_threshold', None)
             for p in group['params']:
                 p_state = self.state.get(p, {})
                 if p_state and 'step' in p_state:
@@ -178,6 +186,7 @@ class AdamWLegacy(Optimizer):
                 maximize=group['maximize'],
                 capturable=group['capturable'],
                 max_lr=group['max_lr_snapshot'] if group['corrected_weight_decay'] else None,
+                clipping_threshold=group['clipping_threshold'],
             )
 
         return loss
@@ -202,6 +211,7 @@ def adamw(
         caution: bool,
         maximize: bool,
         max_lr: Optional[float],
+        clipping_threshold: Optional[float] = None,
 ) -> None:
     r"""Functional API that performs AdamW algorithm computation.
       See AdamWLegacy class for details.
@@ -237,6 +247,7 @@ def adamw(
         maximize=maximize,
         capturable=capturable,
         max_lr=max_lr,
+        clipping_threshold=clipping_threshold,
     )
 
 
@@ -258,6 +269,7 @@ def _single_tensor_adamw(
         maximize: bool,
         capturable: bool,
         max_lr: Optional[float],
+        clipping_threshold: Optional[float] = None,
 ):
     if capturable:
         _check_capturable_devices(params, state_steps)
@@ -311,6 +323,8 @@ def _single_tensor_adamw(
             # add eps before dividing by the (negative) step size, as in the non-capturable path. Dividing eps by
             # the step size first gives 0 / 0 = NaN when lr == 0. NOTE eps must be representable in the param dtype.
             denom = (denom_base.sqrt() / bias_correction2_sqrt).add_(eps)
+            if clipping_threshold is not None:
+                _rms_clip_denom_(denom, grad, clipping_threshold)
             if denom.dtype == torch.float16:
                 # avoid FP16 overflow when folding in small step sizes
                 denom = denom.float()
@@ -332,6 +346,8 @@ def _single_tensor_adamw(
             bias_correction2_sqrt = bias_correction2 ** 0.5
 
             denom = (denom_base.sqrt() / bias_correction2_sqrt).add_(eps)
+            if clipping_threshold is not None:
+                _rms_clip_denom_(denom, grad, clipping_threshold)
 
             if caution:
                 # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
@@ -361,6 +377,7 @@ def _multi_tensor_adamw(
         maximize: bool,
         capturable: bool,
         max_lr: Optional[float],
+        clipping_threshold: Optional[float] = None,
 ):
     if len(params) == 0:
         return
@@ -417,6 +434,8 @@ def _multi_tensor_adamw(
         # add eps before dividing by the (negative) step size, as in the non-capturable path (see single-tensor)
         torch._foreach_div_(denom_base, bias_correction2_sqrt)
         torch._foreach_add_(denom_base, eps)
+        if clipping_threshold is not None:
+            _foreach_rms_clip_denom_(denom_base, grads, clipping_threshold)
         # Promote FP16 to avoid overflow with small step sizes. Mixed dtypes make eager _foreach_addcdiv_
         # fall back to per-tensor kernels; Inductor can fuse the cast and update under torch.compile.
         denom_base = [d.float() if d.dtype == torch.float16 else d for d in denom_base]
@@ -453,6 +472,8 @@ def _multi_tensor_adamw(
 
         torch._foreach_div_(denom, bias_correction2_sqrt)
         torch._foreach_add_(denom, eps)
+        if clipping_threshold is not None:
+            _foreach_rms_clip_denom_(denom, grads, clipping_threshold)
 
         if caution:
             # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
