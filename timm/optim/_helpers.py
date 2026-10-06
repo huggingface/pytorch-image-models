@@ -260,6 +260,33 @@ def _foreach_increment_steps(state_steps: List[Tensor]) -> None:
         torch._foreach_add_(state_steps, 1)
 
 
+def _rms_clip_denom_(denom: Tensor, grad: Tensor, clipping_threshold: float) -> None:
+    """Scale an update denominator in place so the update (numerator / denom) is RMS clipped.
+
+    denom *= max(1, rms / clipping_threshold) w/ rms the RMS of the normalized gradient grad / denom, as per
+    StableAdamW (https://arxiv.org/abs/2304.13013) and Adafactor update clipping. No host sync.
+    """
+    rms = grad.div(denom).norm() / (grad.numel() ** 0.5)
+    denom.mul_((rms / clipping_threshold).clamp_(min=1.0))
+
+
+def _foreach_rms_clip_denom_(denoms: List[Tensor], grads: List[Tensor], clipping_threshold: float) -> None:
+    """Multi-tensor _rms_clip_denom_, the per tensor clip factors are computed w/ one vectorized op per (device, dtype).
+    """
+    norms = torch._foreach_norm(torch._foreach_div(grads, denoms))
+    # rms / clipping_threshold, per tensor scales as Python scalars (no host to device copy, CUDA graph capture safe)
+    torch._foreach_mul_(norms, [1. / (g.numel() ** 0.5 * clipping_threshold) for g in grads])
+    clips: List[Optional[Tensor]] = [None] * len(norms)
+    groups = {}
+    for i, n in enumerate(norms):
+        groups.setdefault((n.device, n.dtype), []).append(i)
+    for idx in groups.values():
+        clip = torch.stack([norms[i] for i in idx]).clamp_(min=1.0)
+        for i, c in zip(idx, clip.unbind(0)):
+            clips[i] = c
+    torch._foreach_mul_(denoms, clips)
+
+
 def _get_value(x):
     # item() is faster for eager CPU scalar-tensor state, but causes specialization under torch.compile.
     if not torch.jit.is_scripting() and _is_compiling():

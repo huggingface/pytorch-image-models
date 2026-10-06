@@ -69,8 +69,6 @@ class AdafactorBigVision(Optimizer):
             unscaled_wd: bool = False,
             caution: bool = False,
             corrected_weight_decay: bool = False,
-            *,
-            foreach: Optional[bool] = False,
     ):
         if isinstance(momentum_dtype, str):
             if momentum_dtype == 'float16':
@@ -99,7 +97,6 @@ class AdafactorBigVision(Optimizer):
             caution=caution,
             corrected_weight_decay=corrected_weight_decay,
             max_lr_snapshot=_max_lr_snapshot(lr, corrected_weight_decay),
-            foreach=foreach,
         )
         super().__init__(params, defaults)
 
@@ -110,7 +107,6 @@ class AdafactorBigVision(Optimizer):
             group.setdefault('caution', False)
             group.setdefault('corrected_weight_decay', False)
             group.setdefault('max_lr_snapshot', self.defaults['max_lr_snapshot'])
-            group.setdefault('foreach', None)
             for p in group['params']:
                 p_state = self.state.get(p, {})
                 if len(p_state) != 0 and 'step' in p_state:
@@ -181,12 +177,7 @@ class AdafactorBigVision(Optimizer):
                 exp_avg_sqs.append(state.get('exp_avg_sq', None))
                 exp_avgs.append(state.get('exp_avg', None))
 
-            if group['foreach']:
-                func = _multi_tensor_adafactor
-            else:
-                func = _single_tensor_adafactor
-
-            func(
+            _single_tensor_adafactor(
                 params=params_with_grad,
                 grads=grads,
                 exp_avg_sq_rs=exp_avg_sq_rs,
@@ -322,30 +313,3 @@ def _single_tensor_adafactor(
 
         # Update parameters
         param.add_(update, alpha=-1.0)
-
-
-def _multi_tensor_adafactor(
-        params: List[Tensor],
-        grads: List[Tensor],
-        exp_avg_sq_rs: List[Optional[Tensor]],
-        exp_avg_sq_cs: List[Optional[Tensor]],
-        exp_avg_sqs: List[Optional[Tensor]],
-        exp_avgs: List[Optional[Tensor]],
-        state_steps: List[Tensor],
-        *,
-        beta2_decay: float,
-        beta2_decay_offset: int,
-        beta2_cap: float,
-        min_dim_size_to_factor: int,
-        eps: float,
-        lr: float,
-        weight_decay: float,
-        momentum: Optional[float],
-        momentum_dtype: Union[str, torch.dtype],
-        clipping_threshold: Optional[float],
-        unscaled_wd: bool,
-        caution: bool,
-        max_lr: Optional[float],
-):
-    # FIXME TODO
-    assert False, 'multi-tensor fn (foreach=True) not implemented yet'

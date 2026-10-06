@@ -248,6 +248,12 @@ group.add_argument('--lr-cycle-limit', type=int, default=1, metavar='N',
                    help='learning rate cycle limit, cycles enabled if > 1')
 group.add_argument('--lr-k-decay', type=float, default=1.0,
                    help='learning rate k-decay for cosine/poly (default: 1.0)')
+group.add_argument('--lr-decay-fn', type=str, default=None, metavar='FN',
+                   help='decay phase function for wsd / rsqrt schedules: linear, 1-sqrt, cosine, power, exp '
+                        '(default: 1-sqrt for wsd, linear for rsqrt)')
+group.add_argument('--lr-stable-timescale', type=float, default=None, metavar='N',
+                   help='timescale in epochs of the rsqrt schedule\'s stable phase decay, '
+                        'lr * (1 + t / timescale) ** -0.5 (default: warmup epochs, required w/o warmup)')
 group.add_argument('--warmup-lr', type=float, default=1e-5, metavar='LR',
                    help='warmup learning rate (default: 1e-5)')
 group.add_argument('--min-lr', type=float, default=0, metavar='LR',
@@ -260,8 +266,9 @@ group.add_argument('--start-epoch', default=None, type=int, metavar='N',
                    help='manual epoch number (useful on restarts)')
 group.add_argument('--decay-milestones', default=[90, 180, 270], type=int, nargs='+', metavar="MILESTONES",
                    help='list of decay epoch indices for multistep lr. must be increasing')
-group.add_argument('--decay-epochs', type=float, default=90, metavar='N',
-                   help='epoch interval to decay LR')
+group.add_argument('--decay-epochs', type=float, default=None, metavar='N',
+                   help='epoch interval to decay LR (step, default: 90), or length of the decay phase '
+                        '(wsd / rsqrt, < 1 for a fraction, default: 0.2)')
 group.add_argument('--warmup-epochs', type=int, default=5, metavar='N',
                    help='epochs to warmup LR, if scheduler supports')
 group.add_argument('--warmup-prefix', action='store_true', default=False,

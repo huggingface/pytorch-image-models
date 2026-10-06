@@ -14,6 +14,8 @@ from timm.scheduler import (
     PlateauLRScheduler,
     PolyLRScheduler,
     TanhLRScheduler,
+    WSDLRScheduler,
+    create_scheduler_v2,
 )
 from timm.scheduler.scheduler import Scheduler
 
@@ -38,6 +40,7 @@ class TestSchedulerBasics:
         (PlateauLRScheduler, {}),
         (PolyLRScheduler, {'t_initial': 100}),
         (TanhLRScheduler, {'t_initial': 100}),
+        (WSDLRScheduler, {'t_initial': 100, 'decay_t': 20}),
     ])
     def test_scheduler_init(self, scheduler_cls, kwargs):
         """Test that all schedulers can be initialized."""
@@ -52,6 +55,7 @@ class TestSchedulerBasics:
         (MultiStepLRScheduler, {'decay_t': [10, 20, 30]}),
         (PolyLRScheduler, {'t_initial': 100}),
         (TanhLRScheduler, {'t_initial': 100}),
+        (WSDLRScheduler, {'t_initial': 100, 'decay_t': 20}),
     ])
     def test_scheduler_step(self, scheduler_cls, kwargs):
         """Test that schedulers can step without error."""
@@ -86,6 +90,7 @@ class TestWarmup:
         (MultiStepLRScheduler, {'decay_t': [10, 20, 30]}),
         (PolyLRScheduler, {'t_initial': 100}),
         (TanhLRScheduler, {'t_initial': 100}),
+        (WSDLRScheduler, {'t_initial': 100, 'decay_t': 20}),
     ])
     def test_warmup_lr_increases(self, scheduler_cls, kwargs):
         """Test that LR increases during warmup period."""
@@ -490,7 +495,6 @@ class TestNoise:
         # With same seed, noise should be deterministic
         assert lrs_run1 == lrs_run2
 
-
 class TestKDecay:
     """Test k-decay option in cosine and poly schedulers."""
 
@@ -532,3 +536,162 @@ class TestKDecay:
 
         # The schedules should differ
         assert lrs_k1[50] != lrs_k2[50]
+
+
+class TestWSDScheduler:
+    """Test WSDLRScheduler (warmup-stable-decay) behavior."""
+
+    @staticmethod
+    def _lrs(scheduler, optimizer, num_steps):
+        lrs = []
+        for t in range(num_steps):
+            scheduler.step(t)
+            lrs.append(optimizer.param_groups[0]['lr'])
+        return lrs
+
+    def test_phases(self):
+        """Warmup to base lr, constant stable phase, decay reaching lr_min at warmup_t + t_initial, then held."""
+        base_lr, lr_min, warmup_t, t_initial, decay_t = 0.1, 0.01, 5, 100, 20
+        optimizer = _create_optimizer(lr=base_lr)
+        scheduler = WSDLRScheduler(
+            optimizer, t_initial=t_initial, decay_t=decay_t, lr_min=lr_min, warmup_t=warmup_t, warmup_lr_init=0.)
+        assert scheduler.get_cycle_length() == warmup_t + t_initial
+        lrs = self._lrs(scheduler, optimizer, warmup_t + t_initial + 10)
+        assert lrs[warmup_t - 1] < base_lr
+        # stable phase, from the end of warmup up to the start of the decay
+        for t in range(warmup_t, warmup_t + t_initial - decay_t + 1):
+            assert lrs[t] == pytest.approx(base_lr)
+        # strictly decreasing decay, to lr_min at the end of the schedule, held after
+        decay = lrs[warmup_t + t_initial - decay_t:warmup_t + t_initial + 1]
+        assert all(a > b for a, b in zip(decay, decay[1:]))
+        assert decay[-1] == pytest.approx(lr_min)
+        assert all(lr == pytest.approx(lr_min) for lr in lrs[warmup_t + t_initial:])
+
+    @pytest.mark.parametrize('decay_fn,mid_factor', [
+        ('linear', 0.5),
+        ('1-sqrt', 1 - math.sqrt(0.5)),
+        ('cosine', 0.5),
+        ('power', 1 - 0.5 ** 2),  # decay_power=2 below
+        ('exp', (0.1 ** 0.5 - 0.1) / 0.9),  # decay_ratio=0.1
+        (lambda frac: 1 - frac ** 3, 1 - 0.5 ** 3),
+    ])
+    def test_decay_fns(self, decay_fn, mid_factor):
+        """Decay functions are 1 at the start, the expected value halfway and 0 at the end of the decay."""
+        base_lr, t_initial, decay_t = 0.1, 100, 20
+        optimizer = _create_optimizer(lr=base_lr)
+        scheduler = WSDLRScheduler(optimizer, t_initial=t_initial, decay_t=decay_t, decay_fn=decay_fn, decay_power=2.)
+        lrs = self._lrs(scheduler, optimizer, t_initial + 1)
+        assert lrs[t_initial - decay_t] == pytest.approx(base_lr)
+        assert lrs[t_initial - decay_t // 2] == pytest.approx(base_lr * mid_factor)
+        assert lrs[t_initial] == pytest.approx(0., abs=1e-12)
+
+    @pytest.mark.parametrize('stable_fn,timescale,power', [('rsqrt', 2, 0.5), ('rsqrt', 50, 0.5), ('power', 10, 1.)])
+    def test_stable_fns(self, stable_fn, timescale, power):
+        """Decaying stable fns hand off from warmup at the base lr for any timescale, and keep decaying through the
+        decay phase (multiplicative w/ the decay fn, as per the Big Vision rsqrt + cooldown schedule)."""
+        base_lr, warmup_t, t_initial, decay_t = 0.1, 5, 100, 20
+        optimizer = _create_optimizer(lr=base_lr)
+        scheduler = WSDLRScheduler(
+            optimizer, t_initial=t_initial, decay_t=decay_t, stable_fn=stable_fn, stable_timescale=timescale,
+            stable_power=power, decay_fn='linear', warmup_t=warmup_t,
+        )
+        lrs = self._lrs(scheduler, optimizer, warmup_t + t_initial + 1)
+        assert lrs[warmup_t] == pytest.approx(base_lr)
+        for t in range(warmup_t, warmup_t + t_initial - decay_t):
+            t_s = t - warmup_t
+            assert lrs[t] == pytest.approx(base_lr * (1 + t_s / timescale) ** -power)
+        t = warmup_t + t_initial - decay_t // 2
+        t_s = t - warmup_t
+        assert lrs[t] == pytest.approx(base_lr * (1 + t_s / timescale) ** -power * 0.5)
+        assert lrs[warmup_t + t_initial] == pytest.approx(0., abs=1e-12)
+
+    def test_rsqrt_matches_big_vision(self):
+        """With timescale == warmup_t the rsqrt stable fn is sqrt(timescale / max(t, timescale)) as in Big Vision."""
+        base_lr, warmup_t, t_initial = 0.1, 10, 100
+        optimizer = _create_optimizer(lr=base_lr)
+        scheduler = WSDLRScheduler(optimizer, t_initial=t_initial, decay_t=1, stable_fn='rsqrt', warmup_t=warmup_t)
+        lrs = self._lrs(scheduler, optimizer, warmup_t + t_initial - 1)
+        for t in range(warmup_t, warmup_t + t_initial - 1):
+            assert lrs[t] == pytest.approx(base_lr * math.sqrt(warmup_t / max(t, warmup_t)))
+
+    def test_lr_min_floor(self):
+        """A decaying stable fn does not go below lr_min."""
+        optimizer = _create_optimizer(lr=0.1)
+        scheduler = WSDLRScheduler(
+            optimizer, t_initial=1000, decay_t=100, lr_min=0.05, stable_fn='power', stable_timescale=1, stable_power=2.)
+        lrs = self._lrs(scheduler, optimizer, 1000)
+        assert min(lrs) == pytest.approx(0.05)
+
+    def test_invalid_args(self):
+        optimizer = _create_optimizer()
+        with pytest.raises(ValueError):
+            WSDLRScheduler(optimizer, t_initial=100, decay_t=0)
+        with pytest.raises(ValueError):
+            WSDLRScheduler(optimizer, t_initial=100, decay_t=101)
+        with pytest.raises(ValueError):
+            WSDLRScheduler(optimizer, t_initial=100, decay_t=10, decay_fn='sqrt')
+        with pytest.raises(ValueError):
+            WSDLRScheduler(optimizer, t_initial=100, decay_t=10, stable_fn='rsqrt')  # no warmup, needs a timescale
+        with pytest.raises(ValueError):
+            WSDLRScheduler(optimizer, t_initial=100, decay_t=10, decay_fn='power', decay_power=0.)
+        with pytest.raises(ValueError):
+            WSDLRScheduler(
+                optimizer, t_initial=100, decay_t=10, stable_fn='power', stable_timescale=10, stable_power=-1.)
+
+    @pytest.mark.parametrize('step_on_updates', [False, True])
+    def test_factory_rsqrt_timescale(self, step_on_updates):
+        """The rsqrt timescale is given in epochs (converted to updates w/ step_on_updates), required w/o warmup."""
+        updates_per_epoch = 10
+        scale = updates_per_epoch if step_on_updates else 1
+        kwargs = dict(
+            sched='rsqrt', num_epochs=100, warmup_epochs=0, step_on_epochs=not step_on_updates,
+            updates_per_epoch=updates_per_epoch if step_on_updates else 0,
+        )
+        with pytest.raises(ValueError):
+            create_scheduler_v2(_create_optimizer(lr=0.1), **kwargs)
+        optimizer = _create_optimizer(lr=0.1)
+        scheduler, _ = create_scheduler_v2(optimizer, stable_timescale=4, **kwargs)
+        assert scheduler.stable_timescale == 4 * scale
+        step = scheduler.step_update if step_on_updates else scheduler.step
+        step(12 * scale)  # t = 3 timescales, before the decay phase
+        assert optimizer.param_groups[0]['lr'] == pytest.approx(0.1 * 4 ** -0.5)
+
+    @pytest.mark.parametrize('sched,expected', [('wsd', 20), ('rsqrt', 20), ('step', 90)])
+    def test_factory_default_decay_epochs(self, sched, expected):
+        """decay_epochs=None resolves per scheduler, the final 20% for wsd / rsqrt, 90 epoch intervals for step."""
+        optimizer = _create_optimizer(lr=0.1)
+        scheduler, _ = create_scheduler_v2(optimizer, sched=sched, num_epochs=105, warmup_epochs=5)
+        assert scheduler.decay_t == expected
+
+    @pytest.mark.parametrize('warmup_prefix', [False, True])
+    @pytest.mark.parametrize('step_on_updates', [False, True])
+    def test_factory(self, warmup_prefix, step_on_updates):
+        """The factory keeps --epochs semantics consistent w/ the other schedulers (the scheduler itself is always
+        warmup prefixed), and resolves decay_epochs < 1 as a fraction of the stable + decay length."""
+        epochs, warmup, decay, cooldown, updates_per_epoch = 100, 5, 20, 3, 10
+        base_lr = 0.1
+        for decay_epochs in (decay, decay / (epochs if warmup_prefix else epochs - warmup)):
+            optimizer = _create_optimizer(lr=base_lr)
+            scheduler, num_epochs = create_scheduler_v2(
+                optimizer, sched='wsd', num_epochs=epochs, decay_epochs=decay_epochs, warmup_epochs=warmup,
+                warmup_prefix=warmup_prefix, cooldown_epochs=cooldown, step_on_epochs=not step_on_updates,
+                updates_per_epoch=updates_per_epoch if step_on_updates else 0,
+            )
+            assert num_epochs == epochs + cooldown + (warmup if warmup_prefix else 0)
+            scale = updates_per_epoch if step_on_updates else 1
+            assert scheduler.warmup_t == warmup * scale
+            assert scheduler.decay_t == decay * scale
+            assert scheduler.get_cycle_length() == (num_epochs - cooldown) * scale
+            # last scheduled step (before the cooldown hold) is just above lr_min, the cooldown is at lr_min
+            step = scheduler.step_update if step_on_updates else scheduler.step
+            step((num_epochs - cooldown) * scale - 1)
+            assert 0 < optimizer.param_groups[0]['lr'] < base_lr * 0.5
+            step((num_epochs - cooldown) * scale)
+            assert optimizer.param_groups[0]['lr'] == pytest.approx(0., abs=1e-12)
+
+    def test_factory_rsqrt(self):
+        optimizer = _create_optimizer(lr=0.1)
+        scheduler, _ = create_scheduler_v2(optimizer, sched='rsqrt', num_epochs=100, decay_epochs=10, warmup_epochs=5)
+        assert scheduler.stable_fn == 'rsqrt' and scheduler.stable_timescale == 5 and scheduler.decay_fn == 'linear'
+        with pytest.raises(ValueError):
+            create_scheduler_v2(optimizer, sched='wsd', num_epochs=10, decay_epochs=10, warmup_epochs=5)

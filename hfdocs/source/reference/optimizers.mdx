@@ -1,14 +1,147 @@
 # Optimization
 
-This page contains the API reference documentation for learning rate optimizers included in `timm`.
+This page contains the API reference documentation for the optimizers included in `timm`, and an overview of how
+they are selected and configured through the optimizer factory.
 
-## Optimizers
+## Usage
+
+Optimizers are created by name with [`create_optimizer_v2`](#timm.optim.create_optimizer_v2). Given a model, the
+factory builds the parameter groups (weight decay exclusions, optional layer-wise learning rate decay) before
+constructing the optimizer. Optimizer specific arguments pass through as keyword arguments.
+
+```python
+import timm
+from timm.optim import create_optimizer_v2, list_optimizers
+
+model = timm.create_model('vit_base_patch16_224')
+
+# AdamW. 1D params (biases, norm scales) and params in model.no_weight_decay() are excluded from weight decay.
+optimizer = create_optimizer_v2(model, opt='adamw', lr=1e-3, weight_decay=0.05)
+
+# Layer-wise learning rate decay (fine-tuning), per-layer lr scales from the model's group_matcher().
+optimizer = create_optimizer_v2(model, opt='adamw', lr=1e-3, weight_decay=0.05, layer_decay=0.75)
+
+# Optimizer specific arguments are passed through.
+optimizer = create_optimizer_v2(model, opt='lamb', lr=5e-3, weight_decay=0.02, trust_clip=True)
+
+# A list of params or param groups can be passed instead of a model, weight decay grouping is then up to the caller.
+optimizer = create_optimizer_v2(model.parameters(), opt='sgd', lr=0.1, momentum=0.9)
+
+# All registered names, optionally with a description.
+print(list_optimizers(with_description=True))
+```
+
+The training script (`train.py`) exposes the same through `--opt`, `--lr`, `--weight-decay`, `--momentum`,
+`--opt-eps`, `--opt-betas`, `--layer-decay` and `--opt-kwargs key=value ...` for any other optimizer argument.
+
+### Naming conventions
+
+Registered names are lower case, a base optimizer name plus modifiers:
+
+| Modifier | Meaning | Examples |
+|---|---|---|
+| `c` prefix | Cautious variant, the update is masked where its sign disagrees with the gradient ([Cautious Optimizers](https://arxiv.org/abs/2411.16085)) | `cadamw`, `clion`, `cmars`, `cadopt` |
+| `w` suffix | Decoupled (AdamW style) weight decay, for optimizers that default to coupled L2 decay | `sgdw`, `lambw`, `adoptw`, `novogradw`, `rmsproptfw` |
+| `c` suffix | Corrected weight decay, the decay is scaled by `lr² / max_lr` instead of `lr` ([Why Gradients Rapidly Increase Near the End of Training](https://arxiv.org/abs/2506.02285)) | `adamc`, `nadamc`, `sgdc`, `lionc`, `adoptc`, `kronc` |
+| `n` prefix | Nesterov momentum (SGD, LARS and Muon families) | `nesterov`, `nlars`, `nmuon`, `nadamuon` |
+| `lookahead_` prefix | Wrap the optimizer in [`Lookahead`](#timm.optim.lookahead.Lookahead) | `lookahead_adamw` |
+| `fused` prefix | NVIDIA Apex fused implementation (requires `apex`) | `fusedadamw`, `fusedlamb` |
+| `bnb` prefix | bitsandbytes implementation, `8bit` suffix for 8-bit state (requires `bitsandbytes`) | `bnbadamw`, `bnbadamw8bit` |
+
+A few names predate the conventions: `lambc` and `larc` are LAMB / LARS with trust ratio clipping (the corrected
+decay LAMB variant is `lambcd`), `momentum` is SGD with classical momentum and `sgd` is SGD with Nesterov momentum.
+`adam`, `adamw`, `nadam`, `radam`, `radamw`, `adamax`, `adadelta`, `adagrad`, `rmsprop`, `sgd`, `momentum` and
+`nesterov` pass through to `torch.optim`, the `timm` versions of AdamW / NAdam / RAdam that predate their inclusion
+in PyTorch are `adamwlegacy`, `nadamlegacy` and `radamlegacy`.
+
+### Optimizer families
+
+| Names | Implementation | Notes |
+|---|---|---|
+| `adamw`, `adam`, `nadam`, `radam`, `radamw`, `adamax`, `adadelta`, `adagrad`, `rmsprop`, `sgd`, `momentum`, `nesterov` | `torch.optim` | |
+| `adamwlegacy`, `adamc`, `cadamw`, `cadamc` | [`AdamWLegacy`](#timm.optim.adamw.AdamWLegacy) | AdamW with caution, corrected decay, update clipping, `capturable` |
+| `nadamw`, `nadamc`, `cnadamw`, `cnadamc` | [`NAdamW`](#timm.optim.nadamw.NAdamW) | AdamW with Nesterov momentum (MLCommons algorithmic-efficiency form) |
+| `adopt`, `adoptw`, `adoptc`, `cadopt`, `cadoptw`, `cadoptc` | [`Adopt`](#timm.optim.adopt.Adopt) | Adam variant that converges for any β2 |
+| `adan`, `adanw`, `cadan`, `cadanw` | [`Adan`](#timm.optim.adan.Adan) | Adaptive Nesterov momentum |
+| `adabelief`, `radabelief` | [`AdaBelief`](#timm.optim.adabelief.AdaBelief) | `radabelief` adds RAdam style rectification |
+| `adafactor`, `cadafactor` | [`Adafactor`](#timm.optim.adafactor.Adafactor) | fairseq Adafactor, relative step size when `lr=None` |
+| `adafactorbv`, `adafactorbvc`, `cadafactorbv`, `cadafactorbvc` | [`AdafactorBigVision`](#timm.optim.adafactor_bv.AdafactorBigVision) | Big Vision Adafactor, factored second moments, low precision momentum, update clipping |
+| `adamp`, `cadamp`, `sgdp`, `csgdp` | [`AdamP`](#timm.optim.adamp.AdamP), [`SGDP`](#timm.optim.sgdp.SGDP) | Projection of the update for scale invariant weights |
+| `adahessian` | [`Adahessian`](#timm.optim.adahessian.Adahessian) | Second order, requires a closure (`is_second_order`) |
+| `kron`, `kronw`, `kronc` | [`Kron`](#timm.optim.kron.Kron) | PSGD with a Kronecker-factored preconditioner |
+| `lamb`, `lambc`, `lambw`, `lambcw`, `lambcd`, `clamb`, `clambw` | [`Lamb`](#timm.optim.lamb.Lamb) | Layer-wise adaptive moments, `trust_clip` variants (`lambc`, `lambcw`) |
+| `laprop`, `lapropc`, `claprop` | [`LaProp`](#timm.optim.laprop.LaProp) | Momentum and adaptivity separated |
+| `lars`, `larc`, `nlars`, `nlarc` | [`Lars`](#timm.optim.lars.Lars) | Layer-wise adaptive rate scaling, `trust_clip` variants (`larc`, `nlarc`) |
+| `lion`, `lionc`, `clion`, `clionc` | [`Lion`](#timm.optim.lion.Lion) | Evolved sign momentum |
+| `madgrad`, `madgradw` | [`MADGRAD`](#timm.optim.madgrad.MADGRAD) | Momentum based dual averaging |
+| `mars`, `cmars` | [`Mars`](#timm.optim.mars.Mars) | Variance reduction, AdamW or Lion style update |
+| `muon`, `nmuon`, `adamuon`, `nadamuon` | [`Muon`](#timm.optim.muon.Muon) | Newton-Schulz orthogonalized momentum for 2D+ weights, AdamW / NAdamW fallback for 1D params |
+| `novograd`, `novogradw`, `novogradc` | [`NvNovoGrad`](#timm.optim.nvnovograd.NvNovoGrad) | Layer-wise normalized moments |
+| `rmsproptf`, `rmsproptfw`, `rmsproptfc`, `crmsproptf` | [`RMSpropTF`](#timm.optim.rmsprop_tf.RMSpropTF) | TensorFlow ordering of ops and eps handling, lr folded into the momentum buffer |
+| `sgdw`, `nesterovw`, `sgdc`, `csgdw`, `csgdc` | [`SGDW`](#timm.optim.sgdw.SGDW) | SGD with decoupled weight decay |
+| `nadamlegacy`, `radamlegacy` | [`NAdamLegacy`](#timm.optim.nadam.NAdamLegacy), [`RAdamLegacy`](#timm.optim.radam.RAdamLegacy) | Reference implementations, superseded by `torch.optim` |
+| `fused*`, `bnb*` | NVIDIA Apex, bitsandbytes | Registered when the package is installed |
+
+### Common options
+
+Most `timm` optimizers share a set of options beyond the usual `lr`, `weight_decay`, `betas` and `eps`. Which
+optimizers accept which can be checked in the class signatures below, the factory raises on unsupported arguments.
+
+- **`caution`** applies the cautious update mask, equivalent to the `c` prefixed registry names.
+- **`corrected_weight_decay`** scales decoupled weight decay by `lr² / max_lr` instead of `lr` (the `c` suffixed
+  names), so the effective decay follows the learning rate schedule. `max_lr` is the learning rate the optimizer
+  was constructed with, construct it with the peak schedule lr (as `train.py` does). It is kept in each param group
+  (`max_lr_snapshot`) and saved / restored with the optimizer state.
+- **`decoupled_decay`** (or `decoupled`) switches optimizers that default to coupled L2 decay to AdamW style decay
+  (the `w` suffixed names).
+- **`foreach`** selects the multi-tensor implementation. By default (`None`) it is used on CUDA and other devices
+  with foreach kernels, matching `torch.optim`, unless unsupported by the configuration (a tensor `lr` without
+  `capturable`, or `caution` on a PyTorch version without the required `_foreach_maximum_` overload). The
+  multi-tensor step is run in chunks of parameters sized so each chunk's working set stays in the GPU L2 cache,
+  which is faster than streaming every parameter through memory once per op for large models. The chunk size is
+  derived from the device L2 cache size (PyTorch >= 2.5) and chunking is skipped on devices where the resulting
+  chunk would be below 4M elements. `TIMM_FOREACH_CHUNK_SIZE=<elements>` overrides the chunk size, `0` disables
+  chunking.
+- **`capturable`** (AdamWLegacy, NAdamW, Adopt, Muon) keeps the step count on the device so the step can be captured
+  in a CUDA graph. All optimizers accept an `lr` given as a 0-dim tensor, updated in place by a schedule, for use
+  with `torch.compile` and CUDA graphs.
+- **`clipping_threshold`** (AdamWLegacy, NAdamW, AdafactorBigVision) clips the update by its RMS,
+  `update / max(1, rms / threshold)` with `rms` the RMS of the second-moment normalized gradient, per tensor
+  ([StableAdamW](https://arxiv.org/abs/2304.13013), Adafactor). `1.0` as in the papers. As in Adafactor, the
+  (decoupled) weight decay is not clipped, StableAdamW also scales the decay by the clipped learning rate.
+- **`maximize`** maximizes the objective instead of minimizing.
+
+Low precision parameters (`bfloat16`, `float16`) are supported throughout. AdaBelief, RAdamLegacy and Adafactor keep
+their state in `float32` for low precision params, AdafactorBigVision keeps its momentum in a reduced precision
+(`momentum_dtype`) and Kron has separate `mu_dtype` / `precond_dtype` options. These state dtypes are preserved by
+`load_state_dict` (PyTorch's default loader casts state to the param dtype). The step functions avoid host syncs
+(data dependent Python branches on device tensors), AdamP / SGDP's projection check is the exception.
+
+### Parameter groups
+
+When given a model, `create_optimizer_v2` groups parameters with
+[`param_groups_weight_decay`](#timm.optim.param_groups_weight_decay) (no decay for 1D params and the model's
+`no_weight_decay()` set) or, with `layer_decay` set,
+[`param_groups_layer_decay`](#timm.optim.param_groups_layer_decay), which assigns a learning rate scale of
+`layer_decay ** (num_layers - layer_id)` per layer using the model's `group_matcher()`. Models without a
+`group_matcher()` fall back to [`auto_group_layers`](#timm.optim.auto_group_layers), which needs the model's
+`pretrained_cfg['classifier']` to separate the head. For hybrid optimizers (Muon) the `fallback_list` and
+`fallback_no_weight_decay` arguments route parameters to the fallback (AdamW) optimizer.
+
+## API
 
 ### Factory functions
 
 [[autodoc]] timm.optim.create_optimizer_v2
 [[autodoc]] timm.optim.list_optimizers
 [[autodoc]] timm.optim.get_optimizer_class
+[[autodoc]] timm.optim.get_optimizer_info
+
+### Parameter group functions
+
+[[autodoc]] timm.optim.param_groups_weight_decay
+[[autodoc]] timm.optim.param_groups_layer_decay
+[[autodoc]] timm.optim.auto_group_layers
 
 ### Optimizer Classes
 
@@ -17,8 +150,10 @@ This page contains the API reference documentation for learning rate optimizers 
 [[autodoc]] timm.optim.adafactor_bv.AdafactorBigVision
 [[autodoc]] timm.optim.adahessian.Adahessian
 [[autodoc]] timm.optim.adamp.AdamP
+[[autodoc]] timm.optim.adamw.AdamWLegacy
 [[autodoc]] timm.optim.adan.Adan
 [[autodoc]] timm.optim.adopt.Adopt
+[[autodoc]] timm.optim.kron.Kron
 [[autodoc]] timm.optim.lamb.Lamb
 [[autodoc]] timm.optim.laprop.LaProp
 [[autodoc]] timm.optim.lars.Lars
@@ -26,8 +161,11 @@ This page contains the API reference documentation for learning rate optimizers 
 [[autodoc]] timm.optim.lookahead.Lookahead
 [[autodoc]] timm.optim.madgrad.MADGRAD
 [[autodoc]] timm.optim.mars.Mars
+[[autodoc]] timm.optim.muon.Muon
+[[autodoc]] timm.optim.nadam.NAdamLegacy
 [[autodoc]] timm.optim.nadamw.NAdamW
 [[autodoc]] timm.optim.nvnovograd.NvNovoGrad
+[[autodoc]] timm.optim.radam.RAdamLegacy
 [[autodoc]] timm.optim.rmsprop_tf.RMSpropTF
 [[autodoc]] timm.optim.sgdp.SGDP
 [[autodoc]] timm.optim.sgdw.SGDW
