@@ -71,7 +71,7 @@ def load_class_map(map_or_filename, root=''):
         assert os.path.exists(class_map_path), 'Cannot locate specified class map file (%s)' % map_or_filename
     class_map_ext = os.path.splitext(map_or_filename)[-1].lower()
     if class_map_ext == '.txt':
-        with open(class_map_path) as f:
+        with open(class_map_path, encoding='utf-8') as f:
             class_to_idx = {v.strip(): k for k, v in enumerate(f)}
     elif class_map_ext == '.pkl':
         with open(class_map_path, 'rb') as f:
