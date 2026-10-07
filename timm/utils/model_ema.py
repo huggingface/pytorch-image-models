@@ -165,6 +165,7 @@ class ModelEmaV3(nn.Module):
             warmup_gamma: float = 1.0,
             warmup_power: float = 2/3,
             device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
             foreach: bool = True,
             exclude_buffers: bool = False,
     ):
@@ -172,6 +173,11 @@ class ModelEmaV3(nn.Module):
         # make a copy of the model for accumulating moving average of weights
         self.module = deepcopy(model)
         self.module.eval()
+        # Keep the EMA in a higher precision than a low precision (e.g. bfloat16) model if set. With decay ~0.9999,
+        # the per-step change (1 - decay) * (param - ema) is far below bfloat16 resolution and the EMA stops moving.
+        self.dtype = dtype
+        if dtype is not None:
+            self.module.to(dtype=dtype)
         self.decay = decay
         self.min_decay = min_decay
         self.update_after_step = update_after_step
@@ -220,7 +226,7 @@ class ModelEmaV3(nn.Module):
             for ema_v, model_v in zip(self.module.state_dict().values(), model.state_dict().values()):
                 if ema_v.is_floating_point():
                     ema_lerp_values.append(ema_v)
-                    model_lerp_values.append(model_v)
+                    model_lerp_values.append(model_v.to(dtype=ema_v.dtype))
                 else:
                     ema_v.copy_(model_v)
 
@@ -232,14 +238,14 @@ class ModelEmaV3(nn.Module):
         else:
             for ema_v, model_v in zip(self.module.state_dict().values(), model.state_dict().values()):
                 if ema_v.is_floating_point():
-                    ema_v.lerp_(model_v.to(device=self.device), weight=1. - decay)
+                    ema_v.lerp_(model_v.to(device=self.device, dtype=ema_v.dtype), weight=1. - decay)
                 else:
                     ema_v.copy_(model_v.to(device=self.device))
 
     def apply_update_no_buffers_(self, model, decay: float):
         # interpolate parameters, copy buffers
         ema_params = tuple(self.module.parameters())
-        model_params = tuple(model.parameters())
+        model_params = tuple(p.to(dtype=e.dtype) for e, p in zip(ema_params, model.parameters()))
         if self.foreach:
             if hasattr(torch, '_foreach_lerp_'):
                 torch._foreach_lerp_(ema_params, model_params, weight=1. - decay)
@@ -248,7 +254,7 @@ class ModelEmaV3(nn.Module):
                 torch._foreach_add_(ema_params, model_params, alpha=1 - decay)
         else:
             for ema_p, model_p in zip(ema_params, model_params):
-                ema_p.lerp_(model_p.to(device=self.device), weight=1. - decay)
+                ema_p.lerp_(model_p.to(device=self.device, dtype=ema_p.dtype), weight=1. - decay)
 
         for ema_b, model_b in zip(self.module.buffers(), model.buffers()):
             ema_b.copy_(model_b.to(device=self.device))

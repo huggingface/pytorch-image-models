@@ -232,3 +232,29 @@ def test_parse_kwargs_non_literal_falls_back_to_string():
         'act': 'nn.GELU',
         'cfg': {'a': 1},
     }
+
+
+@pytest.mark.parametrize('foreach', [True, False])
+def test_model_ema_v3_fp32_ema_of_bf16_model(foreach):
+    """A bfloat16 EMA barely moves at decay ~0.9998: (1 - decay) * (param - ema) is below bfloat16 resolution.
+    With dtype=torch.float32 the EMA is kept in float32 and tracks a bfloat16 model like a float32 EMA would."""
+    import torch
+    from timm.utils.model_ema import ModelEmaV3
+    torch.manual_seed(0)
+    model = torch.nn.Linear(16, 16).to(torch.bfloat16)
+    ema_bf16 = ModelEmaV3(model, decay=0.9998, foreach=foreach)
+    ema_fp32 = ModelEmaV3(model, decay=0.9998, foreach=foreach, dtype=torch.float32)
+    start = model.weight.detach().double().clone()
+    ref = start.clone()  # float64 reference EMA over the model's actual (bfloat16) weights
+    for step in range(2000):
+        with torch.no_grad():
+            model.weight.add_(1e-3)
+        ema_bf16.update(model, step=step)
+        ema_fp32.update(model, step=step)
+        ref = ref.lerp(model.weight.detach().double(), 1. - ema_fp32.get_decay(step))
+    assert ema_fp32.module.weight.dtype == torch.float32
+    moved_ref = (ref - start).mean().item()
+    moved_fp32 = (ema_fp32.module.weight.double() - start).mean().item()
+    moved_bf16 = (ema_bf16.module.weight.double() - start).mean().item()
+    assert abs(moved_fp32 - moved_ref) < 0.02 * moved_ref
+    assert moved_bf16 < 0.5 * moved_ref  # the default bfloat16 EMA falls far behind
