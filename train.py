@@ -223,7 +223,7 @@ group.add_argument('--opt-kwargs', nargs='*', default={}, action=utils.ParseKwar
 # Learning rate schedule parameters
 group = parser.add_argument_group('Learning rate schedule parameters')
 group.add_argument('--sched', type=str, default='cosine', metavar='SCHEDULER',
-                   help='LR scheduler (default: "cosine"')
+                   help='LR scheduler, "none" for constant LR (default: "cosine"')
 group.add_argument('--sched-on-updates', action='store_true', default=False,
                    help='Apply LR scheduler step on update instead of epoch end.')
 group.add_argument('--lr', type=float, default=None, metavar='LR',
@@ -1278,9 +1278,11 @@ def main():
             sched_explain = '(warmup_epochs + epochs + cooldown_epochs). Warmup added to total when warmup_prefix=True'
         else:
             sched_explain = '(epochs + cooldown_epochs). Warmup within epochs when warmup_prefix=False'
-        _logger.info(
-            f'Scheduled epochs: {num_epochs} {sched_explain}. '
-            f'LR stepped per {"epoch" if lr_scheduler.t_in_epochs else "update"}.')
+        if lr_scheduler is None:
+            sched_step = 'Constant LR.'
+        else:
+            sched_step = f'LR stepped per {"epoch" if lr_scheduler.t_in_epochs else "update"}.'
+        _logger.info(f'Scheduled epochs: {num_epochs} {sched_explain}. {sched_step}')
 
     results = []
     try:

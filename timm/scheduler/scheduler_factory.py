@@ -94,7 +94,8 @@ def create_scheduler_v2(
 
     Args:
         optimizer: optimizer to schedule
-        sched: scheduler name, one of 'cosine', 'tanh', 'step', 'multistep', 'plateau', 'poly', 'wsd', 'rsqrt'
+        sched: scheduler name, one of 'cosine', 'tanh', 'step', 'multistep', 'plateau', 'poly', 'wsd', 'rsqrt',
+            or 'none' for a constant lr (returns None)
         num_epochs: number of epochs in the schedule (excluding warmup if warmup_prefix, excluding cooldown)
         decay_epochs: lr decay interval (step), or the length of the decay phase (wsd / rsqrt) in epochs, a value
             in (0, 1) is a fraction of the schedule length. None = 90 (step), 0.2 (wsd / rsqrt)
@@ -264,6 +265,8 @@ def create_scheduler_v2(
             warmup_lr_init=warmup_lr,
             **noise_args,
         )
+    elif sched != 'none':
+        raise ValueError(f"Unknown scheduler '{sched}'.")
 
     if hasattr(lr_scheduler, 'get_cycle_length'):
         # For cycle based schedulers (cosine, tanh, poly) recalculate total epochs w/ cycles & cooldown
