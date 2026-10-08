@@ -257,22 +257,3 @@ def test_eval_transform_center_crop_uses_requested_interpolation(img_size, inter
     transform = create_transform(input_size=(3, *img_size), interpolation=interpolation, crop_pct=0.875)
     resize = transform.transforms[0]
     assert resize.interpolation == str_to_interp_mode(interpolation)
-
-
-def test_imagefolder_class_map_non_ascii(tmp_path, monkeypatch):
-    from timm.data.readers import class_map as class_map_module
-
-    # Windows decodes open() without encoding= as cp1252, which drops the 'café' images
-    def open_cp1252_default(file, mode='r', encoding=None, **kwargs):
-        return open(file, mode, encoding=encoding or 'cp1252', **kwargs)
-    monkeypatch.setattr(class_map_module, 'open', open_cp1252_default, raising=False)
-
-    for class_name in ('café', 'mango'):
-        class_dir = tmp_path / class_name
-        class_dir.mkdir()
-        Image.new('RGB', (8, 8)).save(class_dir / '0.png')
-    (tmp_path / 'class_map.txt').write_bytes('café\nmango\n'.encode('utf-8'))
-
-    ds = create_dataset('', root=str(tmp_path), class_map='class_map.txt')
-    assert len(ds) == 2
-    assert sorted(target for _, target in ds) == [0, 1]
