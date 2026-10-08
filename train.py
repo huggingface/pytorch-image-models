@@ -415,6 +415,9 @@ group.add_argument('--model-ema', action='store_true', default=False,
                    help='Enable tracking moving average of model weights.')
 group.add_argument('--model-ema-force-cpu', action='store_true', default=False,
                    help='Force ema to be tracked on CPU, rank=0 node only. Disables EMA validation.')
+group.add_argument('--model-ema-force-fp32', action='store_true', default=False,
+                   help='Keep model EMA weights in float32 when training a bfloat16 model '
+                        '(default: bfloat16 EMA w/ stochastic rounding, float16 models always use a float32 EMA).')
 group.add_argument('--model-ema-decay', type=float, default=0.9998,
                    help='Decay factor for model weights moving average (default: 0.9998)')
 group.add_argument('--model-ema-warmup', action='store_true',
@@ -1151,12 +1154,20 @@ def main():
         )
 
     # setup exponential moving average of model weights, SWA could be used here too
+    ema_dtype = None
     if args.model_ema:
+        if model_dtype == torch.float16 or (model_dtype == torch.bfloat16 and args.model_ema_force_fp32):
+            # A half precision EMA cannot hold the (1 - decay) * (model - ema) update, it's below half precision
+            # resolution. bfloat16 EMA tensors are updated with stochastic rounding by default so the update
+            # accumulates in expectation, float16 (or forced) use a float32 EMA at 2x the EMA memory.
+            ema_dtype = torch.float32
         # Important to create EMA model after cuda(), DP wrapper, and AMP but before DDP wrapper
         task.setup_ema(
             decay=args.model_ema_decay,
             use_warmup=args.model_ema_warmup,
             device='cpu' if args.model_ema_force_cpu else None,
+            dtype=ema_dtype,
+            stochastic_rounding_seed=args.seed,
         )
         if args.resume:
             load_task_ema_checkpoint(task, args.resume)
@@ -1338,7 +1349,7 @@ def main():
                         device=device,
                         amp_autocast=amp_autocast,
                         log_suffix=' (EMA)',
-                        model_dtype=model_dtype,
+                        model_dtype=ema_dtype or model_dtype,
                     )
                     eval_metrics = ema_eval_metrics
             else:
@@ -1645,6 +1656,9 @@ def validate(
             if not args.prefetcher:
                 input = input.to(device=device, dtype=model_dtype)
                 target = target.to(device=device)
+            elif model_dtype is not None and input.dtype != model_dtype:
+                # prefetcher outputs the training dtype, a float32 EMA of a half precision model needs float32 input
+                input = input.to(dtype=model_dtype)
             if args.channels_last:
                 input = input.contiguous(memory_format=torch.channels_last)
 
