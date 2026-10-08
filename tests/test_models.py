@@ -1460,6 +1460,305 @@ def test_swin_family_set_input_size(model_name, img_size):
         model(torch.randn(1, 3, img_size, img_size))
 
 
+def _swin_window_spec(spec, w):
+    # window size specs relative to the default window w (grid // 8) at the base img size
+    return {
+        'default': None,
+        'uniform': 2 * w,  # one window for all stages that is not grid // 8
+        'per_stage': (w, w, 2 * w, w),  # Swin S3 style
+        'non_square': ((w, 4), (2 * w, w), (w, 2 * w), (w, w)),
+    }[spec]
+
+
+def _scale_window_spec(window_size, scale):
+    if isinstance(window_size, int):
+        return window_size * scale
+    return tuple([_scale_window_spec(w, scale) for w in window_size])
+
+
+def _assert_swin_stage_windows(model, window_size):
+    from timm.models.swin_transformer import resolve_stage_window_sizes
+    stages = model.layers if hasattr(model, 'layers') else model.stages
+    for stage, ws in zip(stages, resolve_stage_window_sizes(window_size, len(stages))):
+        for b in stage.blocks:
+            feat_size = b.feat_size if hasattr(b, 'feat_size') else b.input_resolution
+            # windows are clamped to the feature size when not always partitioning
+            assert b.window_size == tuple([min(w, f) for w, f in zip(ws, feat_size)])
+
+
+def _swin_structure(model):
+    blocks = _swin_blocks(model)
+    return [(b.window_size, b.shift_size) for b in blocks], {k: v.shape for k, v in model.state_dict().items()}
+
+
+def _create_swin(model_name, **kwargs):
+    model = create_model(model_name, **dict(_SWIN_KWARGS, **kwargs)).eval()
+    with torch.no_grad():
+        # SwinV2 zero inits the res-post-norm weights, which would hide attention / window changes in the output
+        for n, p in model.named_parameters():
+            if 'norm' in n and n.endswith('weight'):
+                p.fill_(1.)
+    return model
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('spec', ['default', 'uniform', 'per_stage', 'non_square'])
+@pytest.mark.parametrize('model_name,img_size', _SWIN_FAMILY)
+def test_swin_family_set_input_size_stage_windows(model_name, img_size, spec):
+    window_size = _swin_window_spec(spec, img_size // 32)
+    model = _create_swin(model_name, **(dict(window_size=window_size) if window_size is not None else {}))
+    _assert_swin_stage_windows(model, window_size if window_size is not None else img_size // 32)
+    x = torch.randn(1, 3, img_size, img_size)
+    state = {k: v.clone() for k, v in model.state_dict().items()}
+    structure = _swin_structure(model)
+    with torch.no_grad():
+        expected = model(x)
+
+    # calls at the current size must not change the model
+    for kw in (dict(), dict(img_size=(img_size, img_size))):
+        model.set_input_size(**kw)
+        assert _swin_structure(model) == structure
+        for k, v in model.state_dict().items():
+            assert torch.equal(v, state[k]), k
+        with torch.no_grad():
+            torch.testing.assert_close(model(x), expected, rtol=0, atol=0)
+
+    # a resize scales every stage's window with the grid, matching a model created at that size w/ scaled windows
+    new_size = (img_size * 2, img_size * 2)
+    model.set_input_size(img_size=new_size)
+    ref_window_size = _scale_window_spec(window_size if window_size is not None else img_size // 32, 2)
+    ref = _create_swin(model_name, img_size=new_size, window_size=ref_window_size)
+    _assert_swin_stage_windows(model, ref_window_size)
+    assert _swin_structure(model) == _swin_structure(ref)
+    ref.load_state_dict(model.state_dict())
+    x_new = torch.randn(1, 3, *new_size)
+    with torch.no_grad():
+        torch.testing.assert_close(model(x_new), ref(x_new))
+
+    # and back again restores the original windows
+    model.set_input_size(img_size=(img_size, img_size))
+    assert _swin_structure(model) == structure
+
+    # explicit per-stage window sizes are applied as given and become the reference for later calls
+    stage_windows = _scale_window_spec(_swin_window_spec('per_stage', img_size // 32), 2)
+    model.set_input_size(img_size=new_size, window_size=stage_windows)
+    _assert_swin_stage_windows(model, stage_windows)
+    ref = _create_swin(model_name, img_size=new_size, window_size=stage_windows)
+    assert _swin_structure(model) == _swin_structure(ref)
+    model.set_input_size()
+    assert _swin_structure(model) == _swin_structure(ref)
+
+    # window_ratio keeps the legacy behaviour of one grid // window_ratio window for all stages
+    model.set_input_size(img_size=(img_size, img_size), window_ratio=8)
+    ref = _create_swin(model_name, window_size=img_size // 32)
+    assert _swin_structure(model) == _swin_structure(ref)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name', [m for m, _ in _SWIN_FAMILY])
+def test_swin_family_set_input_size_window_ratios(model_name):
+    windows = ((8, 10), (8, 10), (16, 20), (8, 10))
+    for window_ratio in [(8, 8, 4, 8), [8, 8, 4, 8]]:
+        model = _create_swin(model_name)
+        model.set_input_size(img_size=(256, 320), window_ratio=window_ratio)
+        _assert_swin_stage_windows(model, windows)
+        # ratios divide the new patch grid and become the reference for later resizes
+        for size, size_windows in [((256, 320), windows), ((320, 256), ((10, 8), (10, 8), (20, 16), (10, 8)))]:
+            model.set_input_size(img_size=size)
+            ref = _create_swin(model_name, img_size=size, window_size=size_windows)
+            assert _swin_structure(model) == _swin_structure(ref)
+            ref.load_state_dict(model.state_dict())
+            x = torch.randn(1, 3, *size)
+            with torch.no_grad():
+                torch.testing.assert_close(model(x), ref(x))
+
+        # an explicit window size overrides the ratio
+        model.set_input_size(window_size=4, window_ratio=window_ratio)
+        _assert_swin_stage_windows(model, 4)
+
+        if model_name.startswith('swinv2_cr'):
+            # V2-CR also takes window ratios in the constructor
+            model = _create_swin(model_name, img_size=(256, 320), window_ratio=window_ratio)
+            _assert_swin_stage_windows(model, windows)
+            structure = _swin_structure(model)
+            model.set_input_size()
+            assert _swin_structure(model) == structure
+            _assert_swin_stage_windows(_create_swin(model_name, window_size=4, window_ratio=window_ratio), 4)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name,img_size', _SWIN_FAMILY)
+def test_swin_family_set_input_size_invalid_and_min_windows(model_name, img_size):
+    # an invalid window spec must raise before any part of the model is changed
+    model = _create_swin(model_name)
+    state = {k: v.clone() for k, v in model.state_dict().items()}
+    structure = _swin_structure(model)
+    for window_kwargs in [
+        dict(window_ratio=(8, 4)),  # wrong number of stages
+        dict(window_ratio=0),
+        dict(window_size=(7, 7, 7)),  # wrong number of stages
+        dict(window_size=0),
+    ]:
+        with pytest.raises(AssertionError):
+            model.set_input_size(img_size=(img_size * 2, img_size * 2), **window_kwargs)
+        assert model.patch_embed.img_size == (img_size, img_size)
+        assert _swin_structure(model) == structure
+        for k, v in model.state_dict().items():
+            assert torch.equal(v, state[k]), k
+    with torch.no_grad():
+        model(torch.randn(1, 3, img_size, img_size))
+
+    # windows never drop below 1, and a window of 1 must give finite outputs (SwinV2 log-CPB divides by window - 1)
+    for size, window_kwargs in [((64, 64), dict(window_ratio=32)), ((32, 32), dict())]:
+        model.set_input_size(img_size=size, **window_kwargs)
+        assert all(w >= 1 for b in _swin_blocks(model) for w in b.window_size)
+        with torch.no_grad():
+            assert torch.isfinite(model(torch.randn(1, 3, *size))).all()
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name', [m for m, _ in _SWIN_FAMILY])
+def test_swin_family_resize_metadata(model_name):
+    from timm.models._features import FeatureGetterNet
+
+    model = _create_swin(model_name, img_size=(64, 96), patch_size=2, window_size=4)
+    features = FeatureGetterNet(model, out_indices=(0, 1, 2, 3)).eval()
+    for size, patch_size in [((64, 96), 2), ((96, 128), 4), ((64, 96), 2)]:
+        if model_name.startswith('swinv2_cr'):
+            patch_size = 2  # V2 CR only exposes patch_size in its constructor.
+            model.set_input_size(img_size=size)
+            assert model.img_size == size
+        else:
+            model.set_input_size(img_size=size, patch_size=patch_size)
+        grid_size = tuple(s // patch_size for s in size)
+        assert model.patch_embed.img_size == size
+        assert model.patch_embed.grid_size == grid_size
+        assert model.patch_embed.num_patches == grid_size[0] * grid_size[1]
+        reductions = [patch_size * 2 ** i for i in range(4)]
+        assert features.feature_info.reduction() == reductions
+        with torch.no_grad():
+            outputs = features(torch.randn(1, 3, *size))
+        assert [tuple(x.shape[-2:]) for x in outputs] == [tuple(s // r for s in size) for r in reductions]
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name', [m for m, _ in _SWIN_FAMILY])
+def test_swin_family_resize_odd_stage_sizes(model_name):
+    model = _create_swin(model_name, img_size=224, window_size=7)
+    for size in [(232, 248), (248, 232), (224, 224)]:
+        model.set_input_size(img_size=size, window_size=7)
+        ref = _create_swin(model_name, img_size=size, window_size=7)
+        dynamic = _create_swin(model_name, img_size=size, window_size=7, strict_img_size=False)
+        ref.load_state_dict(model.state_dict())
+        dynamic.load_state_dict(model.state_dict())
+        x = torch.randn(1, 3, *size)
+        with torch.no_grad():
+            output, features = model.forward_intermediates(x)
+            torch.testing.assert_close(output, ref.forward_features(x))
+            torch.testing.assert_close(output, dynamic.forward_features(x))
+        stages = model.layers if hasattr(model, 'layers') else model.stages
+        grid_size = tuple(s // 4 for s in size)
+        for index, (stage, feature) in enumerate(zip(stages, features)):
+            if index:
+                grid_size = tuple((s + 1) // 2 for s in grid_size)
+            assert tuple(feature.shape[-2:]) == grid_size
+            for block in stage.blocks:
+                recorded_size = block.feat_size if hasattr(block, 'feat_size') else block.input_resolution
+                assert recorded_size == grid_size
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name', [m for m, _ in _SWIN_FAMILY])
+def test_swin_family_set_input_size_after_pruning(model_name):
+    model = _create_swin(model_name, img_size=(64, 96))
+    model.prune_intermediate_layers(indices=[0, 1], prune_norm=True)
+    assert len(model._ref_window_sizes) == 2
+    # patch grid at (96, 128) is (24, 32)
+    for window_kwargs, windows in [
+        (dict(window_size=4), 4),
+        (dict(window_size=((2, 4), (4, 2))), ((2, 4), (4, 2))),
+        (dict(window_ratio=8), (3, 4)),
+        (dict(window_ratio=(8, 4)), ((3, 4), (6, 8))),  # two ratio values are two stages, not (h, w)
+        (dict(), ((3, 4), (6, 8))),
+    ]:
+        model.set_input_size(img_size=(96, 128), **window_kwargs)
+        _assert_swin_stage_windows(model, windows)
+        with torch.no_grad():
+            features = model.forward_intermediates(
+                torch.randn(1, 3, 96, 128), intermediates_only=True,
+            )
+        assert len(features) == 2
+        assert [x.shape[-2:] for x in features] == [(24, 32), (12, 16)]
+        assert all(torch.isfinite(x).all() for x in features)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name', [m for m, _ in _SWIN_FAMILY])
+def test_swin_family_script_after_resize(model_name):
+    import io
+
+    model = _create_swin(model_name, img_size=(64, 96), window_size=(2, 3))
+    original_script = torch.jit.script(model)
+    for window_kwargs in [dict(window_ratio=(8, 8, 4, 8)), dict(window_size=2), dict(window_size=1)]:
+        model.set_input_size(img_size=(96, 128), **window_kwargs)
+        scripted = torch.jit.script(model)
+        buffer = io.BytesIO()
+        torch.jit.save(scripted, buffer)
+        buffer.seek(0)
+        reloaded = torch.jit.load(buffer)
+        x = torch.randn(1, 3, 96, 128)
+        with torch.no_grad():
+            expected = model(x)
+            torch.testing.assert_close(scripted(x), expected)
+            torch.testing.assert_close(reloaded(x), expected)
+    # Scripting captures geometry; resizing the eager model does not resize an existing ScriptModule.
+    assert original_script.patch_embed.img_size == (64, 96)
+    assert not hasattr(original_script, 'set_input_size')
+
+
+@pytest.mark.base
+@pytest.mark.skipif(not hasattr(torch, 'compile'), reason='requires torch.compile')
+@pytest.mark.parametrize('model_name', [m for m, _ in _SWIN_FAMILY])
+def test_swin_family_compile_resize_guards(model_name):
+    model = _create_swin(model_name, img_size=(64, 96), window_size=(2, 3))
+    graphs = []
+
+    def backend(graph, example_inputs):
+        graphs.append(graph)
+        return graph.forward
+
+    compiled = torch.compile(model, backend=backend, fullgraph=True)
+    for resize_kwargs, size, num_graphs in [
+        (None, (64, 96), 1),
+        (dict(), (64, 96), 1),
+        (dict(img_size=(96, 128), window_ratio=(8, 8, 4, 8)), (96, 128), 2),
+        (dict(window_size=2), (96, 128), 3),
+    ]:
+        if resize_kwargs is not None:
+            compiled.set_input_size(**resize_kwargs)
+        x = torch.randn(1, 3, *size)
+        with torch.no_grad():
+            torch.testing.assert_close(compiled(x), model(x))
+        assert len(graphs) == num_graphs
+
+
+@pytest.mark.base
+def test_hybrid_vit_set_input_size_dtype():
+    # the backbone forward used to size the hybrid embed must follow the model device / dtype
+    kwargs = dict(embed_dim=32, depth=1, num_heads=1, num_classes=5)
+    model = create_model('vit_tiny_r_s16_p8_224', **kwargs).to(torch.bfloat16).eval()
+    state = {k: v.clone() for k, v in model.state_dict().items()}
+    model.set_input_size()  # no-op
+    assert all(torch.equal(v, state[k]) for k, v in model.state_dict().items())
+    model.set_input_size(img_size=(256, 256))
+    ref = create_model('vit_tiny_r_s16_p8_224', img_size=256, **kwargs)
+    assert model.patch_embed.grid_size == ref.patch_embed.grid_size
+    model.set_input_size(patch_size=(4, 4))
+    assert model.patch_embed.proj.weight.dtype == torch.bfloat16
+    with torch.no_grad():
+        assert model(torch.randn(1, 3, 256, 256, dtype=torch.bfloat16)).shape == (1, 5)
+
+
 _RELPOS_FAMILY = [
     # model, ctor kwargs, base img size, resized img size
     ('maxvit_nano_rw_256', dict(), 256, 320),  # RelPosBias, window / grid partition attn
