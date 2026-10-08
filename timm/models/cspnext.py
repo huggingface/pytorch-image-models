@@ -24,7 +24,8 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import ClassifierHead, ConvNormAct, EffectiveSEModule, get_device_dtype
+from timm.layers import ClassifierHead, ConvNormAct, DropPath, EffectiveSEModule, calculate_drop_path_rates, \
+    get_device_dtype
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import MATCH_PREV_GROUP, checkpoint_seq
@@ -117,6 +118,7 @@ class CspNextBlock(nn.Module):
             add_identity: bool = True,
             kernel_size: int = 5,
             dilation: int = 1,
+            drop_path: float = 0.,
             norm_layer: Union[str, Callable, Type[nn.Module]] = nn.BatchNorm2d,
             act_layer: Union[str, Callable, Type[nn.Module]] = nn.SiLU,
             device=None,
@@ -145,11 +147,12 @@ class CspNextBlock(nn.Module):
             **dd,
         )
         self.add_identity = add_identity and in_channels == out_channels
+        self.drop_path = DropPath(drop_path) if drop_path and self.add_identity else nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         out = self.conv2(self.conv1(x))
         if self.add_identity:
-            out = out + x
+            out = self.drop_path(out) + x
         return out
 
 
@@ -165,6 +168,7 @@ class CspNextLayer(nn.Module):
             add_identity: bool = True,
             channel_attention: bool = False,
             dilation: int = 1,
+            drop_path_rates: Optional[List[float]] = None,
             norm_layer: Union[str, Callable, Type[nn.Module]] = nn.BatchNorm2d,
             act_layer: Union[str, Callable, Type[nn.Module]] = nn.SiLU,
             device=None,
@@ -181,11 +185,12 @@ class CspNextLayer(nn.Module):
                 mid_channels,
                 add_identity=add_identity,
                 dilation=dilation,
+                drop_path=drop_path_rates[i] if drop_path_rates is not None else 0.,
                 norm_layer=norm_layer,
                 act_layer=act_layer,
                 **dd,
             )
-            for _ in range(num_blocks)
+            for i in range(num_blocks)
         ])
         self.attention = EffectiveSEModule(2 * mid_channels, **dd) if channel_attention else nn.Identity()
         self.final_conv = ConvNormAct(
@@ -224,6 +229,7 @@ class CspNext(nn.Module):
             global_pool: str = 'avg',
             output_stride: int = 32,
             drop_rate: float = 0.,
+            drop_path_rate: float = 0.,
             depths: Tuple[int, ...] = (3, 6, 6, 3),
             channels: Tuple[int, ...] = (128, 256, 512, 1024),
             deepen_factor: float = 1.0,
@@ -242,6 +248,7 @@ class CspNext(nn.Module):
             global_pool: Global pooling type.
             output_stride: Network output stride. Down-sampling is replaced by dilation beyond this stride.
             drop_rate: Classifier dropout rate.
+            drop_path_rate: Stochastic depth rate, linearly increasing across blocks.
             depths: Number of CSPNeXt blocks per stage, before scaling by `deepen_factor`.
             channels: Output channels per stage, before scaling by `widen_factor`.
             deepen_factor: Depth multiplier applied to `depths`.
@@ -262,6 +269,8 @@ class CspNext(nn.Module):
 
         stage_depths = [max(round(d * deepen_factor), 1) for d in depths]
         stage_channels = [int(c * widen_factor) for c in channels]
+        # the last stage has no residual connections, ramp the drop path rate over the preceding stages only
+        dpr = calculate_drop_path_rates(drop_path_rate, stage_depths[:-1], stagewise=True) + [None]
         stem_chs = max(stage_channels[0] // 2, 1)
         half_chs = max(stem_chs // 2, 1)
         self.stem = nn.Sequential(
@@ -307,6 +316,7 @@ class CspNext(nn.Module):
                 add_identity=not is_last,
                 channel_attention=channel_attention,
                 dilation=dilation,
+                drop_path_rates=dpr[i],
                 norm_layer=norm_layer,
                 act_layer=act_layer,
                 **dd,
