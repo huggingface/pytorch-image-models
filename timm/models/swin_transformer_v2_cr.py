@@ -30,7 +30,7 @@ Modifications and additions for timm hacked together by / Copyright 2022, Ross W
 import logging
 import math
 from functools import partial
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -43,6 +43,12 @@ from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
 from ._manipulate import named_apply, checkpoint
 from ._registry import generate_default_cfgs, register_model
+from .swin_transformer import (
+    calc_stage_window_sizes,
+    resolve_stage_window_sizes,
+    resolve_window_args,
+    window_sizes_from_ratio,
+)
 
 __all__ = ['SwinTransformerV2Cr']  # model_registry will add each entrypoint fn to this
 
@@ -652,7 +658,7 @@ class SwinTransformerV2CrStage(nn.Module):
         super().__init__()
         self.downscale: bool = downscale
         self.grad_checkpointing: bool = False
-        self.feat_size: Tuple[int, int] = (feat_size[0] // 2, feat_size[1] // 2) if downscale else feat_size
+        self.feat_size: Tuple[int, int] = tuple((s + 1) // 2 for s in feat_size) if downscale else feat_size
 
         if downscale:
             self.downsample = PatchMerging(embed_dim, norm_layer=norm_layer, **dd)
@@ -700,7 +706,7 @@ class SwinTransformerV2CrStage(nn.Module):
             window_size (int): New window size
             feat_size (Tuple[int, int]): New input resolution
         """
-        self.feat_size = (feat_size[0] // 2, feat_size[1] // 2) if self.downscale else feat_size
+        self.feat_size = tuple((s + 1) // 2 for s in feat_size) if self.downscale else feat_size
         for block in self.blocks:
             block.set_input_size(
                 feat_size=self.feat_size,
@@ -734,8 +740,9 @@ class SwinTransformerV2Cr(nn.Module):
 
     Args:
         img_size: Input resolution.
-        window_size: Window size. If None, grid_size // window_div
-        window_ratio: Window size to patch grid ratio.
+        window_size: Window size, an int or (h, w) for all stages or one per stage. Overrides window_ratio.
+        window_ratio: Divisor of the patch grid size (before stage downsampling), an int for all stages or one per
+            stage. Unlike window_size, a sequence of two values is two stages, not (h, w).
         patch_size: Patch size.
         in_chans: Number of input channels.
         depths: Depth of the stage (number of layers).
@@ -757,8 +764,8 @@ class SwinTransformerV2Cr(nn.Module):
             self,
             img_size: Tuple[int, int] = (224, 224),
             patch_size: int = 4,
-            window_size: Optional[int] = None,
-            window_ratio: int = 8,
+            window_size: Optional[Union[int, Tuple[int, int], Sequence[Union[int, Tuple[int, int]]]]] = None,
+            window_ratio: Union[int, Sequence[int]] = 8,
             always_partition: bool = False,
             strict_img_size: bool = True,
             in_chans: int = 3,
@@ -803,9 +810,12 @@ class SwinTransformerV2Cr(nn.Module):
         )
         grid_size = self.patch_embed.grid_size
         if window_size is None:
-            self.window_size = tuple([s // window_ratio for s in grid_size])
-        else:
-            self.window_size = to_2tuple(window_size)
+            window_size = window_sizes_from_ratio(grid_size, window_ratio, len(depths))
+        window_size = resolve_stage_window_sizes(window_size, len(depths))
+        self.window_size = window_size[0]  # first stage window size, kept for backwards compatibility
+        # set_input_size() scales these with the patch grid to keep each stage's window to grid ratio
+        self._ref_window_sizes = window_size
+        self._ref_grid_size = tuple(grid_size)
 
         dpr = calculate_drop_path_rates(drop_path_rate, depths, stagewise=True)
         stages = []
@@ -816,9 +826,9 @@ class SwinTransformerV2Cr(nn.Module):
                 embed_dim=in_dim,
                 depth=depth,
                 downscale=stage_idx != 0,
-                feat_size=(grid_size[0] // in_scale, grid_size[1] // in_scale),
+                feat_size=tuple((g + in_scale - 1) // in_scale for g in grid_size),
                 num_heads=num_heads,
-                window_size=self.window_size,
+                window_size=window_size[stage_idx],
                 always_partition=always_partition,
                 dynamic_mask=not strict_img_size,
                 mlp_ratio=mlp_ratio,
@@ -835,7 +845,8 @@ class SwinTransformerV2Cr(nn.Module):
             if stage_idx != 0:
                 in_dim *= 2
                 in_scale *= 2
-            self.feature_info += [dict(num_chs=in_dim, reduction=4 * in_scale, module=f'stages.{stage_idx}')]
+            self.feature_info += [dict(
+                num_chs=in_dim, reduction=max(to_2tuple(patch_size)) * in_scale, module=f'stages.{stage_idx}')]
         self.stages = nn.Sequential(*stages)
 
         self.head = ClassifierHead(
@@ -871,30 +882,47 @@ class SwinTransformerV2Cr(nn.Module):
     def set_input_size(
             self,
             img_size: Optional[Tuple[int, int]] = None,
-            window_size: Optional[Tuple[int, int]] = None,
-            window_ratio: int = 8,
+            window_size: Optional[Union[int, Tuple[int, int], Sequence[Union[int, Tuple[int, int]]]]] = None,
+            window_ratio: Optional[Union[int, Sequence[int]]] = None,
             always_partition: Optional[bool] = None,
     ) -> None:
         """Updates the image resolution, window size and so the pair-wise relative positions.
 
+        If neither window_size nor window_ratio is set, each stage's window size is scaled with the patch grid
+        so the window to grid ratio of every stage is kept, calling at the current size is a no-op.
+
         Args:
             img_size (Optional[Tuple[int, int]]): New input resolution, if None current resolution is used
-            window_size (Optional[int]): New window size, if None based on new_img_size // window_div
-            window_ratio (int): divisor for calculating window size from patch grid size
+            window_size: New window size, an int or (h, w) for all stages or one per stage. Overrides window_ratio.
+            window_ratio: Divisor of the new patch grid size (before stage downsampling), an int for all stages
+                or one per stage. Unlike window_size, a sequence of two values is two stages, not (h, w).
             always_partition: always partition / shift windows even if feat size is < window
         """
+        # check and expand window args first so an invalid spec cannot leave the model partially updated
+        window_size, window_ratio = resolve_window_args(window_size, window_ratio, len(self.stages))
         if img_size is not None:
             self.patch_embed.set_input_size(img_size=img_size)
-        grid_size = self.patch_embed.grid_size
+            self.img_size = self.patch_embed.img_size
+        grid_size = tuple(self.patch_embed.grid_size)
 
-        if window_size is None and window_ratio is not None:
-            window_size = tuple([s // window_ratio for s in grid_size])
+        window_sizes = calc_stage_window_sizes(
+            grid_size,
+            self._ref_window_sizes,
+            self._ref_grid_size,
+            window_size=window_size,
+            window_ratio=window_ratio,
+        )
+        if window_size is not None or window_ratio is not None:
+            # explicit window sizes become the new reference for later resizes
+            self._ref_window_sizes = window_sizes
+            self._ref_grid_size = grid_size
+        self.window_size = window_sizes[0]
 
         for index, stage in enumerate(self.stages):
             stage_scale = 2 ** max(index - 1, 0)
             stage.set_input_size(
-                feat_size=(grid_size[0] // stage_scale, grid_size[1] // stage_scale),
-                window_size=window_size,
+                feat_size=tuple((g + stage_scale - 1) // stage_scale for g in grid_size),
+                window_size=window_sizes[index],
                 always_partition=always_partition,
             )
 
@@ -984,6 +1012,7 @@ class SwinTransformerV2Cr(nn.Module):
         """
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
         self.stages = self.stages[:max_index + 1]  # truncate blocks
+        self._ref_window_sizes = self._ref_window_sizes[:max_index + 1]
         if prune_head:
             self.reset_classifier(0, '')
         return take_indices

@@ -91,8 +91,11 @@ class PatchEmbed(nn.Module):
                     dtype=self.proj.weight.dtype,
                 )
                 new_proj.weight.copy_(resample_patch_embed(self.proj.weight, new_patch_size, verbose=True))
+                new_proj.weight.requires_grad_(self.proj.weight.requires_grad)
                 if self.proj.bias is not None:
                     new_proj.bias.copy_(self.proj.bias)
+                    new_proj.bias.requires_grad_(self.proj.bias.requires_grad)
+                new_proj.train(self.proj.training)
                 self.proj = new_proj
             self.patch_size = new_patch_size
         img_size = img_size or self.img_size

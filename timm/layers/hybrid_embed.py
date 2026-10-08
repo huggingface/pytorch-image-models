@@ -11,7 +11,7 @@ from torch import nn as nn
 import torch.nn.functional as F
 
 from .format import Format, nchw_to
-from .helpers import to_2tuple
+from .helpers import get_device_dtype, to_2tuple
 from .patch_embed import resample_patch_embed
 
 
@@ -105,16 +105,19 @@ class HybridEmbed(nn.Module):
         if feature_size is None:
             with torch.no_grad():
                 # NOTE Most reliable way of determining output dims is to run forward pass
-                training = self.backbone.training
-                if training:
+                training = [(m, m.training) for m in self.backbone.modules()]
+                try:
                     self.backbone.eval()
-                # FIXME whatif meta device?
-                o = self.backbone(torch.zeros(1, self.in_chans, img_size[0], img_size[1], device=device, dtype=dtype))
+                    # FIXME whatif meta device?
+                    x = torch.zeros(1, self.in_chans, img_size[0], img_size[1], device=device, dtype=dtype)
+                    o = self.backbone(x)
+                finally:
+                    for module, was_training in training:
+                        module.training = was_training
                 if isinstance(o, (list, tuple)):
                     o = o[-1]  # last feature if backbone outputs list/tuple of features
                 feature_size = o.shape[-2:]
                 feature_dim = o.shape[1]
-                self.backbone.train(training)
             feature_ratio = tuple([s // f for s, f in zip(img_size, feature_size)])
         else:
             feature_size = to_2tuple(feature_size)
@@ -136,8 +139,7 @@ class HybridEmbed(nn.Module):
             feature_ratio: Optional[Union[int, Tuple[int, int]]] = None,
             feature_dim: Optional[int] = None,
     ):
-        assert img_size is not None or patch_size is not None
-        img_size = img_size or self.img_size
+        img_size = to_2tuple(img_size) if img_size is not None else self.img_size
         new_patch_size = None
         if patch_size is not None:
             new_patch_size = to_2tuple(patch_size)
@@ -150,15 +152,16 @@ class HybridEmbed(nn.Module):
                     kernel_size=new_patch_size,
                     stride=new_patch_size,
                     bias=self.proj.bias is not None,
-                    device=self.proj.device,
-                    dtype=self.proj.dtype,
+                    **get_device_dtype(self.proj),
                 )
                 new_proj.weight.copy_(resample_patch_embed(self.proj.weight, new_patch_size, verbose=True))
+                new_proj.weight.requires_grad_(self.proj.weight.requires_grad)
                 if self.proj.bias is not None:
                     new_proj.bias.copy_(self.proj.bias)
+                    new_proj.bias.requires_grad_(self.proj.bias.requires_grad)
+                new_proj.train(self.proj.training)
                 self.proj = new_proj
-            patch_size = new_patch_size
-        patch_size = patch_size or self.patch_size
+        patch_size = new_patch_size or self.patch_size
 
         if img_size != self.img_size or patch_size != self.patch_size:
             (
@@ -175,7 +178,7 @@ class HybridEmbed(nn.Module):
                 feature_size=feature_size,
                 feature_ratio=feature_ratio,
                 feature_dim=feature_dim,
-                # FIXME device/dtype?
+                **get_device_dtype(self.backbone),
             )
 
     def feat_ratio(self, as_scalar=True) -> Union[Tuple[int, int], int]:
