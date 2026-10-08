@@ -60,7 +60,7 @@ FEAT_INTER_FILTERS = [
     'mambaout', 'inception_next', 'inception_v4', 'hgnet', 'gcvit', 'focalnet', 'efficientformer_v2', 'edgenext',
     'davit', 'rdnet', 'convnext', 'pit', 'starnet', 'shvit', 'fasternet', 'swiftformer', 'ghostnet', 'naflexvit',
     'csatv2', 'cpubone', 'lcnetv2', 'lowformer', 'qwen3_vit', 'iformer', 'efficientvim', 'deepseek_vit',
-    'efficientvit_mit', 'cspnext',
+    'efficientvit_mit', 'cspnext', 'dpn',
 ]
 
 # transformer / hybrid models don't support full set of spatial / feature APIs and/or have spatial output.
@@ -88,7 +88,7 @@ else:
     NON_STD_EXCLUDE_FILTERS = ['*gigantic*', '*enormous*', '*_3b_*', '*_5b_*', '*_7b_*']
 
 EXCLUDE_JIT_FILTERS = [
-    'hiera_*', '*naflex*', '*_5b_*', '*_7b_*', 'hrnet*', 'dpn*', 'densenet*', 'selecsls*',
+    'hiera_*', '*naflex*', '*_5b_*', '*_7b_*', 'hrnet*', 'densenet*', 'selecsls*',
     # gemma4_vit shares NaFlex's ``Union[Tensor, Dict[str, Tensor]]`` forward signature,
     # which TorchScript cannot narrow (``Unknown type name 'dict'``).
     'gemma4_vit*',

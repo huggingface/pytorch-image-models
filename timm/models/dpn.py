@@ -8,21 +8,25 @@ Hacked together by / Copyright 2020 Ross Wightman
 """
 from collections import OrderedDict
 from functools import partial
-from typing import Tuple, Type, Optional
+from typing import List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DPN_MEAN, IMAGENET_DPN_STD, IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import BatchNormAct2d, ConvNormAct, create_conv2d, create_classifier, get_norm_act_layer, get_device_dtype
+from timm.layers import BatchNormAct2d, ConvNormAct, create_conv2d, create_classifier, get_norm_act_layer, \
+    get_device_dtype
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
+from ._manipulate import checkpoint_seq
 from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['DPN']
 
 
-class CatBnAct(nn.Module):
+class BnAct(nn.Module):
+    """Norm + act wrapper, kept as a module so the pretrained weight key ('.bn') is preserved."""
     def __init__(
             self,
             in_chs: int,
@@ -34,9 +38,7 @@ class CatBnAct(nn.Module):
         super().__init__()
         self.bn = norm_layer(in_chs, eps=0.001, **dd)
 
-    def forward(self, x):
-        if isinstance(x, tuple):
-            x = torch.cat(x, dim=1)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.bn(x)
 
 
@@ -57,11 +59,14 @@ class BnActConv2d(nn.Module):
         self.bn = norm_layer(in_chs, eps=0.001, **dd)
         self.conv = create_conv2d(in_chs, out_chs, kernel_size, stride=stride, groups=groups, **dd)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.conv(self.bn(x))
 
 
 class DualPathBlock(nn.Module):
+    """Dual path block, the residual path (first num_1x1_c channels) and dense path (remaining channels)
+    are carried through the network as a single concatenated tensor.
+    """
     def __init__(
             self,
             in_chs: int,
@@ -77,75 +82,54 @@ class DualPathBlock(nn.Module):
     ):
         dd = {'device': device, 'dtype': dtype}
         super().__init__()
+        assert block_type in ('proj', 'down', 'normal')
         self.num_1x1_c = num_1x1_c
         self.inc = inc
         self.b = b
-        if block_type == 'proj':
-            self.key_stride = 1
-            self.has_proj = True
-        elif block_type == 'down':
-            self.key_stride = 2
-            self.has_proj = True
-        else:
-            assert block_type == 'normal'
-            self.key_stride = 1
-            self.has_proj = False
+        self.key_stride = 2 if block_type == 'down' else 1
+        self.has_proj = block_type != 'normal'
 
-        self.c1x1_w_s1 = None
-        self.c1x1_w_s2 = None
+        # NOTE separate attribute names for the stride 1 / 2 projection are kept for pretrained weight compat
+        self.c1x1_w_s1: Optional[nn.Module] = None
+        self.c1x1_w_s2: Optional[nn.Module] = None
         if self.has_proj:
-            # Using different member names here to allow easier parameter key matching for conversion
+            proj = BnActConv2d(in_chs, num_1x1_c + 2 * inc, kernel_size=1, stride=self.key_stride, **dd)
             if self.key_stride == 2:
-                self.c1x1_w_s2 = BnActConv2d(
-                    in_chs=in_chs, out_chs=num_1x1_c + 2 * inc, kernel_size=1, stride=2, **dd)
+                self.c1x1_w_s2 = proj
             else:
-                self.c1x1_w_s1 = BnActConv2d(
-                    in_chs=in_chs, out_chs=num_1x1_c + 2 * inc, kernel_size=1, stride=1, **dd)
+                self.c1x1_w_s1 = proj
 
-        self.c1x1_a = BnActConv2d(in_chs=in_chs, out_chs=num_1x1_a, kernel_size=1, stride=1, **dd)
-        self.c3x3_b = BnActConv2d(
-            in_chs=num_1x1_a, out_chs=num_3x3_b, kernel_size=3, stride=self.key_stride, groups=groups, **dd)
+        self.c1x1_a = BnActConv2d(in_chs, num_1x1_a, kernel_size=1, stride=1, **dd)
+        self.c3x3_b = BnActConv2d(num_1x1_a, num_3x3_b, kernel_size=3, stride=self.key_stride, groups=groups, **dd)
+        self.c1x1_c1: Optional[nn.Module] = None
+        self.c1x1_c2: Optional[nn.Module] = None
         if b:
-            self.c1x1_c = CatBnAct(in_chs=num_3x3_b, **dd)
+            self.c1x1_c = BnAct(num_3x3_b, **dd)
             self.c1x1_c1 = create_conv2d(num_3x3_b, num_1x1_c, kernel_size=1, **dd)
             self.c1x1_c2 = create_conv2d(num_3x3_b, inc, kernel_size=1, **dd)
         else:
-            self.c1x1_c = BnActConv2d(in_chs=num_3x3_b, out_chs=num_1x1_c + inc, kernel_size=1, stride=1, **dd)
-            self.c1x1_c1 = None
-            self.c1x1_c2 = None
+            self.c1x1_c = BnActConv2d(num_3x3_b, num_1x1_c + inc, kernel_size=1, stride=1, **dd)
 
-    def forward(self, x) -> Tuple[torch.Tensor, torch.Tensor]:
-        if isinstance(x, tuple):
-            x_in = torch.cat(x, dim=1)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self.c1x1_w_s1 is not None:
+            x_s = self.c1x1_w_s1(x)
+        elif self.c1x1_w_s2 is not None:
+            x_s = self.c1x1_w_s2(x)
         else:
-            x_in = x
-        if self.c1x1_w_s1 is None and self.c1x1_w_s2 is None:
-            # self.has_proj == False, torchscript requires condition on module == None
-            x_s1 = x[0]
-            x_s2 = x[1]
+            x_s = x
+        x_s1 = x_s[:, :self.num_1x1_c]
+        x_s2 = x_s[:, self.num_1x1_c:]
+
+        x = self.c1x1_a(x)
+        x = self.c3x3_b(x)
+        x = self.c1x1_c(x)
+        if self.c1x1_c1 is not None and self.c1x1_c2 is not None:
+            out1 = self.c1x1_c1(x)
+            out2 = self.c1x1_c2(x)
         else:
-            # self.has_proj == True
-            if self.c1x1_w_s1 is not None:
-                # self.key_stride = 1
-                x_s = self.c1x1_w_s1(x_in)
-            else:
-                # self.key_stride = 2
-                x_s = self.c1x1_w_s2(x_in)
-            x_s1 = x_s[:, :self.num_1x1_c, :, :]
-            x_s2 = x_s[:, self.num_1x1_c:, :, :]
-        x_in = self.c1x1_a(x_in)
-        x_in = self.c3x3_b(x_in)
-        x_in = self.c1x1_c(x_in)
-        if self.c1x1_c1 is not None:
-            # self.b == True, using None check for torchscript compat
-            out1 = self.c1x1_c1(x_in)
-            out2 = self.c1x1_c2(x_in)
-        else:
-            out1 = x_in[:, :self.num_1x1_c, :, :]
-            out2 = x_in[:, self.num_1x1_c:, :, :]
-        resid = x_s1 + out1
-        dense = torch.cat([x_s2, out2], dim=1)
-        return resid, dense
+            out1 = x[:, :self.num_1x1_c]
+            out2 = x[:, self.num_1x1_c:]
+        return torch.cat([x_s1 + out1, x_s2, out2], dim=1)
 
 
 class DPN(nn.Module):
@@ -175,14 +159,16 @@ class DPN(nn.Module):
         self.in_chans = in_chans
         self.drop_rate = drop_rate
         self.b = b
+        self.grad_checkpointing = False
         assert output_stride == 32  # FIXME look into dilation support
 
         norm_layer = partial(get_norm_act_layer(norm_layer, act_layer=act_layer), eps=.001)
         fc_norm_layer = partial(get_norm_act_layer(norm_layer, act_layer=fc_act_layer), eps=.001, inplace=False)
         bw_factor = 1 if small else 4
-        blocks = OrderedDict()
 
-        # conv1
+        # NOTE the flat 'features' sequential and its conv{stage}_{block} naming are kept for pretrained weight
+        # compat, stage boundaries are tracked by index in feature_ends for forward_intermediates / pruning.
+        blocks = OrderedDict()
         blocks['conv1_1'] = ConvNormAct(
             in_chans,
             num_init_features,
@@ -193,55 +179,24 @@ class DPN(nn.Module):
         )
         blocks['conv1_pool'] = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.feature_info = [dict(num_chs=num_init_features, reduction=2, module='features.conv1_1')]
+        self.feature_ends = [0]
 
-        # conv2
-        bw = 64 * bw_factor
-        inc = inc_sec[0]
-        r = (k_r * bw) // (64 * bw_factor)
-        blocks['conv2_1'] = DualPathBlock(num_init_features, r, r, bw, inc, groups, 'proj', b, **dd)
-        in_chs = bw + 3 * inc
-        for i in range(2, k_sec[0] + 1):
-            blocks['conv2_' + str(i)] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'normal', b, **dd)
-            in_chs += inc
-        self.feature_info += [dict(num_chs=in_chs, reduction=4, module=f'features.conv2_{k_sec[0]}')]
+        in_chs = num_init_features
+        for i, (bw_base, depth, inc) in enumerate(zip((64, 128, 256, 512), k_sec, inc_sec)):
+            bw = bw_base * bw_factor
+            r = k_r * bw_base // 64
+            name = f'conv{i + 2}'
+            blocks[f'{name}_1'] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'proj' if i == 0 else 'down', b, **dd)
+            in_chs = bw + 3 * inc
+            for j in range(2, depth + 1):
+                blocks[f'{name}_{j}'] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'normal', b, **dd)
+                in_chs += inc
+            self.feature_info.append(dict(num_chs=in_chs, reduction=4 * 2 ** i, module=f'features.{name}_{depth}'))
+            self.feature_ends.append(len(blocks) - 1)
 
-        # conv3
-        bw = 128 * bw_factor
-        inc = inc_sec[1]
-        r = (k_r * bw) // (64 * bw_factor)
-        blocks['conv3_1'] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'down', b, **dd)
-        in_chs = bw + 3 * inc
-        for i in range(2, k_sec[1] + 1):
-            blocks['conv3_' + str(i)] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'normal', b, **dd)
-            in_chs += inc
-        self.feature_info += [dict(num_chs=in_chs, reduction=8, module=f'features.conv3_{k_sec[1]}')]
-
-        # conv4
-        bw = 256 * bw_factor
-        inc = inc_sec[2]
-        r = (k_r * bw) // (64 * bw_factor)
-        blocks['conv4_1'] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'down', b, **dd)
-        in_chs = bw + 3 * inc
-        for i in range(2, k_sec[2] + 1):
-            blocks['conv4_' + str(i)] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'normal', b, **dd)
-            in_chs += inc
-        self.feature_info += [dict(num_chs=in_chs, reduction=16, module=f'features.conv4_{k_sec[2]}')]
-
-        # conv5
-        bw = 512 * bw_factor
-        inc = inc_sec[3]
-        r = (k_r * bw) // (64 * bw_factor)
-        blocks['conv5_1'] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'down', b, **dd)
-        in_chs = bw + 3 * inc
-        for i in range(2, k_sec[3] + 1):
-            blocks['conv5_' + str(i)] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'normal', b, **dd)
-            in_chs += inc
-        self.feature_info += [dict(num_chs=in_chs, reduction=32, module=f'features.conv5_{k_sec[3]}')]
-
-        blocks['conv5_bn_ac'] = CatBnAct(in_chs, norm_layer=fc_norm_layer, **dd)
-
-        self.num_features = self.head_hidden_size = in_chs
+        blocks['conv5_bn_ac'] = BnAct(in_chs, norm_layer=fc_norm_layer, **dd)
         self.features = nn.Sequential(blocks)
+        self.num_features = self.head_hidden_size = in_chs
 
         # Using 1x1 conv for the FC layer to allow the extra pooling scheme
         self.global_pool, self.classifier = create_classifier(
@@ -254,7 +209,7 @@ class DPN(nn.Module):
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
 
     @torch.jit.ignore
-    def group_matcher(self, coarse=False):
+    def group_matcher(self, coarse: bool = False):
         matcher = dict(
             stem=r'^features\.conv1',
             blocks=[
@@ -265,16 +220,18 @@ class DPN(nn.Module):
         return matcher
 
     @torch.jit.ignore
-    def set_grad_checkpointing(self, enable=True):
-        assert not enable, 'gradient checkpointing not supported'
+    def set_grad_checkpointing(self, enable: bool = True):
+        self.grad_checkpointing = enable
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
         return self.classifier
 
-    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
+        if global_pool is None:
+            global_pool = self.global_pool.pool_type
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, use_conv=True, **dd)
         self.global_pool.train(self.training)
@@ -282,10 +239,78 @@ class DPN(nn.Module):
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
         self.flatten.train(self.training)
 
-    def forward_features(self, x):
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            indices: Take last n features if int, all if None, select matching indices if sequence.
+                Index 0 is the stem output, indices 1-4 the stage outputs.
+            norm: Apply the final norm + act layer to the last intermediate
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        last_idx = len(self.feature_ends) - 1
+        norm_idx = len(self.features) - 1  # final norm + act is the last module in features
+
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            layers = self.features
+        else:
+            layers = self.features[:self.feature_ends[max_index] + 1]
+        feat_idx = 0
+        for i, layer in enumerate(layers):
+            x = layer(x)
+            if i == self.feature_ends[feat_idx]:
+                if feat_idx in take_indices:
+                    if norm and feat_idx == last_idx:
+                        intermediates.append(self.features[norm_idx](x))
+                    else:
+                        intermediates.append(x)
+                feat_idx = min(feat_idx + 1, last_idx)
+
+        if intermediates_only:
+            return intermediates
+
+        if max_index == last_idx and len(layers) <= norm_idx:
+            x = self.features[norm_idx](x)  # stopped early at last stage, apply the final norm + act
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        keep = list(self.features.named_children())[:self.feature_ends[max_index] + 1]
+        if max_index == len(self.feature_ends) - 1 and not prune_norm:
+            keep.append(('conv5_bn_ac', self.features[-1]))
+        self.features = nn.Sequential(OrderedDict(keep))
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
+
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            return checkpoint_seq(self.features, x)
         return self.features(x)
 
-    def forward_head(self, x, pre_logits: bool = False):
+    def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
         x = self.global_pool(x)
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
@@ -294,7 +319,7 @@ class DPN(nn.Module):
         x = self.classifier(x)
         return self.flatten(x)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x
@@ -305,7 +330,7 @@ def _create_dpn(variant, pretrained=False, **kwargs):
         DPN,
         variant,
         pretrained,
-        feature_cfg=dict(feature_concat=True, flatten_sequential=True),
+        feature_cfg=dict(flatten_sequential=True),
         **kwargs,
     )
 
