@@ -5,7 +5,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 import logging
 from collections import OrderedDict
 from copy import deepcopy
-from typing import Optional
+from typing import List, Optional
 
 import torch
 import torch.nn as nn
@@ -132,6 +132,49 @@ class ModelEmaV2(nn.Module):
         return self.module(*args, **kwargs)
 
 
+def _lerp_stochastic_round_bf16_(
+        ema_values: List[torch.Tensor],
+        model_values: List[torch.Tensor],
+        weight: float,
+        chunk_numel: int = 2 ** 22,
+        generator: Optional[torch.Generator] = None,
+) -> None:
+    """In-place EMA update of bfloat16 tensors with stochastic rounding.
+
+    The update is computed in float32, then random bits are added below the bfloat16 mantissa before truncating,
+    so the result rounds up with probability equal to the discarded fraction. Updates far below bfloat16
+    resolution (the usual case with decay ~0.9998) then accumulate in expectation instead of rounding away.
+
+    Tensors are flattened and processed in chunks of at most chunk_numel elements to bound the transient
+    float32 memory (~10 bytes / element) and keep the number of kernel launches low with many small tensors.
+    """
+    def _update_chunk(chunk_ema: List[torch.Tensor], chunk_model: List[torch.Tensor]):
+        x = torch.cat([v.reshape(-1) for v in chunk_ema]).float()
+        x.mul_(1. - weight).add_(torch.cat([v.reshape(-1) for v in chunk_model]), alpha=weight)
+        bits = x.view(torch.int32)
+        bits.add_(torch.randint(
+            0, 1 << 16, bits.shape, dtype=torch.int32, device=bits.device, generator=generator,
+        ))
+        bits.bitwise_and_(-(1 << 16))  # truncate to bfloat16 precision (exactly representable in bfloat16)
+        x_split = [xi.view(v.shape) for xi, v in zip(x.split([v.numel() for v in chunk_ema]), chunk_ema)]
+        if hasattr(torch, '_foreach_copy_'):
+            torch._foreach_copy_(chunk_ema, x_split)
+        else:
+            for ema_v, xi in zip(chunk_ema, x_split):
+                ema_v.copy_(xi)
+
+    chunk_ema, chunk_model, numel = [], [], 0
+    for ema_v, model_v in zip(ema_values, model_values):
+        if numel and numel + ema_v.numel() > chunk_numel:
+            _update_chunk(chunk_ema, chunk_model)
+            chunk_ema, chunk_model, numel = [], [], 0
+        chunk_ema.append(ema_v)
+        chunk_model.append(model_v)
+        numel += ema_v.numel()
+    if chunk_ema:
+        _update_chunk(chunk_ema, chunk_model)
+
+
 class ModelEmaV3(nn.Module):
     """ Model Exponential Moving Average V3
 
@@ -152,6 +195,15 @@ class ModelEmaV3(nn.Module):
     disable validation of the EMA weights. Validation will have to be done manually in a separate
     process, or after the training stops converging.
 
+    Low precision (bfloat16 / float16) weights cannot hold a plain EMA update, (1 - decay) * (model - ema)
+    is far below their resolution at typical decay values and rounds to zero. By default bfloat16 EMA
+    tensors are updated with stochastic rounding (stochastic_rounding=True) so the updates accumulate in
+    expectation. Alternatively set dtype=torch.float32 to keep the EMA in float32 (2x the EMA memory) for a
+    low precision model, this is the only option for float16.
+
+    Stochastic rounding uses a private RNG seeded with stochastic_rounding_seed, the global RNG is untouched
+    and all ranks in distributed training round identically (keeping EMA weights in sync) given the same seed.
+
     This class is sensitive where it is initialized in the sequence of model init,
     GPU assignment and distributed training wrappers.
     """
@@ -165,6 +217,9 @@ class ModelEmaV3(nn.Module):
             warmup_gamma: float = 1.0,
             warmup_power: float = 2/3,
             device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+            stochastic_rounding: bool = True,
+            stochastic_rounding_seed: int = 0,
             foreach: bool = True,
             exclude_buffers: bool = False,
     ):
@@ -180,10 +235,18 @@ class ModelEmaV3(nn.Module):
         self.warmup_power = warmup_power
         self.foreach = foreach
         self.device = device  # perform ema on different device from model if set
+        self.dtype = dtype  # keep ema in a different (e.g. higher precision) dtype from model if set
+        self.stochastic_rounding = stochastic_rounding  # stochastic rounding for bfloat16 ema tensors
+        self.stochastic_rounding_seed = stochastic_rounding_seed
         self.exclude_buffers = exclude_buffers
         if self.device is not None and device != next(model.parameters()).device:
             self.foreach = False  # cannot use foreach methods with different devices
             self.module.to(device=device)
+        if self.dtype is not None:
+            self.module.to(dtype=dtype)
+        # private RNG for stochastic rounding, leaves global RNG untouched and keeps ranks in sync
+        self._sr_generator = torch.Generator(device=next(self.module.parameters()).device)
+        self._sr_generator.manual_seed(stochastic_rounding_seed)
 
     def get_decay(self, step: Optional[int] = None) -> float:
         """
@@ -212,6 +275,38 @@ class ModelEmaV3(nn.Module):
         else:
             self.apply_update_(model, decay)
 
+    def _lerp_(self, ema_v: torch.Tensor, model_v: torch.Tensor, weight: float) -> None:
+        # single tensor update, tensors on same device, model_v cast to ema dtype as needed
+        if self.stochastic_rounding and ema_v.dtype == torch.bfloat16:
+            _lerp_stochastic_round_bf16_([ema_v], [model_v], weight, generator=self._sr_generator)
+        else:
+            ema_v.lerp_(model_v.to(dtype=ema_v.dtype), weight=weight)
+
+    def _foreach_lerp_(self, ema_values: List[torch.Tensor], model_values: List[torch.Tensor], weight: float) -> None:
+        # multi tensor update, tensors on same device, handles mixed ema / model dtypes
+        if self.stochastic_rounding:
+            sr_ema_values, sr_model_values = [], []
+            lerp_ema_values, lerp_model_values = [], []
+            for ema_v, model_v in zip(ema_values, model_values):
+                if ema_v.dtype == torch.bfloat16:
+                    sr_ema_values.append(ema_v)
+                    sr_model_values.append(model_v)
+                else:
+                    lerp_ema_values.append(ema_v)
+                    lerp_model_values.append(model_v)
+            if sr_ema_values:
+                _lerp_stochastic_round_bf16_(sr_ema_values, sr_model_values, weight, generator=self._sr_generator)
+            ema_values, model_values = lerp_ema_values, lerp_model_values
+        if not ema_values:
+            return
+        same_dtype = all(ema_v.dtype == model_v.dtype for ema_v, model_v in zip(ema_values, model_values))
+        if same_dtype and hasattr(torch, '_foreach_lerp_'):
+            torch._foreach_lerp_(ema_values, model_values, weight=weight)
+        else:
+            # lerp_ requires matching dtypes, add_ promotes in-kernel so no cast copies of the model are needed
+            torch._foreach_mul_(ema_values, scalar=1. - weight)
+            torch._foreach_add_(ema_values, model_values, alpha=weight)
+
     def apply_update_(self, model, decay: float):
         # interpolate parameters and buffers
         if self.foreach:
@@ -224,31 +319,23 @@ class ModelEmaV3(nn.Module):
                 else:
                     ema_v.copy_(model_v)
 
-            if hasattr(torch, '_foreach_lerp_'):
-                torch._foreach_lerp_(ema_lerp_values, model_lerp_values, weight=1. - decay)
-            else:
-                torch._foreach_mul_(ema_lerp_values, scalar=decay)
-                torch._foreach_add_(ema_lerp_values, model_lerp_values, alpha=1. - decay)
+            self._foreach_lerp_(ema_lerp_values, model_lerp_values, weight=1. - decay)
         else:
             for ema_v, model_v in zip(self.module.state_dict().values(), model.state_dict().values()):
                 if ema_v.is_floating_point():
-                    ema_v.lerp_(model_v.to(device=self.device), weight=1. - decay)
+                    self._lerp_(ema_v, model_v.to(device=self.device), weight=1. - decay)
                 else:
                     ema_v.copy_(model_v.to(device=self.device))
 
     def apply_update_no_buffers_(self, model, decay: float):
         # interpolate parameters, copy buffers
-        ema_params = tuple(self.module.parameters())
-        model_params = tuple(model.parameters())
+        ema_params = list(self.module.parameters())
+        model_params = list(model.parameters())
         if self.foreach:
-            if hasattr(torch, '_foreach_lerp_'):
-                torch._foreach_lerp_(ema_params, model_params, weight=1. - decay)
-            else:
-                torch._foreach_mul_(ema_params, scalar=decay)
-                torch._foreach_add_(ema_params, model_params, alpha=1 - decay)
+            self._foreach_lerp_(ema_params, model_params, weight=1. - decay)
         else:
             for ema_p, model_p in zip(ema_params, model_params):
-                ema_p.lerp_(model_p.to(device=self.device), weight=1. - decay)
+                self._lerp_(ema_p, model_p.to(device=self.device), weight=1. - decay)
 
         for ema_b, model_b in zip(self.module.buffers(), model.buffers()):
             ema_b.copy_(model_b.to(device=self.device))
