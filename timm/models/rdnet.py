@@ -16,7 +16,7 @@ from timm.layers import DropPath, calculate_drop_path_rates, NormMlpClassifierHe
     make_divisible, get_act_layer, get_norm_layer, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
-from ._manipulate import named_apply
+from ._manipulate import named_apply, checkpoint, checkpoint_seq
 from ._registry import register_model, generate_default_cfgs
 
 __all__ = ["RDNet"]
@@ -233,6 +233,7 @@ class RDNet(nn.Module):
         self.num_classes = num_classes
         self.in_chans = in_chans
         self.drop_rate = drop_rate
+        self.grad_checkpointing = False
 
         # stem
         assert stem_type in ('patch', 'overlap', 'overlap_tiered')
@@ -343,8 +344,7 @@ class RDNet(nn.Module):
 
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=True):
-        for s in self.dense_stages:
-            s.grad_checkpointing = enable
+        self.grad_checkpointing = enable
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
@@ -390,7 +390,10 @@ class RDNet(nn.Module):
         else:
             dense_stages = self.dense_stages[:max_index + 1]
         for feat_idx, stage in enumerate(dense_stages):
-            x = stage(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(stage, x)
+            else:
+                x = stage(x)
             if feat_idx in take_indices:
                 if norm and feat_idx == last_idx:
                     x_inter = self.norm_pre(x)  # applying final norm to last intermediate
@@ -426,7 +429,10 @@ class RDNet(nn.Module):
 
     def forward_features(self, x):
         x = self.stem(x)
-        x = self.dense_stages(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.dense_stages, x)
+        else:
+            x = self.dense_stages(x)
         x = self.norm_pre(x)
         return x
 
