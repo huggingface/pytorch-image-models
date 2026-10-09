@@ -423,6 +423,9 @@ def create_naflex_loader(
 
     else:
         # For validation, use fixed sequence length (unchanged)
+        if patch_size is None:
+            # same default as the training dataset wrapper
+            patch_size = 16
         dataset.transform = create_transform(
             is_training=False,
             interpolation=interpolation,

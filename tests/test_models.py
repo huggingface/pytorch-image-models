@@ -469,6 +469,31 @@ if 'GITHUB_ACTIONS' not in os.environ:
         create_model(model_name, pretrained=True, features_only=True)
 
 
+@pytest.mark.cfg
+@pytest.mark.parametrize('model_name', list_models())
+def test_model_param_groups(model_name, cfg_device):
+    """Check group_matcher() and no_weight_decay(), used by the optimizer factory, match the model's params."""
+    from timm.models._manipulate import group_parameters
+
+    with torch.device(cfg_device) if _HAS_DEVICE_CONTEXT else nullcontext():
+        model = create_model(model_name, pretrained=False, device=cfg_device)
+    param_names = [n for n, _ in model.named_parameters()]
+    if hasattr(model, 'group_matcher'):
+        groups = group_parameters(model, model.group_matcher(coarse=False), reverse=True)
+        assert len(set(groups.values())) > 1, 'group_matcher() puts all params in a single group'
+    if hasattr(model, 'no_weight_decay'):
+        for pattern in model.no_weight_decay():
+            if any(fnmatch.fnmatch(n, pattern) for n in param_names):
+                continue
+            # an optional param (e.g. a class or register token) can be listed when this config doesn't use it
+            obj = model
+            for attr in pattern.split('.'):
+                obj = getattr(obj, attr, None)
+                if obj is None:
+                    break
+            assert obj is None, f'no_weight_decay() entry {pattern!r} matches no parameter'
+
+
 @pytest.mark.parametrize(
     'model_name',
     ['efficientnet_b1_pruned', 'efficientnet_b2_pruned', 'efficientnet_b3_pruned'],

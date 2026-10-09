@@ -113,6 +113,11 @@ def _zigzag_permutation(rows: int, cols: int) -> List[int]:
     return zigzag
 
 
+def _dct_compute_dtype(dtype: Optional[torch.dtype]) -> Optional[torch.dtype]:
+    # fft / linalg.inv don't support low precision, build the kernels in float32 and cast them afterwards
+    return dtype if dtype in (None, torch.float32, torch.float64) else torch.float32
+
+
 def _dct_kernel_type_2(
         kernel_size: int,
         orthonormal: bool,
@@ -120,6 +125,7 @@ def _dct_kernel_type_2(
         dtype=None,
 ) -> torch.Tensor:
     """Generate Type-II DCT kernel matrix."""
+    out_dtype, dtype = dtype, _dct_compute_dtype(dtype)
     dd = dict(device=device, dtype=dtype)
     x = torch.eye(kernel_size, **dd)
     v = x.clone().contiguous().view(-1, kernel_size)
@@ -136,7 +142,7 @@ def _dct_kernel_type_2(
         v[:, 0] = v[:, 0] * torch.sqrt(torch.tensor(1 / (kernel_size * 4), **dd))
         v[:, 1:] = v[:, 1:] * torch.sqrt(torch.tensor(1 / (kernel_size * 2), **dd))
     v = v.contiguous().view(*x.shape)
-    return v
+    return v.to(out_dtype) if out_dtype is not None else v
 
 
 def _dct_kernel_type_3(
@@ -146,7 +152,8 @@ def _dct_kernel_type_3(
         dtype=None,
 ) -> torch.Tensor:
     """Generate Type-III DCT kernel matrix (inverse of Type-II)."""
-    return torch.linalg.inv(_dct_kernel_type_2(kernel_size, orthonormal, device, dtype))
+    v = torch.linalg.inv(_dct_kernel_type_2(kernel_size, orthonormal, device, _dct_compute_dtype(dtype)))
+    return v.to(dtype) if dtype is not None else v
 
 
 class Dct1d(nn.Module):

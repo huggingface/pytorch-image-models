@@ -772,8 +772,11 @@ class Levit(nn.Module):
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
         matcher = dict(
-            stem=r'^cls_token|pos_embed|patch_embed',  # stem and embed
-            blocks=[(r'^blocks\.(\d+)', None), (r'^norm', (99999,))]
+            stem=r'^stem',  # stem and embed
+            blocks=r'^stages\.(\d+)' if coarse else [
+                (r'^stages\.(\d+)\.downsample', (0,)),
+                (r'^stages\.(\d+)\.blocks\.(\d+)', None),
+            ]
         )
         return matcher
 

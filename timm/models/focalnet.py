@@ -451,7 +451,7 @@ class FocalNet(nn.Module):
 
     @torch.jit.ignore
     def no_weight_decay(self):
-        return {''}
+        return set()
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):

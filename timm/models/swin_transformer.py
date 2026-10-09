@@ -809,6 +809,7 @@ class SwinTransformer(nn.Module):
             window_size: _int_or_tuple_2_t = 7,
             always_partition: bool = False,
             strict_img_size: bool = True,
+            dynamic_img_size: bool = False,
             mlp_ratio: float = 4.,
             qkv_bias: bool = True,
             drop_rate: float = 0.,
@@ -833,6 +834,10 @@ class SwinTransformer(nn.Module):
             num_heads: Number of attention heads in different layers.
             head_dim: Dimension of self-attention heads.
             window_size: Window size, an int or (h, w) for all stages or one per stage.
+            always_partition: Always partition into windows and shift (even if window size < feat size).
+            strict_img_size: Require the input to match img_size.
+            dynamic_img_size: Accept any input size, building the attention masks for it on each forward. Same as
+                strict_img_size=False.
             mlp_ratio: Ratio of mlp hidden dim to embedding dim.
             qkv_bias: If True, add a learnable bias to query, key, value.
             drop_rate: Dropout rate.
@@ -843,6 +848,9 @@ class SwinTransformer(nn.Module):
         """
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
+        if dynamic_img_size:
+            strict_img_size = False
+        self.dynamic_img_size = not strict_img_size
         assert global_pool in ('', 'avg')
         self.num_classes = num_classes
         self.in_chans = in_chans

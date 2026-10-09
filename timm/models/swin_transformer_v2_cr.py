@@ -744,6 +744,10 @@ class SwinTransformerV2Cr(nn.Module):
         window_size: Window size, an int or (h, w) for all stages or one per stage. Overrides window_ratio.
         window_ratio: Divisor of the patch grid size (before stage downsampling), an int for all stages or one per
             stage. Unlike window_size, a sequence of two values is two stages, not (h, w).
+        always_partition: Always partition into windows and shift (even if window size < feat size).
+        strict_img_size: Require the input to match img_size.
+        dynamic_img_size: Accept any input size, building the attention masks for it on each forward. Same as
+            strict_img_size=False.
         patch_size: Patch size.
         in_chans: Number of input channels.
         depths: Depth of the stage (number of layers).
@@ -769,6 +773,7 @@ class SwinTransformerV2Cr(nn.Module):
             window_ratio: Union[int, Sequence[int]] = 8,
             always_partition: bool = False,
             strict_img_size: bool = True,
+            dynamic_img_size: bool = False,
             in_chans: int = 3,
             num_classes: int = 1000,
             embed_dim: int = 96,
@@ -792,6 +797,9 @@ class SwinTransformerV2Cr(nn.Module):
     ) -> None:
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
+        if dynamic_img_size:
+            strict_img_size = False
+        self.dynamic_img_size = not strict_img_size
         img_size = to_2tuple(img_size)
         self.num_classes: int = num_classes
         self.in_chans: int = in_chans

@@ -441,7 +441,7 @@ class Nest(nn.Module):
 
     @torch.jit.ignore
     def no_weight_decay(self):
-        return {f'level.{i}.pos_embed' for i in range(len(self.levels))}
+        return {f'levels.{i}.pos_embed' for i in range(len(self.levels))}
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):

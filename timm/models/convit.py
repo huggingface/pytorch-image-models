@@ -345,7 +345,7 @@ class ConVit(nn.Module):
         self.norm = norm_layer(embed_dim, **dd)
 
         # Classifier head
-        self.feature_info = [dict(num_chs=embed_dim, reduction=0, module='head')]
+        self.feature_info = [dict(num_chs=embed_dim, reduction=patch_size, module='head')]
         self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 

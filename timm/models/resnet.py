@@ -1867,11 +1867,11 @@ def ecaresnext26t_32x4d(pretrained: bool = False, **kwargs) -> ResNet:
 @register_model
 def ecaresnext50t_32x4d(pretrained: bool = False, **kwargs) -> ResNet:
     """Constructs an ECA-ResNeXt-50-T model.
-    This is technically a 28 layer ResNet, like a 'D' bag-of-tricks model but with tiered 24, 32, 64 channels
-    in the deep stem. This model replaces SE module with the ECA module
+    Like a 'D' bag-of-tricks model but with tiered 24, 32, 64 channels in the deep stem.
+    This model replaces SE module with the ECA module
     """
     model_args = dict(
-        block=Bottleneck, layers=(2, 2, 2, 2), cardinality=32, base_width=4, stem_width=32,
+        block=Bottleneck, layers=(3, 4, 6, 3), cardinality=32, base_width=4, stem_width=32,
         stem_type='deep_tiered', avg_down=True, block_args=dict(attn_layer='eca'))
     return _create_resnet('ecaresnext50t_32x4d', pretrained, **dict(model_args, **kwargs))
 

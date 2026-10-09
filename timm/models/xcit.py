@@ -491,7 +491,8 @@ class Xcit(nn.Module):
 
     @torch.jit.ignore
     def no_weight_decay(self):
-        return {'pos_embed', 'cls_token'}
+        # the positional encoding is a module (Fourier features + projection), exclude all of its params
+        return {'pos_embed.*', 'cls_token'}
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
