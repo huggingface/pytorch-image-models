@@ -101,6 +101,7 @@ class NaFlexPrefetchLoader:
             Tuple of (input_dict, targets) with normalized patches.
         """
         first = True
+        input_dict = target = None  # previous batch, yielded once the next one is prefetched
 
         device_mod = None
         if self.is_cuda:
