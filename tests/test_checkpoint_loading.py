@@ -515,7 +515,9 @@ def test_train_pretrained_cfg_overlay(monkeypatch, extra_args, expected):
     ])
     with pytest.raises(_Created) as e:
         train.main()
-    assert e.value.args[0]['pretrained_cfg_overlay'] == expected
+    # the overlay is resolved into the pretrained cfg passed to create_model (resolve_model_input_args)
+    pretrained_cfg = e.value.args[0]['pretrained_cfg']
+    assert {k: pretrained_cfg[k] for k in expected} == expected
 
 
 def test_teacher_pretrained_cfg_overlay_custom_load(tmp_path, monkeypatch):

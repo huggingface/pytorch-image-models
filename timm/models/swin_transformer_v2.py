@@ -765,7 +765,6 @@ class SwinTransformerV2(nn.Module):
             pretrained_window_sizes: Tuple[int, ...] = (0, 0, 0, 0),
             device=None,
             dtype=None,
-            **kwargs,
     ):
         """
         Args:

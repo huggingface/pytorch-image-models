@@ -93,7 +93,6 @@ class StarNet(nn.Module):
             output_stride: int = 32,
             device=None,
             dtype=None,
-            **kwargs,
     ):
         dd = {'device': device, 'dtype': dtype}
         super().__init__()

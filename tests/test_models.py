@@ -16,6 +16,7 @@ import torch
 import platform
 import os
 import fnmatch
+import inspect
 from contextlib import nullcontext
 
 _IS_MAC = platform.system() == 'Darwin'
@@ -492,6 +493,43 @@ def test_model_param_groups(model_name, cfg_device):
                 if obj is None:
                     break
             assert obj is None, f'no_weight_decay() entry {pattern!r} matches no parameter'
+
+
+@pytest.mark.cfg
+@pytest.mark.parametrize('model_name', list_models())
+def test_model_unknown_kwarg_raises(model_name, cfg_device):
+    """Check unknown constructor args raise instead of being silently ignored."""
+    with torch.device(cfg_device) if _HAS_DEVICE_CONTEXT else nullcontext():
+        with pytest.raises(TypeError):
+            create_model(model_name, pretrained=False, device=cfg_device, not_a_model_arg=1)
+
+
+@pytest.mark.cfg
+@pytest.mark.parametrize('model_name', list_models())
+def test_model_reset_classifier_default_pool(model_name, cfg_device):
+    """Check reset_classifier() keeps the current pooling by default (global_pool=None)."""
+    with torch.device(cfg_device) if _HAS_DEVICE_CONTEXT else nullcontext():
+        model = create_model(model_name, pretrained=False, device=cfg_device)
+    if not hasattr(model, 'reset_classifier'):
+        return
+    param = inspect.signature(model.reset_classifier).parameters.get('global_pool')
+    if param is not None:
+        assert param.default is None, f'reset_classifier global_pool default is {param.default!r}, not None'
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name', ['resnet18', 'efficientnet_b0', 'densenet121', 'convnext_atto'])
+def test_reset_classifier_keeps_pool(model_name):
+    model = create_model(model_name, pretrained=False, global_pool='max').eval()
+    x = torch.randn(2, 3, 64, 64)
+    with torch.no_grad():
+        expected = model.forward_head(model.forward_features(x), pre_logits=True)
+        model.reset_classifier(5)
+        torch.testing.assert_close(model.forward_head(model.forward_features(x), pre_logits=True), expected)
+        assert model(x).shape == (2, 5)
+        model.reset_classifier(5, 'avg')
+        pooled_avg = model.forward_head(model.forward_features(x), pre_logits=True)
+        assert not torch.allclose(pooled_avg, expected)
 
 
 @pytest.mark.parametrize(

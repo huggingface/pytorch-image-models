@@ -476,7 +476,6 @@ class HighPerfGpuNet(nn.Module):
             use_lab: bool = False,
             device=None,
             dtype=None,
-            **kwargs,
     ):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}

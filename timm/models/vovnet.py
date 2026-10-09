@@ -203,6 +203,10 @@ class VovNet(nn.Module):
         self.drop_rate = drop_rate
         assert output_stride == 32  # FIXME support dilation
 
+        unknown_kwargs = set(kwargs) - set(cfg) - {'stem_stride'}
+        if unknown_kwargs:
+            raise TypeError(
+                f'{type(self).__name__}.__init__() got unexpected keyword argument(s): {sorted(unknown_kwargs)}')
         cfg = dict(cfg, **kwargs)
         stem_stride = cfg.get("stem_stride", 4)
         stem_chs = cfg["stem_chs"]

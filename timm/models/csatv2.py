@@ -574,7 +574,6 @@ class CSATv2(nn.Module):
             global_pool: str = 'avg',
             device=None,
             dtype=None,
-            **kwargs,
     ) -> None:
         dd = dict(device=device, dtype=dtype)
         super().__init__()
@@ -869,7 +868,6 @@ def _create_csatv2(variant: str, pretrained: bool = False, **kwargs) -> CSATv2:
         pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
         feature_cfg=dict(out_indices=out_indices, flatten_sequential=True),
-        default_cfg=default_cfgs[variant],
         **kwargs,
     )
 

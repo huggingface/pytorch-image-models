@@ -38,7 +38,6 @@ class ConvMixer(nn.Module):
             act_layer: Type[nn.Module] = nn.GELU,
             device=None,
             dtype=None,
-            **kwargs,
     ):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}

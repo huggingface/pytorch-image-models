@@ -821,7 +821,6 @@ class SwinTransformer(nn.Module):
             weight_init: str = '',
             device=None,
             dtype=None,
-            **kwargs,
     ):
         """
         Args:

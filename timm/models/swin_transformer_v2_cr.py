@@ -793,7 +793,6 @@ class SwinTransformerV2Cr(nn.Module):
             weight_init: str = 'reset',
             device=None,
             dtype=None,
-            **kwargs: Any
     ) -> None:
         super().__init__()
         dd = {'device': device, 'dtype': dtype}

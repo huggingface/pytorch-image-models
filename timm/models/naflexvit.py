@@ -1185,6 +1185,10 @@ class NaFlexVit(nn.Module):
         # Initialize config
         cfg = cfg or NaFlexVitCfg()
         if kwargs:
+            unknown_kwargs = set(kwargs) - set(cfg.__dataclass_fields__.keys())
+            if unknown_kwargs:
+                raise TypeError(
+                    f'{type(self).__name__}.__init__() got unexpected keyword argument(s): {sorted(unknown_kwargs)}')
             cfg = _overlay_kwargs(cfg, **kwargs)
 
         # Validate configuration
@@ -2204,6 +2208,7 @@ def _create_naflexvit_from_eva(
     """
     # Handle EVA's unique parameters & block args
     kwargs.pop('no_embed_class', None)  # EVA specific, not used in NaFlexVit (always no-embed)
+    kwargs.pop('dynamic_img_size', None)  # NaFlexVit always supports dynamic image sizes
 
     # Map EVA's rope parameters
     use_rot_pos_emb = kwargs.pop('use_rot_pos_emb', False)
@@ -2243,7 +2248,7 @@ def _create_naflexvit_from_eva(
         'rope_grid_offset': rope_grid_offset,
         'rope_grid_indexing': rope_grid_indexing,
         'rope_rotate_half': kwargs.pop('rope_rotate_half', False),
-        'rope_ref_feat_shape': kwargs.get('ref_feat_shape', None),
+        'rope_ref_feat_shape': kwargs.pop('ref_feat_shape', None),
         'attn_type': kwargs.pop('attn_type', 'eva'),
         'swiglu_mlp': kwargs.pop('swiglu_mlp', False),
         'qkv_fused': kwargs.pop('qkv_fused', True),
