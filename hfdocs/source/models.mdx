@@ -1,230 +1,289 @@
-# Model Summaries
-
-The model architectures included come from a wide variety of sources. Sources, including papers, original impl ("reference code") that I rewrote / adapted, and PyTorch impl that I leveraged directly ("code") are listed below.
-
-Most included models have pretrained weights. The weights are either:
-
-1. from their original sources
-2. ported by myself from their original impl in a different framework (e.g. Tensorflow models)
-3. trained from scratch using the included training script
-
-The validation results for the pretrained weights are [here](results)
-
-A more exciting view (with pretty pictures) of the models within `timm` can be found at [paperswithcode](https://paperswithcode.com/lib/timm).
-
-## Big Transfer ResNetV2 (BiT)
-
-* Implementation: [resnetv2.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/resnetv2.py)
-* Paper: `Big Transfer (BiT): General Visual Representation Learning` - https://arxiv.org/abs/1912.11370
-* Reference code: https://github.com/google-research/big_transfer
-
-## Cross-Stage Partial Networks
-
-* Implementation: [cspnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/cspnet.py)
-* Paper: `CSPNet: A New Backbone that can Enhance Learning Capability of CNN` - https://arxiv.org/abs/1911.11929
-* Reference impl: https://github.com/WongKinYiu/CrossStagePartialNetworks
-
-## DenseNet
-
-* Implementation: [densenet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/densenet.py)
-* Paper: `Densely Connected Convolutional Networks` - https://arxiv.org/abs/1608.06993
-* Code: https://github.com/pytorch/vision/tree/master/torchvision/models
-
-## DLA
-
-* Implementation: [dla.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/dla.py)
-* Paper: `Deep Layer Aggregation` - https://arxiv.org/abs/1707.06484
-* Code: https://github.com/ucbdrive/dla
-
-## Dual-Path Networks
-
-* Implementation: [dpn.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/dpn.py)
-* Paper: `Dual Path Networks` - https://arxiv.org/abs/1707.01629
-* My PyTorch code: https://github.com/rwightman/pytorch-dpn-pretrained
-* Reference code: https://github.com/cypw/DPNs
-
-## GPU-Efficient Networks
-
-* Implementation: [byobnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/byobnet.py)
-* Paper: `Neural Architecture Design for GPU-Efficient Networks` - https://arxiv.org/abs/2006.14090
-* Reference code: https://github.com/idstcv/GPU-Efficient-Networks
-
-## HRNet
-
-* Implementation: [hrnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/hrnet.py)
-* Paper: `Deep High-Resolution Representation Learning for Visual Recognition` - https://arxiv.org/abs/1908.07919
-* Code: https://github.com/HRNet/HRNet-Image-Classification
-
-## Inception-V3
-
-* Implementation: [inception_v3.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/inception_v3.py)
-* Paper: `Rethinking the Inception Architecture for Computer Vision` - https://arxiv.org/abs/1512.00567
-* Code: https://github.com/pytorch/vision/tree/master/torchvision/models
-
-## Inception-V4
-
-* Implementation: [inception_v4.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/inception_v4.py)
-* Paper: `Inception-v4, Inception-ResNet and the Impact of Residual Connections on Learning` - https://arxiv.org/abs/1602.07261
-* Code: https://github.com/Cadene/pretrained-models.pytorch
-* Reference code: https://github.com/tensorflow/models/tree/master/research/slim/nets
-
-## Inception-ResNet-V2
-
-* Implementation: [inception_resnet_v2.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/inception_resnet_v2.py)
-* Paper: `Inception-v4, Inception-ResNet and the Impact of Residual Connections on Learning` - https://arxiv.org/abs/1602.07261
-* Code: https://github.com/Cadene/pretrained-models.pytorch
-* Reference code: https://github.com/tensorflow/models/tree/master/research/slim/nets
-
-## NASNet-A
-
-* Implementation: [nasnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/nasnet.py)
-* Paper: `Learning Transferable Architectures for Scalable Image Recognition` - https://arxiv.org/abs/1707.07012
-* Code: https://github.com/Cadene/pretrained-models.pytorch
-* Reference code: https://github.com/tensorflow/models/tree/master/research/slim/nets/nasnet
-
-## PNasNet-5
-
-* Implementation: [pnasnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/pnasnet.py)
-* Paper: `Progressive Neural Architecture Search` - https://arxiv.org/abs/1712.00559
-* Code: https://github.com/Cadene/pretrained-models.pytorch
-* Reference code: https://github.com/tensorflow/models/tree/master/research/slim/nets/nasnet
-
-## EfficientNet
-
-* Implementation: [efficientnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/efficientnet.py)
-* Papers:
-  * EfficientNet NoisyStudent (B0-B7, L2) - https://arxiv.org/abs/1911.04252
-  * EfficientNet AdvProp (B0-B8) - https://arxiv.org/abs/1911.09665
-  * EfficientNet (B0-B7) - https://arxiv.org/abs/1905.11946
-  * EfficientNet-EdgeTPU (S, M, L) - https://ai.googleblog.com/2019/08/efficientnet-edgetpu-creating.html
-  * MixNet - https://arxiv.org/abs/1907.09595
-  * MNASNet B1, A1 (Squeeze-Excite), and Small - https://arxiv.org/abs/1807.11626
-  * MobileNet-V2 - https://arxiv.org/abs/1801.04381
-  * FBNet-C - https://arxiv.org/abs/1812.03443
-  * Single-Path NAS - https://arxiv.org/abs/1904.02877
-* My PyTorch code: https://github.com/rwightman/gen-efficientnet-pytorch
-* Reference code: https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet
-
-## MobileNet-V3
-
-* Implementation: [mobilenetv3.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/mobilenetv3.py)
-* Paper: `Searching for MobileNetV3` - https://arxiv.org/abs/1905.02244
-* Reference code: https://github.com/tensorflow/models/tree/master/research/slim/nets/mobilenet
-
-## RegNet
-
-* Implementation: [regnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/regnet.py)
-* Paper: `Designing Network Design Spaces` - https://arxiv.org/abs/2003.13678
-* Reference code: https://github.com/facebookresearch/pycls/blob/master/pycls/models/regnet.py
-
-## RepVGG
-
-* Implementation: [byobnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/byobnet.py)
-* Paper: `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
-* Reference code: https://github.com/DingXiaoH/RepVGG
-
-## ResNet, ResNeXt
-
-* Implementation: [resnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/resnet.py)
-
-* ResNet (V1B)
-  * Paper: `Deep Residual Learning for Image Recognition` - https://arxiv.org/abs/1512.03385
-  * Code: https://github.com/pytorch/vision/tree/master/torchvision/models
-* ResNeXt
-  * Paper: `Aggregated Residual Transformations for Deep Neural Networks` - https://arxiv.org/abs/1611.05431
-  * Code: https://github.com/pytorch/vision/tree/master/torchvision/models
-* 'Bag of Tricks' / Gluon C, D, E, S ResNet variants
-  * Paper: `Bag of Tricks for Image Classification with CNNs` - https://arxiv.org/abs/1812.01187
-  * Code: https://github.com/dmlc/gluon-cv/blob/master/gluoncv/model_zoo/resnetv1b.py
-* Instagram pretrained / ImageNet tuned ResNeXt101
-  * Paper: `Exploring the Limits of Weakly Supervised Pretraining` - https://arxiv.org/abs/1805.00932
-  * Weights: https://pytorch.org/hub/facebookresearch_WSL-Images_resnext (NOTE: CC BY-NC 4.0 License, NOT commercial friendly)
-* Semi-supervised (SSL) / Semi-weakly Supervised (SWSL) ResNet and ResNeXts
-  * Paper: `Billion-scale semi-supervised learning for image classification` - https://arxiv.org/abs/1905.00546
-  * Weights: https://github.com/facebookresearch/semi-supervised-ImageNet1K-models (NOTE: CC BY-NC 4.0 License, NOT commercial friendly)
-* Squeeze-and-Excitation Networks
-  * Paper: `Squeeze-and-Excitation Networks` - https://arxiv.org/abs/1709.01507
-  * Code: Added to ResNet base, this is current version going forward, old `senet.py` is being deprecated
-* ECAResNet (ECA-Net)
-  * Paper: `ECA-Net: Efficient Channel Attention for Deep CNN` - https://arxiv.org/abs/1910.03151v4
-  * Code: Added to ResNet base, ECA module contributed by @VRandme, reference https://github.com/BangguWu/ECANet
-
-## Res2Net
-
-* Implementation: [res2net.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/res2net.py)
-* Paper: `Res2Net: A New Multi-scale Backbone Architecture` - https://arxiv.org/abs/1904.01169
-* Code: https://github.com/gasvn/Res2Net
-
-## ResNeSt
-
-* Implementation: [resnest.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/resnest.py)
-* Paper: `ResNeSt: Split-Attention Networks` - https://arxiv.org/abs/2004.08955
-* Code: https://github.com/zhanghang1989/ResNeSt
-
-## ReXNet
-
-* Implementation: [rexnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/rexnet.py)
-* Paper: `ReXNet: Diminishing Representational Bottleneck on CNN` - https://arxiv.org/abs/2007.00992
-* Code: https://github.com/clovaai/rexnet
-
-## Selective-Kernel Networks
-
-* Implementation: [sknet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/sknet.py)
-* Paper: `Selective-Kernel Networks` - https://arxiv.org/abs/1903.06586
-* Code: https://github.com/implus/SKNet, https://github.com/clovaai/assembled-cnn
-
-## SelecSLS
-
-* Implementation: [selecsls.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/selecsls.py)
-* Paper: `XNect: Real-time Multi-Person 3D Motion Capture with a Single RGB Camera` - https://arxiv.org/abs/1907.00837
-* Code: https://github.com/mehtadushy/SelecSLS-Pytorch
-
-## Squeeze-and-Excitation Networks
-
-* Implementation: [senet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/senet.py)
-NOTE: I am deprecating this version of the networks, the new ones are part of `resnet.py`
-
-* Paper: `Squeeze-and-Excitation Networks` - https://arxiv.org/abs/1709.01507
-* Code: https://github.com/Cadene/pretrained-models.pytorch 
-
-## TResNet
-
-* Implementation: [tresnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/tresnet.py)
-* Paper: `TResNet: High Performance GPU-Dedicated Architecture` - https://arxiv.org/abs/2003.13630
-* Code: https://github.com/mrT23/TResNet
-
-## VGG
-
-* Implementation: [vgg.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vgg.py)
-* Paper: `Very Deep Convolutional Networks For Large-Scale Image Recognition` - https://arxiv.org/pdf/1409.1556.pdf
-* Reference code: https://github.com/pytorch/vision/blob/master/torchvision/models/vgg.py
-
-## Vision Transformer
-
-* Implementation: [vision_transformer.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py)
-* Paper: `An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale` - https://arxiv.org/abs/2010.11929
-* Reference code and pretrained weights: https://github.com/google-research/vision_transformer
-
-## VovNet V2 and V1
-
-* Implementation: [vovnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vovnet.py)
-* Paper: `CenterMask : Real-Time Anchor-Free Instance Segmentation` - https://arxiv.org/abs/1911.06667
-* Reference code: https://github.com/youngwanLEE/vovnet-detectron2
-
-## Xception
-
-* Implementation: [xception.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/xception.py)
-* Paper: `Xception: Deep Learning with Depthwise Separable Convolutions` - https://arxiv.org/abs/1610.02357
-* Code: https://github.com/Cadene/pretrained-models.pytorch
-
-## Xception (Modified Aligned, Gluon)
-
-* Implementation: [gluon_xception.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/gluon_xception.py)
-* Paper: `Encoder-Decoder with Atrous Separable Convolution for Semantic Image Segmentation` - https://arxiv.org/abs/1802.02611
-* Reference code: https://github.com/dmlc/gluon-cv/tree/master/gluoncv/model_zoo, https://github.com/jfzhang95/pytorch-deeplab-xception/
-
-## Xception (Modified Aligned, TF)
-
-* Implementation: [aligned_xception.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/aligned_xception.py)
-* Paper: `Encoder-Decoder with Atrous Separable Convolution for Semantic Image Segmentation` - https://arxiv.org/abs/1802.02611
-* Reference code: https://github.com/tensorflow/models/tree/master/research/deeplab
+<!-- Generated by hfdocs/generate_model_docs.py, do not edit. Change the FAMILIES entry or the model code / docstring
+and regenerate. -->
+
+# Model Families
+
+`timm` has 1356 architectures in 98 model families, with 1812 pretrained weights. Each family page lists the papers,
+architectures and pretrained weights of a model module, and which parts of the [Model API](model_api) its models
+support. See the [Quickstart](quickstart) for loading and using the models, the [models reference](reference/models) for
+`create_model` and the pretrained configs, and the [results](results) for the ImageNet validation results of all
+weights.
+
+## Convolutional networks
+
+* [Aligned Xception](models/xception-aligned) (5 architectures, 6 weights): Aligned Xception (41, 65, 71 layers) as
+  modified in DeepLab, implemented from scratch and compatible with the TensorFlow DeepLab weights.
+* [BYOBNet (GENet, RepVGG, MobileOne, ...)](models/byobnet) (53 architectures, 57 weights): Bring-Your-Own-Blocks
+  Network, a flexible network built from dataclass configs that stack blocks into stages. It implements GPU-Efficient
+  Networks (`gernet_*`), RepVGG, MobileOne, RegNetZ, the ResNet image towers of CLIP (`*_clip`) and a number of ResNet
+  style `timm` variants.
+* [ConvMixer](models/convmixer) (3 architectures, 3 weights): ConvMixer embeds the image as patches and keeps that
+  resolution throughout, alternating depthwise convolutions (spatial mixing) and pointwise convolutions (channel
+  mixing).
+* [ConvNeXt](models/convnext) (31 architectures, 101 weights): ConvNeXt is a pure convolutional network that adopts
+  design choices from vision transformers, such as large depthwise kernels, inverted bottlenecks and LayerNorm.
+  ConvNeXt-V2 adds Global Response Normalization (GRN) and is pretrained as a fully convolutional masked autoencoder
+  (FCMAE).
+* [CSPNet (CSPResNet, CSPDarkNet, DarkNet)](models/cspnet) (23 architectures, 15 weights): Cross Stage Partial Networks
+  split the features of each stage into two parts, one passing through the stage blocks and one merged back at the end
+  of the stage. This module holds CSPResNet, CSPResNeXt, CSPDarkNet, DarkNet and the `timm` `cs3*` variants.
+* [CSPNeXt](models/cspnext) (5 architectures, 5 weights): The CSPNeXt backbone of the RTMDet real-time object detector
+  (CSP blocks with 5x5 depthwise convolutions), with ImageNet-1k classification weights converted from the OpenMMLab
+  checkpoints.
+* [DenseNet](models/densenet) (6 architectures, 6 weights): Densely connected convolutional networks, where each layer
+  in a dense block takes the concatenated outputs of all preceding layers of the block. Adapted from torchvision,
+  `densenetblur` uses blur pool anti-aliased downsampling.
+* [DLA](models/dla) (12 architectures, 12 weights): Deep Layer Aggregation (DLA) networks merge features across blocks
+  and stages with iterative and hierarchical aggregation nodes. Includes DLA variants built from Res2Net blocks.
+* [DPN](models/dpn) (7 architectures, 7 weights): Dual Path Networks combine a residual path (feature re-use) and a
+  densely connected path (new feature exploration) in each block. Compatible with the weights of the original MXNet
+  implementation.
+* [HRNet](models/hrnet) (11 architectures, 14 weights): High-Resolution Networks keep a high resolution branch through
+  the whole network and add lower resolution branches in parallel, repeatedly exchanging information between them.
+* [Inception-ResNet-v2](models/inception-resnet-v2) (1 architecture, 2 weights): Inception-ResNet-v2 combines Inception
+  modules with residual connections. Ported from the TensorFlow implementation and weights.
+* [Inception-v3](models/inception-v3) (1 architecture, 4 weights): Inception-v3, adapted from the torchvision
+  `Inception3` model.
+* [Inception-v4](models/inception-v4) (1 architecture, 1 weight): Inception-v4, ported from the TensorFlow
+  implementation and weights.
+* [InceptionNeXt](models/inception-next) (4 architectures, 5 weights): InceptionNeXt decomposes the large kernel
+  depthwise convolution of ConvNeXt into parallel branches, a small square kernel, two orthogonal band kernels and an
+  identity mapping, following Inception.
+* [MambaOut](models/mambaout) (11 architectures, 12 weights): MambaOut stacks Gated CNN blocks, Mamba blocks without the
+  state space model (SSM) token mixer, to test whether SSMs are needed for image classification.
+* [NASNet](models/nasnet) (1 architecture, 1 weight): NASNet-A Large, a network of cells found by neural architecture
+  search, from Cadene's pretrained models port.
+* [NFNet](models/nfnet) (36 architectures, 14 weights): Normalization-Free networks, trained without batch normalization
+  using scaled weight standardization: NFNet (with adaptive gradient clipping), NF-RegNet and pre-activation NF-ResNet
+  models.
+* [PNASNet](models/pnasnet) (1 architecture, 1 weight): PNASNet-5 Large, found by progressive neural architecture
+  search, from Cadene's pretrained models port.
+* [PP-HGNet](models/hgnet) (10 architectures, 19 weights): PP-HGNet and PP-HGNetV2 (High Performance GPU Net) from
+  PaddleClas, built from HG blocks that aggregate the outputs of a sequence of convolutions. The `ssld` weights are
+  trained with PaddleClas SSLD distillation.
+* [RDNet](models/rdnet) (4 architectures, 5 weights): RDNet (DenseNets Reloaded) revisits densely connected
+  convolutional networks with modernized blocks and design choices.
+* [RegNet](models/regnet) (36 architectures, 65 weights): RegNetX and RegNetY networks from the regular network design
+  spaces, RegNetZ from "Fast and Accurate Model Scaling", and `timm` additions such as the pre-activation RegNetV.
+  Includes weights from pycls, torchvision and VISSL (SEER).
+* [Res2Net](models/res2net) (9 architectures, 9 weights): Res2Net splits the channels of the bottleneck block into
+  groups connected hierarchically, giving several receptive field sizes within one block. Includes Res2NeXt.
+* [ResNeSt](models/resnest) (8 architectures, 8 weights): ResNeSt uses split-attention blocks, channel attention across
+  groups of feature map splits, in a ResNet style network.
+* [ResNet](models/resnet) (81 architectures, 149 weights): Residual networks (ResNet) and the variants built on the same
+  `ResNet` class: ResNeXt grouped convolutions, Squeeze-and-Excitation (SE) and ECA channel attention, deep / tiered
+  stems and average pool downsampling (the "c", "d", "s" and "t" variants), anti-aliased downsampling, Wide ResNet and
+  ResNet-RS configurations.
+* [ResNetV2 (BiT)](models/resnetv2) (20 architectures, 24 weights): Pre-activation ResNet (v2) with Group Normalization
+  and Weight Standardization as used by Big Transfer (BiT), with the original BiT weights. Also supports the non
+  pre-activation variant used as the hybrid Vision Transformer backbone.
+* [SelecSLS](models/selecsls) (5 architectures, 3 weights): SelecSLS uses selective long and short range skip
+  connections, proposed as the core network of XNect, a real-time multi-person 3D pose estimation system.
+* [SENet (legacy)](models/senet) (9 architectures, 9 weights): SENet, SE-ResNet and SE-ResNeXt from Cadene's pretrained
+  models (`legacy_*`). The module is deprecated in favour of the SE variants of the `ResNet` class.
+* [SKNet](models/sknet) (5 architectures, 3 weights): Selective Kernel Networks on a ResNet base, where SK units fuse
+  branches with different kernel sizes using attention over the branches.
+* [TResNet](models/tresnet) (4 architectures, 10 weights): TResNet is a ResNet based design for high GPU throughput,
+  with a space-to-depth stem, anti-aliased downsampling and SE layers.
+* [VGG](models/vgg) (8 architectures, 8 weights): VGG networks of stacked 3x3 convolutions, adapted from torchvision
+  with `timm` functionality added.
+* [VoVNet](models/vovnet) (10 architectures, 3 weights): VoVNet uses One-Shot Aggregation (OSA) modules, which
+  concatenate the outputs of all layers of a block once at its end. VoVNetV2 (from CenterMask) adds residual connections
+  and effective SE (eSE) attention.
+* [Xception (legacy)](models/xception) (1 architecture, 1 weight): The original Xception, depthwise separable
+  convolutions with residual connections, with weights ported from Keras (`legacy_xception`).
+
+## Vision Transformers
+
+* [BEiT](models/beit) (7 architectures, 13 weights): BEiT and BEiT-v2 Vision Transformers, pretrained with masked image
+  modeling. BEiT predicts the discrete visual tokens of masked patches, BEiT-v2 uses a vector-quantized visual tokenizer
+  for the targets. The weights here are fine-tuned classification weights.
+* [CaiT](models/cait) (10 architectures, 10 weights): Class-Attention in Image Transformers (CaiT), deep Vision
+  Transformers that use LayerScale and finish with class-attention layers, which update only the class token from the
+  patch tokens.
+* [ConViT](models/convit) (3 architectures, 3 weights): ConViT replaces the self-attention of the early Vision
+  Transformer blocks with gated positional self-attention (GPSA), which can be initialized to behave like a convolution,
+  as a soft convolutional inductive bias.
+* [CrossViT](models/crossvit) (11 architectures, 11 weights): CrossViT processes small and large image patches in two
+  Transformer branches and fuses them with cross-attention through the class tokens. Model names in `timm` give the
+  actual input resolution (240 / 408 instead of the original 224 / 384).
+* [DaViT](models/davit) (8 architectures, 5 weights): Dual Attention Vision Transformers (DaViT) combine spatial window
+  attention and channel group attention, both linear in the number of tokens, in a hierarchical design.
+* [DeiT](models/deit) (16 architectures, 24 weights): Data-efficient Image Transformers (DeiT) are Vision Transformers
+  trained on ImageNet-1k only, optionally with a distillation token that learns from a CNN teacher. DeiT III models are
+  trained with an improved recipe.
+* [EVA](models/eva) (65 architectures, 83 weights): EVA and EVA-02 Vision Transformers and other ViT variants sharing
+  the `Eva` class, with rotary position embeddings (RoPE), SwiGLU MLPs and related additions. The module also holds the
+  Perception Encoder (PE), ROPE-ViT, DINOv3, LingBot-Vision and Sapiens2 models and `timm` original ViT configs with
+  RoPE.
+* [GCViT](models/gcvit) (5 architectures, 5 weights): Global Context Vision Transformers (GCViT) alternate local window
+  attention with global context attention, whose queries are generated from the whole feature map by a convolutional
+  module.
+* [Hiera](models/hiera) (8 architectures, 16 weights): Hiera is a hierarchical vision transformer without specialized
+  modules (convolutions, shifted windows, relative position biases), relying on masked autoencoder (MAE) pretraining to
+  learn spatial biases.
+* [HieraDet (SAM 2)](models/hieradet-sam2) (5 architectures, 8 weights): HieraDet, the Hiera based image encoder of
+  Segment Anything 2 (SAM 2), with windowed attention and windowed position embeddings.
+* [MViTv2](models/mvitv2) (8 architectures, 7 weights): Multiscale Vision Transformers v2, a hierarchical transformer
+  with pooling attention, decomposed relative position embeddings and residual pooling connections.
+* [NaFlex ViT](models/naflexvit) (8 architectures, 5 weights): A Vision Transformer with the patch embedding and
+  position encoding in one module, supporting pre-patchified inputs with variable aspect ratio and resolution (NaFlex),
+  FlexiViT variable patch size and NaViT factorized position embeddings.
+* [NesT](models/nest) (6 architectures, 3 weights): Nested Transformers (NesT) apply self-attention locally within
+  non-overlapping image blocks and aggregate neighbouring blocks between stages. Weights converted from the official JAX
+  release.
+* [PiT](models/pit) (8 architectures, 8 weights): Pooling-based Vision Transformers (PiT) reduce the spatial size and
+  increase the channels of the tokens between stages with a depthwise convolution pooling layer, as in CNNs.
+* [PVTv2](models/pvt-v2) (7 architectures, 7 weights): Pyramid Vision Transformer v2, a hierarchical transformer with
+  spatial-reduction attention (linear in the `_li` variant), overlapping patch embeddings and convolutional feed-forward
+  layers.
+* [Segment Anything ViT](models/vision-transformer-sam) (4 architectures, 3 weights): The ViT image encoder of the
+  Segment Anything Model (SAM), a plain ViT backbone with windowed and global attention blocks and relative position
+  embeddings as in ViTDet.
+* [Swin Transformer](models/swin-transformer) (9 architectures, 19 weights): Swin Transformer is a hierarchical vision
+  transformer that computes self-attention within local windows, shifted between consecutive blocks for cross-window
+  connections. Includes the S3 (AutoFormerV2) weights.
+* [Swin Transformer V2](models/swin-transformer-v2) (12 architectures, 12 weights): Swin Transformer V2 scales up Swin
+  with residual post-norm, scaled cosine attention and a log-spaced continuous relative position bias that transfers
+  across window sizes.
+* [Swin Transformer V2 (CR)](models/swin-transformer-v2-cr) (16 architectures, 3 weights): An alternative Swin
+  Transformer V2 implementation adapted from Christoph Reich's code, designed for changing the image size together with
+  the window size, including non-square sizes. The module docstring marks it as experimental.
+* [TNT](models/tnt) (3 architectures, 3 weights): Transformer in Transformer (TNT) models the structure inside each
+  patch with an inner transformer over sub-patches, alongside the outer transformer over patches.
+* [Twins](models/twins) (6 architectures, 6 weights): Twins-PCPVT (Pyramid Vision Transformer with conditional position
+  encodings) and Twins-SVT (spatially separable self-attention, locally grouped attention alternating with global
+  sub-sampled attention).
+* [Vision Transformer (relative position)](models/vision-transformer-relpos) (13 architectures, 9 weights): Vision
+  Transformers using relative position biases instead of absolute position embeddings. The module docstring marks these
+  models as experimental.
+* [Vision Transformer (ViT)](models/vision-transformer) (157 architectures, 302 weights): The Vision Transformer (ViT)
+  splits an image into fixed size patches, linearly embeds them and processes the resulting token sequence with a
+  standard Transformer encoder. This module holds the `VisionTransformer` class and the weights for the original ViT,
+  the "How to train your ViT?" (AugReg) and FlexiViT models, and many image-text (CLIP, SigLIP) and self-supervised
+  pretrained image towers that share the architecture.
+* [VOLO](models/volo) (11 architectures, 11 weights): Vision Outlooker (VOLO) adds outlook attention, which encodes
+  fine-level features from local neighbourhoods, before transformer stages that operate on coarser tokens.
+* [XCiT](models/xcit) (28 architectures, 42 weights): Cross-Covariance Image Transformers (XCiT) replace token
+  self-attention with cross-covariance attention across feature channels, linear in the number of tokens, and add local
+  patch interaction layers.
+
+## Hybrid convolution / attention networks
+
+* [BYOANet (BoTNet, HaloNet, LambdaNet)](models/byoanet) (15 architectures, 13 weights): Networks built with the
+  `ByobNet` block / stage config system that place self-attention (or similar) layers in ResNet style stages: Bottleneck
+  Transformers (BoTNet), HaloNets and Lambda ResNets. The module docstring marks these definitions as experimental.
+* [CoaT](models/coat) (8 architectures, 8 weights): Co-Scale Conv-Attentional Image Transformers (CoaT) use factorized
+  attention with convolution based relative position encodings, and a co-scale mechanism that exchanges information
+  between parallel blocks at different scales.
+* [CSATv2](models/csatv2) (2 architectures, 3 weights): CSATv2 is a frequency-domain vision model that works on DCT
+  transforms of the input image, with spatial attention.
+* [FocalNet](models/focalnet) (12 architectures, 12 weights): Focal Modulation Networks (FocalNet) replace
+  self-attention with focal modulation, which aggregates context at several granularities with depthwise convolutions
+  and gates it into each query token.
+* [Hybrid Vision Transformer](models/vision-transformer-hybrid) (14 architectures, 14 weights): Vision Transformers
+  whose patch tokens come from a convolutional backbone (ResNet / ResNetV2 stem or stages) instead of a linear patch
+  embedding, using the `VisionTransformer` class.
+* [LeViT](models/levit) (20 architectures, 10 weights): LeViT is a hybrid network for fast inference, a convolutional
+  stem followed by attention stages that shrink the resolution with attention based downsampling and use attention
+  biases for position.
+* [MaxViT and CoAtNet](models/maxxvit) (56 architectures, 52 weights): From-scratch implementations of MaxViT (MBConv
+  blocks with multi-axis attention, blocked local and dilated grid attention) and CoAtNet (convolution stages followed
+  by relative attention stages), plus `timm` variants (`_rw` configs, MaxxViT).
+* [MetaFormer (PoolFormer, ConvFormer, CAFormer)](models/metaformer) (18 architectures, 50 weights): MetaFormer models
+  share a general transformer block structure and vary the token mixer: pooling in PoolFormer / PoolFormerV2, separable
+  convolutions in ConvFormer, and convolutions in the early stages with attention in the later stages in CAFormer.
+* [Next-ViT](models/nextvit) (3 architectures, 12 weights): Next-ViT is a hybrid CNN / transformer for efficient
+  deployment, stacking Next Convolution Blocks (NCB) and Next Transformer Blocks (NTB).
+* [TinyViT](models/tiny-vit) (5 architectures, 11 weights): TinyViT is a family of small hierarchical vision
+  transformers (a convolutional first stage, then local window attention), pretrained by fast distillation from large
+  teacher models.
+* [Visformer](models/visformer) (2 architectures, 2 weights): Visformer (Vision-friendly Transformer) transitions a
+  transformer towards a convolutional design, with convolutional blocks in the early stage and self-attention in the
+  later stages.
+* [ViTamin](models/vitamin) (13 architectures, 15 weights): ViTamin is a vision model designed for vision-language
+  models, with convolutional (MBConv) stages followed by transformer stages. The weights are CLIP image towers.
+
+## Efficient and mobile networks
+
+* [CPUBone](models/cpubone) (9 architectures, 9 weights): CPUBone is a vision backbone designed for devices with low
+  parallelization capabilities, such as CPUs, built from (fused) MBConv blocks and convolutional attention blocks.
+* [EdgeNeXt](models/edgenext) (5 architectures, 6 weights): EdgeNeXt is a hybrid CNN-Transformer for mobile devices that
+  combines depthwise convolution encoders with split depth-wise transpose attention (SDTA) encoders, which apply
+  attention across channels.
+* [EfficientFormer](models/efficientformer) (3 architectures, 3 weights): EfficientFormer is a vision transformer
+  designed for mobile latency, with pooling based blocks on 4D feature maps in the early stages and multi-head
+  self-attention blocks in the last stage.
+* [EfficientFormer-V2](models/efficientformer-v2) (4 architectures, 4 weights): EfficientFormer-V2 revisits the
+  EfficientFormer design to reduce both parameter count and latency for mobile devices, with convolutional stages and
+  attention in the later, lower resolution stages.
+* [EfficientNet](models/efficientnet) (115 architectures, 119 weights): EfficientNet and EfficientNetV2, and the related
+  mobile architectures built from the same depthwise separable, inverted residual (MBConv) and fused MBConv blocks:
+  MixNet, MnasNet, FBNet, Single-Path NAS, MobileNet-V1 / V2, EfficientNet-Lite, EdgeTPU and TinyNet.
+* [EfficientViM](models/efficientvim) (8 architectures, 12 weights): Efficient Vision Mamba (EfficientViM) is built
+  around the Hidden State Mixer based State Space Duality (HSM-SSD) layer, implemented here in plain PyTorch. The
+  `_dist` models add a distillation head.
+* [EfficientViT (MIT)](models/efficientvit-mit) (7 architectures, 19 weights): EfficientViT from the MIT Han Lab, a
+  vision backbone for high-resolution, low-computation recognition that uses multi-scale linear attention.
+* [EfficientViT (MSRA)](models/efficientvit-msra) (6 architectures, 6 weights): EfficientViT from Microsoft Research, a
+  memory efficient vision transformer with cascaded group attention, which feeds each attention head a different split
+  of the features.
+* [FasterNet](models/fasternet) (6 architectures, 6 weights): FasterNet is built around partial convolution (PConv),
+  which convolves only a part of the input channels to reduce redundant computation and memory access.
+* [FastViT](models/fastvit) (12 architectures, 21 weights): FastViT is a hybrid convolutional / transformer network that
+  uses structural reparameterization to remove skip connections at inference. The module also includes the MobileCLIP
+  image encoders (`fastvit_mci*`).
+* [GhostNet](models/ghostnet) (10 architectures, 5 weights): GhostNet generates part of its feature maps with cheap
+  operations (Ghost modules). GhostNetV2 adds DFC attention for long-range dependencies, GhostNetV3 uses
+  re-parameterization and knowledge distillation in training.
+* [HardCoRe-NAS](models/hardcorenas) (6 architectures, 6 weights): Mobile networks found by HardCoRe-NAS, a
+  differentiable neural architecture search with hard latency constraints, built on the `MobileNetV3` class.
+* [iFormer](models/iformer) (9 architectures, 8 weights): iFormer integrates a fast convolutional network with
+  single-head modulation attention (SHMA) in the later stages, for mobile applications.
+* [LowFormer](models/lowformer) (8 architectures, 7 weights): LowFormer is a convolutional transformer backbone designed
+  for hardware efficiency (measured throughput and latency rather than MACs). The E1 / E2 / E3 edge GPU variants are
+  from the journal extension.
+* [MobileNet-V3](models/mobilenetv3) (33 architectures, 45 weights): MobileNet-V3 and the related networks built on the
+  same `MobileNetV3` class: MobileNet-V4, LCNet (PP-LCNet), FBNet-V3 and TensorFlow ported MobileNet-V3 weights
+  (`tf_*`).
+* [MobileViT](models/mobilevit) (10 architectures, 16 weights): MobileViT combines MobileNet-V2 inverted residual blocks
+  with MobileViT blocks, which apply transformers to unfolded patches for global processing. MobileViT-V2 uses separable
+  self-attention. Built on the `ByobNet` class.
+* [PP-LCNetV2](models/lcnetv2) (3 architectures, 4 weights): PP-LCNetV2 from PaddleClas is a CPU oriented network built
+  on PP-LCNet. The depthwise convolutions of the later stages are re-parameterizable multi-scale branches, and SE and
+  shortcuts are used sparingly to avoid latency penalties on CPU.
+* [RepGhost](models/repghost) (8 architectures, 8 weights): RepGhostNet replaces the feature concatenation of the Ghost
+  module with re-parameterized feature reuse, folded into a single convolution path at inference.
+* [RepViT](models/repvit) (8 architectures, 13 weights): RepViT is a mobile CNN that brings design choices of
+  lightweight vision transformers into MobileNet-V3 style blocks, with structural re-parameterization.
+* [ReXNet](models/rexnet) (10 architectures, 9 weights): ReXNet revises the channel configuration of inverted residual
+  networks to reduce representational bottlenecks. The `rexnetr_*` variants round the channels to multiples of 8.
+* [SHViT](models/shvit) (4 architectures, 4 weights): SHViT (Single-Head Vision Transformer) uses a memory efficient
+  macro design and single-head attention applied to part of the channels.
+* [StarNet](models/starnet) (7 architectures, 4 weights): StarNet is a deliberately simple proof-of-concept network
+  built around the star operation, the element-wise multiplication of two branches.
+* [SwiftFormer](models/swiftformer) (4 architectures, 4 weights): SwiftFormer replaces the quadratic matrix
+  multiplications of self-attention with efficient additive attention, for real-time mobile vision applications.
+
+## MLP and other token mixers
+
+* [MLP-Mixer, ResMLP and gMLP](models/mlp-mixer) (15 architectures, 19 weights): All-MLP architectures that alternate
+  token mixing across patches with channel mixing: MLP-Mixer, ResMLP and gMLP (gating with a spatial projection). The
+  module docstring notes the gMLP implementation is not verified.
+* [Sequencer](models/sequencer) (3 architectures, 3 weights): Sequencer replaces self-attention with BiLSTM layers that
+  mix tokens along the vertical and horizontal axes, followed by channel MLPs.
+
+## Multimodal model vision encoders
+
+* [DeepSeek ViT](models/deepseek-vit) (3 architectures, 6 weights): The vision encoder of the DeepSeek-V4 / V4.1
+  multimodal models, a pre-norm ViT with RMSNorm, a SwiGLU MLP and axial 2D RoPE as the only position encoding.
+  Classifier variants add pooling and a linear head, the `_enc` variants keep the native projector that maps the tokens
+  to the language model width.
+* [Gemma 4 ViT](models/gemma4-vit) (4 architectures, 4 weights): The vision encoder of Google's Gemma 4 multimodal
+  models, a ViT with 2D RoPE, gated MLPs, QK normalization and sandwich normalization blocks.
+* [MobileNet-V5](models/mobilenetv5) (3 architectures, 1 weight): The MobileNet-V5 vision encoder from Google's Gemma
+  3n, built from MobileNet-V4 blocks (Universal Inverted Residual, Mobile MQA) with a multi-scale fusion adapter.
+* [Qwen3 ViT](models/qwen3-vit) (9 architectures, 39 weights): The vision encoder of the Qwen3-VL / Qwen3.5 / Qwen3.8
+  multimodal models, a pre-norm ViT with a learned absolute position grid combined with axial 2D RoPE. Classifier
+  variants add pooling and a linear head, the `_enc` variants keep the native projector that maps the tokens to the
+  language model width.

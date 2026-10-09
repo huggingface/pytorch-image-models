@@ -14,7 +14,10 @@ fully convolutional masked autoencoder (FCMAE).
 ## Papers
 
 * [A ConvNet for the 2020s](https://arxiv.org/abs/2201.03545)
-* [ConvNeXt-V2 - Co-designing and Scaling ConvNets with Masked Autoencoders](https://arxiv.org/abs/2301.00808)
+* [ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders](https://arxiv.org/abs/2301.00808)
+* [Reproducible scaling laws for contrastive language-image learning](https://arxiv.org/abs/2212.07143)
+* [DINOv3](https://arxiv.org/abs/2508.10104)
+* [Efficient Universal Perception Encoder](https://arxiv.org/abs/2603.22387)
 
 ## Usage
 
@@ -87,80 +90,22 @@ results](https://github.com/huggingface/pytorch-image-models/tree/main/results).
 
 ## Pretrained weights
 
+Top-1 is ImageNet-1k validation accuracy from
+[`results-imagenet.csv`](https://github.com/huggingface/pytorch-image-models/blob/main/results/results-imagenet.csv) at
+the listed eval size, - if the weight has no ImageNet-1k result (e.g. pretraining or image-text weights). Classes is the
+size of the pretrained classifier, none for weights without one.
+
+Weights are grouped by source: the paper or origin given in the pretrained config, else a Hub organization other than
+`timm`, else the first part of the pretrained tag (`architecture.tag`). Sources with a single weight are listed under
+other.
+
+### ConvNeXt V2
+
+Pretrained configs reference [ConvNeXt V2: Co-designing and Scaling ConvNets with Masked
+Autoencoders](https://arxiv.org/abs/2301.00808).
+
 | Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
 |---|---:|---:|---:|---:|---|---|
-| `convnext_atto.d2_in1k` | 224 (test 288) | 77.016 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_atto.d2_in1k) |
-| `convnext_atto_ols.a2_in1k` | 224 (test 288) | 77.220 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_atto_ols.a2_in1k) |
-| `convnext_base.clip_laion2b` | 256 | - | - | 640 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.clip_laion2b) |
-| `convnext_base.clip_laion2b_augreg` | 256 | - | - | 640 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.clip_laion2b_augreg) |
-| `convnext_base.clip_laion2b_augreg_ft_in12k` | 256 | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.clip_laion2b_augreg_ft_in12k) |
-| `convnext_base.clip_laion2b_augreg_ft_in12k_in1k` | 256 | 86.378 | 256 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.clip_laion2b_augreg_ft_in12k_in1k) |
-| `convnext_base.clip_laion2b_augreg_ft_in12k_in1k_384` | 384 | 87.144 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.clip_laion2b_augreg_ft_in12k_in1k_384) |
-| `convnext_base.clip_laion2b_augreg_ft_in1k` | 256 | 86.184 | 256 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.clip_laion2b_augreg_ft_in1k) |
-| `convnext_base.clip_laiona` | 256 | - | - | 640 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.clip_laiona) |
-| `convnext_base.clip_laiona_320` | 320 | - | - | 640 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.clip_laiona_320) |
-| `convnext_base.clip_laiona_augreg_320` | 320 | - | - | 640 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.clip_laiona_augreg_320) |
-| `convnext_base.clip_laiona_augreg_ft_in1k_384` | 384 | 86.490 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.clip_laiona_augreg_ft_in1k_384) |
-| `convnext_base.dinov3_lvd1689m` | 224 | - | - | none | dinov3-license | [timm](https://huggingface.co/timm/convnext_base.dinov3_lvd1689m) |
-| `convnext_base.eupe_lvd1689m` | 256 | - | - | none | fair-noncommercial-research-license | [timm](https://huggingface.co/timm/convnext_base.eupe_lvd1689m) |
-| `convnext_base.fb_in1k` | 224 (test 288) | 84.466 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.fb_in1k) |
-| `convnext_base.fb_in22k` | 224 | - | - | 21841 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.fb_in22k) |
-| `convnext_base.fb_in22k_ft_in1k` | 224 (test 288) | 86.302 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.fb_in22k_ft_in1k) |
-| `convnext_base.fb_in22k_ft_in1k_384` | 384 | 86.826 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.fb_in22k_ft_in1k_384) |
-| `convnext_femto.d1_in1k` | 224 (test 288) | 78.712 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_femto.d1_in1k) |
-| `convnext_femto_ols.d1_in1k` | 224 (test 288) | 78.916 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_femto_ols.d1_in1k) |
-| `convnext_large.dinov3_lvd1689m` | 224 | - | - | none | dinov3-license | [timm](https://huggingface.co/timm/convnext_large.dinov3_lvd1689m) |
-| `convnext_large.fb_in1k` | 224 (test 288) | 84.862 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large.fb_in1k) |
-| `convnext_large.fb_in22k` | 224 | - | - | 21841 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large.fb_in22k) |
-| `convnext_large.fb_in22k_ft_in1k` | 224 (test 288) | 87.012 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large.fb_in22k_ft_in1k) |
-| `convnext_large.fb_in22k_ft_in1k_384` | 384 | 87.456 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large.fb_in22k_ft_in1k_384) |
-| `convnext_large_mlp.clip_laion2b_augreg` | 256 | - | - | 768 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large_mlp.clip_laion2b_augreg) |
-| `convnext_large_mlp.clip_laion2b_augreg_ft_in12k_384` | 384 | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large_mlp.clip_laion2b_augreg_ft_in12k_384) |
-| `convnext_large_mlp.clip_laion2b_augreg_ft_in1k` | 256 | 87.344 | 256 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large_mlp.clip_laion2b_augreg_ft_in1k) |
-| `convnext_large_mlp.clip_laion2b_augreg_ft_in1k_384` | 384 | 87.890 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large_mlp.clip_laion2b_augreg_ft_in1k_384) |
-| `convnext_large_mlp.clip_laion2b_ft_320` | 320 | - | - | 768 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large_mlp.clip_laion2b_ft_320) |
-| `convnext_large_mlp.clip_laion2b_ft_soup_320` | 320 | - | - | 768 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large_mlp.clip_laion2b_ft_soup_320) |
-| `convnext_large_mlp.clip_laion2b_soup_ft_in12k_320` | 320 | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large_mlp.clip_laion2b_soup_ft_in12k_320) |
-| `convnext_large_mlp.clip_laion2b_soup_ft_in12k_384` | 384 | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large_mlp.clip_laion2b_soup_ft_in12k_384) |
-| `convnext_large_mlp.clip_laion2b_soup_ft_in12k_in1k_320` | 320 | 87.970 | 320 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large_mlp.clip_laion2b_soup_ft_in12k_in1k_320) |
-| `convnext_large_mlp.clip_laion2b_soup_ft_in12k_in1k_384` | 384 | 88.334 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large_mlp.clip_laion2b_soup_ft_in12k_in1k_384) |
-| `convnext_nano.d1h_in1k` | 224 (test 288) | 81.474 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_nano.d1h_in1k) |
-| `convnext_nano.in12k` | 224 | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_nano.in12k) |
-| `convnext_nano.in12k_ft_in1k` | 224 (test 288) | 82.882 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_nano.in12k_ft_in1k) |
-| `convnext_nano.r384_ad_in12k` | 384 | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_nano.r384_ad_in12k) |
-| `convnext_nano.r384_in12k` | 384 | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_nano.r384_in12k) |
-| `convnext_nano.r384_in12k_ft_in1k` | 384 | 83.334 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_nano.r384_in12k_ft_in1k) |
-| `convnext_nano_ols.d1h_in1k` | 224 (test 288) | 81.612 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_nano_ols.d1h_in1k) |
-| `convnext_pico.d1_in1k` | 224 (test 288) | 80.426 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_pico.d1_in1k) |
-| `convnext_pico_ols.d1_in1k` | 224 (test 288) | 80.458 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_pico_ols.d1_in1k) |
-| `convnext_small.dinov3_lvd1689m` | 224 | - | - | none | dinov3-license | [timm](https://huggingface.co/timm/convnext_small.dinov3_lvd1689m) |
-| `convnext_small.eupe_lvd1689m` | 256 | - | - | none | fair-noncommercial-research-license | [timm](https://huggingface.co/timm/convnext_small.eupe_lvd1689m) |
-| `convnext_small.fb_in1k` | 224 (test 288) | 83.704 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_small.fb_in1k) |
-| `convnext_small.fb_in22k` | 224 | - | - | 21841 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_small.fb_in22k) |
-| `convnext_small.fb_in22k_ft_in1k` | 224 (test 288) | 85.276 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_small.fb_in22k_ft_in1k) |
-| `convnext_small.fb_in22k_ft_in1k_384` | 384 | 85.752 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_small.fb_in22k_ft_in1k_384) |
-| `convnext_small.in12k` | 224 | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_small.in12k) |
-| `convnext_small.in12k_ft_in1k` | 224 (test 288) | 85.324 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_small.in12k_ft_in1k) |
-| `convnext_small.in12k_ft_in1k_384` | 384 | 86.186 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_small.in12k_ft_in1k_384) |
-| `convnext_tiny.dinov3_lvd1689m` | 224 | - | - | none | dinov3-license | [timm](https://huggingface.co/timm/convnext_tiny.dinov3_lvd1689m) |
-| `convnext_tiny.eupe_lvd1689m` | 256 | - | - | none | fair-noncommercial-research-license | [timm](https://huggingface.co/timm/convnext_tiny.eupe_lvd1689m) |
-| `convnext_tiny.fb_in1k` | 224 (test 288) | 82.694 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_tiny.fb_in1k) |
-| `convnext_tiny.fb_in22k` | 224 | - | - | 21841 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_tiny.fb_in22k) |
-| `convnext_tiny.fb_in22k_ft_in1k` | 224 (test 288) | 78.950 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_tiny.fb_in22k_ft_in1k) |
-| `convnext_tiny.fb_in22k_ft_in1k_384` | 384 | 84.098 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_tiny.fb_in22k_ft_in1k_384) |
-| `convnext_tiny.in12k` | 224 | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_tiny.in12k) |
-| `convnext_tiny.in12k_ft_in1k` | 224 (test 288) | 84.448 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_tiny.in12k_ft_in1k) |
-| `convnext_tiny.in12k_ft_in1k_384` | 384 | 85.154 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_tiny.in12k_ft_in1k_384) |
-| `convnext_tiny_hnf.a2h_in1k` | 224 (test 288) | 82.608 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_tiny_hnf.a2h_in1k) |
-| `convnext_xlarge.fb_in22k` | 224 | - | - | 21841 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_xlarge.fb_in22k) |
-| `convnext_xlarge.fb_in22k_ft_in1k` | 224 (test 288) | 87.378 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_xlarge.fb_in22k_ft_in1k) |
-| `convnext_xlarge.fb_in22k_ft_in1k_384` | 384 | 87.764 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_xlarge.fb_in22k_ft_in1k_384) |
-| `convnext_xxlarge.clip_laion2b_rewind` | 256 | - | - | 1024 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_xxlarge.clip_laion2b_rewind) |
-| `convnext_xxlarge.clip_laion2b_soup` | 256 | - | - | 1024 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_xxlarge.clip_laion2b_soup) |
-| `convnext_xxlarge.clip_laion2b_soup_ft_in12k` | 256 | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_xxlarge.clip_laion2b_soup_ft_in12k) |
-| `convnext_xxlarge.clip_laion2b_soup_ft_in1k` | 256 | 88.622 | 256 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_xxlarge.clip_laion2b_soup_ft_in1k) |
-| `convnext_zepto_rms.ra4_e3600_r224_in1k` | 224 | 72.820 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_zepto_rms.ra4_e3600_r224_in1k) |
-| `convnext_zepto_rms_ols.ra4_e3600_r224_in1k` | 224 | 73.234 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_zepto_rms_ols.ra4_e3600_r224_in1k) |
 | `convnextv2_atto.fcmae` | 224 | - | - | none | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/convnextv2_atto.fcmae) |
 | `convnextv2_atto.fcmae_ft_in1k` | 224 (test 288) | 77.794 | 288 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/convnextv2_atto.fcmae_ft_in1k) |
 | `convnextv2_base.fcmae` | 224 | - | - | none | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/convnextv2_base.fcmae) |
@@ -187,14 +132,121 @@ results](https://github.com/huggingface/pytorch-image-models/tree/main/results).
 | `convnextv2_tiny.fcmae_ft_in1k` | 224 (test 288) | 83.478 | 288 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/convnextv2_tiny.fcmae_ft_in1k) |
 | `convnextv2_tiny.fcmae_ft_in22k_in1k` | 224 (test 288) | 84.428 | 288 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/convnextv2_tiny.fcmae_ft_in22k_in1k) |
 | `convnextv2_tiny.fcmae_ft_in22k_in1k_384` | 384 | 85.098 | 384 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/convnextv2_tiny.fcmae_ft_in22k_in1k_384) |
+
+### `clip` tags
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
+| `convnext_base.clip_laion2b` | 256 | - | - | 640 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.clip_laion2b) |
+| `convnext_base.clip_laion2b_augreg` | 256 | - | - | 640 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.clip_laion2b_augreg) |
+| `convnext_base.clip_laion2b_augreg_ft_in12k` | 256 | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.clip_laion2b_augreg_ft_in12k) |
+| `convnext_base.clip_laion2b_augreg_ft_in12k_in1k` | 256 | 86.378 | 256 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.clip_laion2b_augreg_ft_in12k_in1k) |
+| `convnext_base.clip_laion2b_augreg_ft_in12k_in1k_384` | 384 | 87.144 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.clip_laion2b_augreg_ft_in12k_in1k_384) |
+| `convnext_base.clip_laion2b_augreg_ft_in1k` | 256 | 86.184 | 256 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.clip_laion2b_augreg_ft_in1k) |
+| `convnext_base.clip_laiona` | 256 | - | - | 640 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.clip_laiona) |
+| `convnext_base.clip_laiona_320` | 320 | - | - | 640 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.clip_laiona_320) |
+| `convnext_base.clip_laiona_augreg_320` | 320 | - | - | 640 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.clip_laiona_augreg_320) |
+| `convnext_base.clip_laiona_augreg_ft_in1k_384` | 384 | 86.490 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.clip_laiona_augreg_ft_in1k_384) |
+| `convnext_large_mlp.clip_laion2b_augreg` | 256 | - | - | 768 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large_mlp.clip_laion2b_augreg) |
+| `convnext_large_mlp.clip_laion2b_augreg_ft_in12k_384` | 384 | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large_mlp.clip_laion2b_augreg_ft_in12k_384) |
+| `convnext_large_mlp.clip_laion2b_augreg_ft_in1k` | 256 | 87.344 | 256 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large_mlp.clip_laion2b_augreg_ft_in1k) |
+| `convnext_large_mlp.clip_laion2b_augreg_ft_in1k_384` | 384 | 87.890 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large_mlp.clip_laion2b_augreg_ft_in1k_384) |
+| `convnext_large_mlp.clip_laion2b_ft_320` | 320 | - | - | 768 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large_mlp.clip_laion2b_ft_320) |
+| `convnext_large_mlp.clip_laion2b_ft_soup_320` | 320 | - | - | 768 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large_mlp.clip_laion2b_ft_soup_320) |
+| `convnext_large_mlp.clip_laion2b_soup_ft_in12k_320` | 320 | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large_mlp.clip_laion2b_soup_ft_in12k_320) |
+| `convnext_large_mlp.clip_laion2b_soup_ft_in12k_384` | 384 | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large_mlp.clip_laion2b_soup_ft_in12k_384) |
+| `convnext_large_mlp.clip_laion2b_soup_ft_in12k_in1k_320` | 320 | 87.970 | 320 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large_mlp.clip_laion2b_soup_ft_in12k_in1k_320) |
+| `convnext_large_mlp.clip_laion2b_soup_ft_in12k_in1k_384` | 384 | 88.334 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large_mlp.clip_laion2b_soup_ft_in12k_in1k_384) |
+| `convnext_xxlarge.clip_laion2b_rewind` | 256 | - | - | 1024 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_xxlarge.clip_laion2b_rewind) |
+| `convnext_xxlarge.clip_laion2b_soup` | 256 | - | - | 1024 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_xxlarge.clip_laion2b_soup) |
+| `convnext_xxlarge.clip_laion2b_soup_ft_in12k` | 256 | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_xxlarge.clip_laion2b_soup_ft_in12k) |
+| `convnext_xxlarge.clip_laion2b_soup_ft_in1k` | 256 | 88.622 | 256 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_xxlarge.clip_laion2b_soup_ft_in1k) |
+
+### `fb` tags
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
+| `convnext_base.fb_in1k` | 224 (test 288) | 84.466 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.fb_in1k) |
+| `convnext_base.fb_in22k` | 224 | - | - | 21841 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.fb_in22k) |
+| `convnext_base.fb_in22k_ft_in1k` | 224 (test 288) | 86.302 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.fb_in22k_ft_in1k) |
+| `convnext_base.fb_in22k_ft_in1k_384` | 384 | 86.826 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_base.fb_in22k_ft_in1k_384) |
+| `convnext_large.fb_in1k` | 224 (test 288) | 84.862 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large.fb_in1k) |
+| `convnext_large.fb_in22k` | 224 | - | - | 21841 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large.fb_in22k) |
+| `convnext_large.fb_in22k_ft_in1k` | 224 (test 288) | 87.012 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large.fb_in22k_ft_in1k) |
+| `convnext_large.fb_in22k_ft_in1k_384` | 384 | 87.456 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_large.fb_in22k_ft_in1k_384) |
+| `convnext_small.fb_in1k` | 224 (test 288) | 83.704 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_small.fb_in1k) |
+| `convnext_small.fb_in22k` | 224 | - | - | 21841 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_small.fb_in22k) |
+| `convnext_small.fb_in22k_ft_in1k` | 224 (test 288) | 85.276 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_small.fb_in22k_ft_in1k) |
+| `convnext_small.fb_in22k_ft_in1k_384` | 384 | 85.752 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_small.fb_in22k_ft_in1k_384) |
+| `convnext_tiny.fb_in1k` | 224 (test 288) | 82.694 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_tiny.fb_in1k) |
+| `convnext_tiny.fb_in22k` | 224 | - | - | 21841 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_tiny.fb_in22k) |
+| `convnext_tiny.fb_in22k_ft_in1k` | 224 (test 288) | 78.950 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_tiny.fb_in22k_ft_in1k) |
+| `convnext_tiny.fb_in22k_ft_in1k_384` | 384 | 84.098 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_tiny.fb_in22k_ft_in1k_384) |
+| `convnext_xlarge.fb_in22k` | 224 | - | - | 21841 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_xlarge.fb_in22k) |
+| `convnext_xlarge.fb_in22k_ft_in1k` | 224 (test 288) | 87.378 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_xlarge.fb_in22k_ft_in1k) |
+| `convnext_xlarge.fb_in22k_ft_in1k_384` | 384 | 87.764 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_xlarge.fb_in22k_ft_in1k_384) |
+
+### `d1` tags
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
+| `convnext_femto.d1_in1k` | 224 (test 288) | 78.712 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_femto.d1_in1k) |
+| `convnext_femto_ols.d1_in1k` | 224 (test 288) | 78.916 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_femto_ols.d1_in1k) |
+| `convnext_pico.d1_in1k` | 224 (test 288) | 80.426 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_pico.d1_in1k) |
+| `convnext_pico_ols.d1_in1k` | 224 (test 288) | 80.458 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_pico_ols.d1_in1k) |
+
+### `dinov3` tags
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
+| `convnext_base.dinov3_lvd1689m` | 224 | - | - | none | dinov3-license | [timm](https://huggingface.co/timm/convnext_base.dinov3_lvd1689m) |
+| `convnext_large.dinov3_lvd1689m` | 224 | - | - | none | dinov3-license | [timm](https://huggingface.co/timm/convnext_large.dinov3_lvd1689m) |
+| `convnext_small.dinov3_lvd1689m` | 224 | - | - | none | dinov3-license | [timm](https://huggingface.co/timm/convnext_small.dinov3_lvd1689m) |
+| `convnext_tiny.dinov3_lvd1689m` | 224 | - | - | none | dinov3-license | [timm](https://huggingface.co/timm/convnext_tiny.dinov3_lvd1689m) |
+
+### `eupe` tags
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
+| `convnext_base.eupe_lvd1689m` | 256 | - | - | none | fair-noncommercial-research-license | [timm](https://huggingface.co/timm/convnext_base.eupe_lvd1689m) |
+| `convnext_small.eupe_lvd1689m` | 256 | - | - | none | fair-noncommercial-research-license | [timm](https://huggingface.co/timm/convnext_small.eupe_lvd1689m) |
+| `convnext_tiny.eupe_lvd1689m` | 256 | - | - | none | fair-noncommercial-research-license | [timm](https://huggingface.co/timm/convnext_tiny.eupe_lvd1689m) |
+
+### `d1h` tags
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
+| `convnext_nano.d1h_in1k` | 224 (test 288) | 81.474 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_nano.d1h_in1k) |
+| `convnext_nano_ols.d1h_in1k` | 224 (test 288) | 81.612 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_nano_ols.d1h_in1k) |
+
+### `ra4` tags
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
+| `convnext_zepto_rms.ra4_e3600_r224_in1k` | 224 | 72.820 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_zepto_rms.ra4_e3600_r224_in1k) |
+| `convnext_zepto_rms_ols.ra4_e3600_r224_in1k` | 224 | 73.234 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_zepto_rms_ols.ra4_e3600_r224_in1k) |
+
+### Other
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
+| `convnext_atto.d2_in1k` | 224 (test 288) | 77.016 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_atto.d2_in1k) |
+| `convnext_atto_ols.a2_in1k` | 224 (test 288) | 77.220 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_atto_ols.a2_in1k) |
+| `convnext_nano.in12k` | 224 | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_nano.in12k) |
+| `convnext_nano.in12k_ft_in1k` | 224 (test 288) | 82.882 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_nano.in12k_ft_in1k) |
+| `convnext_nano.r384_ad_in12k` | 384 | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_nano.r384_ad_in12k) |
+| `convnext_nano.r384_in12k` | 384 | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_nano.r384_in12k) |
+| `convnext_nano.r384_in12k_ft_in1k` | 384 | 83.334 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_nano.r384_in12k_ft_in1k) |
+| `convnext_small.in12k` | 224 | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_small.in12k) |
+| `convnext_small.in12k_ft_in1k` | 224 (test 288) | 85.324 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_small.in12k_ft_in1k) |
+| `convnext_small.in12k_ft_in1k_384` | 384 | 86.186 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_small.in12k_ft_in1k_384) |
+| `convnext_tiny.in12k` | 224 | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_tiny.in12k) |
+| `convnext_tiny.in12k_ft_in1k` | 224 (test 288) | 84.448 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_tiny.in12k_ft_in1k) |
+| `convnext_tiny.in12k_ft_in1k_384` | 384 | 85.154 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_tiny.in12k_ft_in1k_384) |
+| `convnext_tiny_hnf.a2h_in1k` | 224 (test 288) | 82.608 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/convnext_tiny_hnf.a2h_in1k) |
 | `test_convnext.r160_in1k` | 160 | 47.774 | 160 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/test_convnext.r160_in1k) |
 | `test_convnext2.r160_in1k` | 160 | 53.520 | 160 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/test_convnext2.r160_in1k) |
 | `test_convnext3.r160_in1k` | 160 | 53.302 | 160 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/test_convnext3.r160_in1k) |
-
-Top-1 is ImageNet-1k validation accuracy from
-[`results-imagenet.csv`](https://github.com/huggingface/pytorch-image-models/blob/main/results/results-imagenet.csv) at
-the listed eval size, - if the weight has no ImageNet-1k result (e.g. pretraining or image-text weights). Classes is the
-size of the pretrained classifier, none for weights without one.
 
 ## Citation
 

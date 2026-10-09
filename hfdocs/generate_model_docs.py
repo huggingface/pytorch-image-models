@@ -8,9 +8,10 @@ Each family page (``hfdocs/source/models/<slug>.mdx``) is built from:
   * ``results/results-imagenet.csv`` (ImageNet-1k top-1) and a ``results/benchmark-infer-*.csv`` (params, GMACs),
   * a functional probe of the model API on a randomly initialized, smallest architecture per model class.
 
-The probe results are also rendered as a support matrix (one row per family / model class) and spliced into
+The probe results are also rendered as a support matrix (one row per family) and spliced into
 ``hfdocs/source/model_api.mdx`` between the ``<!-- BEGIN GENERATED SUPPORT MATRIX -->`` /
-``<!-- END GENERATED SUPPORT MATRIX -->`` markers, and optionally written to ``--matrix-file``.
+``<!-- END GENERATED SUPPORT MATRIX -->`` markers, and optionally written to ``--matrix-file``. The families are listed
+by category on the ``hfdocs/source/models.mdx`` index page.
 
 Run from the repository root, against the repository timm (not an installed release), offline:
 
@@ -18,8 +19,9 @@ Run from the repository root, against the repository timm (not an installed rele
     PYTHONPATH=. python hfdocs/generate_model_docs.py --families resnet convnext
     PYTHONPATH=. python hfdocs/generate_model_docs.py --check
 
-Adding a family is adding an entry to ``FAMILIES``. A module holding several families can be split with the
-``include`` / ``exclude`` architecture name filters (fnmatch patterns, as accepted by ``timm.list_models``).
+Every module of ``timm.models.list_modules()`` needs an entry in ``FAMILIES``, a missing one is reported. A module
+holding several families can be split with the ``include`` / ``exclude`` architecture name filters (fnmatch
+patterns, as accepted by ``timm.list_models``).
 """
 import argparse
 import ast
@@ -40,7 +42,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import torch
 
 import timm
-from timm.models import get_pretrained_cfg
+from timm.models import get_pretrained_cfg, list_modules
 from timm.models._manipulate import group_parameters
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -56,16 +58,598 @@ _GENERATED_NOTE = (
 )
 
 # One entry per family page, keyed by page slug (module name with '_' replaced by '-').
-#   title: page title, category: one of CNN, ViT, Hybrid, Efficient/Mobile, MLP, Encoder
-#   modules: model modules (``timm/models/<module>.py``) the family is registered in
+#   title: page title
+#   category: one of the CATEGORIES keys
 #   description: short hand written summary, keep it factual and grounded in the module docstring / papers
+#   modules: (optional) model modules (``timm/models/<module>.py``) the family is registered in, defaults to the
+#       module named by the slug
 #   example: (optional) pretrained weight used in the usage snippet, defaults to an automatic pick
 #   include / exclude: (optional) architecture name filters to split a module across several pages
+# Family categories and their index page section titles, in page order.
+CATEGORIES = {
+    'CNN': 'Convolutional networks',
+    'ViT': 'Vision Transformers',
+    'Hybrid': 'Hybrid convolution / attention networks',
+    'Efficient/Mobile': 'Efficient and mobile networks',
+    'MLP': 'MLP and other token mixers',
+    'Encoder': 'Multimodal model vision encoders',
+}
 FAMILIES: Dict[str, Dict[str, Any]] = {
+    'beit': dict(
+        title='BEiT',
+        category='ViT',
+        description=(
+            'BEiT and BEiT-v2 Vision Transformers, pretrained with masked image modeling. BEiT predicts the discrete '
+            'visual tokens of masked patches, BEiT-v2 uses a vector-quantized visual tokenizer for the targets. The '
+            'weights here are fine-tuned classification weights.'
+        ),
+    ),
+    'byoanet': dict(
+        title='BYOANet (BoTNet, HaloNet, LambdaNet)',
+        category='Hybrid',
+        description=(
+            'Networks built with the `ByobNet` block / stage config system that place self-attention (or similar) '
+            'layers in ResNet style stages: Bottleneck Transformers (BoTNet), HaloNets and Lambda ResNets. The '
+            'module docstring marks these definitions as experimental.'
+        ),
+    ),
+    'byobnet': dict(
+        title='BYOBNet (GENet, RepVGG, MobileOne, ...)',
+        category='CNN',
+        description=(
+            'Bring-Your-Own-Blocks Network, a flexible network built from dataclass configs that stack blocks into '
+            'stages. It implements GPU-Efficient Networks (`gernet_*`), RepVGG, MobileOne, RegNetZ, the ResNet image '
+            'towers of CLIP (`*_clip`) and a number of ResNet style `timm` variants.'
+        ),
+    ),
+    'cait': dict(
+        title='CaiT',
+        category='ViT',
+        description=(
+            'Class-Attention in Image Transformers (CaiT), deep Vision Transformers that use LayerScale and finish '
+            'with class-attention layers, which update only the class token from the patch tokens.'
+        ),
+    ),
+    'coat': dict(
+        title='CoaT',
+        category='Hybrid',
+        description=(
+            'Co-Scale Conv-Attentional Image Transformers (CoaT) use factorized attention with convolution based '
+            'relative position encodings, and a co-scale mechanism that exchanges information between parallel '
+            'blocks at different scales.'
+        ),
+    ),
+    'convit': dict(
+        title='ConViT',
+        category='ViT',
+        description=(
+            'ConViT replaces the self-attention of the early Vision Transformer blocks with gated positional '
+            'self-attention (GPSA), which can be initialized to behave like a convolution, as a soft convolutional '
+            'inductive bias.'
+        ),
+    ),
+    'convmixer': dict(
+        title='ConvMixer',
+        category='CNN',
+        description=(
+            'ConvMixer embeds the image as patches and keeps that resolution throughout, alternating depthwise '
+            'convolutions (spatial mixing) and pointwise convolutions (channel mixing).'
+        ),
+    ),
+    'convnext': dict(
+        title='ConvNeXt',
+        category='CNN',
+        example='convnext_tiny.in12k_ft_in1k',
+        description=(
+            'ConvNeXt is a pure convolutional network that adopts design choices from vision transformers, such '
+            'as large depthwise kernels, inverted bottlenecks and LayerNorm. ConvNeXt-V2 adds Global Response '
+            'Normalization (GRN) and is pretrained as a fully convolutional masked autoencoder (FCMAE).'
+        ),
+    ),
+    'cpubone': dict(
+        title='CPUBone',
+        category='Efficient/Mobile',
+        description=(
+            'CPUBone is a vision backbone designed for devices with low parallelization capabilities, such as CPUs, '
+            'built from (fused) MBConv blocks and convolutional attention blocks.'
+        ),
+    ),
+    'crossvit': dict(
+        title='CrossViT',
+        category='ViT',
+        description=(
+            'CrossViT processes small and large image patches in two Transformer branches and fuses them with '
+            'cross-attention through the class tokens. Model names in `timm` give the actual input resolution '
+            '(240 / 408 instead of the original 224 / 384).'
+        ),
+    ),
+    'csatv2': dict(
+        title='CSATv2',
+        category='Hybrid',
+        description=(
+            'CSATv2 is a frequency-domain vision model that works on DCT transforms of the input image, with spatial '
+            'attention.'
+        ),
+    ),
+    'cspnet': dict(
+        title='CSPNet (CSPResNet, CSPDarkNet, DarkNet)',
+        category='CNN',
+        description=(
+            'Cross Stage Partial Networks split the features of each stage into two parts, one passing through the '
+            'stage blocks and one merged back at the end of the stage. This module holds CSPResNet, CSPResNeXt, '
+            'CSPDarkNet, DarkNet and the `timm` `cs3*` variants.'
+        ),
+    ),
+    'cspnext': dict(
+        title='CSPNeXt',
+        category='CNN',
+        description=(
+            'The CSPNeXt backbone of the RTMDet real-time object detector (CSP blocks with 5x5 depthwise '
+            'convolutions), with ImageNet-1k classification weights converted from the OpenMMLab checkpoints.'
+        ),
+    ),
+    'davit': dict(
+        title='DaViT',
+        category='ViT',
+        description=(
+            'Dual Attention Vision Transformers (DaViT) combine spatial window attention and channel group '
+            'attention, both linear in the number of tokens, in a hierarchical design.'
+        ),
+    ),
+    'deepseek-vit': dict(
+        title='DeepSeek ViT',
+        category='Encoder',
+        description=(
+            'The vision encoder of the DeepSeek-V4 / V4.1 multimodal models, a pre-norm ViT with RMSNorm, a SwiGLU '
+            'MLP and axial 2D RoPE as the only position encoding. Classifier variants add pooling and a linear head, '
+            'the `_enc` variants keep the native projector that maps the tokens to the language model width.'
+        ),
+    ),
+    'deit': dict(
+        title='DeiT',
+        category='ViT',
+        description=(
+            'Data-efficient Image Transformers (DeiT) are Vision Transformers trained on ImageNet-1k only, '
+            'optionally with a distillation token that learns from a CNN teacher. DeiT III models are trained with '
+            'an improved recipe.'
+        ),
+    ),
+    'densenet': dict(
+        title='DenseNet',
+        category='CNN',
+        description=(
+            'Densely connected convolutional networks, where each layer in a dense block takes the concatenated '
+            'outputs of all preceding layers of the block. Adapted from torchvision, `densenetblur` uses blur pool '
+            'anti-aliased downsampling.'
+        ),
+    ),
+    'dla': dict(
+        title='DLA',
+        category='CNN',
+        description=(
+            'Deep Layer Aggregation (DLA) networks merge features across blocks and stages with iterative and '
+            'hierarchical aggregation nodes. Includes DLA variants built from Res2Net blocks.'
+        ),
+    ),
+    'dpn': dict(
+        title='DPN',
+        category='CNN',
+        description=(
+            'Dual Path Networks combine a residual path (feature re-use) and a densely connected path (new feature '
+            'exploration) in each block. Compatible with the weights of the original MXNet implementation.'
+        ),
+    ),
+    'edgenext': dict(
+        title='EdgeNeXt',
+        category='Efficient/Mobile',
+        description=(
+            'EdgeNeXt is a hybrid CNN-Transformer for mobile devices that combines depthwise convolution encoders '
+            'with split depth-wise transpose attention (SDTA) encoders, which apply attention across channels.'
+        ),
+    ),
+    'efficientformer': dict(
+        title='EfficientFormer',
+        category='Efficient/Mobile',
+        description=(
+            'EfficientFormer is a vision transformer designed for mobile latency, with pooling based blocks on 4D '
+            'feature maps in the early stages and multi-head self-attention blocks in the last stage.'
+        ),
+    ),
+    'efficientformer-v2': dict(
+        title='EfficientFormer-V2',
+        category='Efficient/Mobile',
+        description=(
+            'EfficientFormer-V2 revisits the EfficientFormer design to reduce both parameter count and latency for '
+            'mobile devices, with convolutional stages and attention in the later, lower resolution stages.'
+        ),
+    ),
+    'efficientnet': dict(
+        title='EfficientNet',
+        category='Efficient/Mobile',
+        example='efficientnet_b0.ra_in1k',
+        description=(
+            'EfficientNet and EfficientNetV2, and the related mobile architectures built from the same depthwise '
+            'separable, inverted residual (MBConv) and fused MBConv blocks: MixNet, MnasNet, FBNet, Single-Path NAS, '
+            'MobileNet-V1 / V2, EfficientNet-Lite, EdgeTPU and TinyNet.'
+        ),
+    ),
+    'efficientvim': dict(
+        title='EfficientViM',
+        category='Efficient/Mobile',
+        description=(
+            'Efficient Vision Mamba (EfficientViM) is built around the Hidden State Mixer based State Space Duality '
+            '(HSM-SSD) layer, implemented here in plain PyTorch. The `_dist` models add a distillation head.'
+        ),
+    ),
+    'efficientvit-mit': dict(
+        title='EfficientViT (MIT)',
+        category='Efficient/Mobile',
+        description=(
+            'EfficientViT from the MIT Han Lab, a vision backbone for high-resolution, low-computation recognition '
+            'that uses multi-scale linear attention.'
+        ),
+    ),
+    'efficientvit-msra': dict(
+        title='EfficientViT (MSRA)',
+        category='Efficient/Mobile',
+        description=(
+            'EfficientViT from Microsoft Research, a memory efficient vision transformer with cascaded group '
+            'attention, which feeds each attention head a different split of the features.'
+        ),
+    ),
+    'eva': dict(
+        title='EVA',
+        category='ViT',
+        description=(
+            'EVA and EVA-02 Vision Transformers and other ViT variants sharing the `Eva` class, with rotary position '
+            'embeddings (RoPE), SwiGLU MLPs and related additions. The module also holds the Perception Encoder (PE), '
+            'ROPE-ViT, DINOv3, LingBot-Vision and Sapiens2 models and `timm` original ViT configs with RoPE.'
+        ),
+    ),
+    'fasternet': dict(
+        title='FasterNet',
+        category='Efficient/Mobile',
+        description=(
+            'FasterNet is built around partial convolution (PConv), which convolves only a part of the input '
+            'channels to reduce redundant computation and memory access.'
+        ),
+    ),
+    'fastvit': dict(
+        title='FastViT',
+        category='Efficient/Mobile',
+        description=(
+            'FastViT is a hybrid convolutional / transformer network that uses structural reparameterization to '
+            'remove skip connections at inference. The module also includes the MobileCLIP image encoders '
+            '(`fastvit_mci*`).'
+        ),
+    ),
+    'focalnet': dict(
+        title='FocalNet',
+        category='Hybrid',
+        description=(
+            'Focal Modulation Networks (FocalNet) replace self-attention with focal modulation, which aggregates '
+            'context at several granularities with depthwise convolutions and gates it into each query token.'
+        ),
+    ),
+    'gcvit': dict(
+        title='GCViT',
+        category='ViT',
+        description=(
+            'Global Context Vision Transformers (GCViT) alternate local window attention with global context '
+            'attention, whose queries are generated from the whole feature map by a convolutional module.'
+        ),
+    ),
+    'gemma4-vit': dict(
+        title='Gemma 4 ViT',
+        category='Encoder',
+        description=(
+            "The vision encoder of Google's Gemma 4 multimodal models, a ViT with 2D RoPE, gated MLPs, QK "
+            'normalization and sandwich normalization blocks.'
+        ),
+    ),
+    'ghostnet': dict(
+        title='GhostNet',
+        category='Efficient/Mobile',
+        description=(
+            'GhostNet generates part of its feature maps with cheap operations (Ghost modules). GhostNetV2 adds '
+            'DFC attention for long-range dependencies, GhostNetV3 uses re-parameterization and knowledge '
+            'distillation in training.'
+        ),
+    ),
+    'hardcorenas': dict(
+        title='HardCoRe-NAS',
+        category='Efficient/Mobile',
+        description=(
+            'Mobile networks found by HardCoRe-NAS, a differentiable neural architecture search with hard latency '
+            'constraints, built on the `MobileNetV3` class.'
+        ),
+    ),
+    'hgnet': dict(
+        title='PP-HGNet',
+        category='CNN',
+        description=(
+            'PP-HGNet and PP-HGNetV2 (High Performance GPU Net) from PaddleClas, built from HG blocks that '
+            'aggregate the outputs of a sequence of convolutions. The `ssld` weights are trained with PaddleClas '
+            'SSLD distillation.'
+        ),
+    ),
+    'hiera': dict(
+        title='Hiera',
+        category='ViT',
+        description=(
+            'Hiera is a hierarchical vision transformer without specialized modules (convolutions, shifted windows, '
+            'relative position biases), relying on masked autoencoder (MAE) pretraining to learn spatial biases.'
+        ),
+    ),
+    'hieradet-sam2': dict(
+        title='HieraDet (SAM 2)',
+        category='ViT',
+        description=(
+            'HieraDet, the Hiera based image encoder of Segment Anything 2 (SAM 2), with windowed attention and '
+            'windowed position embeddings.'
+        ),
+    ),
+    'hrnet': dict(
+        title='HRNet',
+        category='CNN',
+        description=(
+            'High-Resolution Networks keep a high resolution branch through the whole network and add lower '
+            'resolution branches in parallel, repeatedly exchanging information between them.'
+        ),
+    ),
+    'iformer': dict(
+        title='iFormer',
+        category='Efficient/Mobile',
+        description=(
+            'iFormer integrates a fast convolutional network with single-head modulation attention (SHMA) in the '
+            'later stages, for mobile applications.'
+        ),
+    ),
+    'inception-next': dict(
+        title='InceptionNeXt',
+        category='CNN',
+        description=(
+            'InceptionNeXt decomposes the large kernel depthwise convolution of ConvNeXt into parallel branches, a '
+            'small square kernel, two orthogonal band kernels and an identity mapping, following Inception.'
+        ),
+    ),
+    'inception-resnet-v2': dict(
+        title='Inception-ResNet-v2',
+        category='CNN',
+        description=(
+            'Inception-ResNet-v2 combines Inception modules with residual connections. Ported from the TensorFlow '
+            'implementation and weights.'
+        ),
+    ),
+    'inception-v3': dict(
+        title='Inception-v3',
+        category='CNN',
+        description='Inception-v3, adapted from the torchvision `Inception3` model.',
+    ),
+    'inception-v4': dict(
+        title='Inception-v4',
+        category='CNN',
+        description='Inception-v4, ported from the TensorFlow implementation and weights.',
+    ),
+    'lcnetv2': dict(
+        title='PP-LCNetV2',
+        category='Efficient/Mobile',
+        description=(
+            'PP-LCNetV2 from PaddleClas is a CPU oriented network built on PP-LCNet. The depthwise convolutions of '
+            'the later stages are re-parameterizable multi-scale branches, and SE and shortcuts are used sparingly '
+            'to avoid latency penalties on CPU.'
+        ),
+    ),
+    'levit': dict(
+        title='LeViT',
+        category='Hybrid',
+        description=(
+            'LeViT is a hybrid network for fast inference, a convolutional stem followed by attention stages that '
+            'shrink the resolution with attention based downsampling and use attention biases for position.'
+        ),
+    ),
+    'lowformer': dict(
+        title='LowFormer',
+        category='Efficient/Mobile',
+        description=(
+            'LowFormer is a convolutional transformer backbone designed for hardware efficiency (measured throughput '
+            'and latency rather than MACs). The E1 / E2 / E3 edge GPU variants are from the journal extension.'
+        ),
+    ),
+    'mambaout': dict(
+        title='MambaOut',
+        category='CNN',
+        description=(
+            'MambaOut stacks Gated CNN blocks, Mamba blocks without the state space model (SSM) token mixer, to '
+            'test whether SSMs are needed for image classification.'
+        ),
+    ),
+    'maxxvit': dict(
+        title='MaxViT and CoAtNet',
+        category='Hybrid',
+        description=(
+            'From-scratch implementations of MaxViT (MBConv blocks with multi-axis attention, blocked local and '
+            'dilated grid attention) and CoAtNet (convolution stages followed by relative attention stages), plus '
+            '`timm` variants (`_rw` configs, MaxxViT).'
+        ),
+    ),
+    'metaformer': dict(
+        title='MetaFormer (PoolFormer, ConvFormer, CAFormer)',
+        category='Hybrid',
+        description=(
+            'MetaFormer models share a general transformer block structure and vary the token mixer: pooling in '
+            'PoolFormer / PoolFormerV2, separable convolutions in ConvFormer, and convolutions in the early stages '
+            'with attention in the later stages in CAFormer.'
+        ),
+    ),
+    'mlp-mixer': dict(
+        title='MLP-Mixer, ResMLP and gMLP',
+        category='MLP',
+        description=(
+            'All-MLP architectures that alternate token mixing across patches with channel mixing: MLP-Mixer, '
+            'ResMLP and gMLP (gating with a spatial projection). The module docstring notes the gMLP implementation '
+            'is not verified.'
+        ),
+    ),
+    'mobilenetv3': dict(
+        title='MobileNet-V3',
+        category='Efficient/Mobile',
+        description=(
+            'MobileNet-V3 and the related networks built on the same `MobileNetV3` class: MobileNet-V4, LCNet '
+            '(PP-LCNet), FBNet-V3 and TensorFlow ported MobileNet-V3 weights (`tf_*`).'
+        ),
+    ),
+    'mobilenetv5': dict(
+        title='MobileNet-V5',
+        category='Encoder',
+        description=(
+            "The MobileNet-V5 vision encoder from Google's Gemma 3n, built from MobileNet-V4 blocks (Universal "
+            'Inverted Residual, Mobile MQA) with a multi-scale fusion adapter.'
+        ),
+    ),
+    'mobilevit': dict(
+        title='MobileViT',
+        category='Efficient/Mobile',
+        description=(
+            'MobileViT combines MobileNet-V2 inverted residual blocks with MobileViT blocks, which apply transformers '
+            'to unfolded patches for global processing. MobileViT-V2 uses separable self-attention. Built on the '
+            '`ByobNet` class.'
+        ),
+    ),
+    'mvitv2': dict(
+        title='MViTv2',
+        category='ViT',
+        description=(
+            'Multiscale Vision Transformers v2, a hierarchical transformer with pooling attention, decomposed '
+            'relative position embeddings and residual pooling connections.'
+        ),
+    ),
+    'naflexvit': dict(
+        title='NaFlex ViT',
+        category='ViT',
+        description=(
+            'A Vision Transformer with the patch embedding and position encoding in one module, supporting '
+            'pre-patchified inputs with variable aspect ratio and resolution (NaFlex), FlexiViT variable patch '
+            'size and NaViT factorized position embeddings.'
+        ),
+    ),
+    'nasnet': dict(
+        title='NASNet',
+        category='CNN',
+        description=(
+            "NASNet-A Large, a network of cells found by neural architecture search, from Cadene's pretrained "
+            'models port.'
+        ),
+    ),
+    'nest': dict(
+        title='NesT',
+        category='ViT',
+        description=(
+            'Nested Transformers (NesT) apply self-attention locally within non-overlapping image blocks and '
+            'aggregate neighbouring blocks between stages. Weights converted from the official JAX release.'
+        ),
+    ),
+    'nextvit': dict(
+        title='Next-ViT',
+        category='Hybrid',
+        description=(
+            'Next-ViT is a hybrid CNN / transformer for efficient deployment, stacking Next Convolution Blocks (NCB) '
+            'and Next Transformer Blocks (NTB).'
+        ),
+    ),
+    'nfnet': dict(
+        title='NFNet',
+        category='CNN',
+        description=(
+            'Normalization-Free networks, trained without batch normalization using scaled weight standardization: '
+            'NFNet (with adaptive gradient clipping), NF-RegNet and pre-activation NF-ResNet models.'
+        ),
+    ),
+    'pit': dict(
+        title='PiT',
+        category='ViT',
+        description=(
+            'Pooling-based Vision Transformers (PiT) reduce the spatial size and increase the channels of the tokens '
+            'between stages with a depthwise convolution pooling layer, as in CNNs.'
+        ),
+    ),
+    'pnasnet': dict(
+        title='PNASNet',
+        category='CNN',
+        description=(
+            "PNASNet-5 Large, found by progressive neural architecture search, from Cadene's pretrained models "
+            'port.'
+        ),
+    ),
+    'pvt-v2': dict(
+        title='PVTv2',
+        category='ViT',
+        description=(
+            'Pyramid Vision Transformer v2, a hierarchical transformer with spatial-reduction attention (linear in '
+            'the `_li` variant), overlapping patch embeddings and convolutional feed-forward layers.'
+        ),
+    ),
+    'qwen3-vit': dict(
+        title='Qwen3 ViT',
+        category='Encoder',
+        description=(
+            'The vision encoder of the Qwen3-VL / Qwen3.5 / Qwen3.8 multimodal models, a pre-norm ViT with a learned '
+            'absolute position grid combined with axial 2D RoPE. Classifier variants add pooling and a linear head, '
+            'the `_enc` variants keep the native projector that maps the tokens to the language model width.'
+        ),
+    ),
+    'rdnet': dict(
+        title='RDNet',
+        category='CNN',
+        description=(
+            'RDNet (DenseNets Reloaded) revisits densely connected convolutional networks with modernized blocks and '
+            'design choices.'
+        ),
+    ),
+    'regnet': dict(
+        title='RegNet',
+        category='CNN',
+        description=(
+            'RegNetX and RegNetY networks from the regular network design spaces, RegNetZ from "Fast and Accurate '
+            'Model Scaling", and `timm` additions such as the pre-activation RegNetV. Includes weights from pycls, '
+            'torchvision and VISSL (SEER).'
+        ),
+    ),
+    'repghost': dict(
+        title='RepGhost',
+        category='Efficient/Mobile',
+        description=(
+            'RepGhostNet replaces the feature concatenation of the Ghost module with re-parameterized feature '
+            'reuse, folded into a single convolution path at inference.'
+        ),
+    ),
+    'repvit': dict(
+        title='RepViT',
+        category='Efficient/Mobile',
+        description=(
+            'RepViT is a mobile CNN that brings design choices of lightweight vision transformers into MobileNet-V3 '
+            'style blocks, with structural re-parameterization.'
+        ),
+    ),
+    'res2net': dict(
+        title='Res2Net',
+        category='CNN',
+        description=(
+            'Res2Net splits the channels of the bottleneck block into groups connected hierarchically, giving '
+            'several receptive field sizes within one block. Includes Res2NeXt.'
+        ),
+    ),
+    'resnest': dict(
+        title='ResNeSt',
+        category='CNN',
+        description=(
+            'ResNeSt uses split-attention blocks, channel attention across groups of feature map splits, in a ResNet '
+            'style network.'
+        ),
+    ),
     'resnet': dict(
         title='ResNet',
         category='CNN',
-        modules=('resnet',),
         example='resnet50.a1_in1k',
         description=(
             'Residual networks (ResNet) and the variants built on the same `ResNet` class: ResNeXt grouped '
@@ -74,21 +658,155 @@ FAMILIES: Dict[str, Dict[str, Any]] = {
             'ResNet-RS configurations.'
         ),
     ),
-    'convnext': dict(
-        title='ConvNeXt',
+    'resnetv2': dict(
+        title='ResNetV2 (BiT)',
         category='CNN',
-        modules=('convnext',),
-        example='convnext_tiny.in12k_ft_in1k',
         description=(
-            'ConvNeXt is a pure convolutional network that adopts design choices from vision transformers, such '
-            'as large depthwise kernels, inverted bottlenecks and LayerNorm. ConvNeXt-V2 adds Global Response '
-            'Normalization (GRN) and is pretrained as a fully convolutional masked autoencoder (FCMAE).'
+            'Pre-activation ResNet (v2) with Group Normalization and Weight Standardization as used by Big Transfer '
+            '(BiT), with the original BiT weights. Also supports the non pre-activation variant used as the hybrid '
+            'Vision Transformer backbone.'
+        ),
+    ),
+    'rexnet': dict(
+        title='ReXNet',
+        category='Efficient/Mobile',
+        description=(
+            'ReXNet revises the channel configuration of inverted residual networks to reduce representational '
+            'bottlenecks. The `rexnetr_*` variants round the channels to multiples of 8.'
+        ),
+    ),
+    'selecsls': dict(
+        title='SelecSLS',
+        category='CNN',
+        description=(
+            'SelecSLS uses selective long and short range skip connections, proposed as the core network of XNect, '
+            'a real-time multi-person 3D pose estimation system.'
+        ),
+    ),
+    'senet': dict(
+        title='SENet (legacy)',
+        category='CNN',
+        description=(
+            "SENet, SE-ResNet and SE-ResNeXt from Cadene's pretrained models (`legacy_*`). The module is deprecated "
+            'in favour of the SE variants of the `ResNet` class.'
+        ),
+    ),
+    'sequencer': dict(
+        title='Sequencer',
+        category='MLP',
+        description=(
+            'Sequencer replaces self-attention with BiLSTM layers that mix tokens along the vertical and horizontal '
+            'axes, followed by channel MLPs.'
+        ),
+    ),
+    'shvit': dict(
+        title='SHViT',
+        category='Efficient/Mobile',
+        description=(
+            'SHViT (Single-Head Vision Transformer) uses a memory efficient macro design and single-head attention '
+            'applied to part of the channels.'
+        ),
+    ),
+    'sknet': dict(
+        title='SKNet',
+        category='CNN',
+        description=(
+            'Selective Kernel Networks on a ResNet base, where SK units fuse branches with different kernel sizes '
+            'using attention over the branches.'
+        ),
+    ),
+    'starnet': dict(
+        title='StarNet',
+        category='Efficient/Mobile',
+        description=(
+            'StarNet is a deliberately simple proof-of-concept network built around the star operation, the '
+            'element-wise multiplication of two branches.'
+        ),
+    ),
+    'swiftformer': dict(
+        title='SwiftFormer',
+        category='Efficient/Mobile',
+        description=(
+            'SwiftFormer replaces the quadratic matrix multiplications of self-attention with efficient additive '
+            'attention, for real-time mobile vision applications.'
+        ),
+    ),
+    'swin-transformer': dict(
+        title='Swin Transformer',
+        category='ViT',
+        description=(
+            'Swin Transformer is a hierarchical vision transformer that computes self-attention within local '
+            'windows, shifted between consecutive blocks for cross-window connections. Includes the S3 '
+            '(AutoFormerV2) weights.'
+        ),
+    ),
+    'swin-transformer-v2': dict(
+        title='Swin Transformer V2',
+        category='ViT',
+        description=(
+            'Swin Transformer V2 scales up Swin with residual post-norm, scaled cosine attention and a log-spaced '
+            'continuous relative position bias that transfers across window sizes.'
+        ),
+    ),
+    'swin-transformer-v2-cr': dict(
+        title='Swin Transformer V2 (CR)',
+        category='ViT',
+        description=(
+            "An alternative Swin Transformer V2 implementation adapted from Christoph Reich's code, designed for "
+            'changing the image size together with the window size, including non-square sizes. The module '
+            'docstring marks it as experimental.'
+        ),
+    ),
+    'tiny-vit': dict(
+        title='TinyViT',
+        category='Hybrid',
+        description=(
+            'TinyViT is a family of small hierarchical vision transformers (a convolutional first stage, then local '
+            'window attention), pretrained by fast distillation from large teacher models.'
+        ),
+    ),
+    'tnt': dict(
+        title='TNT',
+        category='ViT',
+        description=(
+            'Transformer in Transformer (TNT) models the structure inside each patch with an inner transformer over '
+            'sub-patches, alongside the outer transformer over patches.'
+        ),
+    ),
+    'tresnet': dict(
+        title='TResNet',
+        category='CNN',
+        description=(
+            'TResNet is a ResNet based design for high GPU throughput, with a space-to-depth stem, anti-aliased '
+            'downsampling and SE layers.'
+        ),
+    ),
+    'twins': dict(
+        title='Twins',
+        category='ViT',
+        description=(
+            'Twins-PCPVT (Pyramid Vision Transformer with conditional position encodings) and Twins-SVT (spatially '
+            'separable self-attention, locally grouped attention alternating with global sub-sampled attention).'
+        ),
+    ),
+    'vgg': dict(
+        title='VGG',
+        category='CNN',
+        description=(
+            'VGG networks of stacked 3x3 convolutions, adapted from torchvision with `timm` functionality added.'
+        ),
+    ),
+    'visformer': dict(
+        title='Visformer',
+        category='Hybrid',
+        description=(
+            'Visformer (Vision-friendly Transformer) transitions a transformer towards a convolutional design, with '
+            'convolutional blocks in the early stage and self-attention in the later stages.'
         ),
     ),
     'vision-transformer': dict(
         title='Vision Transformer (ViT)',
         category='ViT',
-        modules=('vision_transformer',),
         example='vit_base_patch16_224.augreg2_in21k_ft_in1k',
         description=(
             'The Vision Transformer (ViT) splits an image into fixed size patches, linearly embeds them and '
@@ -98,36 +816,84 @@ FAMILIES: Dict[str, Dict[str, Any]] = {
             'pretrained image towers that share the architecture.'
         ),
     ),
-    'efficientnet': dict(
-        title='EfficientNet',
-        category='Efficient/Mobile',
-        modules=('efficientnet',),
-        example='efficientnet_b0.ra_in1k',
+    'vision-transformer-hybrid': dict(
+        title='Hybrid Vision Transformer',
+        category='Hybrid',
         description=(
-            'EfficientNet and EfficientNetV2, and the related mobile architectures built from the same depthwise '
-            'separable, inverted residual (MBConv) and fused MBConv blocks: MixNet, MnasNet, FBNet, Single-Path NAS, '
-            'MobileNet-V1 / V2, EfficientNet-Lite, EdgeTPU and TinyNet.'
+            'Vision Transformers whose patch tokens come from a convolutional backbone (ResNet / ResNetV2 stem or '
+            'stages) instead of a linear patch embedding, using the `VisionTransformer` class.'
+        ),
+    ),
+    'vision-transformer-relpos': dict(
+        title='Vision Transformer (relative position)',
+        category='ViT',
+        description=(
+            'Vision Transformers using relative position biases instead of absolute position embeddings. The module '
+            'docstring marks these models as experimental.'
+        ),
+    ),
+    'vision-transformer-sam': dict(
+        title='Segment Anything ViT',
+        category='ViT',
+        description=(
+            'The ViT image encoder of the Segment Anything Model (SAM), a plain ViT backbone with windowed and '
+            'global attention blocks and relative position embeddings as in ViTDet.'
+        ),
+    ),
+    'vitamin': dict(
+        title='ViTamin',
+        category='Hybrid',
+        description=(
+            'ViTamin is a vision model designed for vision-language models, with convolutional (MBConv) stages '
+            'followed by transformer stages. The weights are CLIP image towers.'
+        ),
+    ),
+    'volo': dict(
+        title='VOLO',
+        category='ViT',
+        description=(
+            'Vision Outlooker (VOLO) adds outlook attention, which encodes fine-level features from local '
+            'neighbourhoods, before transformer stages that operate on coarser tokens.'
+        ),
+    ),
+    'vovnet': dict(
+        title='VoVNet',
+        category='CNN',
+        description=(
+            'VoVNet uses One-Shot Aggregation (OSA) modules, which concatenate the outputs of all layers of a block '
+            'once at its end. VoVNetV2 (from CenterMask) adds residual connections and effective SE (eSE) attention.'
+        ),
+    ),
+    'xception': dict(
+        title='Xception (legacy)',
+        category='CNN',
+        description=(
+            'The original Xception, depthwise separable convolutions with residual connections, with weights ported '
+            'from Keras (`legacy_xception`).'
+        ),
+    ),
+    'xception-aligned': dict(
+        title='Aligned Xception',
+        category='CNN',
+        description=(
+            'Aligned Xception (41, 65, 71 layers) as modified in DeepLab, implemented from scratch and compatible '
+            'with the TensorFlow DeepLab weights.'
+        ),
+    ),
+    'xcit': dict(
+        title='XCiT',
+        category='ViT',
+        description=(
+            'Cross-Covariance Image Transformers (XCiT) replace token self-attention with cross-covariance attention '
+            'across feature channels, linear in the number of tokens, and add local patch interaction layers.'
         ),
     ),
 }
 
-# Hosts whose links in a module docstring are taken as paper references (code / weight links are skipped).
-_PAPER_HOSTS = (
-    'arxiv.org',
-    'openreview.net',
-    'proceedings.neurips.cc',
-    'papers.nips.cc',
-    'openaccess.thecvf.com',
-    'proceedings.mlr.press',
-    'aclanthology.org',
-)
-_URL_RE = re.compile(r'https?://[^\s<>`\'"()\[\],]+')
+# A paper reference in a module docstring is one line: ``* `Title` - https://...`` (bullet ``*`` or ``-``, any indent).
+_PAPER_LINE_RE = re.compile(r'^\s*[*-]\s+`(?P<title>[^`]+)`\s*[-\u2013]\s*(?P<url>https?://[^\s<>`]+)')
 _ARXIV_ID_RE = re.compile(r'(\d{4}\.\d{4,5})(v\d+)?')
 _BIBTEX_START_RE = re.compile(r'^\s*@\w+\s*\{')
-_DELIMITED_TITLE_RE = re.compile(r"`([^`]{4,})`|'([^']{8,})'|\"([^\"]{8,})\"")
-_PAPER_PREFIX_RE = re.compile(r'^.*?\bpaper(?:\s+link)?\s*:\s*', re.IGNORECASE)
-_LEAD_PHRASE_RE = re.compile(
-    r'^(?:as described in|based on paper|a pytorch impl(?:ementation)? of\s*:?|from)(?:\s+|$)', re.IGNORECASE)
 
 
 # --------------------------------------------------------------------------------------------------------------------
@@ -153,17 +919,12 @@ def _paper_key(url: str) -> str:
 
 def _normalize_paper_url(url: str) -> str:
     """Point arXiv pdf links to the abstract page."""
-    url = url.rstrip('.')
+    url = url.rstrip('.,;)')
     if 'arxiv.org' in url:
         m = _ARXIV_ID_RE.search(url)
         if m:
             return f'https://arxiv.org/abs/{m.group(1)}{m.group(2) or ""}'
     return url
-
-
-def _is_paper_url(url: str) -> bool:
-    host = url.split('/')[2].lower()
-    return any(host == h or host.endswith('.' + h) for h in _PAPER_HOSTS)
 
 
 def _split_bibtex(doc: str) -> Tuple[List[str], List[str]]:
@@ -190,70 +951,12 @@ def _split_bibtex(doc: str) -> Tuple[List[str], List[str]]:
     return entries, other
 
 
-def _bibtex_field(entry: str, name: str) -> Optional[str]:
-    """Extract a (possibly brace nested) field value from a BibTeX entry."""
-    m = re.search(rf'\b{name}\s*=\s*', entry, re.IGNORECASE)
-    if not m:
-        return None
-    rest = entry[m.end():]
-    if rest.startswith('{'):
-        depth = 0
-        for i, c in enumerate(rest):
-            depth += (c == '{') - (c == '}')
-            if depth == 0:
-                value = rest[1:i]
-                break
-        else:
-            return None
-    elif rest.startswith('"'):
-        end = rest.find('"', 1)
-        value = rest[1:end] if end > 0 else ''
-    else:
-        value = re.split(r'[,\n}]', rest, maxsplit=1)[0]
-    return ' '.join(value.replace('{', '').replace('}', '').split()) or None
-
-
-def _bibtex_paper(entry: str) -> Optional[Paper]:
-    """Paper reference for a BibTeX entry, if it carries an arXiv id or url."""
-    title = _bibtex_field(entry, 'title')
-    url = _bibtex_field(entry, 'url')
-    if not url:
-        arxiv = None
-        for name in ('eprint', 'journal', 'booktitle'):
-            value = _bibtex_field(entry, name) or ''
-            m = _ARXIV_ID_RE.search(value)
-            if m and (name == 'eprint' or 'arxiv' in value.lower()):
-                arxiv = m.group(1)
-                break
-        url = f'https://arxiv.org/abs/{arxiv}' if arxiv else None
-    if not url and not title:
-        return None
-    return Paper(url=url or '', title=title, key=_paper_key(url) if url else f'title:{(title or "").lower()}')
-
-
-def _clean_title(text: str) -> Optional[str]:
-    """Reduce the non-url text of a docstring line to a paper title, or None if nothing title-like remains."""
-    m = _DELIMITED_TITLE_RE.search(text)
-    if m:
-        return next(g for g in m.groups() if g).strip()
-    text = re.sub(r'\(\s*\)', ' ', text)
-    text = _PAPER_PREFIX_RE.sub('', text)
-    text = text.strip().lstrip('*-•').strip()
-    text = _LEAD_PHRASE_RE.sub('', text)
-    if text.startswith('('):
-        return None  # only a remark left, e.g. "paper: <url> (CVPR 2025)"
-    text = text.strip(' \t-–:,.')
-    if len(text) < 4 or not re.search(r'[A-Za-z]{3}', text):
-        return None
-    return ' '.join(text.split())
-
-
 def parse_papers(doc: Optional[str]) -> Tuple[List[Paper], List[str]]:
     """Parse paper references and BibTeX entries from a module docstring.
 
-    Handles the common docstring styles in ``timm/models``: ``* `Title` - url``, ``Paper: Title - url``,
-    ``Title (url)``, a title line followed by an indented ``- url`` line, and bare BibTeX blocks. Titles that
-    cannot be found in the text are taken from a BibTeX entry with the same arXiv id, if any.
+    Paper references follow the ``timm/models`` docstring convention of one line per paper,
+    ``* `Title` - https://...`` (bullet ``*`` or ``-``, any indent, title in backticks). Other lines, including other
+    links (code, weights), are ignored. BibTeX entries are returned as is for the citation block.
 
     Args:
         doc: Module docstring.
@@ -264,73 +967,127 @@ def parse_papers(doc: Optional[str]) -> Tuple[List[Paper], List[str]]:
     if not doc:
         return [], []
     bibtex, lines = _split_bibtex(doc)
-    bib_papers = [p for p in (_bibtex_paper(e) for e in bibtex) if p is not None]
-    bib_titles = {p.key: p.title for p in bib_papers if p.title}
-
     papers: Dict[str, Paper] = {}
-    prev_text = ''
     for line in lines:
-        urls = _URL_RE.findall(line)
-        paper_urls = [u for u in urls if _is_paper_url(u)]
-        rest = _URL_RE.sub(' ', line)
-        if not paper_urls:
-            if line.strip():
-                prev_text = rest if not urls else ''
+        m = _PAPER_LINE_RE.match(line)
+        if not m:
             continue
-        title = _clean_title(rest) if len(paper_urls) == 1 else None
-        if title is None and len(paper_urls) == 1 and not rest.strip(' \t*-•'):
-            # url only line, the title is expected on the line above (e.g. "Paper: `Title`\n    - url")
-            title = _clean_title(prev_text)
-        for url in paper_urls:
-            url = _normalize_paper_url(url)
-            key = _paper_key(url)
-            delimited = _DELIMITED_TITLE_RE.search(rest) or _DELIMITED_TITLE_RE.search(prev_text)
-            if not delimited and key in bib_titles:
-                title = bib_titles[key]
-            if key not in papers:
-                papers[key] = Paper(url=url, title=title, key=key)
-            elif title and not papers[key].title:
-                papers[key].title = title
-        prev_text = ''
-
-    # BibTeX entries without an arXiv id / url: skip if the title is already listed, else attach the titles to
-    # the untitled links when they pair up one to one (e.g. "Paper: <url>" followed by a single BibTeX entry).
-    def _norm(t: Optional[str]) -> str:
-        return re.sub(r'[^a-z0-9]', '', (t or '').lower())
-
-    listed = {_norm(p.title) for p in papers.values() if p.title}
-    loose = [p for p in bib_papers if not p.url and _norm(p.title) not in listed]
-    untitled = [p for p in papers.values() if not p.title]
-    if loose and len(loose) == len(untitled):
-        for p, b in zip(untitled, loose):
-            p.title = b.title
-        loose = []
-    for p in bib_papers:
-        if p.url and p.key not in papers and _norm(p.title) not in listed:
-            papers[p.key] = p
-    for p in loose:
-        papers[p.key] = p
+        url = _normalize_paper_url(m.group('url'))
+        key = _paper_key(url)
+        if key not in papers:
+            papers[key] = Paper(url=url, title=' '.join(m.group('title').split()), key=key)
     return list(papers.values()), bibtex
+
+
+def _cfg_arxiv_urls(cfg: Any) -> List[str]:
+    """arXiv abstract urls of the ``paper_ids`` field of a pretrained config."""
+    urls = []
+    for pid in str(cfg.paper_ids or '').split(','):
+        m = _ARXIV_ID_RE.search(pid)
+        if m and 'arxiv' in pid.lower():
+            urls.append(f'https://arxiv.org/abs/{m.group(1)}')
+    return urls
 
 
 def config_papers(pretrained_cfgs: Sequence[Any]) -> List[Paper]:
     """Paper references from the ``paper_ids`` / ``paper_name`` fields of pretrained configs."""
     papers: Dict[str, Paper] = {}
     for cfg in pretrained_cfgs:
-        if not cfg.paper_ids:
-            continue
-        for pid in str(cfg.paper_ids).split(','):
-            pid = pid.strip()
-            m = _ARXIV_ID_RE.search(pid)
-            if not m or 'arxiv' not in pid.lower():
-                continue
-            url = f'https://arxiv.org/abs/{m.group(1)}'
+        for url in _cfg_arxiv_urls(cfg):
             key = _paper_key(url)
             if key not in papers:
                 papers[key] = Paper(url=url, title=cfg.paper_name, key=key)
             elif cfg.paper_name and not papers[key].title:
                 papers[key].title = cfg.paper_name
     return list(papers.values())
+
+
+# --------------------------------------------------------------------------------------------------------------------
+# Pretrained weight sources
+
+# First tokens of a pretrained tag that describe the data or training schedule rather than the source of a weight,
+# e.g. ``in1k``, ``in22k_ft_in1k``, ``300ep_in1k``, ``r160_in1k``, ``e300_in1k``, ``patch16_in21k``, ``pt``.
+_TAG_NO_SOURCE_RE = re.compile(r'^(in\d+k|inw\d+k|\d\w*|[er]\d+|patch\d+|ft|pt|dist\w*)$')
+_OTHER_SOURCE = 'other'
+
+
+@dataclass
+class WeightGroup:
+    """Pretrained weights of a family that share a source."""
+    key: str
+    label: str
+    note: str = ''
+    weights: List[str] = field(default_factory=list)
+
+
+def _short_title(title: str) -> str:
+    """Short label for a paper title, the part before a colon if there is one (e.g. ``ConvNeXt-V2: ...``)."""
+    head = title.split(':')[0].strip()
+    return head if head != title and len(head) >= 3 else title
+
+
+def _url_label(url: str) -> str:
+    """Short label for an origin url, ``owner/repo`` for GitHub / Hugging Face Hub urls, else the host."""
+    parts = url.split('://', 1)[-1].rstrip('/').split('/')
+    host = parts[0].lower()
+    host = host[4:] if host.startswith('www.') else host
+    if host in ('github.com', 'huggingface.co') and len(parts) >= 3:
+        return '/'.join(parts[1:3])
+    return host
+
+
+def weight_source(weight: str, paper_titles: Dict[str, str]) -> WeightGroup:
+    """Source of a pretrained weight, for grouping the weights of a family page.
+
+    The pretrained config ``paper_ids`` take precedence, then ``origin_url``, then a Hub organization other than
+    ``timm``, then the first token of the pretrained tag unless it only names the data or schedule (``in1k``,
+    ``300ep``, ...). Weights without any of these are grouped as other.
+
+    Args:
+        weight: Pretrained weight name, ``arch.tag``.
+        paper_titles: Paper titles keyed by paper key, from the module docstring and pretrained configs.
+
+    Returns:
+        An empty group for the source, with its key, label and note.
+    """
+    cfg = get_pretrained_cfg(weight)
+    urls = _cfg_arxiv_urls(cfg)
+    if urls:
+        key = _paper_key(urls[0])
+        title = paper_titles.get(key) or cfg.paper_name
+        label = _short_title(title) if title else key.replace('arxiv:', 'arXiv:')
+        return WeightGroup(f'paper:{key}', label, f'Pretrained configs reference [{_md(title or label)}]({urls[0]}).')
+    if cfg.origin_url:
+        url = cfg.origin_url
+        return WeightGroup(f'origin:{url}', _url_label(url), f'Origin: [{_md(url.split("://", 1)[-1])}]({url})')
+    org = (cfg.hf_hub_id or '').split('/')[0]
+    if org and org != 'timm':
+        return WeightGroup(f'hub:{org}', org, f'Hosted by [`{org}`]({_HUB_URL}/{org}) on the Hugging Face Hub.')
+    token = weight.split('.', 1)[1].split('_')[0] if '.' in weight else ''
+    if token and not _TAG_NO_SOURCE_RE.match(token):
+        return WeightGroup(f'tag:{token}', f'`{token}` tags')
+    return WeightGroup(_OTHER_SOURCE, 'Other')
+
+
+def group_weights(weights: Sequence[str], paper_titles: Dict[str, str]) -> List[WeightGroup]:
+    """Group pretrained weights by source (see ``weight_source``).
+
+    Sources with a single weight are folded into the other group. If fewer than two sources remain the weights are
+    returned as one unlabeled group. Groups are ordered by size, the other group last.
+    """
+    groups: Dict[str, WeightGroup] = {}
+    for w in weights:
+        source = weight_source(w, paper_titles)
+        groups.setdefault(source.key, source).weights.append(w)
+    other = groups.pop(_OTHER_SOURCE, WeightGroup(_OTHER_SOURCE, 'Other'))
+    for key in [k for k, g in groups.items() if len(g.weights) < 2]:
+        other.weights += groups.pop(key).weights
+    if len(groups) < 2:
+        return [WeightGroup('', '', weights=list(weights))] if weights else []
+    order = {w: i for i, w in enumerate(weights)}
+    other.weights.sort(key=order.get)
+    ordered = sorted(groups.values(), key=lambda g: (-len(g.weights), g.label.lower()))
+    return ordered + ([other] if other.weights else [])
 
 
 # --------------------------------------------------------------------------------------------------------------------
@@ -461,16 +1218,20 @@ def _err(e: BaseException) -> str:
     return f'{type(e).__name__}: {str(e).splitlines()[0][:200] if str(e) else ""}'
 
 
-def probe_model_api(arch: str, model_class: str) -> ProbeResult:
+def probe_model_api(arch: str, model_class: str, max_size: int = 384) -> ProbeResult:
     """Functionally probe the model API of a randomly initialized model on CPU.
 
     Signature or ``hasattr`` checks alone are unreliable (some classes accept and silently drop unknown kwargs, some
     methods exist but assert), so each feature counts only if a small call using it actually works. Probe steps catch
     any exception on purpose, a model failing a feature for any reason means the feature is not usable.
 
+    Models with a default input size above ``max_size`` (large VLM encoders, SAM backbones) are probed at about
+    256 px if they accept it, the features don't depend on the size and the probe is much faster.
+
     Args:
         arch: Architecture name, ideally the smallest of its class.
         model_class: Name of the model class, for reporting.
+        max_size: Default input sizes above this are reduced if the model accepts it.
 
     Returns:
         The probe result.
@@ -478,13 +1239,8 @@ def probe_model_api(arch: str, model_class: str) -> ProbeResult:
     t0 = time.perf_counter()
     cfg = get_pretrained_cfg(arch)
     h, w = cfg.input_size[-2:]
-    res = ProbeResult(model_class=model_class, arch=arch, img_size=(h, w))
-    status, errors = res.status, res.errors
-
     torch.manual_seed(0)
     base = timm.create_model(arch, pretrained=False).eval()
-    with torch.no_grad():
-        _forward_ok(base, (h, w))  # must work, anything below is meaningless otherwise
 
     # A size step that is a multiple of the network stride (or patch size), at least 32 px.
     stride = 32
@@ -492,6 +1248,22 @@ def probe_model_api(arch: str, model_class: str) -> ProbeResult:
     if isinstance(feature_info, (list, tuple)) and feature_info and feature_info[-1].get('reduction'):
         stride = int(feature_info[-1]['reduction'])
     step = stride * math.ceil(32 / stride)
+
+    with torch.no_grad():
+        reduced = None
+        if max(h, w) > max_size:
+            size = stride * max(1, round(256 / stride))
+            try:
+                _forward_ok(base, (size, size))
+                reduced = (size, size)
+            except Exception:
+                pass
+        if reduced is not None:
+            h, w = reduced
+        else:
+            _forward_ok(base, (h, w))  # must work, anything below is meaningless otherwise
+    res = ProbeResult(model_class=model_class, arch=arch, img_size=(h, w))
+    status, errors = res.status, res.errors
     square, rect = (h + step, w + step), (h + step, w + 2 * step)
 
     def _check(key: str, fn) -> None:
@@ -638,6 +1410,7 @@ class FamilyData:
     papers: List[Paper]
     weight_papers: List[Paper]
     bibtex: List[str]
+    weight_groups: List[WeightGroup]
     probes: Dict[str, ProbeResult]
     example: Optional[str]
     issues: List[str]
@@ -658,6 +1431,9 @@ def collect_family(
 ) -> FamilyData:
     """Gather the registry, results, docstring and probe data for one family."""
     issues = []
+    spec = dict(spec, modules=tuple(spec.get('modules') or (slug.replace('-', '_'),)))
+    if spec['category'] not in CATEGORIES:
+        raise ValueError(f'family {slug}: unknown category {spec["category"]}')
     filters = dict(
         filter=spec.get('include', ''),
         module=list(spec['modules']),
@@ -711,6 +1487,8 @@ def collect_family(
     weight_papers = [p for p in config_papers([get_pretrained_cfg(w) for w in weights]) if p.key not in seen]
     if not papers:
         issues.append(f'no paper references parsed from the docstring of {", ".join(spec["modules"])}')
+    paper_titles = {p.key: p.title for p in papers + weight_papers if p.title}
+    weight_groups = group_weights(weights, paper_titles)
 
     for w in weights:
         if not get_pretrained_cfg(w).hf_hub_id:
@@ -719,8 +1497,9 @@ def collect_family(
     probes = {}
     if probe:
         for model_class, entries in sorted(by_class.items()):
-            # Smallest architecture of the class, test_* models are skipped as they use deliberately unusual
-            # configs (e.g. test_vit enables dynamic_img_size) unless the class has nothing else.
+            # Smallest architecture of the class in this family. test_* models are listed like any other, but not
+            # used for the probe as they use deliberately unusual configs (e.g. test_vit enables dynamic_img_size),
+            # unless the class has nothing else.
             arch = min([e for e in entries if not e[1].startswith('test_')] or entries)[1]
             try:
                 probes[model_class] = probe_model_api(arch, model_class)
@@ -747,6 +1526,7 @@ def collect_family(
         papers=papers,
         weight_papers=weight_papers,
         bibtex=bibtex,
+        weight_groups=weight_groups,
         probes=probes,
         example=example,
         issues=issues,
@@ -801,6 +1581,37 @@ def _feature_cell(r: ProbeResult, key: str) -> str:
     if key == 'features_only' and value == YES and r.feature_reductions:
         cell += ' (strides ' + ', '.join(str(x) for x in r.feature_reductions) + ')'
     return cell
+
+
+def _weight_table(weights: Sequence[str], results: Dict[str, List[Dict[str, str]]]) -> str:
+    rows = []
+    for w in weights:
+        cfg = get_pretrained_cfg(w)
+        row = _top1(w, results)
+        if cfg.hf_hub_id:
+            hub_text = 'timm' if cfg.hf_hub_id == f'timm/{w}' else cfg.hf_hub_id
+            hub = f'[{_md(hub_text)}]({_HUB_URL}/{cfg.hf_hub_id})'
+        elif cfg.url:
+            hub = f'[original]({cfg.url})'
+        else:
+            hub = '-'
+        input_size = _fmt_size(cfg.input_size)
+        if cfg.test_input_size and tuple(cfg.test_input_size) != tuple(cfg.input_size):
+            input_size += f' (test {_fmt_size(cfg.test_input_size)})'
+        rows.append([
+            f'`{w}`',
+            input_size,
+            row['top1'] if row else '-',
+            row['img_size'] if row else '-',
+            str(cfg.num_classes) if cfg.num_classes else 'none',
+            _md(cfg.license or '-'),
+            hub,
+        ])
+    return _table(
+        ['Weight', 'Input size', 'Top-1 (%)', 'Eval size', 'Classes', 'License', 'Hub'],
+        rows,
+        ['l', 'r', 'r', 'r', 'r', 'l', 'l'],
+    )
 
 
 def render_family(data: FamilyData, results: Dict[str, List[Dict[str, str]]]) -> str:
@@ -893,33 +1704,8 @@ def render_family(data: FamilyData, results: Dict[str, List[Dict[str, str]]]) ->
         '',
     ]
 
-    out += ['## Pretrained weights', '']
-    rows = []
-    for w in data.weights:
-        cfg = get_pretrained_cfg(w)
-        row = _top1(w, results)
-        if cfg.hf_hub_id:
-            hub_text = 'timm' if cfg.hf_hub_id == f'timm/{w}' else cfg.hf_hub_id
-            hub = f'[{_md(hub_text)}]({_HUB_URL}/{cfg.hf_hub_id})'
-        elif cfg.url:
-            hub = f'[original]({cfg.url})'
-        else:
-            hub = '-'
-        input_size = _fmt_size(cfg.input_size)
-        if cfg.test_input_size and tuple(cfg.test_input_size) != tuple(cfg.input_size):
-            input_size += f' (test {_fmt_size(cfg.test_input_size)})'
-        rows.append([
-            f'`{w}`',
-            input_size,
-            row['top1'] if row else '-',
-            row['img_size'] if row else '-',
-            str(cfg.num_classes) if cfg.num_classes else 'none',
-            _md(cfg.license or '-'),
-            hub,
-        ])
     out += [
-        _table(['Weight', 'Input size', 'Top-1 (%)', 'Eval size', 'Classes', 'License', 'Hub'], rows,
-               ['l', 'r', 'r', 'r', 'r', 'l', 'l']),
+        '## Pretrained weights',
         '',
         'Top-1 is ImageNet-1k validation accuracy from [`results-imagenet.csv`]'
         '(https://github.com/huggingface/pytorch-image-models/blob/main/results/results-imagenet.csv) at the '
@@ -927,6 +1713,22 @@ def render_family(data: FamilyData, results: Dict[str, List[Dict[str, str]]]) ->
         'Classes is the size of the pretrained classifier, none for weights without one.',
         '',
     ]
+    grouped = len(data.weight_groups) > 1
+    if grouped:
+        out += [
+            'Weights are grouped by source: the paper or origin given in the pretrained config, else a Hub '
+            'organization other than `timm`, else the first part of the pretrained tag (`architecture.tag`). Sources '
+            'with a single weight are listed under other.',
+            '',
+        ]
+    for group in data.weight_groups:
+        if grouped:
+            out += [f'### {group.label}', '']
+            if group.note:
+                out += [group.note, '']
+        out += [_weight_table(group.weights, results), '']
+    if not data.weight_groups:
+        out += ['No pretrained weights.', '']
 
     if data.bibtex:
         out += ['## Citation', '', '```bibtex', '\n\n'.join(data.bibtex), '```', '']
@@ -934,24 +1736,65 @@ def render_family(data: FamilyData, results: Dict[str, List[Dict[str, str]]]) ->
 
 
 def render_support_matrix(families: Sequence[FamilyData]) -> str:
-    """Render the Model API support matrix (one row per family and model class)."""
+    """Render the Model API support matrix, one row per family (docs page).
+
+    A family with several model classes gets one row per distinct probe outcome, listing the classes that share it.
+    """
     keys = [k for k, _, _ in FEATURES]
-    headers = ['Family', 'Class'] + [_MATRIX_HEADERS[k] for k in keys]
+    headers = ['Family', 'Classes'] + [_MATRIX_HEADERS[k] for k in keys]
     rows = []
-    for data in families:
+    for data in sorted(families, key=lambda d: d.spec['title'].lower()):
+        family = f'[{_md(data.spec["title"])}](models/{data.slug})'
+        by_status: Dict[Tuple[str, ...], List[str]] = {}
         for c in sorted(data.probes):
-            r = data.probes[c]
-            rows.append([f'[{_md(data.spec["title"])}](models/{data.slug})', f'`{c}`'] + [
-                _SYMBOLS[r.status.get(k, NO)] for k in keys])
+            status = tuple(_SYMBOLS[data.probes[c].status.get(k, NO)] for k in keys)
+            by_status.setdefault(status, []).append(c)
+        if not by_status:
+            rows.append([family, 'not probed'] + ['?'] * len(keys))
+        for i, (status, classes) in enumerate(by_status.items()):
+            rows.append([family if i == 0 else '', ', '.join(f'`{c}`' for c in classes)] + list(status))
     return '\n'.join([
         _GENERATED_NOTE,
         '',
         _table(headers, rows),
         '',
-        f'{_LEGEND} Each class is checked by running every feature on a randomly initialized model of '
-        'its smallest (non-test) architecture.',
+        f'{_LEGEND} Each model class of a family is checked by running every feature on a randomly initialized model '
+        'of its smallest (non-test) architecture in the family. Classes with the same results share a row, the '
+        'family page lists the architecture used for each.',
         '',
     ])
+
+
+def _plural(n: int, noun: str) -> str:
+    return f'{n} {noun}' + ('' if n == 1 else 's')
+
+
+def render_index(families: Sequence[FamilyData]) -> str:
+    """Render the model family index page, the families listed by category."""
+    num_archs = sum(len(d.archs) for d in families)
+    num_weights = sum(len(d.weights) for d in families)
+    out = [
+        _GENERATED_NOTE,
+        '',
+        '# Model Families',
+        '',
+        f'`timm` has {num_archs} architectures in {len(families)} model families, with {num_weights} pretrained '
+        'weights. Each family page lists the papers, architectures and pretrained weights of a model module, and '
+        'which parts of the [Model API](model_api) its models support. See the [Quickstart](quickstart) for '
+        'loading and using the models, the [models reference](reference/models) for `create_model` and the '
+        'pretrained configs, and the [results](results) for the ImageNet validation results of all weights.',
+        '',
+    ]
+    for category, category_title in CATEGORIES.items():
+        members = sorted((d for d in families if d.spec['category'] == category), key=lambda d: d.spec['title'].lower())
+        if not members:
+            continue
+        out += [f'## {category_title}', '']
+        for d in members:
+            counts = f'{_plural(len(d.archs), "architecture")}, {_plural(len(d.weights), "weight")}'
+            out.append(f'* [{_md(d.spec["title"])}](models/{d.slug}) ({counts}): {d.spec["description"]}')
+        out.append('')
+    return '\n'.join(out)
 
 
 def splice_matrix(page: Path, matrix: str) -> Optional[str]:
@@ -1018,9 +1861,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         '--matrix-file', type=Path, default=None,
         help='also write the support matrix to this file')
     parser.add_argument(
+        '--index-page', type=Path, default=_DOCS_SOURCE / 'models.mdx',
+        help='model family index page, written when all families are generated')
+    parser.add_argument(
         '--model-api-page', type=Path, default=_DOCS_SOURCE / 'model_api.mdx',
         help='page to splice the support matrix into, if it has the generated support matrix markers')
     parser.add_argument('--no-probe', action='store_true', help='skip the model API probe (no support tables)')
+    parser.add_argument(
+        '--num-threads', type=int, default=1,
+        help='torch CPU threads for the probe. The probed models are small, more threads mostly add overhead and are '
+             'very slow on a busy machine')
     parser.add_argument('--check', action='store_true', help='do not write, exit 1 if any output is out of date')
     parser.add_argument('-v', '--verbose', action='store_true', help='print data issues')
     args = parser.parse_args(argv)
@@ -1032,9 +1882,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     logging.getLogger('timm').setLevel(logging.ERROR)
     warnings.filterwarnings('ignore')
     torch.set_grad_enabled(True)
+    if args.num_threads > 0:
+        torch.set_num_threads(args.num_threads)
 
     t0 = time.perf_counter()
     slugs = args.families or list(FAMILIES)
+    covered = {m for slug, spec in FAMILIES.items() for m in spec.get('modules') or (slug.replace('-', '_'),)}
+    missing = sorted(set(list_modules()) - covered)
+    if missing:
+        print(f'warning: model modules without a FAMILIES entry (no docs page): {", ".join(missing)}')
     results = load_results(args.results_dir / 'results-imagenet.csv')
     bench_path, benchmark = load_benchmark(args.results_dir, timm.list_models(), args.benchmark_csv)
     print(f'timm {timm.__version__} from {Path(timm.__file__).parent}, benchmark data {bench_path}')
@@ -1052,6 +1908,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             for issue in data.issues:
                 print(f'    {issue}')
 
+    if set(slugs) == set(FAMILIES):
+        outputs[args.index_page] = render_index(families)
+    else:
+        print('index page not updated (needs all families)')
     if args.no_probe or set(slugs) != set(FAMILIES):
         # the matrix covers every family, a partial run would drop rows
         print('support matrix not updated (needs all families and the probe)')

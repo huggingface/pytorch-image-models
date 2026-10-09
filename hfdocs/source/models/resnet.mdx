@@ -13,11 +13,19 @@ Squeeze-and-Excitation (SE) and ECA channel attention, deep / tiered stems and a
 
 ## Papers
 
-The module docstring does not reference any papers.
-
-Referenced by pretrained weights:
-
-* [arXiv:2110.00476](https://arxiv.org/abs/2110.00476)
+* [Deep Residual Learning for Image Recognition](https://arxiv.org/abs/1512.03385)
+* [Bag of Tricks for Image Classification with Convolutional Neural Networks](https://arxiv.org/abs/1812.01187)
+* [Aggregated Residual Transformations for Deep Neural Networks](https://arxiv.org/abs/1611.05431)
+* [Wide Residual Networks](https://arxiv.org/abs/1605.07146)
+* [Squeeze-and-Excitation Networks](https://arxiv.org/abs/1709.01507)
+* [ECA-Net: Efficient Channel Attention for Deep Convolutional Neural Networks](https://arxiv.org/abs/1910.03151)
+* [Making Convolutional Networks Shift-Invariant Again](https://arxiv.org/abs/1904.11486)
+* [Group Normalization](https://arxiv.org/abs/1803.08494)
+* [Revisiting ResNets: Improved Training and Scaling Strategies](https://arxiv.org/abs/2103.07579)
+* [ResNet strikes back: An improved training procedure in timm](https://arxiv.org/abs/2110.00476)
+* [Billion-scale semi-supervised learning for image classification](https://arxiv.org/abs/1905.00546)
+* [Exploring the Limits of Weakly Supervised Pretraining](https://arxiv.org/abs/1805.00932)
+* [Knapsack Pruning with Inner Distillation](https://arxiv.org/abs/2002.08258)
 
 ## Usage
 
@@ -139,98 +147,185 @@ results](https://github.com/huggingface/pytorch-image-models/tree/main/results).
 
 ## Pretrained weights
 
+Top-1 is ImageNet-1k validation accuracy from
+[`results-imagenet.csv`](https://github.com/huggingface/pytorch-image-models/blob/main/results/results-imagenet.csv) at
+the listed eval size, - if the weight has no ImageNet-1k result (e.g. pretraining or image-text weights). Classes is the
+size of the pretrained classifier, none for weights without one.
+
+Weights are grouped by source: the paper or origin given in the pretrained config, else a Hub organization other than
+`timm`, else the first part of the pretrained tag (`architecture.tag`). Sources with a single weight are listed under
+other.
+
+### ResNet strikes back
+
+Pretrained configs reference [ResNet strikes back: An improved training procedure in
+timm](https://arxiv.org/abs/2110.00476).
+
 | Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
 |---|---:|---:|---:|---:|---|---|
-| `ecaresnet26t.ra2_in1k` | 256 (test 320) | 79.900 | 320 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/ecaresnet26t.ra2_in1k) |
-| `ecaresnet50d.miil_in1k` | 224 (test 288) | 81.648 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/ecaresnet50d.miil_in1k) |
-| `ecaresnet50d_pruned.miil_in1k` | 224 (test 288) | 80.808 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/ecaresnet50d_pruned.miil_in1k) |
 | `ecaresnet50t.a1_in1k` | 224 (test 288) | 82.110 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/ecaresnet50t.a1_in1k) |
 | `ecaresnet50t.a2_in1k` | 224 (test 288) | 81.682 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/ecaresnet50t.a2_in1k) |
 | `ecaresnet50t.a3_in1k` | 160 (test 224) | 79.548 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/ecaresnet50t.a3_in1k) |
-| `ecaresnet50t.ra2_in1k` | 256 (test 320) | 82.370 | 320 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/ecaresnet50t.ra2_in1k) |
-| `ecaresnet101d.miil_in1k` | 224 (test 288) | 83.006 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/ecaresnet101d.miil_in1k) |
-| `ecaresnet101d_pruned.miil_in1k` | 224 (test 288) | 82.016 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/ecaresnet101d_pruned.miil_in1k) |
-| `ecaresnet269d.ra2_in1k` | 320 (test 352) | 84.968 | 352 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/ecaresnet269d.ra2_in1k) |
-| `ecaresnetlight.miil_in1k` | 224 (test 288) | 81.430 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/ecaresnetlight.miil_in1k) |
-| `resnet10t.c3_in1k` | 176 (test 224) | 68.354 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet10t.c3_in1k) |
-| `resnet14t.c3_in1k` | 176 (test 224) | 72.242 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet14t.c3_in1k) |
 | `resnet18.a1_in1k` | 224 (test 288) | 73.164 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet18.a1_in1k) |
 | `resnet18.a2_in1k` | 224 (test 288) | 72.364 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet18.a2_in1k) |
 | `resnet18.a3_in1k` | 160 (test 224) | 68.250 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet18.a3_in1k) |
-| `resnet18.fb_ssl_yfcc100m_ft_in1k` | 224 | 72.636 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnet18.fb_ssl_yfcc100m_ft_in1k) |
-| `resnet18.fb_swsl_ig1b_ft_in1k` | 224 | 73.286 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnet18.fb_swsl_ig1b_ft_in1k) |
-| `resnet18.gluon_in1k` | 224 | 70.844 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet18.gluon_in1k) |
-| `resnet18.tv_in1k` | 224 | 69.752 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnet18.tv_in1k) |
-| `resnet18d.ra2_in1k` | 224 (test 288) | 73.790 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet18d.ra2_in1k) |
 | `resnet18d.ra4_e3600_r224_in1k` | 224 (test 288) | 76.012 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet18d.ra4_e3600_r224_in1k) |
-| `resnet26.bt_in1k` | 224 (test 288) | 76.384 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet26.bt_in1k) |
-| `resnet26d.bt_in1k` | 224 (test 288) | 77.422 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet26d.bt_in1k) |
-| `resnet26t.ra2_in1k` | 256 (test 320) | 78.330 | 320 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet26t.ra2_in1k) |
 | `resnet34.a1_in1k` | 224 (test 288) | 77.930 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet34.a1_in1k) |
 | `resnet34.a2_in1k` | 224 (test 288) | 77.150 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet34.a2_in1k) |
 | `resnet34.a3_in1k` | 160 (test 224) | 72.996 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet34.a3_in1k) |
-| `resnet34.bt_in1k` | 224 (test 288) | 76.506 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet34.bt_in1k) |
-| `resnet34.gluon_in1k` | 224 | 74.574 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet34.gluon_in1k) |
 | `resnet34.ra4_e3600_r224_in1k` | 224 (test 288) | 78.972 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet34.ra4_e3600_r224_in1k) |
-| `resnet34.tv_in1k` | 224 | 73.298 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnet34.tv_in1k) |
-| `resnet34d.ra2_in1k` | 224 (test 288) | 78.440 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet34d.ra2_in1k) |
 | `resnet50.a1_in1k` | 224 (test 288) | 81.240 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50.a1_in1k) |
 | `resnet50.a1h_in1k` | 176 (test 224) | 80.654 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50.a1h_in1k) |
 | `resnet50.a2_in1k` | 224 (test 288) | 80.774 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50.a2_in1k) |
 | `resnet50.a3_in1k` | 160 (test 224) | 78.052 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50.a3_in1k) |
-| `resnet50.am_in1k` | 224 | 79.004 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50.am_in1k) |
 | `resnet50.b1k_in1k` | 224 (test 288) | 80.708 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50.b1k_in1k) |
 | `resnet50.b2k_in1k` | 224 (test 288) | 80.466 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50.b2k_in1k) |
-| `resnet50.bt_in1k` | 224 (test 288) | 79.652 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50.bt_in1k) |
 | `resnet50.c1_in1k` | 224 (test 288) | 80.928 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50.c1_in1k) |
 | `resnet50.c2_in1k` | 224 (test 288) | 80.862 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50.c2_in1k) |
 | `resnet50.d_in1k` | 224 (test 288) | 81.012 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50.d_in1k) |
-| `resnet50.fb_ssl_yfcc100m_ft_in1k` | 224 | 79.252 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnet50.fb_ssl_yfcc100m_ft_in1k) |
-| `resnet50.fb_swsl_ig1b_ft_in1k` | 224 | 81.146 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnet50.fb_swsl_ig1b_ft_in1k) |
-| `resnet50.gluon_in1k` | 224 | 77.580 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50.gluon_in1k) |
-| `resnet50.ra_in1k` | 224 (test 288) | 79.864 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50.ra_in1k) |
-| `resnet50.ram_in1k` | 224 (test 288) | 79.982 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50.ram_in1k) |
-| `resnet50.tv2_in1k` | 176 (test 224) | 80.846 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnet50.tv2_in1k) |
-| `resnet50.tv_in1k` | 224 | 76.156 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnet50.tv_in1k) |
-| `resnet50_gn.a1h_in1k` | 224 (test 288) | 81.216 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50_gn.a1h_in1k) |
-| `resnet50c.gluon_in1k` | 224 | 78.016 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50c.gluon_in1k) |
 | `resnet50d.a1_in1k` | 224 (test 288) | 81.466 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50d.a1_in1k) |
 | `resnet50d.a2_in1k` | 224 (test 288) | 81.164 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50d.a2_in1k) |
 | `resnet50d.a3_in1k` | 160 (test 224) | 78.742 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50d.a3_in1k) |
-| `resnet50d.gluon_in1k` | 224 | 79.080 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50d.gluon_in1k) |
-| `resnet50d.ra2_in1k` | 224 (test 288) | 81.354 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50d.ra2_in1k) |
 | `resnet50d.ra4_e3600_r224_in1k` | 224 (test 288) | 81.840 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50d.ra4_e3600_r224_in1k) |
-| `resnet50s.gluon_in1k` | 224 | 78.710 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50s.gluon_in1k) |
 | `resnet101.a1_in1k` | 224 (test 288) | 82.326 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet101.a1_in1k) |
 | `resnet101.a1h_in1k` | 224 (test 288) | 82.796 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet101.a1h_in1k) |
 | `resnet101.a2_in1k` | 224 (test 288) | 82.218 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet101.a2_in1k) |
 | `resnet101.a3_in1k` | 160 (test 224) | 79.836 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet101.a3_in1k) |
-| `resnet101.gluon_in1k` | 224 | 79.306 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet101.gluon_in1k) |
-| `resnet101.tv2_in1k` | 176 (test 224) | 81.906 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnet101.tv2_in1k) |
-| `resnet101.tv_in1k` | 224 | 77.404 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnet101.tv_in1k) |
-| `resnet101c.gluon_in1k` | 224 | 79.542 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet101c.gluon_in1k) |
-| `resnet101d.gluon_in1k` | 224 | 80.466 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet101d.gluon_in1k) |
-| `resnet101d.ra2_in1k` | 256 (test 320) | 83.020 | 320 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet101d.ra2_in1k) |
-| `resnet101s.gluon_in1k` | 224 | 80.278 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet101s.gluon_in1k) |
 | `resnet152.a1_in1k` | 224 (test 288) | 82.742 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet152.a1_in1k) |
 | `resnet152.a1h_in1k` | 224 (test 288) | 83.494 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet152.a1h_in1k) |
 | `resnet152.a2_in1k` | 224 (test 288) | 82.614 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet152.a2_in1k) |
 | `resnet152.a3_in1k` | 160 (test 224) | 80.548 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet152.a3_in1k) |
-| `resnet152.gluon_in1k` | 224 | 79.712 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet152.gluon_in1k) |
-| `resnet152.tv2_in1k` | 176 (test 224) | 82.294 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnet152.tv2_in1k) |
-| `resnet152.tv_in1k` | 224 | 78.330 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnet152.tv_in1k) |
-| `resnet152c.gluon_in1k` | 224 | 79.904 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet152c.gluon_in1k) |
-| `resnet152d.gluon_in1k` | 224 | 80.476 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet152d.gluon_in1k) |
-| `resnet152d.ra2_in1k` | 256 (test 320) | 83.684 | 320 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet152d.ra2_in1k) |
-| `resnet152s.gluon_in1k` | 224 | 81.048 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet152s.gluon_in1k) |
-| `resnet200d.ra2_in1k` | 256 (test 320) | 83.976 | 320 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet200d.ra2_in1k) |
 | `resnetaa50.a1h_in1k` | 224 (test 288) | 81.618 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnetaa50.a1h_in1k) |
+| `resnext50_32x4d.a1_in1k` | 224 (test 288) | 81.480 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnext50_32x4d.a1_in1k) |
+| `resnext50_32x4d.a1h_in1k` | 224 (test 288) | 82.016 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnext50_32x4d.a1h_in1k) |
+| `resnext50_32x4d.a2_in1k` | 224 (test 288) | 81.304 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnext50_32x4d.a2_in1k) |
+| `resnext50_32x4d.a3_in1k` | 160 (test 224) | 79.258 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnext50_32x4d.a3_in1k) |
+| `resnext101_64x4d.c1_in1k` | 224 (test 288) | 83.158 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnext101_64x4d.c1_in1k) |
+| `seresnet50.a1_in1k` | 224 (test 288) | 81.114 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnet50.a1_in1k) |
+| `seresnet50.a2_in1k` | 224 (test 288) | 81.094 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnet50.a2_in1k) |
+| `seresnet50.a3_in1k` | 160 (test 224) | 77.036 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnet50.a3_in1k) |
+| `seresnext101_32x8d.ah_in1k` | 224 (test 288) | 84.192 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnext101_32x8d.ah_in1k) |
+| `seresnext101d_32x8d.ah_in1k` | 224 (test 288) | 84.380 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnext101d_32x8d.ah_in1k) |
+| `seresnextaa101d_32x8d.ah_in1k` | 224 (test 288) | 84.580 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnextaa101d_32x8d.ah_in1k) |
+
+### huggingface/pytorch-image-models
+
+Origin: [github.com/huggingface/pytorch-image-models](https://github.com/huggingface/pytorch-image-models)
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
+| `ecaresnet26t.ra2_in1k` | 256 (test 320) | 79.900 | 320 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/ecaresnet26t.ra2_in1k) |
+| `ecaresnet269d.ra2_in1k` | 320 (test 352) | 84.968 | 352 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/ecaresnet269d.ra2_in1k) |
+| `resnet10t.c3_in1k` | 176 (test 224) | 68.354 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet10t.c3_in1k) |
+| `resnet14t.c3_in1k` | 176 (test 224) | 72.242 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet14t.c3_in1k) |
+| `resnet18d.ra2_in1k` | 224 (test 288) | 73.790 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet18d.ra2_in1k) |
+| `resnet26.bt_in1k` | 224 (test 288) | 76.384 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet26.bt_in1k) |
+| `resnet26d.bt_in1k` | 224 (test 288) | 77.422 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet26d.bt_in1k) |
+| `resnet26t.ra2_in1k` | 256 (test 320) | 78.330 | 320 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet26t.ra2_in1k) |
+| `resnet34.bt_in1k` | 224 (test 288) | 76.506 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet34.bt_in1k) |
+| `resnet34d.ra2_in1k` | 224 (test 288) | 78.440 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet34d.ra2_in1k) |
+| `resnet50.bt_in1k` | 224 (test 288) | 79.652 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50.bt_in1k) |
+| `resnet50.ra_in1k` | 224 (test 288) | 79.864 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50.ra_in1k) |
+| `resnet50.ram_in1k` | 224 (test 288) | 79.982 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50.ram_in1k) |
+| `resnet50_gn.a1h_in1k` | 224 (test 288) | 81.216 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50_gn.a1h_in1k) |
+| `resnet50d.ra2_in1k` | 224 (test 288) | 81.354 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50d.ra2_in1k) |
+| `resnet101d.ra2_in1k` | 256 (test 320) | 83.020 | 320 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet101d.ra2_in1k) |
+| `resnet152d.ra2_in1k` | 256 (test 320) | 83.684 | 320 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet152d.ra2_in1k) |
+| `resnet200d.ra2_in1k` | 256 (test 320) | 83.976 | 320 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet200d.ra2_in1k) |
 | `resnetaa50d.d_in12k` | 224 (test 288) | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/resnetaa50d.d_in12k) |
 | `resnetaa50d.sw_in12k` | 224 (test 288) | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/resnetaa50d.sw_in12k) |
 | `resnetaa50d.sw_in12k_ft_in1k` | 224 (test 288) | 82.656 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnetaa50d.sw_in12k_ft_in1k) |
 | `resnetaa101d.sw_in12k` | 224 (test 288) | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/resnetaa101d.sw_in12k) |
 | `resnetaa101d.sw_in12k_ft_in1k` | 224 (test 288) | 84.114 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnetaa101d.sw_in12k_ft_in1k) |
 | `resnetblur50.bt_in1k` | 224 (test 288) | 80.248 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnetblur50.bt_in1k) |
+| `resnext50_32x4d.ra_in1k` | 224 (test 288) | 80.720 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnext50_32x4d.ra_in1k) |
+| `resnext50d_32x4d.bt_in1k` | 224 (test 288) | 80.676 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnext50d_32x4d.bt_in1k) |
+| `seresnet50.ra2_in1k` | 224 (test 288) | 81.288 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnet50.ra2_in1k) |
+| `seresnet152d.ra2_in1k` | 256 (test 320) | 84.344 | 320 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnet152d.ra2_in1k) |
+| `seresnext26d_32x4d.bt_in1k` | 224 (test 288) | 78.816 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnext26d_32x4d.bt_in1k) |
+| `seresnext26t_32x4d.bt_in1k` | 224 (test 288) | 78.736 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnext26t_32x4d.bt_in1k) |
+| `seresnext50_32x4d.racm_in1k` | 224 (test 288) | 82.186 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnext50_32x4d.racm_in1k) |
+| `seresnextaa101d_32x8d.sw_in12k` | 224 (test 288) | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/seresnextaa101d_32x8d.sw_in12k) |
+| `seresnextaa101d_32x8d.sw_in12k_ft_in1k` | 224 (test 288) | 86.524 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnextaa101d_32x8d.sw_in12k_ft_in1k) |
+| `seresnextaa101d_32x8d.sw_in12k_ft_in1k_288` | 288 (test 320) | 86.722 | 320 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnextaa101d_32x8d.sw_in12k_ft_in1k_288) |
+| `wide_resnet50_2.racm_in1k` | 224 (test 288) | 82.260 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/wide_resnet50_2.racm_in1k) |
+
+### cv.gluon.ai
+
+Origin: [cv.gluon.ai/model_zoo/classification.html](https://cv.gluon.ai/model_zoo/classification.html)
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
+| `resnet18.gluon_in1k` | 224 | 70.844 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet18.gluon_in1k) |
+| `resnet34.gluon_in1k` | 224 | 74.574 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet34.gluon_in1k) |
+| `resnet50.gluon_in1k` | 224 | 77.580 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50.gluon_in1k) |
+| `resnet50c.gluon_in1k` | 224 | 78.016 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50c.gluon_in1k) |
+| `resnet50d.gluon_in1k` | 224 | 79.080 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50d.gluon_in1k) |
+| `resnet50s.gluon_in1k` | 224 | 78.710 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50s.gluon_in1k) |
+| `resnet101.gluon_in1k` | 224 | 79.306 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet101.gluon_in1k) |
+| `resnet101c.gluon_in1k` | 224 | 79.542 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet101c.gluon_in1k) |
+| `resnet101d.gluon_in1k` | 224 | 80.466 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet101d.gluon_in1k) |
+| `resnet101s.gluon_in1k` | 224 | 80.278 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet101s.gluon_in1k) |
+| `resnet152.gluon_in1k` | 224 | 79.712 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet152.gluon_in1k) |
+| `resnet152c.gluon_in1k` | 224 | 79.904 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet152c.gluon_in1k) |
+| `resnet152d.gluon_in1k` | 224 | 80.476 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet152d.gluon_in1k) |
+| `resnet152s.gluon_in1k` | 224 | 81.048 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet152s.gluon_in1k) |
+| `resnext50_32x4d.gluon_in1k` | 224 | 79.354 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnext50_32x4d.gluon_in1k) |
+| `resnext101_32x4d.gluon_in1k` | 224 | 80.336 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnext101_32x4d.gluon_in1k) |
+| `resnext101_64x4d.gluon_in1k` | 224 | 80.640 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnext101_64x4d.gluon_in1k) |
+| `senet154.gluon_in1k` | 224 | 81.258 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/senet154.gluon_in1k) |
+| `seresnext50_32x4d.gluon_in1k` | 224 | 79.916 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnext50_32x4d.gluon_in1k) |
+| `seresnext101_32x4d.gluon_in1k` | 224 | 80.886 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnext101_32x4d.gluon_in1k) |
+| `seresnext101_64x4d.gluon_in1k` | 224 | 80.884 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnext101_64x4d.gluon_in1k) |
+
+### pytorch/vision
+
+Origin: [github.com/pytorch/vision](https://github.com/pytorch/vision)
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
+| `resnet18.tv_in1k` | 224 | 69.752 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnet18.tv_in1k) |
+| `resnet34.tv_in1k` | 224 | 73.298 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnet34.tv_in1k) |
+| `resnet50.tv2_in1k` | 176 (test 224) | 80.846 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnet50.tv2_in1k) |
+| `resnet50.tv_in1k` | 224 | 76.156 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnet50.tv_in1k) |
+| `resnet101.tv2_in1k` | 176 (test 224) | 81.906 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnet101.tv2_in1k) |
+| `resnet101.tv_in1k` | 224 | 77.404 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnet101.tv_in1k) |
+| `resnet152.tv2_in1k` | 176 (test 224) | 82.294 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnet152.tv2_in1k) |
+| `resnet152.tv_in1k` | 224 | 78.330 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnet152.tv_in1k) |
+| `resnext50_32x4d.tv2_in1k` | 176 (test 224) | 81.190 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnext50_32x4d.tv2_in1k) |
+| `resnext50_32x4d.tv_in1k` | 224 | 77.632 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnext50_32x4d.tv_in1k) |
+| `resnext101_32x8d.tv2_in1k` | 176 (test 224) | 82.832 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnext101_32x8d.tv2_in1k) |
+| `resnext101_32x8d.tv_in1k` | 224 | 79.308 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnext101_32x8d.tv_in1k) |
+| `resnext101_64x4d.tv_in1k` | 224 | 82.978 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnext101_64x4d.tv_in1k) |
+| `wide_resnet50_2.tv2_in1k` | 176 (test 224) | 81.612 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/wide_resnet50_2.tv2_in1k) |
+| `wide_resnet50_2.tv_in1k` | 224 | 78.486 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/wide_resnet50_2.tv_in1k) |
+| `wide_resnet101_2.tv2_in1k` | 176 (test 224) | 82.514 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/wide_resnet101_2.tv2_in1k) |
+| `wide_resnet101_2.tv_in1k` | 224 | 78.862 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/wide_resnet101_2.tv_in1k) |
+
+### facebookresearch/semi-supervised-ImageNet1K-models
+
+Origin:
+[github.com/facebookresearch/semi-supervised-ImageNet1K-models](https://github.com/facebookresearch/semi-supervised-ImageNet1K-models)
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
+| `resnet18.fb_ssl_yfcc100m_ft_in1k` | 224 | 72.636 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnet18.fb_ssl_yfcc100m_ft_in1k) |
+| `resnet18.fb_swsl_ig1b_ft_in1k` | 224 | 73.286 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnet18.fb_swsl_ig1b_ft_in1k) |
+| `resnet50.fb_ssl_yfcc100m_ft_in1k` | 224 | 79.252 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnet50.fb_ssl_yfcc100m_ft_in1k) |
+| `resnet50.fb_swsl_ig1b_ft_in1k` | 224 | 81.146 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnet50.fb_swsl_ig1b_ft_in1k) |
+| `resnext50_32x4d.fb_ssl_yfcc100m_ft_in1k` | 224 | 80.316 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnext50_32x4d.fb_ssl_yfcc100m_ft_in1k) |
+| `resnext50_32x4d.fb_swsl_ig1b_ft_in1k` | 224 | 82.162 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnext50_32x4d.fb_swsl_ig1b_ft_in1k) |
+| `resnext101_32x4d.fb_ssl_yfcc100m_ft_in1k` | 224 | 80.936 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnext101_32x4d.fb_ssl_yfcc100m_ft_in1k) |
+| `resnext101_32x4d.fb_swsl_ig1b_ft_in1k` | 224 | 83.268 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnext101_32x4d.fb_swsl_ig1b_ft_in1k) |
+| `resnext101_32x8d.fb_ssl_yfcc100m_ft_in1k` | 224 | 81.620 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnext101_32x8d.fb_ssl_yfcc100m_ft_in1k) |
+| `resnext101_32x8d.fb_swsl_ig1b_ft_in1k` | 224 | 84.276 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnext101_32x8d.fb_swsl_ig1b_ft_in1k) |
+| `resnext101_32x16d.fb_ssl_yfcc100m_ft_in1k` | 224 | 81.856 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnext101_32x16d.fb_ssl_yfcc100m_ft_in1k) |
+| `resnext101_32x16d.fb_swsl_ig1b_ft_in1k` | 224 | 83.340 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnext101_32x16d.fb_swsl_ig1b_ft_in1k) |
+
+### `tf` tags
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
 | `resnetrs50.tf_in1k` | 160 (test 224) | 79.934 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnetrs50.tf_in1k) |
 | `resnetrs101.tf_in1k` | 192 (test 288) | 82.288 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnetrs101.tf_in1k) |
 | `resnetrs152.tf_in1k` | 256 (test 320) | 83.710 | 320 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnetrs152.tf_in1k) |
@@ -238,60 +333,38 @@ results](https://github.com/huggingface/pytorch-image-models/tree/main/results).
 | `resnetrs270.tf_in1k` | 256 (test 352) | 84.438 | 352 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnetrs270.tf_in1k) |
 | `resnetrs350.tf_in1k` | 288 (test 384) | 84.710 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnetrs350.tf_in1k) |
 | `resnetrs420.tf_in1k` | 320 (test 416) | 85.010 | 416 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnetrs420.tf_in1k) |
-| `resnext50_32x4d.a1_in1k` | 224 (test 288) | 81.480 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnext50_32x4d.a1_in1k) |
-| `resnext50_32x4d.a1h_in1k` | 224 (test 288) | 82.016 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnext50_32x4d.a1h_in1k) |
-| `resnext50_32x4d.a2_in1k` | 224 (test 288) | 81.304 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnext50_32x4d.a2_in1k) |
-| `resnext50_32x4d.a3_in1k` | 160 (test 224) | 79.258 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnext50_32x4d.a3_in1k) |
-| `resnext50_32x4d.fb_ssl_yfcc100m_ft_in1k` | 224 | 80.316 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnext50_32x4d.fb_ssl_yfcc100m_ft_in1k) |
-| `resnext50_32x4d.fb_swsl_ig1b_ft_in1k` | 224 | 82.162 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnext50_32x4d.fb_swsl_ig1b_ft_in1k) |
-| `resnext50_32x4d.gluon_in1k` | 224 | 79.354 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnext50_32x4d.gluon_in1k) |
-| `resnext50_32x4d.ra_in1k` | 224 (test 288) | 80.720 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnext50_32x4d.ra_in1k) |
-| `resnext50_32x4d.tv2_in1k` | 176 (test 224) | 81.190 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnext50_32x4d.tv2_in1k) |
-| `resnext50_32x4d.tv_in1k` | 224 | 77.632 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnext50_32x4d.tv_in1k) |
-| `resnext50d_32x4d.bt_in1k` | 224 (test 288) | 80.676 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnext50d_32x4d.bt_in1k) |
-| `resnext101_32x4d.fb_ssl_yfcc100m_ft_in1k` | 224 | 80.936 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnext101_32x4d.fb_ssl_yfcc100m_ft_in1k) |
-| `resnext101_32x4d.fb_swsl_ig1b_ft_in1k` | 224 | 83.268 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnext101_32x4d.fb_swsl_ig1b_ft_in1k) |
-| `resnext101_32x4d.gluon_in1k` | 224 | 80.336 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnext101_32x4d.gluon_in1k) |
-| `resnext101_32x8d.fb_ssl_yfcc100m_ft_in1k` | 224 | 81.620 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnext101_32x8d.fb_ssl_yfcc100m_ft_in1k) |
-| `resnext101_32x8d.fb_swsl_ig1b_ft_in1k` | 224 | 84.276 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnext101_32x8d.fb_swsl_ig1b_ft_in1k) |
+
+### `miil` tags
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
+| `ecaresnet50d.miil_in1k` | 224 (test 288) | 81.648 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/ecaresnet50d.miil_in1k) |
+| `ecaresnet50d_pruned.miil_in1k` | 224 (test 288) | 80.808 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/ecaresnet50d_pruned.miil_in1k) |
+| `ecaresnet101d.miil_in1k` | 224 (test 288) | 83.006 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/ecaresnet101d.miil_in1k) |
+| `ecaresnet101d_pruned.miil_in1k` | 224 (test 288) | 82.016 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/ecaresnet101d_pruned.miil_in1k) |
+| `ecaresnetlight.miil_in1k` | 224 (test 288) | 81.430 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/ecaresnetlight.miil_in1k) |
+
+### facebookresearch/WSL-Images
+
+Origin: [github.com/facebookresearch/WSL-Images](https://github.com/facebookresearch/WSL-Images)
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
 | `resnext101_32x8d.fb_wsl_ig1b_ft_in1k` | 224 | 82.720 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnext101_32x8d.fb_wsl_ig1b_ft_in1k) |
-| `resnext101_32x8d.tv2_in1k` | 176 (test 224) | 82.832 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnext101_32x8d.tv2_in1k) |
-| `resnext101_32x8d.tv_in1k` | 224 | 79.308 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnext101_32x8d.tv_in1k) |
-| `resnext101_32x16d.fb_ssl_yfcc100m_ft_in1k` | 224 | 81.856 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnext101_32x16d.fb_ssl_yfcc100m_ft_in1k) |
-| `resnext101_32x16d.fb_swsl_ig1b_ft_in1k` | 224 | 83.340 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnext101_32x16d.fb_swsl_ig1b_ft_in1k) |
 | `resnext101_32x16d.fb_wsl_ig1b_ft_in1k` | 224 | 84.166 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnext101_32x16d.fb_wsl_ig1b_ft_in1k) |
 | `resnext101_32x32d.fb_wsl_ig1b_ft_in1k` | 224 | 85.090 | 224 | 1000 | cc-by-nc-4.0 | [timm](https://huggingface.co/timm/resnext101_32x32d.fb_wsl_ig1b_ft_in1k) |
-| `resnext101_64x4d.c1_in1k` | 224 (test 288) | 83.158 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnext101_64x4d.c1_in1k) |
-| `resnext101_64x4d.gluon_in1k` | 224 | 80.640 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnext101_64x4d.gluon_in1k) |
-| `resnext101_64x4d.tv_in1k` | 224 | 82.978 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/resnext101_64x4d.tv_in1k) |
-| `senet154.gluon_in1k` | 224 | 81.258 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/senet154.gluon_in1k) |
-| `seresnet50.a1_in1k` | 224 (test 288) | 81.114 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnet50.a1_in1k) |
-| `seresnet50.a2_in1k` | 224 (test 288) | 81.094 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnet50.a2_in1k) |
-| `seresnet50.a3_in1k` | 160 (test 224) | 77.036 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnet50.a3_in1k) |
-| `seresnet50.ra2_in1k` | 224 (test 288) | 81.288 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnet50.ra2_in1k) |
-| `seresnet152d.ra2_in1k` | 256 (test 320) | 84.344 | 320 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnet152d.ra2_in1k) |
-| `seresnext26d_32x4d.bt_in1k` | 224 (test 288) | 78.816 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnext26d_32x4d.bt_in1k) |
-| `seresnext26t_32x4d.bt_in1k` | 224 (test 288) | 78.736 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnext26t_32x4d.bt_in1k) |
-| `seresnext50_32x4d.gluon_in1k` | 224 | 79.916 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnext50_32x4d.gluon_in1k) |
-| `seresnext50_32x4d.racm_in1k` | 224 (test 288) | 82.186 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnext50_32x4d.racm_in1k) |
-| `seresnext101_32x4d.gluon_in1k` | 224 | 80.886 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnext101_32x4d.gluon_in1k) |
-| `seresnext101_32x8d.ah_in1k` | 224 (test 288) | 84.192 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnext101_32x8d.ah_in1k) |
-| `seresnext101_64x4d.gluon_in1k` | 224 | 80.884 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnext101_64x4d.gluon_in1k) |
-| `seresnext101d_32x8d.ah_in1k` | 224 (test 288) | 84.380 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnext101d_32x8d.ah_in1k) |
-| `seresnextaa101d_32x8d.ah_in1k` | 224 (test 288) | 84.580 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnextaa101d_32x8d.ah_in1k) |
-| `seresnextaa101d_32x8d.sw_in12k` | 224 (test 288) | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/seresnextaa101d_32x8d.sw_in12k) |
-| `seresnextaa101d_32x8d.sw_in12k_ft_in1k` | 224 (test 288) | 86.524 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnextaa101d_32x8d.sw_in12k_ft_in1k) |
-| `seresnextaa101d_32x8d.sw_in12k_ft_in1k_288` | 288 (test 320) | 86.722 | 320 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnextaa101d_32x8d.sw_in12k_ft_in1k_288) |
+
+### `sw` tags
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
 | `seresnextaa201d_32x8d.sw_in12k` | 320 (test 384) | - | - | 11821 | apache-2.0 | [timm](https://huggingface.co/timm/seresnextaa201d_32x8d.sw_in12k) |
 | `seresnextaa201d_32x8d.sw_in12k_ft_in1k_384` | 384 | 87.304 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/seresnextaa201d_32x8d.sw_in12k_ft_in1k_384) |
-| `test_resnet.r160_in1k` | 160 | 41.602 | 160 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/test_resnet.r160_in1k) |
-| `wide_resnet50_2.racm_in1k` | 224 (test 288) | 82.260 | 288 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/wide_resnet50_2.racm_in1k) |
-| `wide_resnet50_2.tv2_in1k` | 176 (test 224) | 81.612 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/wide_resnet50_2.tv2_in1k) |
-| `wide_resnet50_2.tv_in1k` | 224 | 78.486 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/wide_resnet50_2.tv_in1k) |
-| `wide_resnet101_2.tv2_in1k` | 176 (test 224) | 82.514 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/wide_resnet101_2.tv2_in1k) |
-| `wide_resnet101_2.tv_in1k` | 224 | 78.862 | 224 | 1000 | bsd-3-clause | [timm](https://huggingface.co/timm/wide_resnet101_2.tv_in1k) |
 
-Top-1 is ImageNet-1k validation accuracy from
-[`results-imagenet.csv`](https://github.com/huggingface/pytorch-image-models/blob/main/results/results-imagenet.csv) at
-the listed eval size, - if the weight has no ImageNet-1k result (e.g. pretraining or image-text weights). Classes is the
-size of the pretrained classifier, none for weights without one.
+### Other
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
+| `ecaresnet50t.ra2_in1k` | 256 (test 320) | 82.370 | 320 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/ecaresnet50t.ra2_in1k) |
+| `resnet50.am_in1k` | 224 | 79.004 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50.am_in1k) |
+| `test_resnet.r160_in1k` | 160 | 41.602 | 160 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/test_resnet.r160_in1k) |
