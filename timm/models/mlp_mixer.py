@@ -131,7 +131,8 @@ class Affine(nn.Module):
 class ResBlock(nn.Module):
     """Residual MLP block w/ LayerScale and Affine 'norm'.
 
-    Based on: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
+    Based on: `ResMLP: Feedforward networks for image classification with data-efficient training`
+        - https://arxiv.org/abs/2105.03404
     """
     def __init__(
             self,
@@ -793,7 +794,8 @@ def gmixer_24_224(pretrained=False, **kwargs) -> MlpMixer:
 @register_model
 def resmlp_12_224(pretrained=False, **kwargs) -> MlpMixer:
     """ ResMLP-12
-    Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
+    Paper: `ResMLP: Feedforward networks for image classification with data-efficient training`
+        - https://arxiv.org/abs/2105.03404
     """
     model_args = dict(
         patch_size=16, num_blocks=12, embed_dim=384, mlp_ratio=4, block_layer=ResBlock, norm_layer=Affine, **kwargs)
@@ -804,7 +806,8 @@ def resmlp_12_224(pretrained=False, **kwargs) -> MlpMixer:
 @register_model
 def resmlp_24_224(pretrained=False, **kwargs) -> MlpMixer:
     """ ResMLP-24
-    Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
+    Paper: `ResMLP: Feedforward networks for image classification with data-efficient training`
+        - https://arxiv.org/abs/2105.03404
     """
     model_args = dict(
         patch_size=16, num_blocks=24, embed_dim=384, mlp_ratio=4,
@@ -816,7 +819,8 @@ def resmlp_24_224(pretrained=False, **kwargs) -> MlpMixer:
 @register_model
 def resmlp_36_224(pretrained=False, **kwargs) -> MlpMixer:
     """ ResMLP-36
-    Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
+    Paper: `ResMLP: Feedforward networks for image classification with data-efficient training`
+        - https://arxiv.org/abs/2105.03404
     """
     model_args = dict(
         patch_size=16, num_blocks=36, embed_dim=384, mlp_ratio=4,
@@ -828,7 +832,8 @@ def resmlp_36_224(pretrained=False, **kwargs) -> MlpMixer:
 @register_model
 def resmlp_big_24_224(pretrained=False, **kwargs) -> MlpMixer:
     """ ResMLP-B-24
-    Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
+    Paper: `ResMLP: Feedforward networks for image classification with data-efficient training`
+        - https://arxiv.org/abs/2105.03404
     """
     model_args = dict(
         patch_size=8, num_blocks=24, embed_dim=768, mlp_ratio=4,

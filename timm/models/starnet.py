@@ -1,5 +1,5 @@
 """
-Implementation of Prof-of-Concept Network: StarNet.
+Implementation of Proof-of-Concept Network: StarNet.
 
 Papers:
 * `Rewrite the Stars` - https://arxiv.org/abs/2403.19967

@@ -734,7 +734,7 @@ def _cfgv2(url='', **kwargs):
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'stem.0', 'classifier': 'head.fc',
         'license': 'cc-by-nc-4.0', 'paper_ids': 'arXiv:2301.00808',
-        'paper_name': 'ConvNeXt-V2: Co-designing and Scaling ConvNets with Masked Autoencoders',
+        'paper_name': 'ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders',
         'origin_url': 'https://github.com/facebookresearch/ConvNeXt-V2',
         **kwargs
     }

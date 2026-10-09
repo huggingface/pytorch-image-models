@@ -6,7 +6,7 @@ Papers:
 @article{graham2021levit,
   title={LeViT: a Vision Transformer in ConvNet's Clothing for Faster Inference},
   author={Benjamin Graham and Alaaeldin El-Nouby and Hugo Touvron and Pierre Stock and Armand Joulin and Herv\'e J\'egou and Matthijs Douze},
-  journal={arXiv preprint arXiv:22104.01136},
+  journal={arXiv preprint arXiv:2104.01136},
   year={2021}
 }
 
