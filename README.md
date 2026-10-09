@@ -18,7 +18,6 @@
 * Optimizer improvements
   * Foreach (multi-tensor) impls for RMSpropTF, LaProp, LAMB, LARS, AdaBelief. Foreach steps are chunked by device L2 cache size (`TIMM_FOREACH_CHUNK_SIZE` to override).
   * RMS update clipping (`clipping_threshold`) for AdamWLegacy / NAdamW, new decoupled / corrected weight decay NovoGrad variants (`novogradw`, `novogradc`).
-  * Fix corrected weight decay (`adamc`, `nadamc`, `lionc`, `kronc`, etc.) w/ a tensor lr updated in place. The max lr aliased the live lr, so decay was silently left uncorrected (NaN at lr=0). The max lr is now snapshotted at construction, float lr was unaffected.
   * Correctness fixes across many optimizers, including corrected weight decay w/ in-place updated tensor lr, FP16 update stalls at small lr, low precision state handling (Kron, AdaBelief, NovoGrad), and no more in-place `p.grad`
 modification.
   * `torch.compile` / CUDA graph fixes for Adopt, SGDW, AdafactorBV.
