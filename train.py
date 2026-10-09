@@ -1038,6 +1038,7 @@ def main():
             interpolation=data_config['interpolation'],
             num_workers=eval_workers,
             crop_pct=data_config['crop_pct'],
+            crop_mode=data_config['crop_mode'],
         )
 
         if args.naflex_loader:

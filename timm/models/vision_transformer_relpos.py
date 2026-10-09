@@ -32,6 +32,7 @@ from timm.layers import (
     use_fused_attn,
     LayerType,
 )
+from ._input import update_model_input_size
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import named_apply, checkpoint
@@ -416,6 +417,8 @@ class VisionTransformerRelPos(nn.Module):
         for blk in self.blocks:
             if blk.attn.rel_pos is not None:
                 blk.attn.rel_pos.set_window_size(feat_size)
+
+        update_model_input_size(self, self.patch_embed.img_size, patch_size=patch_size)
 
     @torch.jit.ignore
     def no_weight_decay(self):

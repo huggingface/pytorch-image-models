@@ -73,6 +73,7 @@ from timm.layers import (
     use_fused_attn,
     resize_rel_pos_bias_table,
 )
+from ._input import update_model_input_size
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
@@ -1600,6 +1601,15 @@ class MaxxVit(nn.Module):
         for stage in self.stages:
             feat_size = tuple([(r - 1) // 2 + 1 for r in feat_size])
             stage.set_input_size(feat_size=feat_size, window_size=window_size, grid_size=grid_size)
+
+        # record the partition sizes in use, the constructor overlays transformer_* args onto the transformer cfg
+        update_model_input_size(
+            self,
+            self.img_size,
+            transformer_window_size=window_size,
+            transformer_grid_size=grid_size,
+            transformer_partition_ratio=self.partition_ratio,
+        )
 
     @torch.jit.ignore
     def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:

@@ -217,6 +217,51 @@ def test_windowed_model_resize_roundtrip(tmp_path, name):
         torch.testing.assert_close(restored(x), model(x), rtol=0, atol=0)
 
 
+_RESIZE_ROUNDTRIP = [
+    # model, ctor kwargs, base img size, resized img size
+    ('vit_tiny_patch16_224', dict(embed_dim=32, depth=1, num_heads=2), 64, 96),
+    ('beit_base_patch16_224', dict(embed_dim=32, depth=1, num_heads=2), 64, 96),
+    ('vit_relpos_small_patch16_224', dict(embed_dim=32, depth=1, num_heads=2), 64, 96),
+    ('eva02_tiny_patch14_224', dict(embed_dim=32, depth=1, num_heads=2), 56, 84),
+    # per-stage (S3 style) and uniform non grid // 8 windows, scaled per stage by a default resize
+    ('swin_tiny_patch4_window7_224', dict(window_size=(7, 7, 14, 7)), 112, 224),
+    ('swinv2_tiny_window8_256', dict(window_size=8), 128, 192),
+    ('swinv2_cr_tiny_224', dict(window_size=(7, 14, 7, 7)), 112, 224),
+    ('maxvit_nano_rw_256', dict(), 256, 320),
+    ('efficientvit_m0', dict(), 224, 256),
+]
+_SWIN_SMALL = dict(embed_dim=16, depths=(1, 1, 1, 1), num_heads=(1, 2, 4, 8))
+
+
+@pytest.mark.parametrize('name,kwargs,img_size,new_size', _RESIZE_ROUNDTRIP)
+def test_default_resize_hub_roundtrip(tmp_path, name, kwargs, img_size, new_size):
+    # a model resized w/o explicit window / grid args must reload from its exported config w/ identical structure
+    if name.startswith('swin'):
+        kwargs = dict(_SWIN_SMALL, **kwargs)
+    model = timm.create_model(name, img_size=img_size, num_classes=5, **kwargs).eval()
+    with torch.no_grad():
+        # SwinV2 zero inits the res-post-norm weights, which would hide window changes in the output
+        for n, p in model.named_parameters():
+            if 'norm' in n and n.endswith('weight'):
+                p.fill_(1.)
+    model.set_input_size(img_size=(new_size, new_size))
+    save_for_hf(model, tmp_path)
+    restored = timm.create_model('local-dir:' + str(tmp_path), pretrained=True).eval()
+
+    def _windows(m):
+        return [(b.window_size, b.shift_size) for b in m.modules() if hasattr(b, 'shift_size')]
+
+    assert _windows(restored) == _windows(model)
+    state = model.state_dict()
+    restored_state = restored.state_dict()
+    assert restored_state.keys() == state.keys()
+    for key, value in state.items():
+        torch.testing.assert_close(restored_state[key], value, rtol=0, atol=0)
+    x = torch.randn(1, 3, new_size, new_size)
+    with torch.no_grad():
+        torch.testing.assert_close(restored(x), model(x), rtol=0, atol=0)
+
+
 def test_feature_wrapper_retains_input_contract():
     with torch.device(_CFG_DEVICE) if _HAS_DEVICE_CONTEXT else nullcontext():
         model = timm.create_model('resnet18', in_chans=4, features_only=True, device=_CFG_DEVICE)
