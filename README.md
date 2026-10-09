@@ -12,6 +12,27 @@
 
 ## What's New
 
+## October 9, 2026
+
+* Add [CSPNeXt](https://arxiv.org/abs/2212.07784) (RTMDet backbone) `cspnext_{tiny,s,m,l,x}` with ImageNet-1k classification weights converted from OpenMMLab. Thanks [Munehiro Kobayashi](https://github.com/munehiro-k).
+* Optimizer improvements
+  * Foreach (multi-tensor) impls for RMSpropTF, LaProp, LAMB, LARS, AdaBelief. Foreach steps are chunked by device L2 cache size (`TIMM_FOREACH_CHUNK_SIZE` to override).
+  * RMS update clipping (`clipping_threshold`) for AdamWLegacy / NAdamW, new decoupled / corrected weight decay NovoGrad variants (`novogradw`, `novogradc`).
+  * Correctness fixes across many optimizers, including corrected weight decay w/ in-place updated tensor lr, FP16 update stalls at small lr, low precision state handling (Kron, AdaBelief, NovoGrad), and no more in-place `p.grad`
+modification.
+  * `torch.compile` / CUDA graph fixes for Adopt, SGDW, AdafactorBV.
+  * New optimizer docs covering usage, naming conventions, and families. 
+* Add WSD (warmup-stable-decay) LR scheduler (`--sched wsd`, `--lr-decay-fn`, `--lr-stable-timescale`).
+* Model EMA fixes for bfloat16 / float16 models. ModelEmaV3 bfloat16 EMAs use stochastic rounding by default, float16 models keep a float32 EMA.
+* Model resizing via `set_input_size()`
+  * Expanded support for windowed models (MaxViT, CoAtNet, BEiT, EfficientViT-MSRA, relpos ViT, Swin family).
+  * Swin / SwinV2 / SwinV2-CR keep each stage's window to grid ratio on resize, a call at the current size is now a no-op. Per-stage `window_size` / `window_ratio` supported. Fixes Swin S3 and SwinV2 `window16` / `window12` models
+changing outputs on a same-size call.
+  * Fix SwinV2 NaN w/ a window size of 1, odd stage feature sizes, and hybrid ViT resize on CUDA / low precision.
+* Fix grad accumulation remainder handling (#2821), distributed sampling / repeated augmentation on small datasets, pretrained source overrides and distillation teacher setup, `train.py` w/ `--sched none`, and eval center crop
+interpolation for non-square inputs.
+* ONNX export compatibility fixes across PyTorch versions, dropout consistency fixes, and more meta-device init fixes.
+  
 ## September 25, 2026
 
 * Multi-label classification support
