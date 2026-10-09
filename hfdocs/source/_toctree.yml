@@ -9,6 +9,8 @@
     title: Changelog
   title: Get started
 - sections:
+  - local: model_api
+    title: The timm Model API
   - local: model_adaptation
     title: Adapt and Export Models
   - local: feature_extraction
@@ -31,6 +33,8 @@
     title: AdvProp (EfficientNet)
   - local: models/big-transfer
     title: Big Transfer (BiT)
+  - local: models/convnext
+    title: ConvNeXt
   - local: models/csp-darknet
     title: CSP-DarkNet
   - local: models/csp-resnet
@@ -147,6 +151,8 @@
     title: (Tensorflow) MobileNet v3
   - local: models/tresnet
     title: TResNet
+  - local: models/vision-transformer
+    title: Vision Transformer (ViT)
   - local: models/wide-resnet
     title: Wide ResNet
   - local: models/xception
@@ -158,6 +164,8 @@
     title: Models
   - local: reference/data
     title: Data
+  - local: reference/loss
+    title: Losses
   - local: reference/optimizers
     title: Optimizers
   - local: reference/schedulers

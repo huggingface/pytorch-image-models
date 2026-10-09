@@ -1,5 +1,203 @@
 # Models
 
+This page contains the API reference documentation for creating and discovering `timm` models, their pretrained
+configs and the checkpoint / Hub helpers, and an overview of the interface shared by `timm` models. The individual
+architectures are covered in the [model summaries](../models) and the per-model pages.
+
+## Usage
+
+Models are created by name with [`create_model`](#timm.create_model). The name selects an architecture registered in
+`timm`, optionally w/ a pretrained tag after a `.` (`resnet50.a1_in1k`), or a model on the Hugging Face Hub or in a
+local folder via a source prefix. Keyword arguments that `create_model` doesn't use itself pass through the model's
+entrypoint function to the model class constructor, so any model specific argument can be set.
+
+```python
+import torch
+import timm
+
+# Random init (pretrained=False is the default). The tag selects the pretrained cfg, and the weights loaded with
+# pretrained=True. Without a tag the architecture's default tag is used.
+model = timm.create_model('vit_tiny_patch16_224.augreg_in21k_ft_in1k')
+print(model.pretrained_cfg['mean'], model.pretrained_cfg['crop_pct'])  # (0.5, 0.5, 0.5) 0.9
+
+# Model arguments pass through to the model class, a 10 class head, single channel input and regularization.
+model = timm.create_model('resnet50', num_classes=10, in_chans=1, drop_rate=0.2, drop_path_rate=0.05)
+
+# Discover models, filters are fnmatch wildcards.
+timm.list_models('convnext*')  # architecture names
+timm.list_pretrained('resnet50.*')  # architecture.tag names w/ pretrained weights
+timm.list_models(module='vision_transformer', pretrained=True)
+
+# Image preprocessing to match the model's pretrained cfg (input size, interpolation, crop, mean / std).
+model = timm.create_model('vit_tiny_patch16_224.augreg_in21k_ft_in1k')
+data_config = timm.data.resolve_model_data_config(model)
+transform = timm.data.create_transform(**data_config, is_training=False)
+
+x = torch.randn(2, 3, 224, 224)
+features = model.forward_features(x)  # unpooled features, (2, 197, 192)
+pre_logits = model.forward_head(features, pre_logits=True)  # pooled features, (2, 192)
+logits = model.forward_head(features)  # same as model(x), (2, 1000)
+
+model.reset_classifier(5)  # replace the classifier w/ a new 5 class one
+model.set_input_size(img_size=(384, 384))  # resample the position embedding for a new resolution
+logits = model(torch.randn(2, 3, 384, 384))  # (2, 5)
+```
+
+The training script (`train.py`) exposes the common arguments as `--model`, `--pretrained`, `--num-classes`,
+`--in-chans`, `--gp`, `--drop`, `--drop-path`, `--pretrained-path`, `--initial-checkpoint` and
+`--model-kwargs key=value ...` for any other model argument. See the [quickstart](../quickstart) for an introduction.
+
+### Model names
+
+| Name | Source |
+|---|---|
+| `resnet50` | Architecture in the `timm` registry, w/ its default pretrained cfg (here `a1_in1k`) |
+| `resnet50.a1_in1k` | Architecture + pretrained tag, an unknown tag raises an error |
+| `hf-hub:timm/resnet50.a1_in1k` | Hugging Face Hub repo, the architecture, pretrained cfg and model args come from its `config.json`, `@revision` selects a revision |
+| `local-dir:/path/to/folder` | Local folder w/ a `config.json` and weights, as written by [`save_for_hf`](#timm.models.save_for_hf) |
+
+The Hub and local sources read the config even w/ `pretrained=False`, weights are only loaded w/ `pretrained=True`.
+A name w/o a source prefix that contains `/`, `\` or `:` raises a `ValueError` instead of falling back to a registry
+model of the same name. `hf_hub:` is a deprecated alias of `hf-hub:`.
+
+### Common arguments
+
+- **`pretrained`** loads the weights of the pretrained cfg, from `state_dict` or `file` if set, otherwise from the
+  Hub (`hf_hub_id`) when `huggingface_hub` is installed, or the `url`. If `num_classes` differs from the pretrained
+  cfg the classifier weights are discarded (left at random init), if `in_chans != 3` the first conv weights are
+  adapted, so a pretrained model can be created for fine-tuning in one call.
+- **`num_classes`** sets the classifier size, `0` removes the classifier. **`global_pool`** sets the pooling type,
+  the options are model specific (e.g. `avg`, `max`, `avgmax`, `catavgmax` for most convnets, `token`, `avg`,
+  `map` for ViT), `''` disables pooling. **`in_chans`** sets the input channels. The `num_classes` and `in_chans`
+  defaults come from the pretrained cfg.
+- **`drop_rate`** (classifier dropout) and **`drop_path_rate`** (stochastic depth) are supported by most models.
+- **`img_size`** is an argument of ViT style and other models w/ a fixed input size, they're built for the pretrained
+  cfg `input_size` unless it's set. The ViT and EVA families also accept `dynamic_img_size=True` to resample the
+  position embedding to the input size on every forward pass.
+- **`features_only`** (w/ `out_indices`, `output_stride`, `feature_cls`) wraps the model as a feature backbone
+  returning feature maps, see [feature extraction](../feature_extraction).
+- **`pretrained_cfg`** replaces the pretrained cfg (a tag, dict or [`PretrainedCfg`](#timm.models.PretrainedCfg)),
+  **`pretrained_cfg_overlay`** overrides some of its fields, e.g. `pretrained_cfg_overlay=dict(file='weights.pth')`
+  loads `pretrained=True` weights from a local file, w/ the classifier / input conv adaptation above (as
+  `--pretrained-path` does in `train.py`).
+- **`checkpoint_path`** loads a checkpoint w/ [`load_checkpoint`](#timm.models.load_checkpoint) after the model is
+  created. It's a strict load w/o adaptation, EMA weights are used if the checkpoint has them.
+- **`cache_dir`** overrides the download cache for pretrained weights and Hub configs.
+- **`device`** and **`dtype`** are passed to the model class, params are created on the device and in the dtype
+  directly. `device='meta'` creates a model w/o allocating memory for its weights.
+- **`scriptable`**, **`exportable`** and **`no_jit`** set layer config flags for TorchScript scripting, export /
+  tracing, and to disable jit scripted layers.
+
+Arguments set to `None` are dropped before reaching the model, so the model defaults apply. Arguments the model class
+doesn't accept raise a `TypeError` in most models, a few ignore unknown arguments.
+
+### Pretrained config
+
+Architectures have one or more pretrained cfgs, one per tag, registered w/ the model. A cfg describes the weights
+(location, license, origin) and how the model was trained and should be evaluated w/ them. Models created by
+`create_model` have their cfg as a dict in `model.pretrained_cfg` (`model.default_cfg` is an alias), the registry
+versions are returned as [`PretrainedCfg`](#timm.models.PretrainedCfg) instances by
+[`get_pretrained_cfg`](#timm.get_pretrained_cfg).
+
+| Field | Description |
+|---|---|
+| `architecture`, `tag` | Model architecture and pretrained tag |
+| `hf_hub_id`, `url`, `file`, `state_dict` | Weight sources (see `pretrained` above) |
+| `input_size`, `test_input_size`, `fixed_input_size` | Train (and default eval) input size, eval size used w/ `use_test_size=True` (if different), whether the model has a fixed input size (`img_size` argument) |
+| `interpolation`, `crop_pct`, `test_crop_pct`, `crop_mode` | Eval resize interpolation, crop fraction (w/ the default `center` crop mode the image is resized to `input_size / crop_pct`, then center cropped) and crop mode |
+| `mean`, `std` | Input normalization |
+| `num_classes`, `label_names`, `label_descriptions` | Classifier size and labels (when known) |
+| `classifier`, `first_conv` | Module names of the classifier and first conv, used to adapt the weights on load |
+| `license`, `origin_url`, `paper_ids`, `paper_name`, `notes` | Weight meta-data |
+
+The input fields are what [`resolve_data_config`](data#timm.data.resolve_data_config) /
+[`resolve_model_data_config`](data#timm.data.resolve_model_data_config) resolve to a data config for the dataset
+transforms and loader. The cfg describes the source checkpoint and isn't updated when the model is created or
+modified differently (`num_classes`, `in_chans`, `img_size`, `set_input_size()`). The model's current input
+channels, size and fixed size constraint are tracked separately:
+[`get_model_input_config`](#timm.models.get_model_input_config) returns them, and
+[`resolve_input_data_config`](data#timm.data.resolve_input_data_config) resolves a data config against them (as the
+training, validation and inference scripts do). [`get_model_args`](#timm.models.get_model_args) returns the arguments
+to rebuild the model as it is now, which [`save_for_hf`](#timm.models.save_for_hf) writes to the exported config. See
+[adapt and export models](../model_adaptation) for details.
+
+### Model interface
+
+`timm` models share a common interface beyond `forward()`: the `forward_features()` / `forward_head()` split,
+classifier reset, intermediate features, input resizing and training hooks such as gradient checkpointing and
+parameter grouping. It is described in [the timm Model API](../model_api), including which model families support
+which parts.
+
+### Checkpoints and the Hub
+
+[`load_checkpoint`](#timm.models.load_checkpoint) loads a checkpoint file (PyTorch or `.safetensors`) into a model,
+[`load_state_dict`](#timm.models.load_state_dict) returns its state dict. Both pick the EMA weights of a `train.py`
+checkpoint by default (`use_ema`) and remove `module.` (DDP) and `_orig_mod.` (`torch.compile`) key prefixes.
+[`resume_checkpoint`](#timm.models.resume_checkpoint) restores the model, optimizer and loss scaler state of a
+`train.py` checkpoint and returns the epoch to resume from.
+
+[`save_for_hf`](#timm.models.save_for_hf) writes the weights and a `config.json` (architecture, pretrained cfg,
+`model_args`, `label_names`) to a folder, [`push_to_hf_hub`](#timm.models.push_to_hf_hub) uploads them to a Hub repo
+w/ a generated model card if the repo has none. The model is then created w/ `hf-hub:` or `local-dir:`, see
+[sharing and loading models](../hf_hub).
+
+```python
+import timm
+from timm.models import save_for_hf
+
+model = timm.create_model('resnet18', num_classes=4)
+# ... fine-tune
+save_for_hf(model, 'my_resnet18', model_config=dict(label_names=['a', 'b', 'c', 'd']), safe_serialization=True)
+model = timm.create_model('local-dir:my_resnet18', pretrained=True)  # 4 classes, weights and labels restored
+print(model.pretrained_cfg['label_names'])
+```
+
+### Custom models
+
+A model entrypoint function decorated w/ [`register_model`](#timm.models.register_model) is added to the registry, so
+it can be created w/ `create_model` and found w/ `list_models`. Entrypoints in `timm` build their model w/
+[`build_model_with_cfg`](#timm.models.build_model_with_cfg), which handles the pretrained cfg, pretrained weight
+loading and `features_only`.
+
+## API
+
+### Model creation
+
 [[autodoc]] timm.create_model
 
+### Model discovery
+
 [[autodoc]] timm.list_models
+[[autodoc]] timm.list_pretrained
+[[autodoc]] timm.list_modules
+[[autodoc]] timm.is_model
+[[autodoc]] timm.is_model_pretrained
+[[autodoc]] timm.model_entrypoint
+
+### Pretrained config
+
+[[autodoc]] timm.get_pretrained_cfg
+[[autodoc]] timm.get_pretrained_cfg_value
+[[autodoc]] timm.models.get_arch_pretrained_cfgs
+[[autodoc]] timm.models.PretrainedCfg
+
+### Current model input and export
+
+[[autodoc]] timm.models.get_model_input_config
+[[autodoc]] timm.models.get_model_traits
+[[autodoc]] timm.models.get_model_args
+[[autodoc]] timm.models.resolve_model_input_args
+[[autodoc]] timm.models.adapt_input_conv
+
+### Checkpoints and Hub
+
+[[autodoc]] timm.models.load_checkpoint
+[[autodoc]] timm.models.load_state_dict
+[[autodoc]] timm.models.resume_checkpoint
+[[autodoc]] timm.models.save_for_hf
+[[autodoc]] timm.models.push_to_hf_hub
+
+### Custom models
+
+[[autodoc]] timm.models.register_model
+[[autodoc]] timm.models.build_model_with_cfg

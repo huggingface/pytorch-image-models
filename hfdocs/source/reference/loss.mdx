@@ -1,0 +1,175 @@
+# Losses
+
+This page contains the API reference documentation for the classification losses included in `timm`, and an
+overview of how they are created and configured through the loss factory.
+
+## Usage
+
+Losses are created by name with [`create_classification_loss`](#timm.loss.create_classification_loss).
+`multi_label` selects between single-label targets (class indices, or dense soft distributions from Mixup/CutMix)
+and multi-label targets (dense independent binary labels shaped `(B, C)`), with `loss_type=None` the factory picks
+`ce` or `bce` accordingly. Loss specific arguments are prefixed with the loss name (`asl_*`, `poly_*`, `db_*`, ...)
+and ignored by the other losses. The factory raises on combinations a loss doesn't support, e.g. class weights for
+losses other than `bce` / multi-label `asl`, `bce_*` or `class_counts` arguments for other losses, or a multi-label
+only loss without `multi_label` (or a single-label only loss with it).
+
+```python
+import torch
+import timm
+from timm.data import Mixup
+from timm.loss import PolyCrossEntropy, create_classification_loss
+
+# Single-label, class index targets. Label smoothing selects LabelSmoothingCrossEntropy.
+criterion = create_classification_loss(smoothing=0.1)
+loss = criterion(torch.randn(8, 1000), torch.randint(0, 1000, (8,)))
+
+# Mixup/CutMix output dense soft targets with the smoothing already applied, SoftTargetCrossEntropy.
+mixup_fn = Mixup(mixup_alpha=0.8, cutmix_alpha=1.0, label_smoothing=0.1, num_classes=1000)
+criterion = create_classification_loss(smoothing=0.1, soft_targets=True)
+images, target = mixup_fn(torch.randn(8, 3, 224, 224), torch.randint(0, 1000, (8,)))
+loss = criterion(torch.randn(8, 1000), target)
+
+# Multi-label, dense (B, C) binary targets. BCE by default, other losses by name.
+criterion = create_classification_loss(multi_label=True)
+criterion = create_classification_loss('asl', multi_label=True, asl_gamma_neg=4., asl_gamma_pos=1., asl_clip=0.05)
+loss = criterion(torch.randn(8, 6), torch.randint(0, 2, (8, 6)).float())
+
+# The training tasks create their criterion with the factory, multi_label is set by the task.
+from timm.task import MultiLabelClassificationTask
+model = timm.create_model('resnet18', num_classes=6)
+task = MultiLabelClassificationTask(model, criterion_kwargs=dict(loss_type='zlpr'))
+
+# Losses can also be constructed directly, note the class defaults can differ from the factory's (below).
+criterion = PolyCrossEntropy(epsilon=2.)
+```
+
+The training script (`train.py`) maps `--loss` to `loss_type`, `--task multilabel` to `multi_label=True` and
+`--smoothing` (default 0.1, 0 for multi-label) to `smoothing`, and sets `soft_targets` when Mixup or CutMix is
+enabled. The `--asl-*`, `--poly-*`, `--twoway-*`, `--db-*`, `--bce-sum` and `--bce-target-thresh` flags map to the
+factory arguments of the same name and `--aug-splits` to `jsd_splits`. The class weighting flags (`--class-stats`,
+`--loss-pos-weight`, `--loss-class-weight`, `--loss-weight-*`) are resolved with the class weight functions below.
+See the [training docs](../training_script#multi-label-classification) for the command line usage.
+
+### Loss types
+
+`LOSS_TYPES` holds the names accepted by the factory and `MULTI_LABEL_LOSS_TYPES` the ones usable with
+`multi_label=True`.
+
+| `loss_type` | Class | Targets | Notes |
+|---|---|---|---|
+| `ce` | `nn.CrossEntropyLoss`, [`LabelSmoothingCrossEntropy`](#timm.loss.cross_entropy.LabelSmoothingCrossEntropy), [`SoftTargetCrossEntropy`](#timm.loss.cross_entropy.SoftTargetCrossEntropy) | Single-label | Softmax cross-entropy, the class depends on `smoothing` and `soft_targets`. Single-label default |
+| `bce` | [`BinaryCrossEntropy`](#timm.loss.binary_cross_entropy.BinaryCrossEntropy) | Both | Sigmoid BCE, multi-label default. Class index targets are one-hot encoded, `bce_target_thresh` binarizes soft targets, `bce_sum` sums over classes before averaging over the batch |
+| `asl` | [`AsymmetricLossMultiLabel`](#timm.loss.asymmetric_loss.AsymmetricLossMultiLabel), [`AsymmetricLossSingleLabel`](#timm.loss.asymmetric_loss.AsymmetricLossSingleLabel) | Both | [Asymmetric Loss](https://arxiv.org/abs/2009.14119), separate focusing for positives (`asl_gamma_pos`) and negatives (`asl_gamma_neg`), a probability margin on negatives (`asl_clip`, multi-label only). The single-label (softmax) variant needs class index targets, no Mixup/CutMix |
+| `poly` | [`PolyBinaryCrossEntropy`](#timm.loss.poly_loss.PolyBinaryCrossEntropy), [`PolyCrossEntropy`](#timm.loss.poly_loss.PolyCrossEntropy) | Both | [Poly-1](https://arxiv.org/abs/2204.12511), adds `poly_epsilon * (1 - p_t)` to BCE / CE, `0` reduces to BCE / CE. Optional focal (`poly_gamma`) and balance (`poly_alpha`) terms for multi-label |
+| `jsd` | [`JsdCrossEntropy`](#timm.loss.jsd.JsdCrossEntropy) | Single-label | CE on the clean split + Jensen-Shannon divergence across `jsd_splits` augmentation splits ([AugMix](https://arxiv.org/abs/1912.02781)) |
+| `twoway` | [`TwoWayLoss`](#timm.loss.two_way_loss.TwoWayLoss) | Multi-label | [Two-way Multi-Label Loss](https://staff.aist.go.jp/takumi.kobayashi/publication/2023/CVPR2023.pdf), temperatures `twoway_tp` / `twoway_tn`, binary targets only |
+| `zlpr` | [`ZlprLoss`](#timm.loss.zlpr_loss.ZlprLoss) | Multi-label | [ZLPR](https://arxiv.org/abs/2208.02955), multi-label extension of softmax CE w/o hyperparameters, binary targets only |
+| `db` | [`DistributionBalancedLoss`](#timm.loss.distribution_balanced_loss.DistributionBalancedLoss) | Multi-label | [Distribution-Balanced Loss](https://arxiv.org/abs/2007.09654) for long-tailed data, needs `class_counts` and `num_samples` |
+
+### Label smoothing and soft targets
+
+`smoothing` defaults to 0 in the factory. For single-label targets the target class gets `1 - s + s / C` and the
+others `s / C` (`LabelSmoothingCrossEntropy` is equivalent to `nn.CrossEntropyLoss(label_smoothing=s)`), `bce` uses
+the same one-hot smoothing for class index targets. For multi-label targets each binary label is moved towards 0.5,
+`y * (1 - s) + 0.5 * s`.
+
+`timm.data.Mixup` applies its `label_smoothing` while mixing and outputs dense targets (with `multi_label=True` it mixes
+and smooths dense multi-label targets). Create the loss with `soft_targets=True` in this case: `ce` becomes
+`SoftTargetCrossEntropy` and `bce`, multi-label `asl`, `poly` and `db` don't smooth the targets again. Single-label
+`asl` raises with `soft_targets`, and `twoway` / `zlpr` raise with either `soft_targets` or `smoothing` as they binarize
+targets at 0.5.
+
+The classes have their own defaults when constructed directly, `BinaryCrossEntropy`, `LabelSmoothingCrossEntropy`
+and `JsdCrossEntropy` default to `smoothing=0.1` and `AsymmetricLossSingleLabel` to `eps=0.1` (its label smoothing).
+
+### Class weighting
+
+`pos_weight` multiplies the positive term of each class, balancing positives against negatives within a class.
+`class_weight` multiplies the whole loss of each class, balancing the classes against each other. Both take a single
+value or one value per class and are supported by `bce` and multi-label `asl`. They can be given explicitly or derived
+from per-class positive counts with [`compute_class_weights`](#timm.loss.compute_class_weights), which returns the loss
+argument the weights are for and the weights. Classes without positives are counted as having one, and `max_weight` caps
+the final weights.
+
+| `method` | Argument | Weights for a class w/ `n` positives |
+|---|---|---|
+| `neg_pos` | `pos_weight` | `((num_samples - n) / n) ** power` |
+| `inv_freq` | `class_weight` | `(num_samples / n) ** power`, normalized to a mean of 1 |
+| `effective_num` | `class_weight` | `(1 - beta) / (1 - beta ** n)` ([class-balanced](https://arxiv.org/abs/1901.05555)), normalized to a mean of 1 |
+
+The methods are in `CLASS_WEIGHT_METHODS`, and `CLASS_WEIGHT_METHOD_KINDS` maps each to its loss argument.
+[`load_class_stats`](#timm.loss.load_class_stats) reads the counts from a JSON file with `pos_counts` and
+`num_samples` entries, as written by `class_weights.py` in the repository root.
+[`load_class_weights`](#timm.loss.load_class_weights) parses explicit weights (a number, a comma separated string, a
+list, or a JSON / text file) and [`resolve_class_weights`](#timm.loss.resolve_class_weights) accepts either a method
+name or explicit weights, as `train.py` does for its flags. The `db` loss takes the counts directly.
+
+```python
+import torch
+from timm.loss import compute_class_weights, create_classification_loss, resolve_class_weights
+
+pos_counts = [120, 3400, 560, 45, 980, 2100]  # positives per class
+num_samples = 5000
+
+kind, weights = compute_class_weights(pos_counts, num_samples, method='neg_pos', power=0.5)  # kind == 'pos_weight'
+criterion = create_classification_loss(multi_label=True, pos_weight=weights)
+
+# Method names (w/ class stats) or explicit weights, class_stats can be loaded w/ load_class_stats('stats.json')
+class_stats = (torch.tensor(pos_counts), num_samples)
+class_weight = resolve_class_weights('effective_num', 'class_weight', class_stats=class_stats, beta=0.999)
+pos_weight = resolve_class_weights('2.0', 'pos_weight')
+criterion = create_classification_loss('asl', multi_label=True, class_weight=class_weight, pos_weight=pos_weight)
+
+criterion = create_classification_loss('db', multi_label=True, class_counts=pos_counts, num_samples=num_samples)
+```
+
+### Loss notes
+
+- **Precision.** The multi-label ASL, Poly-1, DB, Two-way and ZLPR losses compute in `float32` regardless of the
+  logit dtype, low precision (`float16`) ASL probabilities would otherwise underflow its log clamp.
+- **Reduction.** Multi-label ASL defaults to `asl_reduction='batchmean'`, the loss is summed over classes and
+  averaged over the batch. `sum` is the original ASL reduction, it also sums over the batch so the loss scales with
+  batch size, `mean` averages over batch and classes like BCE. Single-label ASL sums over classes and averages over
+  the batch, the factory only accepts `batchmean` for it. `bce`, multi-label `poly` and `db` average over batch and
+  classes (`bce_sum` sums over classes for `bce`).
+- **Two-way** contrasts the hardest negative logit with the hardest positive logit across the classes of each sample
+  and across the samples of each class, only samples / classes with a positive contribute. Its logits are ranking
+  scores, not calibrated sigmoid probabilities, so thresholded metrics (F1) are not meaningful, use mAP.
+- **ZLPR** pushes every positive logit above every negative one with 0 as the decision threshold, so logits > 0
+  (sigmoid > 0.5) predict positives.
+- **DB** weights each (sample, class) term by the ratio of class-level to instance-level sampling probability,
+  accounting for label co-occurrence, shifts the logits by a class prior (`db_init_bias`) and scales the negative
+  logits (`db_neg_scale`). Counts are clamped to `[1, num_samples - 1]`. The re-balancing map parameters and the
+  focal balance are class arguments, not exposed by the factory.
+- **JSD** expects the batch as `jsd_splits` equal splits with the clean images first (as `fast_collate` arranges
+  `AugMixDataset` samples), the CE term uses only the clean split. The JSD weight (`alpha=12`) is a class argument.
+
+## API
+
+### Factory functions
+
+[[autodoc]] timm.loss.create_classification_loss
+
+### Class weight functions
+
+[[autodoc]] timm.loss.compute_class_weights
+[[autodoc]] timm.loss.load_class_stats
+[[autodoc]] timm.loss.load_class_weights
+[[autodoc]] timm.loss.resolve_class_weights
+
+### Single-label Loss Classes
+
+[[autodoc]] timm.loss.cross_entropy.LabelSmoothingCrossEntropy
+[[autodoc]] timm.loss.cross_entropy.SoftTargetCrossEntropy
+[[autodoc]] timm.loss.asymmetric_loss.AsymmetricLossSingleLabel
+[[autodoc]] timm.loss.jsd.JsdCrossEntropy
+[[autodoc]] timm.loss.poly_loss.PolyCrossEntropy
+
+### Multi-label Loss Classes
+
+[[autodoc]] timm.loss.binary_cross_entropy.BinaryCrossEntropy
+[[autodoc]] timm.loss.asymmetric_loss.AsymmetricLossMultiLabel
+[[autodoc]] timm.loss.poly_loss.PolyBinaryCrossEntropy
+[[autodoc]] timm.loss.distribution_balanced_loss.DistributionBalancedLoss
+[[autodoc]] timm.loss.two_way_loss.TwoWayLoss
+[[autodoc]] timm.loss.zlpr_loss.ZlprLoss
