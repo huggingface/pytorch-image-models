@@ -1,6 +1,9 @@
 """
 TResNet: High Performance GPU-Dedicated Architecture
-https://arxiv.org/pdf/2003.13630.pdf
+
+Papers:
+    * `TResNet: High Performance GPU-Dedicated Architecture` - https://arxiv.org/abs/2003.13630
+    * `ImageNet-21K Pretraining for the Masses` - https://arxiv.org/abs/2104.10972
 
 Original model: https://github.com/mrT23/TResNet
 

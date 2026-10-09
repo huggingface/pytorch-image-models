@@ -1,5 +1,8 @@
 """ CrossViT Model
 
+Papers:
+* `CrossViT: Cross-Attention Multi-Scale Vision Transformer for Image Classification` - https://arxiv.org/abs/2103.14899
+
 @inproceedings{
     chen2021crossvit,
     title={{CrossViT: Cross-Attention Multi-Scale Vision Transformer for Image Classification}},
@@ -8,7 +11,6 @@
     year={2021}
 }
 
-Paper link: https://arxiv.org/abs/2103.14899
 Original code: https://github.com/IBM/CrossViT/blob/main/models/crossvit.py
 
 NOTE: model names have been renamed from originals to represent actual input res all *_224 -> *_240 and *_384 -> *_408

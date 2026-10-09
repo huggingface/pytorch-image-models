@@ -1,6 +1,7 @@
 """ ResNeSt Models
 
-Paper: `ResNeSt: Split-Attention Networks` - https://arxiv.org/abs/2004.08955
+Papers:
+    * `ResNeSt: Split-Attention Networks` - https://arxiv.org/abs/2004.08955
 
 Adapted from original PyTorch impl w/ weights at https://github.com/zhanghang1989/ResNeSt by Hang Zhang
 

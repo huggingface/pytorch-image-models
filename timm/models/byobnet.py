@@ -5,16 +5,23 @@ A flexible network w/ dataclass based config for stacking those NN blocks.
 This model is currently used to implement the following networks:
 
 GPU Efficient (ResNets) - gernet_l/m/s (original versions called genet, but this was already used (by SENet author)).
-Paper: `Neural Architecture Design for GPU-Efficient Networks` - https://arxiv.org/abs/2006.14090
+* `Neural Architecture Design for GPU-Efficient Networks` - https://arxiv.org/abs/2006.14090
 Code and weights: https://github.com/idstcv/GPU-Efficient-Networks, licensed Apache 2.0
 
 RepVGG - repvgg_*
-Paper: `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+* `RepVGG: Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
 Code and weights: https://github.com/DingXiaoH/RepVGG, licensed MIT
 
 MobileOne - mobileone_*
-Paper: `MobileOne: An Improved One millisecond Mobile Backbone` - https://arxiv.org/abs/2206.04040
+* `MobileOne: An Improved One millisecond Mobile Backbone` - https://arxiv.org/abs/2206.04040
 Code and weights: https://github.com/apple/ml-mobileone, licensed MIT
+
+RegNetZ - regnetz_* (timm specific sizing, `_evos` variants use EvoNorm)
+* `Fast and Accurate Model Scaling` - https://arxiv.org/abs/2103.06877
+* `Evolving Normalization-Activation Layers` - https://arxiv.org/abs/2004.02967
+
+CLIP ResNets - resnet*_clip*
+* `Learning Transferable Visual Models From Natural Language Supervision` - https://arxiv.org/abs/2103.00020
 
 In all cases the models have been modified to fit within the design of ByobNet. I've remapped
 the original weights and verified accuracies.

@@ -1,6 +1,7 @@
 """ Swin Transformer
-A PyTorch impl of : `Swin Transformer: Hierarchical Vision Transformer using Shifted Windows`
-    - https://arxiv.org/pdf/2103.14030
+A PyTorch impl of:
+* `Swin Transformer: Hierarchical Vision Transformer using Shifted Windows` - https://arxiv.org/abs/2103.14030
+* `Searching the Search Space of Vision Transformer` - https://arxiv.org/abs/2111.14725 (AutoFormerV2 / S3)
 
 Code/weights from https://github.com/microsoft/Swin-Transformer, original copyright/license info below
 

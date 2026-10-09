@@ -1,6 +1,9 @@
 """ NasNet-A (Large)
  nasnetalarge implementation grabbed from Cadene's pretrained models
  https://github.com/Cadene/pretrained-models.pytorch
+
+Papers:
+* `Learning Transferable Architectures for Scalable Image Recognition` - https://arxiv.org/abs/1707.07012
 """
 from functools import partial
 from typing import Optional, Type

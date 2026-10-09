@@ -2,8 +2,9 @@
 
 CSPNeXt backbone from RTMDet (OpenMMLab), ImageNet-1k classification models.
 
-Paper: `RTMDet: An Empirical Study of Designing Real-Time Object Detectors`
-    - https://arxiv.org/abs/2212.07784
+Papers:
+    * `RTMDet: An Empirical Study of Designing Real-Time Object Detectors` - https://arxiv.org/abs/2212.07784
+
     The paper describes this backbone (CSP blocks with 5x5 depthwise convs) without naming it;
     the name `CSPNeXt` comes from the MMDetection implementation.
 

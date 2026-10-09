@@ -4,6 +4,8 @@
 
  https://github.com/Cadene/pretrained-models.pytorch/blob/master/pretrainedmodels/models/pnasnet.py
 
+ Papers:
+    * `Progressive Neural Architecture Search` - https://arxiv.org/abs/1712.00559
 """
 from collections import OrderedDict
 from functools import partial

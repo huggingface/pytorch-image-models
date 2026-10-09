@@ -1,6 +1,6 @@
 """iFormer
 iFormer: Integrating ConvNet and Transformer for Mobile Application (ICLR 2025)
-- paper: https://arxiv.org/abs/2501.15369
+- `iFormer: Integrating ConvNet and Transformer for Mobile Application` - https://arxiv.org/abs/2501.15369
 - code: https://github.com/ChuanyangZheng/iFormer
 @inproceedings{zheng2025iformer,
   title={iformer: Integrating convnet and transformer for mobile application},

@@ -1,5 +1,8 @@
 """ EfficientFormer-V2
 
+Papers:
+* `Rethinking Vision Transformers for MobileNet Size and Speed` - https://arxiv.org/abs/2212.08059
+
 @article{
     li2022rethinking,
     title={Rethinking Vision Transformers for MobileNet Size and Speed},

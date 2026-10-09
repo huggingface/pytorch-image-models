@@ -1,10 +1,13 @@
 """RegNet X, Y, Z, and more
 
-Paper: `Designing Network Design Spaces` - https://arxiv.org/abs/2003.13678
-Original Impl: https://github.com/facebookresearch/pycls/blob/master/pycls/models/regnet.py
-
-Paper: `Fast and Accurate Model Scaling` - https://arxiv.org/abs/2103.06877
-Original Impl: None
+Papers:
+    * `Designing Network Design Spaces` - https://arxiv.org/abs/2003.13678
+      Original Impl: https://github.com/facebookresearch/pycls/blob/master/pycls/models/regnet.py
+    * `Fast and Accurate Model Scaling` - https://arxiv.org/abs/2103.06877
+      Original Impl: None
+    * `Self-supervised Pretraining of Visual Features in the Wild` - https://arxiv.org/abs/2103.01988 (SEER weights)
+    * `Revisiting Weakly Supervised Pre-Training of Visual Perception Models` - https://arxiv.org/abs/2201.08371
+      (SWAG weights)
 
 Based on original PyTorch impl linked above, but re-wrote to use my own blocks (adapted from ResNet here)
 and cleaned up with more descriptive variable names.

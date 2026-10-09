@@ -1,7 +1,7 @@
 """ Cross-Covariance Image Transformer (XCiT) in PyTorch
 
-Paper:
-    - https://arxiv.org/abs/2106.09681
+Papers:
+    - `XCiT: Cross-Covariance Image Transformers` - https://arxiv.org/abs/2106.09681
 
 Same as the official implementation, with some minor adaptations, original copyright below
     - https://github.com/facebookresearch/xcit/blob/master/xcit.py

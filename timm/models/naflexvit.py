@@ -7,11 +7,11 @@ An improved version of the Vision Transformer with:
 4. Support for FlexiViT variable patch size
 5. Support for NaViT fractional/factorized position embedding
 
-Based on ideas from:
-- Original Vision Transformer: https://arxiv.org/abs/2010.11929
-- FlexiViT: https://arxiv.org/abs/2212.08013
-- NaViT: https://arxiv.org/abs/2307.06304
-- NaFlex (SigLip-2): https://arxiv.org/abs/2502.14786
+Based on ideas from (original ViT, FlexiViT, NaViT, and NaFlex from SigLIP-2):
+- `An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale` - https://arxiv.org/abs/2010.11929
+- `FlexiViT: One Model for All Patch Sizes` - https://arxiv.org/abs/2212.08013
+- `Patch n' Pack: NaViT, a Vision Transformer for any Aspect Ratio and Resolution` - https://arxiv.org/abs/2307.06304
+- `SigLIP 2: Multilingual Vision-Language Encoders with Improved Semantic Understanding, Localization, and Dense Features` - https://arxiv.org/abs/2502.14786
 
 Hacked together by / Copyright 2025, Ross Wightman, Hugging Face
 """

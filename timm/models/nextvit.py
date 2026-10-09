@@ -1,6 +1,7 @@
 """ Next-ViT
 
-As described in https://arxiv.org/abs/2207.05501
+Papers:
+* `Next-ViT: Next Generation Vision Transformer for Efficient Deployment in Realistic Industrial Scenarios` - https://arxiv.org/abs/2207.05501
 
 Next-ViT model defs and weights adapted from https://github.com/bytedance/Next-ViT, original copyright below
 """

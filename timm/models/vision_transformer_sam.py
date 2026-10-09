@@ -2,11 +2,11 @@
 
 A PyTorch implement of Vision Transformers as described in:
 
-'Exploring Plain Vision Transformer Backbones for Object Detection'
-    - https://arxiv.org/abs/2203.16527
+* `Exploring Plain Vision Transformer Backbones for Object Detection` - https://arxiv.org/abs/2203.16527
+* `Segment Anything` - https://arxiv.org/abs/2304.02643
+* `An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale` - https://arxiv.org/abs/2010.11929
 
-'Segment Anything Model (SAM)'
-    - https://github.com/facebookresearch/segment-anything/
+Segment Anything Model (SAM) code: https://github.com/facebookresearch/segment-anything/
 
 """
 import logging

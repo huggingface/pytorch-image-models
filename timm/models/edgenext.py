@@ -1,7 +1,8 @@
 """ EdgeNeXt
 
-Paper: `EdgeNeXt: Efficiently Amalgamated CNN-Transformer Architecture for Mobile Vision Applications`
- - https://arxiv.org/abs/2206.10589
+Papers:
+* `EdgeNeXt: Efficiently Amalgamated CNN-Transformer Architecture for Mobile Vision Applications` - https://arxiv.org/abs/2206.10589
+* `Solving ImageNet: a Unified Scheme for Training any Backbone to Top Results` - https://arxiv.org/abs/2204.03475 (USI)
 
 Original code and weights from https://github.com/mmaaz60/EdgeNeXt
 

@@ -1,9 +1,12 @@
 """ Deep Layer Aggregation and DLA w/ Res2Net
+
+Papers:
+* `Deep Layer Aggregation` - https://arxiv.org/abs/1707.06484
+* `Res2Net: A New Multi-scale Backbone Architecture` - https://arxiv.org/abs/1904.01169
+
 DLA original adapted from Official Pytorch impl at: https://github.com/ucbdrive/dla
-DLA Paper: `Deep Layer Aggregation` - https://arxiv.org/abs/1707.06484
 
 Res2Net additions from: https://github.com/gasvn/Res2Net/
-Res2Net Paper: `Res2Net: A New Multi-scale Backbone Architecture` - https://arxiv.org/abs/1904.01169
 """
 import math
 from typing import List, Optional, Tuple, Type

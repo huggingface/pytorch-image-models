@@ -1,5 +1,7 @@
 """ ConvMixer
 
+Papers:
+* `Patches Are All You Need?` - https://arxiv.org/abs/2201.09792
 """
 from typing import Optional, Type
 

@@ -8,6 +8,9 @@ PP-LCNetV2 is a CPU oriented network built on PP-LCNet (see `lcnet_*` models in 
 convs of the later stages are re-parameterizable multi-scale branches, SE and shortcuts are used sparingly to
 avoid latency penalties on CPU inference.
 
+Papers (SSLD distilled weights):
+* `Beyond Self-Supervision: A Simple Yet Effective Network Distillation Alternative to Improve Backbones` - https://arxiv.org/abs/2103.05959
+
 Adapted from the Paddle implementation for timm by Yonghye Kwon
 """
 from typing import Any, Dict, List, Optional, Tuple, Type, Union

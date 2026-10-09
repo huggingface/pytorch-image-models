@@ -1,5 +1,9 @@
 """ BEiT: BERT Pre-Training of Image Transformers (https://arxiv.org/abs/2106.08254)
 
+Papers:
+    * `BEiT: BERT Pre-Training of Image Transformers` - https://arxiv.org/abs/2106.08254
+    * `BEiT v2: Masked Image Modeling with Vector-Quantized Visual Tokenizers` - https://arxiv.org/abs/2208.06366
+
 Model from official source: https://github.com/microsoft/unilm/tree/master/beit
 
 @inproceedings{beit,

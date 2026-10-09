@@ -1,5 +1,8 @@
 """ Pyramid Vision Transformer v2
 
+Papers:
+* `PVT v2: Improved Baselines with Pyramid Vision Transformer` - https://arxiv.org/abs/2106.13797
+
 @misc{wang2021pvtv2,
       title={PVTv2: Improved Baselines with Pyramid Vision Transformer},
       author={Wenhai Wang and Enze Xie and Xiang Li and Deng-Ping Fan and Kaitao Song and Ding Liang and

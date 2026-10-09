@@ -3,7 +3,10 @@
 Vision encoder from Google's Gemma 4 multimodal model.
 Custom ViT with 2D RoPE, Gated MLP, QKV normalization, and 4-norm sandwich blocks.
 
-Paper: https://ai.google.dev/gemma/docs/core/model_card_4
+Papers:
+* `Gemma 4 Technical Report` - https://arxiv.org/abs/2607.02770
+
+Model card: https://ai.google.dev/gemma/docs/core/model_card_4
 Reference impl: https://github.com/huggingface/transformers (Gemma4VisionModel)
 
 Copyright 2025 Yonghye Kwon

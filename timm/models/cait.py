@@ -1,6 +1,7 @@
 """ Class-Attention in Image Transformers (CaiT)
 
-Paper: 'Going deeper with Image Transformers' - https://arxiv.org/abs/2103.17239
+Papers:
+* `Going deeper with Image Transformers` - https://arxiv.org/abs/2103.17239
 
 Original code and weights from https://github.com/facebookresearch/deit, copyright below
 

@@ -1,3 +1,12 @@
+""" MobileNet-V5
+
+The MobileNet-V5 vision encoder from Google's Gemma 3n. Built from MobileNet-V4 blocks (Universal Inverted
+Residual, Mobile MQA) with a Multi-Scale Fusion VLM adapter. There is no dedicated MobileNet-V5 paper at the time of
+writing, the MobileNet-V4 paper describes the building blocks.
+
+Papers:
+* `MobileNetV4 - Universal Models for the Mobile Ecosystem` - https://arxiv.org/abs/2404.10518
+"""
 from functools import partial
 from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 

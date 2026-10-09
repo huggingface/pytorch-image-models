@@ -1,6 +1,9 @@
 """ Pytorch Inception-V4 implementation
 Sourced from https://github.com/Cadene/tensorflow-model-zoo.torch (MIT License) which is
 based upon Google's Tensorflow implementation and pretrained weights (Apache 2.0 License)
+
+Papers:
+* `Inception-v4, Inception-ResNet and the Impact of Residual Connections on Learning` - https://arxiv.org/abs/1602.07261
 """
 from functools import partial
 from typing import List, Optional, Tuple, Union, Type

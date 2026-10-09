@@ -2,6 +2,9 @@
 Based on original MXNet implementation https://github.com/cypw/DPNs with
 many ideas from another PyTorch implementation https://github.com/oyam/pytorch-DPNs.
 
+Papers:
+* `Dual Path Networks` - https://arxiv.org/abs/1707.01629
+
 This implementation is compatible with the pretrained weights from cypw's MXNet implementation.
 
 Hacked together by / Copyright 2020 Ross Wightman

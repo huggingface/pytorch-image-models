@@ -1,6 +1,10 @@
 """Pytorch Densenet implementation w/ tweaks
 This file is a copy of https://github.com/pytorch/vision 'densenet.py' (BSD-3-Clause) with
 fixed kwargs passthrough and addition of dynamic global avg/max pool.
+
+Papers:
+    * `Densely Connected Convolutional Networks` - https://arxiv.org/abs/1608.06993
+    * `Making Convolutional Networks Shift-Invariant Again` - https://arxiv.org/abs/1904.11486
 """
 import re
 from collections import OrderedDict

@@ -2,6 +2,10 @@
 
 NOTE: these models are experimental / WIP, expect changes
 
+Papers:
+* `An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale` - https://arxiv.org/abs/2010.11929
+* `Swin Transformer V2: Scaling Up Capacity and Resolution` - https://arxiv.org/abs/2111.09883
+
 Hacked together by / Copyright 2022, Ross Wightman
 """
 import logging

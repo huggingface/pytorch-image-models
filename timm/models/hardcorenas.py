@@ -1,3 +1,8 @@
+""" HardCoRe-NAS
+
+Papers:
+* `HardCoRe-NAS: Hard Constrained diffeRentiable Neural Architecture Search` - https://arxiv.org/abs/2102.11646
+"""
 from functools import partial
 
 import torch.nn as nn

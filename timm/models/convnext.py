@@ -1,7 +1,7 @@
 """ ConvNeXt
 
 Papers:
-* `A ConvNet for the 2020s` - https://arxiv.org/pdf/2201.03545.pdf
+* `A ConvNet for the 2020s` - https://arxiv.org/abs/2201.03545
 @Article{liu2022convnet,
   author  = {Zhuang Liu and Hanzi Mao and Chao-Yuan Wu and Christoph Feichtenhofer and Trevor Darrell and Saining Xie},
   title   = {A ConvNet for the 2020s},
@@ -9,13 +9,18 @@ Papers:
   year    = {2022},
 }
 
-* `ConvNeXt-V2 - Co-designing and Scaling ConvNets with Masked Autoencoders` - https://arxiv.org/abs/2301.00808
+* `ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders` - https://arxiv.org/abs/2301.00808
 @article{Woo2023ConvNeXtV2,
   title={ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders},
   author={Sanghyun Woo, Shoubhik Debnath, Ronghang Hu, Xinlei Chen, Zhuang Liu, In So Kweon and Saining Xie},
   year={2023},
   journal={arXiv preprint arXiv:2301.00808},
 }
+
+Papers for additional pretrained weights:
+* `Reproducible scaling laws for contrastive language-image learning` - https://arxiv.org/abs/2212.07143 (CLIP)
+* `DINOv3` - https://arxiv.org/abs/2508.10104
+* `Efficient Universal Perception Encoder` - https://arxiv.org/abs/2603.22387 (EUPE)
 
 Original code and weights from:
 * https://github.com/facebookresearch/ConvNeXt, original copyright below

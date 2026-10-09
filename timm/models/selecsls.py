@@ -6,6 +6,9 @@ SelecSLS (core) Network Architecture as proposed in "XNect: Real-time Multi-pers
 Human Pose Estimation with a Single RGB Camera, Mehta et al."
 https://arxiv.org/abs/1907.00837
 
+Papers:
+    * `XNect: Real-time Multi-Person 3D Motion Capture with a Single RGB Camera` - https://arxiv.org/abs/1907.00837
+
 Based on ResNet implementation in https://github.com/rwightman/pytorch-image-models
 and SelecSLS Net implementation in https://github.com/mehtadushy/SelecSLS-Pytorch
 """

@@ -1,5 +1,9 @@
 """ HRNet
 
+Papers:
+* `Deep High-Resolution Representation Learning for Visual Recognition` - https://arxiv.org/abs/1908.07919
+* `Beyond Self-Supervision: A Simple Yet Effective Network Distillation Alternative to Improve Backbones` - https://arxiv.org/abs/2103.05959
+
 Copied from https://github.com/HRNet/HRNet-Image-Classification
 
 Original header:

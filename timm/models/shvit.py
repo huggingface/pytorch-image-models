@@ -1,7 +1,9 @@
 """SHViT
-SHViT: Single-Head Vision Transformer with Memory Efficient Macro Design
+
+Papers:
+* `SHViT: Single-Head Vision Transformer with Memory Efficient Macro Design` - https://arxiv.org/abs/2401.16456
+
 Code: https://github.com/ysj9909/SHViT
-Paper: https://arxiv.org/abs/2401.16456
 
 @inproceedings{yun2024shvit,
   author={Yun, Seokju and Ro, Youngmin},

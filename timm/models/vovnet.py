@@ -1,7 +1,7 @@
 """ VoVNet (V1 & V2)
 
 Papers:
-* `An Energy and GPU-Computation Efficient Backbone Network` - https://arxiv.org/abs/1904.09730
+* `An Energy and GPU-Computation Efficient Backbone Network for Real-Time Object Detection` - https://arxiv.org/abs/1904.09730
 * `CenterMask : Real-Time Anchor-Free Instance Segmentation` - https://arxiv.org/abs/1911.06667
 
 Looked at  https://github.com/youngwanLEE/vovnet-detectron2 &

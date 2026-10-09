@@ -2,9 +2,9 @@
 
 DeiT model defs and weights from https://github.com/facebookresearch/deit, original copyright below
 
-paper: `DeiT: Data-efficient Image Transformers` - https://arxiv.org/abs/2012.12877
-
-paper: `DeiT III: Revenge of the ViT` - https://arxiv.org/abs/2204.07118
+Papers:
+* `Training data-efficient image transformers & distillation through attention` - https://arxiv.org/abs/2012.12877
+* `DeiT III: Revenge of the ViT` - https://arxiv.org/abs/2204.07118
 
 Modifications copyright 2021, Ross Wightman
 """

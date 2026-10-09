@@ -1,5 +1,9 @@
 """ An PyTorch implementation of Hiera
 
+Papers:
+* `Hiera: A Hierarchical Vision Transformer without the Bells-and-Whistles` - https://arxiv.org/abs/2306.00989
+* `Window Attention is Bugged: How not to Interpolate Position Embeddings` - https://arxiv.org/abs/2311.05613 (abswin)
+
 Adapted for timm from originals at https://github.com/facebookresearch/hiera
 """
 

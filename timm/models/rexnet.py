@@ -1,7 +1,10 @@
 """ ReXNet
 
-A PyTorch impl of `ReXNet: Diminishing Representational Bottleneck on Convolutional Neural Network` -
-https://arxiv.org/abs/2007.00992
+A PyTorch impl of ReXNet (paper originally titled 'ReXNet: Diminishing Representational Bottleneck on
+Convolutional Neural Network')
+
+Papers:
+* `Rethinking Channel Dimensions for Efficient Model Design` - https://arxiv.org/abs/2007.00992
 
 Adapted from original impl at https://github.com/clovaai/rexnet
 Copyright (c) 2020-present NAVER Corp. MIT license

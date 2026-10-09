@@ -1,7 +1,9 @@
 """FasterNet
-Run, Don't Walk: Chasing Higher FLOPS for Faster Neural Networks
-- paper: https://arxiv.org/abs/2303.03667
-- code: https://github.com/JierunChen/FasterNet
+
+Papers:
+* `Run, Don't Walk: Chasing Higher FLOPS for Faster Neural Networks` - https://arxiv.org/abs/2303.03667
+
+Code: https://github.com/JierunChen/FasterNet
 
 @article{chen2023run,
   title={Run, Don't Walk: Chasing Higher FLOPS for Faster Neural Networks},

@@ -1,6 +1,7 @@
 """ Visformer
 
-Paper: Visformer: The Vision-friendly Transformer - https://arxiv.org/abs/2104.12533
+Papers:
+* `Visformer: The Vision-friendly Transformer` - https://arxiv.org/abs/2104.12533
 
 From original at https://github.com/danczs/Visformer
 

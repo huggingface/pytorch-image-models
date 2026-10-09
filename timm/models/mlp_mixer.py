@@ -4,7 +4,8 @@ This impl originally based on MLP-Mixer paper.
 
 Official JAX impl: https://github.com/google-research/vision_transformer/blob/linen/vit_jax/models_mixer.py
 
-Paper: 'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
+Paper:
+* `MLP-Mixer: An all-MLP Architecture for Vision` - https://arxiv.org/abs/2105.01601
 
 @article{tolstikhin2021,
   title={MLP-Mixer: An all-MLP Architecture for Vision},
@@ -17,7 +18,8 @@ Paper: 'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2
 Also supporting ResMlp, and a preliminary (not verified) implementations of gMLP
 
 Code: https://github.com/facebookresearch/deit
-Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
+Paper:
+* `ResMLP: Feedforward networks for image classification with data-efficient training` - https://arxiv.org/abs/2105.03404
 @misc{touvron2021resmlp,
       title={ResMLP: Feedforward networks for image classification with data-efficient training},
       author={Hugo Touvron and Piotr Bojanowski and Mathilde Caron and Matthieu Cord and Alaaeldin El-Nouby and
@@ -26,13 +28,18 @@ Paper: `ResMLP: Feedforward networks for image classification...` - https://arxi
       eprint={2105.03404},
 }
 
-Paper: `Pay Attention to MLPs` - https://arxiv.org/abs/2105.08050
+Paper:
+* `Pay Attention to MLPs` - https://arxiv.org/abs/2105.08050
 @misc{liu2021pay,
       title={Pay Attention to MLPs},
       author={Hanxiao Liu and Zihang Dai and David R. So and Quoc V. Le},
       year={2021},
       eprint={2105.08050},
 }
+
+Additional pretrained weights from:
+* `ImageNet-21K Pretraining for the Masses` - https://arxiv.org/abs/2104.10972
+* `Emerging Properties in Self-Supervised Vision Transformers` - https://arxiv.org/abs/2104.14294
 
 A thank you to paper authors for releasing code and weights.
 

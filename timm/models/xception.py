@@ -4,11 +4,8 @@ Ported to pytorch thanks to [tstandley](https://github.com/tstandley/Xception-Py
 @author: tstandley
 Adapted by cadene
 
-Creates an Xception Model as defined in:
-
-Francois Chollet
-Xception: Deep Learning with Depthwise Separable Convolutions
-https://arxiv.org/pdf/1610.02357.pdf
+Creates an Xception Model as defined in (Francois Chollet):
+* `Xception: Deep Learning with Depthwise Separable Convolutions` - https://arxiv.org/abs/1610.02357
 
 This weights ported from the Keras implementation. Achieves the following performance on the validation set:
 

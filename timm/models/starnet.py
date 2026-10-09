@@ -1,6 +1,9 @@
 """
 Implementation of Prof-of-Concept Network: StarNet.
 
+Papers:
+* `Rewrite the Stars` - https://arxiv.org/abs/2403.19967
+
 We make StarNet as simple as possible [to show the key contribution of element-wise multiplication]:
     - like NO layer-scale in network design,
     - and NO EMA during training,

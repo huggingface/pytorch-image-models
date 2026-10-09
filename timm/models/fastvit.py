@@ -5,6 +5,15 @@
 # For licensing see accompanying LICENSE file at https://github.com/apple/ml-fastvit/tree/main
 # Original work is copyright (C) 2023 Apple Inc. All Rights Reserved.
 #
+""" FastViT
+
+Includes the MobileCLIP image encoders (fastvit_mci*).
+
+Papers:
+    * `FastViT: A Fast Hybrid Vision Transformer using Structural Reparameterization` - https://arxiv.org/abs/2303.14189
+    * `MobileCLIP: Fast Image-Text Models through Multi-Modal Reinforced Training` - https://arxiv.org/abs/2311.17049
+    * `MobileCLIP2: Improving Multi-Modal Reinforced Training` - https://arxiv.org/abs/2508.20691
+"""
 import os
 from functools import partial
 from typing import List, Optional, Tuple, Type, Union

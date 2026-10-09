@@ -1,5 +1,9 @@
 """ Inception-V3
 
+Papers:
+* `Rethinking the Inception Architecture for Computer Vision` - https://arxiv.org/abs/1512.00567
+* `Adversarial Machine Learning at Scale` - https://arxiv.org/abs/1611.01236 (adversarially trained weights)
+
 Originally from torchvision Inception3 model
 Licensed BSD-Clause 3 https://github.com/pytorch/vision/blob/master/LICENSE
 """

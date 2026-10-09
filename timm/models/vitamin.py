@@ -1,6 +1,8 @@
 """ ViTamin
 
-Paper: Designing Scalable Vison Models in the Vision-Language Era
+Papers:
+    * `ViTamin: Designing Scalable Vision Models in the Vision-Language Era` - https://arxiv.org/abs/2404.02132
+
 A family of model weights on Huggingface: https://huggingface.co/collections/jienengchen/vitamin-family-661048126b72debdaca060bf
 
 @inproceedings{chen2024vitamin,

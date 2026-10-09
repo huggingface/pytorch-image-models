@@ -4,6 +4,10 @@ Poolformer from MetaFormer is Actually What You Need for Vision https://arxiv.or
 IdentityFormer, RandFormer, PoolFormerV2, ConvFormer, and CAFormer
 from MetaFormer Baselines for Vision https://arxiv.org/abs/2210.13452
 
+Papers:
+    * `MetaFormer Is Actually What You Need for Vision` - https://arxiv.org/abs/2111.11418
+    * `MetaFormer Baselines for Vision` - https://arxiv.org/abs/2210.13452
+
 All implemented models support feature extraction and variable input resolution.
 
 Original implementation by Weihao Yu et al.,

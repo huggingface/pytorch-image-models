@@ -1,15 +1,25 @@
 """ EVA
 
-EVA ViT from https://github.com/baaivision/EVA , paper: https://arxiv.org/abs/2211.07636
+EVA ViT from https://github.com/baaivision/EVA
 
 This file contains a number of ViT variants the utilise ROPE position embeddings, SwiGLU and other additions:
  * EVA & EVA02 model implementations that evolved from BEiT, additional models in vision_transformer.py.
  * `timm` original SBB ViT w/ ROPE position embeddings
- * Perception Encoder (PE) ViT from Meta (https://arxiv.org/abs/2504.13181)
- * ROPE-ViT from Naver AI (https://arxiv.org/abs/2403.13298)
- * DINOv3 from META AI Research (https://arxiv.org/abs/2508.10104)
- * LingBot-Vision from Robbyant (https://arxiv.org/abs/2607.05247)
- * Sapiens2 human-centric ViT from Meta (https://arxiv.org/abs/2604.21681)
+ * Perception Encoder (PE) ViT from Meta
+ * ROPE-ViT from Naver AI
+ * DINOv3 from META AI Research
+ * LingBot-Vision from Robbyant
+ * Sapiens2 human-centric ViT from Meta
+
+Papers:
+ * `EVA: Exploring the Limits of Masked Visual Representation Learning at Scale` - https://arxiv.org/abs/2211.07636
+ * `EVA-02: A Visual Representation for Neon Genesis` - https://arxiv.org/abs/2303.11331
+ * `EVA-CLIP: Improved Training Techniques for CLIP at Scale` - https://arxiv.org/abs/2303.15389
+ * `Perception Encoder: The best visual embeddings are not at the output of the network` - https://arxiv.org/abs/2504.13181
+ * `Rotary Position Embedding for Vision Transformer` - https://arxiv.org/abs/2403.13298
+ * `DINOv3` - https://arxiv.org/abs/2508.10104
+ * `Vision Pretraining for Dense Spatial Perception` - https://arxiv.org/abs/2607.05247 (LingBot-Vision)
+ * `Sapiens2` - https://arxiv.org/abs/2604.21681
 
 @article{EVA,
   title={EVA: Exploring the Limits of Masked Visual Representation Learning at Scale},
@@ -19,7 +29,6 @@ This file contains a number of ViT variants the utilise ROPE position embeddings
   year={2022}
 }
 
-EVA-02: A Visual Representation for Neon Genesis - https://arxiv.org/abs/2303.11331
 @article{EVA02,
   title={EVA-02: A Visual Representation for Neon Genesis},
   author={Fang, Yuxin and Sun, Quan and Wang, Xinggang and Huang, Tiejun and Wang, Xinlong and Cao, Yue},

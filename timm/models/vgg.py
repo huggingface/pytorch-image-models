@@ -3,6 +3,9 @@
 Adapted from https://github.com/pytorch/vision 'vgg.py' (BSD-3-Clause) with a few changes for
 timm functionality.
 
+Papers:
+* `Very Deep Convolutional Networks for Large-Scale Image Recognition` - https://arxiv.org/abs/1409.1556
+
 Copyright 2021 Ross Wightman
 """
 from typing import Any, Dict, List, Optional, Type, Union, cast

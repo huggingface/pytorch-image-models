@@ -1,5 +1,8 @@
 """ EfficientFormer
 
+Papers:
+    * `EfficientFormer: Vision Transformers at MobileNet Speed` - https://arxiv.org/abs/2206.01191
+
 @article{li2022efficientformer,
   title={EfficientFormer: Vision Transformers at MobileNet Speed},
   author={Li, Yanyu and Yuan, Geng and Wen, Yang and Hu, Eric and Evangelidis, Georgios and Tulyakov,

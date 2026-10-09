@@ -1,5 +1,9 @@
 """
 MambaOut models for image classification.
+
+Papers:
+* `MambaOut: Do We Really Need Mamba for Vision?` - https://arxiv.org/abs/2405.07992
+
 Some implementations are modified from:
 timm (https://github.com/rwightman/pytorch-image-models),
 MetaFormer (https://github.com/sail-sg/metaformer),

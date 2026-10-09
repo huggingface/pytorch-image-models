@@ -5,6 +5,21 @@ additional dropout and dynamic global avg/max pool.
 
 ResNeXt, SE-ResNeXt, SENet, and MXNet Gluon stem/downsample variants, tiered stems added by Ross Wightman
 
+Papers:
+* `Deep Residual Learning for Image Recognition` - https://arxiv.org/abs/1512.03385
+* `Bag of Tricks for Image Classification with Convolutional Neural Networks` - https://arxiv.org/abs/1812.01187
+* `Aggregated Residual Transformations for Deep Neural Networks` - https://arxiv.org/abs/1611.05431
+* `Wide Residual Networks` - https://arxiv.org/abs/1605.07146
+* `Squeeze-and-Excitation Networks` - https://arxiv.org/abs/1709.01507
+* `ECA-Net: Efficient Channel Attention for Deep Convolutional Neural Networks` - https://arxiv.org/abs/1910.03151
+* `Making Convolutional Networks Shift-Invariant Again` - https://arxiv.org/abs/1904.11486
+* `Group Normalization` - https://arxiv.org/abs/1803.08494
+* `Revisiting ResNets: Improved Training and Scaling Strategies` - https://arxiv.org/abs/2103.07579
+* `ResNet strikes back: An improved training procedure in timm` - https://arxiv.org/abs/2110.00476
+* `Billion-scale semi-supervised learning for image classification` - https://arxiv.org/abs/1905.00546
+* `Exploring the Limits of Weakly Supervised Pretraining` - https://arxiv.org/abs/1805.00932
+* `Knapsack Pruning with Inner Distillation` - https://arxiv.org/abs/2002.08258
+
 Copyright 2019, Ross Wightman
 """
 import math

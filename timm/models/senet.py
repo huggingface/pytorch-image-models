@@ -5,6 +5,9 @@ Additional credit to https://github.com/creafz
 
 Original model: https://github.com/hujie-frank/SENet
 
+Papers:
+* `Squeeze-and-Excitation Networks` - https://arxiv.org/abs/1709.01507
+
 ResNet code gently borrowed from
 https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
 

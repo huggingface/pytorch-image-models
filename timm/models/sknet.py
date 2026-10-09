@@ -1,6 +1,7 @@
 """ Selective Kernel Networks (ResNet base)
 
-Paper: Selective Kernel Networks (https://arxiv.org/abs/1903.06586)
+Papers:
+    * `Selective Kernel Networks` - https://arxiv.org/abs/1903.06586
 
 This was inspired by reading 'Compounding the Performance Improvements...' (https://arxiv.org/abs/2001.06268)
 and a streamlined impl at https://github.com/clovaai/assembled-cnn but I ended up building something closer

@@ -1,3 +1,9 @@
+""" HieraDet (SAM 2 Hiera image encoder)
+
+Papers:
+    * `SAM 2: Segment Anything in Images and Videos` - https://arxiv.org/abs/2408.00714
+    * `Hiera: A Hierarchical Vision Transformer without the Bells-and-Whistles` - https://arxiv.org/abs/2306.00989
+"""
 import math
 from copy import deepcopy
 from functools import partial

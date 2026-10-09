@@ -1,5 +1,9 @@
 """
 RDNet
+
+Papers:
+* `DenseNets Reloaded: Paradigm Shift Beyond ResNets and ViTs` - https://arxiv.org/abs/2403.19588
+
 Copyright (c) 2024-present NAVER Cloud Corp.
 Apache-2.0
 """

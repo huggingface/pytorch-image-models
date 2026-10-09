@@ -1,10 +1,8 @@
 """ Normalization Free Nets. NFNet, NF-RegNet, NF-ResNet (pre-activation) Models
 
-Paper: `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
-    - https://arxiv.org/abs/2101.08692
-
-Paper: `High-Performance Large-Scale Image Recognition Without Normalization`
-    - https://arxiv.org/abs/2102.06171
+Papers:
+* `Characterizing signal propagation to close the performance gap in unnormalized ResNets` - https://arxiv.org/abs/2101.08692
+* `High-Performance Large-Scale Image Recognition Without Normalization` - https://arxiv.org/abs/2102.06171
 
 Official Deepmind JAX code: https://github.com/deepmind/deepmind-research/tree/master/nfnets
 
