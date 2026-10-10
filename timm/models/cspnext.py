@@ -266,6 +266,7 @@ class CspNext(nn.Module):
             raise ValueError('depths and channels must have the same length')
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.grad_checkpointing = False
 
         stage_depths = [max(round(d * deepen_factor), 1) for d in depths]
