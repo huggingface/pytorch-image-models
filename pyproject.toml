@@ -59,6 +59,8 @@ path = "timm/version.py"
 testpaths = ['tests']
 markers = [
     "base: marker for model tests using the basic setup",
+    "forward: marker for the per-model forward tests",
+    "backward: marker for the per-model backward tests",
     "cfg: marker for model tests checking the config",
     "cfg_nonstd: marker for non-standard model config tests (also marked cfg)",
     "torchscript: marker for model tests using torchscript",

@@ -21,6 +21,8 @@ jobs:
         testmarker:
           - '-k "not test_models"'
           - '-m base'
+          - '-m forward'
+          - '-m backward'
           - '-m "cfg and not cfg_nonstd"'
           - '-m cfg_nonstd'
           - '-m torchscript'

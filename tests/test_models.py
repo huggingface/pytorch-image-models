@@ -178,7 +178,7 @@ def test_model_inference(model_name, batch_size):
         _test_owl(pp(test_owl).unsqueeze(0), tol=(1e-1, 1e-1))  # re-process from original jpg, Pillow output can change a lot btw ver
 
 
-@pytest.mark.base
+@pytest.mark.forward
 @pytest.mark.timeout(timeout120)
 @pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS))
 @pytest.mark.parametrize('batch_size', [1])
@@ -211,7 +211,7 @@ def test_model_forward(model_name, batch_size):
         assert torch.allclose(outputs, outputs2, rtol=1e-4, atol=1e-5), 'Output does not match'
 
 
-@pytest.mark.base
+@pytest.mark.backward
 @pytest.mark.timeout(timeout120)
 @pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS, name_matches_cfg=True))
 @pytest.mark.parametrize('batch_size', [2])
@@ -520,6 +520,7 @@ def test_reset_classifier_keeps_pool(model_name):
         assert not torch.allclose(pooled_avg, expected)
 
 
+@pytest.mark.base
 @pytest.mark.parametrize(
     'model_name',
     ['efficientnet_b1_pruned', 'efficientnet_b2_pruned', 'efficientnet_b3_pruned'],
@@ -1005,6 +1006,7 @@ def test_naflexvit_direct_grid_sample_export(ar_preserving):
     assert actual[1] == expected[1]
 
 
+@pytest.mark.base
 def test_naflexvit_forward_intermediates_dict_input():
     """NaFlex (pre-patchified dict) inputs through forward_intermediates: NLC-only, final-feature
     parity with forward_features, patch_valid surfaced for downstream masking/scatter."""
@@ -1217,6 +1219,7 @@ def test_naflexvit_sapiens2_conversion(num_kv_heads, attn_only_layer_scale):
                 torch.testing.assert_close(parameter.grad, reference_grads[name], rtol=2e-4, atol=2e-6)
 
 
+@pytest.mark.base
 def test_gemma4_forward_intermediates_dict_output():
     """gemma4_vit dict-output intermediates match the NaFlexVit contract (API symmetry):
     'image_intermediates' / 'image_features' / 'patch_valid' aligned with the token sequence."""
