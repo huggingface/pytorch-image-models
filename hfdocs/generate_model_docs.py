@@ -1421,6 +1421,26 @@ def _fmt_size(size: Sequence[int]) -> str:
     return str(h) if h == w else f'{h}x{w}'
 
 
+def _params_match(benchmark_params: float, params: Optional[float]) -> bool:
+    """Whether a benchmark param count (in M, rounded) matches a model's param count."""
+    return params is not None and abs(benchmark_params - params) <= max(0.01, 0.005 * params)
+
+
+def _reparameterized_params(name: str) -> Optional[float]:
+    """Param count (in M) of a model in its fused (reparameterized) deployment form, None if unavailable.
+
+    Built on CPU, reparameterization does not work for all models on the meta device.
+    """
+    from timm.utils.model import reparameterize_model
+    try:
+        with warnings.catch_warnings(), torch.no_grad():
+            warnings.simplefilter('ignore')
+            model = reparameterize_model(timm.create_model(name, pretrained=False).eval())
+    except Exception:
+        return None
+    return sum(p.numel() for p in model.parameters()) / 1e6
+
+
 def collect_family(
         slug: str,
         spec: Dict[str, Any],
@@ -1463,11 +1483,18 @@ def collect_family(
 
         input_size = tuple(get_pretrained_cfg(name).input_size[-2:])
         bench = benchmark.get((name, input_size[-1])) if input_size[0] == input_size[1] else None
-        params_m = float(bench['param_count']) if bench else round(meta_params, 2)
-        if bench and abs(float(bench['param_count']) - meta_params) > max(0.01, 0.005 * meta_params):
-            issues.append(f'{name}: benchmark param_count {bench["param_count"]}M, current code {meta_params:.2f}M')
-        if not bench:
+        if bench and not _params_match(float(bench['param_count']), meta_params):
+            if _params_match(float(bench['param_count']), _reparameterized_params(name)):
+                pass  # benchmarked in the fused (reparameterized) deployment form, the row is current
+            else:
+                # the benchmark predates a change to the architecture, its params / GMACs no longer apply
+                issues.append(
+                    f'{name}: benchmark param_count {bench["param_count"]}M, current code {meta_params:.2f}M, '
+                    f'stale benchmark row not used')
+                bench = None
+        elif not bench:
             issues.append(f'{name}: no benchmark row at img_size {_fmt_size(input_size)}')
+        params_m = float(bench['param_count']) if bench else round(meta_params, 2)
         archs.append(ArchInfo(
             name=name,
             model_class=model_class,
