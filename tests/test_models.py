@@ -263,6 +263,39 @@ EARLY_POOL_MODELS = (
 )
 
 
+def _assert_model_api_contract(model, model_name, cfg_device):
+    """Check parts of the model API the optimizer factory and model creation rely on, for every model."""
+    from timm.models._manipulate import group_parameters
+
+    # unknown constructor args must raise, not be silently ignored
+    with torch.device(cfg_device) if _HAS_DEVICE_CONTEXT else nullcontext():
+        with pytest.raises(TypeError):
+            create_model(model_name, pretrained=False, device=cfg_device, not_a_model_arg=1)
+
+    # reset_classifier keeps the current pooling by default
+    if hasattr(model, 'reset_classifier'):
+        param = inspect.signature(model.reset_classifier).parameters.get('global_pool')
+        if param is not None:
+            assert param.default is None, f'reset_classifier global_pool default is {param.default!r}, not None'
+
+    # group_matcher() / no_weight_decay() must match the model's params
+    param_names = [n for n, _ in model.named_parameters()]
+    if hasattr(model, 'group_matcher'):
+        groups = group_parameters(model, model.group_matcher(coarse=False), reverse=True)
+        assert len(set(groups.values())) > 1, 'group_matcher() puts all params in a single group'
+    if hasattr(model, 'no_weight_decay'):
+        for pattern in model.no_weight_decay():
+            if any(fnmatch.fnmatch(n, pattern) for n in param_names):
+                continue
+            # an optional param (e.g. a class or register token) can be listed when this config doesn't use it
+            obj = model
+            for attr in pattern.split('.'):
+                obj = getattr(obj, attr, None)
+                if obj is None:
+                    break
+            assert obj is None, f'no_weight_decay() entry {pattern!r} matches no parameter'
+
+
 def _assert_reset_classifier_preserves_parent_device_dtype(model):
     reset_classifier = getattr(model, 'reset_classifier', None)
     get_classifier = getattr(model, 'get_classifier', None)
@@ -305,6 +338,7 @@ def test_model_default_cfgs(model_name, batch_size, cfg_device):
     """Check config metadata and feature/head shapes without allocating weights on modern torch."""
     with torch.device(cfg_device) if _HAS_DEVICE_CONTEXT else nullcontext():
         model = create_model(model_name, pretrained=False, device=cfg_device, dtype=torch.float32).eval()
+    _assert_model_api_contract(model, model_name, cfg_device)
     assert getattr(model, 'num_classes') >= 0
     assert getattr(model, 'num_features') > 0
     assert getattr(model, 'head_hidden_size') > 0
@@ -386,6 +420,7 @@ def test_model_default_cfgs_non_std(model_name, batch_size, cfg_device):
     """Check non-standard model config metadata and feature/head shapes."""
     with torch.device(cfg_device) if _HAS_DEVICE_CONTEXT else nullcontext():
         model = create_model(model_name, pretrained=False, device=cfg_device, dtype=torch.float32).eval()
+    _assert_model_api_contract(model, model_name, cfg_device)
     assert getattr(model, 'num_classes') >= 0
     assert getattr(model, 'num_features') > 0
     assert getattr(model, 'head_hidden_size') > 0
@@ -468,53 +503,6 @@ if 'GITHUB_ACTIONS' not in os.environ:
     def test_model_features_pretrained(model_name, batch_size):
         """Create that pretrained weights load when features_only==True."""
         create_model(model_name, pretrained=True, features_only=True)
-
-
-@pytest.mark.cfg
-@pytest.mark.parametrize('model_name', list_models())
-def test_model_param_groups(model_name, cfg_device):
-    """Check group_matcher() and no_weight_decay(), used by the optimizer factory, match the model's params."""
-    from timm.models._manipulate import group_parameters
-
-    with torch.device(cfg_device) if _HAS_DEVICE_CONTEXT else nullcontext():
-        model = create_model(model_name, pretrained=False, device=cfg_device)
-    param_names = [n for n, _ in model.named_parameters()]
-    if hasattr(model, 'group_matcher'):
-        groups = group_parameters(model, model.group_matcher(coarse=False), reverse=True)
-        assert len(set(groups.values())) > 1, 'group_matcher() puts all params in a single group'
-    if hasattr(model, 'no_weight_decay'):
-        for pattern in model.no_weight_decay():
-            if any(fnmatch.fnmatch(n, pattern) for n in param_names):
-                continue
-            # an optional param (e.g. a class or register token) can be listed when this config doesn't use it
-            obj = model
-            for attr in pattern.split('.'):
-                obj = getattr(obj, attr, None)
-                if obj is None:
-                    break
-            assert obj is None, f'no_weight_decay() entry {pattern!r} matches no parameter'
-
-
-@pytest.mark.cfg
-@pytest.mark.parametrize('model_name', list_models())
-def test_model_unknown_kwarg_raises(model_name, cfg_device):
-    """Check unknown constructor args raise instead of being silently ignored."""
-    with torch.device(cfg_device) if _HAS_DEVICE_CONTEXT else nullcontext():
-        with pytest.raises(TypeError):
-            create_model(model_name, pretrained=False, device=cfg_device, not_a_model_arg=1)
-
-
-@pytest.mark.cfg
-@pytest.mark.parametrize('model_name', list_models())
-def test_model_reset_classifier_default_pool(model_name, cfg_device):
-    """Check reset_classifier() keeps the current pooling by default (global_pool=None)."""
-    with torch.device(cfg_device) if _HAS_DEVICE_CONTEXT else nullcontext():
-        model = create_model(model_name, pretrained=False, device=cfg_device)
-    if not hasattr(model, 'reset_classifier'):
-        return
-    param = inspect.signature(model.reset_classifier).parameters.get('global_pool')
-    if param is not None:
-        assert param.default is None, f'reset_classifier global_pool default is {param.default!r}, not None'
 
 
 @pytest.mark.base
