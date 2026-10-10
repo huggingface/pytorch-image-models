@@ -2255,7 +2255,7 @@ model_cfgs = dict(
     ),
     test_coatnet=MaxxVitCfg(
         embed_dim=(32, 64, 96, 128),
-        depths=(1, 1, 1, 1),
+        depths=(1, 1, 2, 1),
         stem_width=(16, 32),
         **_rw_max_cfg(stride_mode='pool', conv_output_bias=True, conv_attn_ratio=0.25),
     ),
