@@ -292,9 +292,12 @@ class FeatureDictNet(nn.ModuleDict):
             if self.grad_checkpointing and not torch.jit.is_scripting():
                 # Skipping checkpoint of first module because need a gradient at input
                 # Skipping last because networks with in-place ops might fail w/ checkpointing enabled
+                # Skipping in-place modules (e.g. a stem's ReLU(inplace=True)): checkpointing one on its own modifies
+                # the tensor saved for recompute and fails in backward, and there is nothing to save by checkpointing it
                 # NOTE: first_or_last module could be static, but recalc in is_scripting guard to avoid jit issues
                 first_or_last_module = i == 0 or i == max(len(self) - 1, 0)
-                x = module(x) if first_or_last_module else checkpoint(module, x)
+                skip = first_or_last_module or getattr(module, 'inplace', False) is True
+                x = module(x) if skip else checkpoint(module, x)
             else:
                 x = module(x)
 
@@ -423,9 +426,12 @@ class FeatureHookNet(nn.ModuleDict):
             if self.grad_checkpointing and not torch.jit.is_scripting():
                 # Skipping checkpoint of first module because need a gradient at input
                 # Skipping last because networks with in-place ops might fail w/ checkpointing enabled
+                # Skipping in-place modules (e.g. a stem's ReLU(inplace=True)): checkpointing one on its own modifies
+                # the tensor saved for recompute and fails in backward, and there is nothing to save by checkpointing it
                 # NOTE: first_or_last module could be static, but recalc in is_scripting guard to avoid jit issues
                 first_or_last_module = i == 0 or i == max(len(self) - 1, 0)
-                x = module(x) if first_or_last_module else checkpoint(module, x)
+                skip = first_or_last_module or getattr(module, 'inplace', False) is True
+                x = module(x) if skip else checkpoint(module, x)
             else:
                 x = module(x)
         out = self.hooks.get_output(x.device)
