@@ -640,6 +640,8 @@ default_cfgs = generate_default_cfgs({
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_relpos_medium_patch16_rpn_224-sw-5d2befd8.pth',
         hf_hub_id='timm/'),
     'vit_relpos_base_patch16_rpn_224.untrained': _cfg(),
+
+    'test_vit_relpos.untrained': _cfg(input_size=(3, 160, 160), crop_pct=0.95),
 })
 
 
@@ -785,4 +787,12 @@ def vit_relpos_base_patch16_rpn_224(pretrained=False, **kwargs) -> VisionTransfo
         patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False, block_fn=ResPostRelPosBlock)
     model = _create_vision_transformer_relpos(
         'vit_relpos_base_patch16_rpn_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def test_vit_relpos(pretrained: bool = False, **kwargs) -> VisionTransformerRelPos:
+    """ViT-RelPos test model, tiny for unit tests."""
+    model_args = dict(patch_size=16, embed_dim=96, depth=9, num_heads=3, mlp_ratio=2, qkv_bias=False, fc_norm=True)
+    model = _create_vision_transformer_relpos('test_vit_relpos', pretrained=pretrained, **dict(model_args, **kwargs))
     return model

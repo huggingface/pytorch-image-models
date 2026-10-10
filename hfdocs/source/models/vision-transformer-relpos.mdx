@@ -5,7 +5,7 @@ and regenerate. -->
 
 **Category:** ViT · **Code:**
 [`timm/models/vision_transformer_relpos.py`](https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/vision_transformer_relpos.py)
-· **Architectures:** 13 · **Pretrained weights:** 9 (9 with ImageNet-1k results)
+· **Architectures:** 14 · **Pretrained weights:** 9 (9 with ImageNet-1k results)
 
 Vision Transformers using relative position biases instead of absolute position embeddings. The module docstring marks
 these models as experimental.
@@ -49,6 +49,7 @@ size). Checked by running each feature on a randomly initialized model (`VisionT
 
 | Architecture | Params (M) | GMACs | Input size | Pretrained weights |
 |---|---:|---:|---:|---:|
+| `test_vit_relpos` | 0.85 | - | 160 | 0 |
 | `vit_relpos_base_patch16_224` | 86.43 | 17.51 | 224 | 1 |
 | `vit_relpos_base_patch16_cls_224` | 86.43 | 17.60 | 224 | 0 |
 | `vit_relpos_base_patch16_clsgap_224` | 86.43 | 17.60 | 224 | 1 |

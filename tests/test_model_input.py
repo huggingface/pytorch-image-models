@@ -227,7 +227,7 @@ _RESIZE_ROUNDTRIP = [
     ('swin_tiny_patch4_window7_224', dict(window_size=(7, 7, 14, 7)), 112, 224),
     ('swinv2_tiny_window8_256', dict(window_size=8), 128, 192),
     ('swinv2_cr_tiny_224', dict(window_size=(7, 14, 7, 7)), 112, 224),
-    ('maxvit_nano_rw_256', dict(), 256, 320),
+    ('test_maxvit', dict(), 160, 224),
     ('efficientvit_m0', dict(), 224, 256),
 ]
 _SWIN_SMALL = dict(embed_dim=16, depths=(1, 1, 1, 1), num_heads=(1, 2, 4, 8))
@@ -310,8 +310,12 @@ def test_model_traits_are_independent_and_follow_resize_and_head_reset():
     (None, ((3, 288, 288), 1.0), ((3, 224, 224), 0.95)),
 ])
 def test_export_data_config_test_size_roundtrip(tmp_path, data_config, expected_test, expected):
-    model = timm.create_model('resnet50.a1_in1k')
-    assert model.pretrained_cfg['test_input_size'] == (3, 288, 288)
+    model = timm.create_model(
+        'test_resnet',
+        pretrained_cfg_overlay=dict(
+            input_size=(3, 224, 224), test_input_size=(3, 288, 288), crop_pct=0.95, test_crop_pct=1.0,
+        ),
+    )
     save_for_hf(model, tmp_path, data_config=data_config)
     restored = timm.create_model('local-dir:' + str(tmp_path))
     for use_test_size, (input_size, crop_pct) in ((True, expected_test), (False, expected)):
@@ -337,7 +341,7 @@ def test_efficientvit_msra_rectangular_resize_roundtrip(tmp_path):
 
 
 def test_export_tracks_reset_pool_and_omits_in_memory_weight_source(tmp_path):
-    model = timm.create_model('resnet18', num_classes=7)
+    model = timm.create_model('test_resnet', num_classes=7)
     model.reset_classifier(3, global_pool='catavgmax')
     model.pretrained_cfg['state_dict'] = {'unused': torch.ones(1)}
     save_for_hf(model, tmp_path)
@@ -355,7 +359,7 @@ def test_export_does_not_inherit_training_regularization(tmp_path, vit):
         model = _vit(num_classes=7, **rates)
     else:
         rates['drop_block_rate'] = 0.1
-        model = timm.create_model('resnet18', num_classes=7, **rates)
+        model = timm.create_model('test_resnet', num_classes=7, **rates)
     assert not rates.keys() & get_model_args(model).keys()
     save_for_hf(model, tmp_path)
     cfg = json.loads((tmp_path / 'config.json').read_text())

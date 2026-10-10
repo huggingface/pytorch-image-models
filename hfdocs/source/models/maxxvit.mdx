@@ -5,7 +5,7 @@ and regenerate. -->
 
 **Category:** Hybrid · **Code:**
 [`timm/models/maxxvit.py`](https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/maxxvit.py) ·
-**Architectures:** 56 · **Pretrained weights:** 52 (43 with ImageNet-1k results)
+**Architectures:** 58 · **Pretrained weights:** 52 (43 with ImageNet-1k results)
 
 From-scratch implementations of MaxViT (MBConv blocks with multi-axis attention, blocked local and dilated grid
 attention) and CoAtNet (convolution stages followed by relative attention stages), plus `timm` variants (`_rw` configs,
@@ -106,6 +106,8 @@ details.
 | `maxxvitv2_rmlp_base_rw_224` | 116.09 | 24.20 | 224 | 2 |
 | `maxxvitv2_rmlp_base_rw_384` | 116.09 | 72.98 | 384 | 1 |
 | `maxxvitv2_rmlp_large_rw_224` | 215.42 | 44.14 | 224 | 0 |
+| `test_coatnet` | 0.46 | - | 160 | 0 |
+| `test_maxvit` | 1.09 | - | 160 | 0 |
 
 GMACs and parameter counts are for the default input size and classifier of each architecture, from the [benchmark
 results](https://github.com/huggingface/pytorch-image-models/tree/main/results).

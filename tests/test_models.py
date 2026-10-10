@@ -506,7 +506,7 @@ if 'GITHUB_ACTIONS' not in os.environ:
 
 
 @pytest.mark.base
-@pytest.mark.parametrize('model_name', ['resnet18', 'efficientnet_b0', 'densenet121', 'convnext_atto'])
+@pytest.mark.parametrize('model_name', ['test_resnet', 'test_efficientnet', 'densenet121', 'test_convnext'])
 def test_reset_classifier_keeps_pool(model_name):
     model = create_model(model_name, pretrained=False, global_pool='max').eval()
     x = torch.randn(2, 3, 64, 64)
@@ -1817,27 +1817,27 @@ def test_hybrid_vit_set_input_size_dtype():
 
 _RELPOS_FAMILY = [
     # model, ctor kwargs, base img size, resized img size
-    ('maxvit_nano_rw_256', dict(), 256, 320),  # RelPosBias, window / grid partition attn
-    ('maxvit_rmlp_nano_rw_256', dict(), 256, 320),  # RelPosMlp
-    ('maxvit_tiny_tf_224', dict(), 224, 288),  # RelPosBiasTf
-    ('coatnet_nano_rw_224', dict(), 224, 288),  # full attn transformer stages w/ RelPosBias
-    ('maxvit_tiny_pm_256', dict(), 256, 320),  # parallel partition attn
+    ('test_maxvit', dict(), 160, 224),  # RelPosBias, window / grid partition attn
+    ('test_maxvit', dict(transformer_rel_pos_type='mlp'), 160, 224),  # RelPosMlp
+    ('test_maxvit', dict(transformer_rel_pos_type='bias_tf'), 160, 224),  # RelPosBiasTf
+    ('test_coatnet', dict(), 160, 224),  # full attn transformer stages w/ RelPosBias
+    ('test_maxvit', dict(block_type=('PM',) * 4), 160, 224),  # parallel partition attn
     ('beit_base_patch16_224', dict(embed_dim=64, depth=2, num_heads=2), 224, 256),
     ('beit_base_patch16_224', dict(embed_dim=64, depth=2, num_heads=2, use_shared_rel_pos_bias=True), 224, 256),
-    ('vit_relpos_small_patch16_224', dict(), 224, 256),  # RelPosMlp
-    ('vit_relpos_small_patch16_224', dict(rel_pos_type='bias'), 224, 256),
-    ('vit_srelpos_small_patch16_224', dict(), 224, 256),  # shared rel pos
+    ('test_vit_relpos', dict(), 160, 224),  # RelPosMlp
+    ('test_vit_relpos', dict(rel_pos_type='bias'), 160, 224),
+    ('test_vit_relpos', dict(shared_rel_pos=True), 160, 224),  # shared rel pos
     ('efficientvit_m0', dict(), 224, 256),
     ('efficientvit_m0', dict(), 224, 160),  # last stage feature size drops below the window size
 ]
 
 
 _RELPOS_NON_SQUARE = [
-    ('maxvit_nano_rw_256', dict()),
-    ('maxvit_tiny_tf_224', dict()),
-    ('coatnet_nano_rw_224', dict()),
+    ('test_maxvit', dict()),
+    ('test_maxvit', dict(transformer_rel_pos_type='bias_tf')),
+    ('test_coatnet', dict()),
     ('beit_base_patch16_224', dict(embed_dim=64, depth=2, num_heads=2)),
-    ('vit_relpos_small_patch16_224', dict(rel_pos_type='bias')),
+    ('test_vit_relpos', dict(rel_pos_type='bias')),
     ('swin_tiny_patch4_window7_224', dict(embed_dim=16, depths=(1, 1, 1, 1), num_heads=(1, 1, 1, 1))),
 ]
 

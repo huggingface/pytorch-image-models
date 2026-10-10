@@ -3,7 +3,7 @@ and regenerate. -->
 
 # Model Families
 
-`timm` has 1356 architectures in 98 model families, with 1812 pretrained weights. Each family page lists the papers,
+`timm` has 1359 architectures in 98 model families, with 1812 pretrained weights. Each family page lists the papers,
 architectures and pretrained weights of a model module, and which parts of the [Model API](model_api) its models
 support. See the [Quickstart](quickstart) for loading and using the models, the [models reference](reference/models) for
 `create_model` and the pretrained configs, and the [results](results) for the ImageNet validation results of all
@@ -154,7 +154,7 @@ weights.
 * [Twins](models/twins) (6 architectures, 6 weights): Twins-PCPVT (Pyramid Vision Transformer with conditional position
   encodings) and Twins-SVT (spatially separable self-attention, locally grouped attention alternating with global
   sub-sampled attention).
-* [Vision Transformer (relative position)](models/vision-transformer-relpos) (13 architectures, 9 weights): Vision
+* [Vision Transformer (relative position)](models/vision-transformer-relpos) (14 architectures, 9 weights): Vision
   Transformers using relative position biases instead of absolute position embeddings. The module docstring marks these
   models as experimental.
 * [Vision Transformer (ViT)](models/vision-transformer) (157 architectures, 302 weights): The Vision Transformer (ViT)
@@ -187,7 +187,7 @@ weights.
 * [LeViT](models/levit) (20 architectures, 10 weights): LeViT is a hybrid network for fast inference, a convolutional
   stem followed by attention stages that shrink the resolution with attention based downsampling and use attention
   biases for position.
-* [MaxViT and CoAtNet](models/maxxvit) (56 architectures, 52 weights): From-scratch implementations of MaxViT (MBConv
+* [MaxViT and CoAtNet](models/maxxvit) (58 architectures, 52 weights): From-scratch implementations of MaxViT (MBConv
   blocks with multi-axis attention, blocked local and dilated grid attention) and CoAtNet (convolution stages followed
   by relative attention stages), plus `timm` variants (`_rw` configs, MaxxViT).
 * [MetaFormer (PoolFormer, ConvFormer, CAFormer)](models/metaformer) (18 architectures, 50 weights): MetaFormer models

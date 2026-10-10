@@ -169,7 +169,7 @@ def test_non_grayscale_space_to_depth_conversion_remains_explicitly_unsupported(
 def test_create_model_transfers_multispectral_checkpoint(frames):
     import timm
 
-    source = timm.create_model('resnet18', pretrained=False, in_chans=13, num_classes=2).eval()
+    source = timm.create_model('test_resnet', pretrained=False, in_chans=13, num_classes=2).eval()
     cfg = dict(
         source.pretrained_cfg,
         state_dict=source.state_dict(),
@@ -177,15 +177,16 @@ def test_create_model_transfers_multispectral_checkpoint(frames):
         num_classes=2,
     )
     target = timm.create_model(
-        'resnet18',
+        'test_resnet',
         pretrained=True,
         in_chans=13 * frames,
         num_classes=2,
         pretrained_cfg=cfg,
     ).eval()
 
+    first_conv_weight = cfg['first_conv'] + '.weight'
     for name, weight in source.state_dict().items():
-        expected = _reference_channels(weight, 13, 13 * frames) if name == 'conv1.weight' else weight
+        expected = _reference_channels(weight, 13, 13 * frames) if name == first_conv_weight else weight
         torch.testing.assert_close(target.state_dict()[name], expected, rtol=0, atol=0)
     image = torch.linspace(-1, 1, 13 * 32 * 32).reshape(1, 13, 32, 32)
     with torch.no_grad():

@@ -24,7 +24,7 @@ def test_average_meter_zero_count():
 
 
 def test_freeze_unfreeze():
-    model = timm.create_model('resnet18')
+    model = timm.create_model('test_resnet', layers=(1, 2, 1, 1))
 
     # Freeze all
     freeze(model)
@@ -75,7 +75,7 @@ def test_freeze_unfreeze():
     assert isinstance(model.layer1[0].bn1, BatchNorm2d)
 
 def test_activation_stats_hook_validation():
-    model = timm.create_model('resnet18')
+    model = timm.create_model('test_resnet')
     
     def test_hook(model, input, output):
         return output.mean().item()
@@ -90,7 +90,7 @@ def test_activation_stats_hook_validation():
 
 
 def test_extract_spp_stats():
-    model = timm.create_model('resnet18')
+    model = timm.create_model('test_resnet')
     
     def test_hook(model, input, output):
         return output.mean().item()
@@ -191,7 +191,7 @@ def test_get_state_dict_custom_unwrap():
 
 
 def test_freeze_unfreeze_string_input():
-    model = timm.create_model('resnet18')
+    model = timm.create_model('test_resnet')
     
     # Test with string input
     _freeze_unfreeze(model, 'layer1', mode='freeze')

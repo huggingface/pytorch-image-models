@@ -147,7 +147,7 @@ def test_token_distillation_reuses_teacher_wrapper(compiled):
 def test_token_distillation_named_teacher_checkpoint(tmp_path):
     from timm import create_model
 
-    teacher_name = 'vit_tiny_patch16_224'
+    teacher_name = 'test_vit'
     source = create_model(teacher_name, pretrained=False, num_classes=3)
     checkpoint_path = tmp_path / 'teacher.pth'
     torch.save(source.state_dict(), checkpoint_path)
