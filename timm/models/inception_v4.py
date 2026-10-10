@@ -1,6 +1,9 @@
 """ Pytorch Inception-V4 implementation
 Sourced from https://github.com/Cadene/tensorflow-model-zoo.torch (MIT License) which is
 based upon Google's Tensorflow implementation and pretrained weights (Apache 2.0 License)
+
+Papers:
+* `Inception-v4, Inception-ResNet and the Impact of Residual Connections on Learning` - https://arxiv.org/abs/1602.07261
 """
 from functools import partial
 from typing import List, Optional, Tuple, Union, Type
@@ -339,9 +342,11 @@ class InceptionV4(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.last_linear
 
-    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
+        if global_pool is None:
+            global_pool = self.global_pool.pool_type
         self.global_pool, self.last_linear = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, **dd)
         self.global_pool.train(self.training)

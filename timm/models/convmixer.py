@@ -1,5 +1,7 @@
 """ ConvMixer
 
+Papers:
+* `Patches Are All You Need?` - https://arxiv.org/abs/2201.09792
 """
 from typing import Optional, Type
 
@@ -38,7 +40,6 @@ class ConvMixer(nn.Module):
             act_layer: Type[nn.Module] = nn.GELU,
             device=None,
             dtype=None,
-            **kwargs,
     ):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}

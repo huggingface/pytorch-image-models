@@ -6,25 +6,39 @@ An implementation of EfficienNet that covers variety of related models with effi
   - `EfficientNetV2: Smaller Models and Faster Training` - https://arxiv.org/abs/2104.00298
 
 * EfficientNet (B0-B8, L2 + Tensorflow pretrained AutoAug/RandAug/AdvProp/NoisyStudent weight ports)
-  - EfficientNet: Rethinking Model Scaling for CNNs - https://arxiv.org/abs/1905.11946
-  - CondConv: Conditionally Parameterized Convolutions for Efficient Inference - https://arxiv.org/abs/1904.04971
-  - Adversarial Examples Improve Image Recognition - https://arxiv.org/abs/1911.09665
-  - Self-training with Noisy Student improves ImageNet classification - https://arxiv.org/abs/1911.04252
+  - `EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks` - https://arxiv.org/abs/1905.11946
+  - `CondConv: Conditionally Parameterized Convolutions for Efficient Inference` - https://arxiv.org/abs/1904.04971
+  - `Adversarial Examples Improve Image Recognition` - https://arxiv.org/abs/1911.09665
+  - `Self-training with Noisy Student improves ImageNet classification` - https://arxiv.org/abs/1911.04252
+  - `Knapsack Pruning with Inner Distillation` - https://arxiv.org/abs/2002.08258
+  - `Evolving Normalization-Activation Layers` - https://arxiv.org/abs/2004.02967
+
+* EfficientNet-X
+  - `Searching for Fast Model Families on Datacenter Accelerators` - https://arxiv.org/abs/2102.05610
 
 * MixNet (Small, Medium, and Large)
-  - MixConv: Mixed Depthwise Convolutional Kernels - https://arxiv.org/abs/1907.09595
+  - `MixConv: Mixed Depthwise Convolutional Kernels` - https://arxiv.org/abs/1907.09595
 
 * MNasNet B1, A1 (SE), Small
-  - MnasNet: Platform-Aware Neural Architecture Search for Mobile - https://arxiv.org/abs/1807.11626
+  - `MnasNet: Platform-Aware Neural Architecture Search for Mobile` - https://arxiv.org/abs/1807.11626
+
+* MobileNet-V1
+  - `MobileNets: Efficient Convolutional Neural Networks for Mobile Vision Applications` - https://arxiv.org/abs/1704.04861
+
+* MobileNet-V2
+  - `MobileNetV2: Inverted Residuals and Linear Bottlenecks` - https://arxiv.org/abs/1801.04381
+
+* MobileNet-EdgeTPU-V2
+  - `Searching for Efficient Neural Architectures for On-Device ML on Edge TPUs` - https://arxiv.org/abs/2204.14007
 
 * FBNet-C
-  - FBNet: Hardware-Aware Efficient ConvNet Design via Differentiable NAS - https://arxiv.org/abs/1812.03443
+  - `FBNet: Hardware-Aware Efficient ConvNet Design via Differentiable Neural Architecture Search` - https://arxiv.org/abs/1812.03443
 
 * Single-Path NAS Pixel1
-  - Single-Path NAS: Designing Hardware-Efficient ConvNets - https://arxiv.org/abs/1904.02877
+  - `Single-Path NAS: Designing Hardware-Efficient ConvNets in less than 4 Hours` - https://arxiv.org/abs/1904.02877
 
 * TinyNet
-    - Model Rubik's Cube: Twisting Resolution, Depth and Width for TinyNets - https://arxiv.org/abs/2010.14819
+    - `Model Rubik's Cube: Twisting Resolution, Depth and Width for TinyNets` - https://arxiv.org/abs/2010.14819
     - Definitions & weights borrowed from https://github.com/huawei-noah/CV-Backbones/tree/master/tinynet_pytorch
 
 * And likely more...
@@ -214,15 +228,17 @@ class EfficientNet(nn.Module):
         """Get the classifier module."""
         return self.classifier
 
-    def reset_classifier(self, num_classes: int, global_pool: str = 'avg') -> None:
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
         """Reset the classifier head.
 
         Args:
             num_classes: Number of classes for new classifier.
-            global_pool: Global pooling type.
+            global_pool: Global pooling type, current pooling is kept if None.
         """
         dd = get_device_dtype(self)
         self.num_classes = num_classes
+        if global_pool is None:
+            global_pool = self.global_pool.pool_type
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, **dd)
         self.global_pool.train(self.training)

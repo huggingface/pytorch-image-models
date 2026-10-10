@@ -1,6 +1,6 @@
 """LowFormer
 LowFormer: Hardware Efficient Design for Convolutional Transformer Backbones (WACV 2025)
-- paper: https://arxiv.org/abs/2409.03460
+- `LowFormer: Hardware Efficient Design for Convolutional Transformer Backbones` - https://arxiv.org/abs/2409.03460
 - code: https://github.com/altair199797/LowFormer
 @article{Nottebaum2024LowFormerHE,
   title={LowFormer: Hardware Efficient Design for Convolutional Transformer Backbones},
@@ -12,7 +12,7 @@ LowFormer: Hardware Efficient Design for Convolutional Transformer Backbones (WA
 
 The LowFormer-E1/E2/E3 edge GPU variants are introduced in the journal extension
 Beyond MACs: Hardware Efficient Architecture Design for Vision Backbones (IJCV 2026)
-- paper: https://arxiv.org/abs/2603.26551
+- `Beyond MACs: Hardware Efficient Architecture Design for Vision Backbones` - https://arxiv.org/abs/2603.26551
 - code: https://github.com/altair199797/LowFormer
 @article{Nottebaum2026BeyondMACs,
   author  = {Nottebaum, Moritz and Dunnhofer, Matteo and Micheloni, Christian},

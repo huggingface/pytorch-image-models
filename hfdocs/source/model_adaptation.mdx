@@ -1,0 +1,99 @@
+# Adapt and Export Models
+
+## Input Channels
+
+Set `in_chans` to the number of channels your model will receive. For a non-RGB
+checkpoint, its pretrained configuration's `input_size[0]` must describe the
+**source checkpoint's** channel count. For example, to use two stacked 13-band
+images with a matching 13-band ResNet-18 checkpoint:
+
+```py
+import timm
+
+model = timm.create_model(
+    'resnet18',
+    pretrained=True,
+    in_chans=26,
+    num_classes=10,
+    pretrained_cfg_overlay={
+        'file': 'path/to/your_13_band_resnet18.pth',
+        'input_size': (13, 224, 224),
+        'num_classes': 10,
+    },
+)
+```
+
+This example requires your own checkpoint with the matching architecture and
+source class count. Input convolution weights are repeated or truncated in
+channel order, then multiplied by the source-to-target channel ratio. Thus a
+13-to-26 conversion repeats the weights twice and scales them by 1/2; repeated
+copies of the same frame preserve the input convolution's response. A 13-to-11
+conversion keeps the first 11 channels and scales by 13/11. Matching channel
+counts load unchanged. Conversion to one channel sums the source-channel weights.
+
+For direct weight conversion, specify the same source information explicitly:
+
+```py
+from timm.models import adapt_input_conv
+
+temporal_weights = adapt_input_conv(26, pretrained_weights, base_chans=13)
+```
+
+`base_chans` describes physical image channels, which can differ from a
+space-to-depth stem's convolution input dimension. The existing RGB default and
+space-to-depth grayscale conversion remain supported; other space-to-depth
+channel conversions still use the unsupported-format fallback during loading.
+Band-specific selection, semantic band matching, and normalization are not
+inferred: arrange the bands and preprocessing for your sensor and task.
+
+## Save Adapted Models
+
+`model.pretrained_cfg` continues to describe the source checkpoint after adaptation.
+The current model exposes `in_chans` and `num_classes`. An instance-owned `_traits`
+dictionary records its nominal `img_size`, `fixed_input_size` constraint, and
+`first_conv` path. The separate `_model_args` dictionary records construction
+arguments for export. Supported `set_input_size()` methods update the traits and
+reconstruction arguments together.
+
+Use `timm.models.get_model_traits(model)` to inspect a copy of the traits plus the
+current `in_chans` and `num_classes` attributes. Those counts are read from the
+attributes instead of duplicated in `_traits`, so classifier resets stay reflected.
+`timm.models.get_model_input_config(model)` resolves the input configuration from
+these traits, and `timm.models.get_model_args(model)` returns reconstruction arguments.
+
+Hub export writes a new configuration describing the saved weights without changing
+the live source configuration. Pass the preprocessing used for the adapted model:
+
+```py
+from timm.models import save_for_hf
+
+save_for_hf(model, 'my_model', data_config=data_config)
+restored = timm.create_model('local-dir:my_model', pretrained=True)
+```
+
+The built-in training, validation, inference, and benchmark scripts resolve input
+settings against the current model. The existing `resolve_data_config` and
+`resolve_model_data_config` helpers retain their source-config behavior.
+
+## Exported Construction Arguments
+
+The factory records construction arguments such as activation, normalization, and
+embedding dimensions. Export excludes device/dtype placement and captured training
+regularization: `drop_rate`, `drop_path_rate`, `drop_block_rate`, and `*_drop_rate`.
+Reloading therefore uses the architecture's regularization defaults unless the
+caller supplies new values. Explicit export `model_args` can retain a rate when
+that is intentional.
+
+Callable arguments cannot be serialized reliably. Prefer registered string names
+when constructing a model, or supply an equivalent name when exporting:
+
+```py
+import torch.nn as nn
+
+model = timm.create_model('resnet18', act_layer=nn.SiLU)
+save_for_hf(model, 'my_silu_resnet', model_args={'act_layer': 'silu'})
+```
+
+Without a serializable replacement, export raises an error naming the argument.
+Dropping it silently could reconstruct a different model even when its weights
+load successfully.

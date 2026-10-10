@@ -3,6 +3,10 @@
 Vision encoder of the Qwen3-VL / Qwen3.5 / Qwen3.8 multimodal models from Alibaba Qwen team, and of the
 driving-domain Qwen-Drive-1.0 built on that same tower.
 
+Papers:
+* `Qwen3-VL Technical Report` - https://arxiv.org/abs/2511.21631
+* `Qwen-Drive-1.0: An Initial Step towards a Vision-Language Foundation Model for Autonomous Driving` - https://arxiv.org/abs/2609.00111
+
 A plain pre-norm ViT (SigLIP-2 style widths, GELU-tanh MLP, fused QKV with bias) with two position encodings
 applied together: a learned absolute grid (48x48 for the released models, bilinearly resampled to the input grid
 with align_corners=True) and axial 2D RoPE (theta 10000, per-axis frequency blocks, 'half' rotation layout).
@@ -171,6 +175,7 @@ class Qwen3VitEncoder(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         assert global_pool in ('', 'avg', 'merge')
         assert embed_dim % num_heads == 0
+        self.in_chans = in_chans
         self.num_classes = 0
         self.global_pool = global_pool
         self.num_features = self.head_hidden_size = self.embed_dim = embed_dim
@@ -419,6 +424,7 @@ class Qwen3VitClassifier(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         assert global_pool in ('', 'avg')
         assert encoder_pool in ('', 'merge')
+        self.in_chans = in_chans
         self.num_classes = num_classes
         self.global_pool = global_pool
         self.encoder_pool = encoder_pool

@@ -101,6 +101,7 @@ class NaFlexPrefetchLoader:
             Tuple of (input_dict, targets) with normalized patches.
         """
         first = True
+        input_dict = target = None  # previous batch, yielded once the next one is prefetched
 
         device_mod = None
         if self.is_cuda:
@@ -423,6 +424,9 @@ def create_naflex_loader(
 
     else:
         # For validation, use fixed sequence length (unchanged)
+        if patch_size is None:
+            # same default as the training dataset wrapper
+            patch_size = 16
         dataset.transform = create_transform(
             is_training=False,
             interpolation=interpolation,

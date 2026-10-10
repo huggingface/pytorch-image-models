@@ -1,5 +1,8 @@
 """ PP-HGNet (V1 & V2)
 
+SSLD pretrained weights:
+* `Beyond Self-Supervision: A Simple Yet Effective Network Distillation Alternative to Improve Backbones` - https://arxiv.org/abs/2103.05959
+
 Reference:
 https://github.com/PaddlePaddle/PaddleClas/blob/develop/docs/zh_CN/models/ImageNet1k/PP-HGNetV2.md
 The Paddle Implement of PP-HGNet (https://github.com/PaddlePaddle/PaddleClas/blob/release/2.5.1/docs/en/models/PP-HGNet_en.md)
@@ -476,7 +479,6 @@ class HighPerfGpuNet(nn.Module):
             use_lab: bool = False,
             device=None,
             dtype=None,
-            **kwargs,
     ):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}

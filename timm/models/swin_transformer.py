@@ -1,6 +1,7 @@
 """ Swin Transformer
-A PyTorch impl of : `Swin Transformer: Hierarchical Vision Transformer using Shifted Windows`
-    - https://arxiv.org/pdf/2103.14030
+A PyTorch impl of:
+* `Swin Transformer: Hierarchical Vision Transformer using Shifted Windows` - https://arxiv.org/abs/2103.14030
+* `Searching the Search Space of Vision Transformer` - https://arxiv.org/abs/2111.14725 (AutoFormerV2 / S3)
 
 Code/weights from https://github.com/microsoft/Swin-Transformer, original copyright/license info below
 
@@ -25,6 +26,7 @@ import torch.nn as nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, calculate_drop_path_rates, ClassifierHead, to_2tuple, to_ntuple, trunc_normal_, \
     use_fused_attn, resize_rel_pos_bias_table, resample_patch_embed, ndgrid, get_device_dtype
+from ._input import update_model_input_size
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
@@ -808,6 +810,7 @@ class SwinTransformer(nn.Module):
             window_size: _int_or_tuple_2_t = 7,
             always_partition: bool = False,
             strict_img_size: bool = True,
+            dynamic_img_size: bool = False,
             mlp_ratio: float = 4.,
             qkv_bias: bool = True,
             drop_rate: float = 0.,
@@ -819,7 +822,6 @@ class SwinTransformer(nn.Module):
             weight_init: str = '',
             device=None,
             dtype=None,
-            **kwargs,
     ):
         """
         Args:
@@ -832,6 +834,10 @@ class SwinTransformer(nn.Module):
             num_heads: Number of attention heads in different layers.
             head_dim: Dimension of self-attention heads.
             window_size: Window size, an int or (h, w) for all stages or one per stage.
+            always_partition: Always partition into windows and shift (even if window size < feat size).
+            strict_img_size: Require the input to match img_size.
+            dynamic_img_size: Accept any input size, building the attention masks for it on each forward. Same as
+                strict_img_size=False.
             mlp_ratio: Ratio of mlp hidden dim to embedding dim.
             qkv_bias: If True, add a learnable bias to query, key, value.
             drop_rate: Dropout rate.
@@ -842,6 +848,9 @@ class SwinTransformer(nn.Module):
         """
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
+        if dynamic_img_size:
+            strict_img_size = False
+        self.dynamic_img_size = not strict_img_size
         assert global_pool in ('', 'avg')
         self.num_classes = num_classes
         self.in_chans = in_chans
@@ -998,6 +1007,15 @@ class SwinTransformer(nn.Module):
                 window_size=window_sizes[index],
                 always_partition=always_partition,
             )
+
+        # record the per-stage windows in use, a model rebuilt w/ img_size alone would use the constructor windows
+        update_model_input_size(
+            self,
+            self.patch_embed.img_size,
+            patch_size=patch_size,
+            window_size=window_sizes,
+            always_partition=always_partition,
+        )
 
     @torch.jit.ignore
     def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:

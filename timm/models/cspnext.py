@@ -2,8 +2,9 @@
 
 CSPNeXt backbone from RTMDet (OpenMMLab), ImageNet-1k classification models.
 
-Paper: `RTMDet: An Empirical Study of Designing Real-Time Object Detectors`
-    - https://arxiv.org/abs/2212.07784
+Papers:
+    * `RTMDet: An Empirical Study of Designing Real-Time Object Detectors` - https://arxiv.org/abs/2212.07784
+
     The paper describes this backbone (CSP blocks with 5x5 depthwise convs) without naming it;
     the name `CSPNeXt` comes from the MMDetection implementation.
 
@@ -265,6 +266,7 @@ class CspNext(nn.Module):
             raise ValueError('depths and channels must have the same length')
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
+        self.in_chans = in_chans
         self.grad_checkpointing = False
 
         stage_depths = [max(round(d * deepen_factor), 1) for d in depths]

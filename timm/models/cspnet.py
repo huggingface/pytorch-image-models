@@ -6,7 +6,9 @@ A PyTorch implementation of Cross Stage Partial Networks including:
 * CSPDarkNet53
 * and DarkNet53 for good measure
 
-Based on paper `CSPNet: A New Backbone that can Enhance Learning Capability of CNN` - https://arxiv.org/abs/1911.11929
+Papers:
+* `CSPNet: A New Backbone that can Enhance Learning Capability of CNN` - https://arxiv.org/abs/1911.11929
+* `YOLOv3: An Incremental Improvement` - https://arxiv.org/abs/1804.02767 (DarkNet53)
 
 Reference impl via darknet cfg files at https://github.com/WongKinYiu/CrossStagePartialNetworks
 

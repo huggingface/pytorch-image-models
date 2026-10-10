@@ -3,6 +3,10 @@
 This is a correct, from scratch impl of Aligned Xception (Deeplab) models compatible with TF weights at
 https://github.com/tensorflow/models/blob/master/research/deeplab/g3doc/model_zoo.md
 
+Papers:
+* `Xception: Deep Learning with Depthwise Separable Convolutions` - https://arxiv.org/abs/1610.02357
+* `Encoder-Decoder with Atrous Separable Convolution for Semantic Image Segmentation` - https://arxiv.org/abs/1802.02611
+
 Hacked together by / Copyright 2020 Ross Wightman
 """
 from functools import partial

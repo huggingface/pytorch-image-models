@@ -1,5 +1,9 @@
 """ Inception-V3
 
+Papers:
+* `Rethinking the Inception Architecture for Computer Vision` - https://arxiv.org/abs/1512.00567
+* `Adversarial Machine Learning at Scale` - https://arxiv.org/abs/1611.01236 (adversarially trained weights)
+
 Originally from torchvision Inception3 model
 Licensed BSD-Clause 3 https://github.com/pytorch/vision/blob/master/LICENSE
 """
@@ -385,9 +389,11 @@ class InceptionV3(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
+        if global_pool is None:
+            global_pool = self.global_pool.pool_type
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool, **dd)
         self.global_pool.train(self.training)
         self.fc.train(self.training)

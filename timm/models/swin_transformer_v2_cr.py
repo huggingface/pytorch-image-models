@@ -1,7 +1,7 @@
 """ Swin Transformer V2
 
-A PyTorch impl of : `Swin Transformer V2: Scaling Up Capacity and Resolution`
-    - https://arxiv.org/pdf/2111.09883
+A PyTorch impl of:
+* `Swin Transformer V2: Scaling Up Capacity and Resolution` - https://arxiv.org/abs/2111.09883
 
 Code adapted from https://github.com/ChristophReich1996/Swin-Transformer-V2, original copyright/license info below
 
@@ -38,6 +38,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropPath, calculate_drop_path_rates, Mlp, ClassifierHead, to_2tuple, _assert, ndgrid, get_device_dtype
+from ._input import update_model_input_size
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
@@ -743,6 +744,10 @@ class SwinTransformerV2Cr(nn.Module):
         window_size: Window size, an int or (h, w) for all stages or one per stage. Overrides window_ratio.
         window_ratio: Divisor of the patch grid size (before stage downsampling), an int for all stages or one per
             stage. Unlike window_size, a sequence of two values is two stages, not (h, w).
+        always_partition: Always partition into windows and shift (even if window size < feat size).
+        strict_img_size: Require the input to match img_size.
+        dynamic_img_size: Accept any input size, building the attention masks for it on each forward. Same as
+            strict_img_size=False.
         patch_size: Patch size.
         in_chans: Number of input channels.
         depths: Depth of the stage (number of layers).
@@ -768,6 +773,7 @@ class SwinTransformerV2Cr(nn.Module):
             window_ratio: Union[int, Sequence[int]] = 8,
             always_partition: bool = False,
             strict_img_size: bool = True,
+            dynamic_img_size: bool = False,
             in_chans: int = 3,
             num_classes: int = 1000,
             embed_dim: int = 96,
@@ -787,10 +793,12 @@ class SwinTransformerV2Cr(nn.Module):
             weight_init: str = 'reset',
             device=None,
             dtype=None,
-            **kwargs: Any
     ) -> None:
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
+        if dynamic_img_size:
+            strict_img_size = False
+        self.dynamic_img_size = not strict_img_size
         img_size = to_2tuple(img_size)
         self.num_classes: int = num_classes
         self.in_chans: int = in_chans
@@ -925,6 +933,14 @@ class SwinTransformerV2Cr(nn.Module):
                 window_size=window_sizes[index],
                 always_partition=always_partition,
             )
+
+        # record the per-stage windows in use, a model rebuilt w/ img_size alone would use the constructor windows
+        update_model_input_size(
+            self,
+            self.patch_embed.img_size,
+            window_size=window_sizes,
+            always_partition=always_partition,
+        )
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):

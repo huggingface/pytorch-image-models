@@ -1,6 +1,8 @@
 """ Res2Net and Res2NeXt
 Adapted from Official Pytorch impl at: https://github.com/gasvn/Res2Net/
-Paper: `Res2Net: A New Multi-scale Backbone Architecture` - https://arxiv.org/abs/1904.01169
+
+Papers:
+* `Res2Net: A New Multi-scale Backbone Architecture` - https://arxiv.org/abs/1904.01169
 """
 import math
 from typing import Optional, Type

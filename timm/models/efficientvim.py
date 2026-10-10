@@ -1,8 +1,11 @@
 """EfficientViM
 
-Efficient ViM: Efficient Vision Mamba with Hidden State Mixer based State Space Duality
-- paper: https://arxiv.org/abs/2411.15241 (CVPR 2025)
-- code: https://github.com/mlvlab/EfficientViM
+Efficient Vision Mamba with Hidden State Mixer based State Space Duality (CVPR 2025)
+
+Papers:
+* `EfficientViM: Efficient Vision Mamba with Hidden State Mixer based State Space Duality` - https://arxiv.org/abs/2411.15241
+
+Code: https://github.com/mlvlab/EfficientViM
 
 Hidden State Mixer based State Space Duality (HSM-SSD) treats the recurrent Mamba-style
 state update as a chunked dual (attention-like) form. The mixer here is intentionally
@@ -494,6 +497,7 @@ class EfficientViM(nn.Module):
         assert global_pool in ('avg', '')
         assert global_pool or num_classes == 0
         assert len(depths) == len(embed_dim) == len(state_dim)
+        self.in_chans = in_chans
         self.global_pool = global_pool
         self.num_classes = num_classes
         self.num_layers = len(depths)

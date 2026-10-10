@@ -1,8 +1,8 @@
 """ MobileViT
 
-Paper:
-V1: `MobileViT: Light-weight, General-purpose, and Mobile-friendly Vision Transformer` - https://arxiv.org/abs/2110.02178
-V2: `Separable Self-attention for Mobile Vision Transformers` - https://arxiv.org/abs/2206.02680
+Papers (MobileViT V1 and V2 respectively):
+* `MobileViT: Light-weight, General-purpose, and Mobile-friendly Vision Transformer` - https://arxiv.org/abs/2110.02178
+* `Separable Self-attention for Mobile Vision Transformers` - https://arxiv.org/abs/2206.02680
 
 MobileVitBlock and checkpoints adapted from https://github.com/apple/ml-cvnets (original copyright below)
 License: https://github.com/apple/ml-cvnets/blob/main/LICENSE (Apple open source)

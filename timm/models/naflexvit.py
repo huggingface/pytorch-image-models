@@ -7,11 +7,11 @@ An improved version of the Vision Transformer with:
 4. Support for FlexiViT variable patch size
 5. Support for NaViT fractional/factorized position embedding
 
-Based on ideas from:
-- Original Vision Transformer: https://arxiv.org/abs/2010.11929
-- FlexiViT: https://arxiv.org/abs/2212.08013
-- NaViT: https://arxiv.org/abs/2307.06304
-- NaFlex (SigLip-2): https://arxiv.org/abs/2502.14786
+Based on ideas from (original ViT, FlexiViT, NaViT, and NaFlex from SigLIP-2):
+- `An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale` - https://arxiv.org/abs/2010.11929
+- `FlexiViT: One Model for All Patch Sizes` - https://arxiv.org/abs/2212.08013
+- `Patch n' Pack: NaViT, a Vision Transformer for any Aspect Ratio and Resolution` - https://arxiv.org/abs/2307.06304
+- `SigLIP 2: Multilingual Vision-Language Encoders with Improved Semantic Understanding, Localization, and Dense Features` - https://arxiv.org/abs/2502.14786
 
 Hacked together by / Copyright 2025, Ross Wightman, Hugging Face
 """
@@ -1185,6 +1185,10 @@ class NaFlexVit(nn.Module):
         # Initialize config
         cfg = cfg or NaFlexVitCfg()
         if kwargs:
+            unknown_kwargs = set(kwargs) - set(cfg.__dataclass_fields__.keys())
+            if unknown_kwargs:
+                raise TypeError(
+                    f'{type(self).__name__}.__init__() got unexpected keyword argument(s): {sorted(unknown_kwargs)}')
             cfg = _overlay_kwargs(cfg, **kwargs)
 
         # Validate configuration
@@ -1201,6 +1205,7 @@ class NaFlexVit(nn.Module):
         mlp_layer = cfg.mlp_layer or Mlp   # TODO: Support configurable mlp_layer via string lookup
 
         # Store instance variables
+        self._traits = dict(fixed_input_size=False, first_conv='embeds.proj')
         self.num_classes = num_classes
         self.in_chans = in_chans
         self.global_pool = cfg.global_pool
@@ -2203,6 +2208,7 @@ def _create_naflexvit_from_eva(
     """
     # Handle EVA's unique parameters & block args
     kwargs.pop('no_embed_class', None)  # EVA specific, not used in NaFlexVit (always no-embed)
+    kwargs.pop('dynamic_img_size', None)  # NaFlexVit always supports dynamic image sizes
 
     # Map EVA's rope parameters
     use_rot_pos_emb = kwargs.pop('use_rot_pos_emb', False)
@@ -2242,7 +2248,7 @@ def _create_naflexvit_from_eva(
         'rope_grid_offset': rope_grid_offset,
         'rope_grid_indexing': rope_grid_indexing,
         'rope_rotate_half': kwargs.pop('rope_rotate_half', False),
-        'rope_ref_feat_shape': kwargs.get('ref_feat_shape', None),
+        'rope_ref_feat_shape': kwargs.pop('ref_feat_shape', None),
         'attn_type': kwargs.pop('attn_type', 'eva'),
         'swiglu_mlp': kwargs.pop('swiglu_mlp', False),
         'qkv_fused': kwargs.pop('qkv_fused', True),

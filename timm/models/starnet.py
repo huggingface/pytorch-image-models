@@ -1,5 +1,8 @@
 """
-Implementation of Prof-of-Concept Network: StarNet.
+Implementation of Proof-of-Concept Network: StarNet.
+
+Papers:
+* `Rewrite the Stars` - https://arxiv.org/abs/2403.19967
 
 We make StarNet as simple as possible [to show the key contribution of element-wise multiplication]:
     - like NO layer-scale in network design,
@@ -93,7 +96,6 @@ class StarNet(nn.Module):
             output_stride: int = 32,
             device=None,
             dtype=None,
-            **kwargs,
     ):
         dd = {'device': device, 'dtype': dtype}
         super().__init__()

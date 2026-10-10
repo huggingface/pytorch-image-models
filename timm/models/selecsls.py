@@ -6,10 +6,13 @@ SelecSLS (core) Network Architecture as proposed in "XNect: Real-time Multi-pers
 Human Pose Estimation with a Single RGB Camera, Mehta et al."
 https://arxiv.org/abs/1907.00837
 
+Papers:
+    * `XNect: Real-time Multi-Person 3D Motion Capture with a Single RGB Camera` - https://arxiv.org/abs/1907.00837
+
 Based on ResNet implementation in https://github.com/rwightman/pytorch-image-models
 and SelecSLS Net implementation in https://github.com/mehtadushy/SelecSLS-Pytorch
 """
-from typing import List, Type
+from typing import List, Optional, Type
 
 import torch
 import torch.nn as nn
@@ -165,9 +168,11 @@ class SelecSls(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
+        if global_pool is None:
+            global_pool = self.global_pool.pool_type
         self.global_pool, self.fc = create_classifier(
             self.num_features,
             self.num_classes,

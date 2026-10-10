@@ -4,10 +4,12 @@
 
  https://github.com/Cadene/pretrained-models.pytorch/blob/master/pretrainedmodels/models/pnasnet.py
 
+ Papers:
+    * `Progressive Neural Architecture Search` - https://arxiv.org/abs/1712.00559
 """
 from collections import OrderedDict
 from functools import partial
-from typing import Type
+from typing import Optional, Type
 
 import torch
 import torch.nn as nn
@@ -391,9 +393,11 @@ class PNASNet5Large(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.last_linear
 
-    def reset_classifier(self, num_classes: int, global_pool: str = 'avg', device=None, dtype=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, device=None, dtype=None):
         dd = get_device_dtype(self, device=device, dtype=dtype)
         self.num_classes = num_classes
+        if global_pool is None:
+            global_pool = self.global_pool.pool_type
         self.global_pool, self.last_linear = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, **dd)
         self.global_pool.train(self.training)

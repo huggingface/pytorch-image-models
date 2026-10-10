@@ -1,6 +1,10 @@
 """Pytorch Densenet implementation w/ tweaks
 This file is a copy of https://github.com/pytorch/vision 'densenet.py' (BSD-3-Clause) with
 fixed kwargs passthrough and addition of dynamic global avg/max pool.
+
+Papers:
+    * `Densely Connected Convolutional Networks` - https://arxiv.org/abs/1608.06993
+    * `Making Convolutional Networks Shift-Invariant Again` - https://arxiv.org/abs/1904.11486
 """
 import re
 from collections import OrderedDict
@@ -377,15 +381,17 @@ class DenseNet(nn.Module):
         """Get the classifier head."""
         return self.classifier
 
-    def reset_classifier(self, num_classes: int, global_pool: str = 'avg') -> None:
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
         """Reset the classifier head.
 
         Args:
             num_classes: Number of classes for new classifier.
-            global_pool: Global pooling type.
+            global_pool: Global pooling type, current pooling is kept if None.
         """
         dd = get_device_dtype(self)
         self.num_classes = num_classes
+        if global_pool is None:
+            global_pool = self.global_pool.pool_type
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, **dd)
         self.global_pool.train(self.training)

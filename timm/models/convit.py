@@ -1,5 +1,8 @@
 """ ConViT Model
 
+Papers:
+* `ConViT: Improving Vision Transformers with Soft Convolutional Inductive Biases` - https://arxiv.org/abs/2103.10697
+
 @article{d2021convit,
   title={ConViT: Improving Vision Transformers with Soft Convolutional Inductive Biases},
   author={d'Ascoli, St{\'e}phane and Touvron, Hugo and Leavitt, Matthew and Morcos, Ari and Biroli, Giulio and Sagun, Levent},
@@ -7,7 +10,6 @@
   year={2021}
 }
 
-Paper link: https://arxiv.org/abs/2103.10697
 Original code: https://github.com/facebookresearch/convit, original copyright below
 
 Modifications and additions for timm hacked together by / Copyright 2021, Ross Wightman
@@ -345,7 +347,7 @@ class ConVit(nn.Module):
         self.norm = norm_layer(embed_dim, **dd)
 
         # Classifier head
-        self.feature_info = [dict(num_chs=embed_dim, reduction=0, module='head')]
+        self.feature_info = [dict(num_chs=embed_dim, reduction=patch_size, module='head')]
         self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 

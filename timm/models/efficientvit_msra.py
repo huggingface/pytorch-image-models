@@ -1,7 +1,7 @@
 """ EfficientViT (by MSRA)
 
-Paper: `EfficientViT: Memory Efficient Vision Transformer with Cascaded Group Attention`
-    - https://arxiv.org/abs/2305.07027
+Papers:
+* `EfficientViT: Memory Efficient Vision Transformer with Cascaded Group Attention` - https://arxiv.org/abs/2305.07027
 
 Adapted from official impl at https://github.com/microsoft/Cream/tree/main/EfficientViT
 """
@@ -24,6 +24,7 @@ from timm.layers import (
     to_2tuple,
     resize_rel_pos_bias_table_levit,
 )
+from ._input import update_model_input_size
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_module
@@ -529,7 +530,7 @@ class PatchEmbedding(torch.nn.Sequential):
 class EfficientVitMsra(nn.Module):
     def __init__(
             self,
-            img_size: int = 224,
+            img_size: Union[int, Tuple[int, int]] = 224,
             in_chans: int = 3,
             num_classes: int = 1000,
             embed_dim: Tuple[int, ...] = (64, 128, 192),
@@ -554,8 +555,9 @@ class EfficientVitMsra(nn.Module):
         # Patch embedding
         self.patch_embed = PatchEmbedding(in_chans, embed_dim[0], **dd)
         stride = self.patch_embed.patch_size
-        self.img_size = img_size
-        resolution = img_size // self.patch_embed.patch_size
+        # the min dim sets the attention window resolution, as in set_input_size()
+        self.img_size = min(to_2tuple(img_size))
+        resolution = self.img_size // self.patch_embed.patch_size
         attn_ratio = [embed_dim[i] / (key_dim[i] * num_heads[i]) for i in range(len(embed_dim))]
 
         # Build EfficientVit blocks
@@ -612,11 +614,16 @@ class EfficientVitMsra(nn.Module):
                 the effective window resolution.
         """
         if img_size is not None:
-            self.img_size = min(to_2tuple(img_size))
+            img_size = to_2tuple(img_size)
+            self.img_size = min(img_size)
         resolution = self.img_size // self.patch_embed.patch_size
         for stage in self.stages:
             stage.set_input_size(resolution)
             resolution = stage.resolution
+
+        if img_size is not None:
+            # record the full (h, w) size, self.img_size only keeps the min dim that sets the window resolution
+            update_model_input_size(self, img_size)
 
     @torch.jit.ignore
     def no_weight_decay(self):

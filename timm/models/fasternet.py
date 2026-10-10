@@ -1,7 +1,9 @@
 """FasterNet
-Run, Don't Walk: Chasing Higher FLOPS for Faster Neural Networks
-- paper: https://arxiv.org/abs/2303.03667
-- code: https://github.com/JierunChen/FasterNet
+
+Papers:
+* `Run, Don't Walk: Chasing Higher FLOPS for Faster Neural Networks` - https://arxiv.org/abs/2303.03667
+
+Code: https://github.com/JierunChen/FasterNet
 
 @article{chen2023run,
   title={Run, Don't Walk: Chasing Higher FLOPS for Faster Neural Networks},
@@ -306,9 +308,11 @@ class FasterNet(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.classifier
 
-    def reset_classifier(self, num_classes: int, global_pool: str = 'avg', device=None, dtype=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, device=None, dtype=None):
         dd = get_device_dtype(self, device=device, dtype=dtype)
         self.num_classes = num_classes
+        if global_pool is None:
+            global_pool = self.global_pool.pool_type
         # cannot meaningfully change pooling of efficient head after creation
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.global_pool.train(self.training)

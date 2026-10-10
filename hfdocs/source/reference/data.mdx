@@ -1,9 +1,270 @@
 # Data
 
+This page contains the API reference documentation for the `timm.data` sub-package, and an overview of the input
+pipeline it provides: resolving a model's preprocessing config, building transforms, creating datasets and loaders,
+Mixup / CutMix, and the NaFlex variable resolution loader.
+
+## Usage
+
+A pipeline is built in four steps: [`resolve_model_data_config`](#timm.data.resolve_model_data_config) reads the
+model's preprocessing config, [`create_transform`](#timm.data.create_transform) builds the train or eval transform,
+[`create_dataset`](#timm.data.create_dataset) creates a dataset by name and root, and
+[`create_loader`](#timm.data.create_loader) builds the transform and a data loader for a dataset.
+
+```python
+import os
+import tempfile
+
+import torch
+from PIL import Image
+
+import timm
+from timm.data import create_dataset, create_loader, create_transform, resolve_model_data_config
+
+model = timm.create_model('resnet50', pretrained=False).eval()
+
+# Preprocessing config from the model's pretrained_cfg, the default pretrained tag's config is attached to the model
+# with or without pretrained weights.
+data_config = resolve_model_data_config(model)
+print(data_config)
+# {'input_size': (3, 224, 224), 'interpolation': 'bicubic', 'mean': (0.485, 0.456, 0.406),
+#  'std': (0.229, 0.224, 0.225), 'crop_pct': 0.95, 'crop_mode': 'center'}
+
+# Eval transform for a PIL image, resize to 224 / crop_pct, center crop 224, to tensor and normalize.
+transform = create_transform(**data_config, is_training=False)
+img = Image.new('RGB', (320, 240), color=(200, 120, 40))
+with torch.no_grad():
+    output = model(transform(img).unsqueeze(0))  # (1, 1000)
+
+# A folder dataset, <root>/<split>/<class>/<image>, two classes w/ four generated images each.
+root = tempfile.mkdtemp()
+for i, cls in enumerate(('cat', 'dog')):
+    os.makedirs(os.path.join(root, 'validation', cls))
+    for j in range(4):
+        path = os.path.join(root, 'validation', cls, f'{j}.jpg')
+        Image.new('RGB', (300, 200), color=(60 * i, 40 * j, 128)).save(path)
+
+dataset = create_dataset('', root=root, split='validation')  # finds the 'validation' sub-folder
+print(len(dataset), dataset.reader.class_to_idx)  # 8 {'cat': 0, 'dog': 1}
+
+# The loader creates the transform from the same config and assigns it to the dataset.
+loader = create_loader(dataset, **data_config, batch_size=4, use_prefetcher=False, num_workers=0)
+with torch.no_grad():
+    for images, targets in loader:
+        output = model(images)  # images (4, 3, 224, 224), targets (4,)
+```
+
+The [quickstart](../quickstart#image-augmentation) walks through the config to transform steps for inference.
+
+The training script (`train.py`) passes `--input-size`, `--img-size`, `--in-chans`, `--interpolation`, `--mean`,
+`--std` and `--crop-pct` to `resolve_input_data_config` as overrides, `--dataset`, `--data-dir`, `--train-split`,
+`--val-split`, `--class-map`, `--input-img-mode`, `--input-key` and `--target-*` to `create_dataset`, the augmentation
+flags (`--aa`, `--reprob`, `--remode`, `--scale`, `--ratio`, `--hflip`, `--color-jitter`, `--train-interpolation`,
+...), `--workers` and `--no-prefetcher` to `create_loader`, and `--mixup*`, `--cutmix*` and `--smoothing` to
+[`Mixup`](#timm.data.Mixup). See [Scripts](../training_script) for examples.
+
+### Data config
+
+[`resolve_data_config`](#timm.data.resolve_data_config) returns a dict with the keys below, which match the
+arguments of `create_transform` and `create_loader`. Values set in `args` (a dict, e.g. `vars(args)` of parsed
+command line args) take precedence over the `pretrained_cfg` argument, which defaults to `model.pretrained_cfg`.
+[`resolve_model_data_config`](#timm.data.resolve_model_data_config) is the same with the model as first argument.
+
+Both read the input size and channels from the pretrained cfg, which describes the source checkpoint, not a model
+created or changed to use a different `img_size` or `in_chans`.
+[`resolve_input_data_config`](#timm.data.resolve_input_data_config), used by the training, validation and inference
+scripts, resolves against the model's current input instead: a fixed input size model always gets its current size,
+explicit `args` that conflict with the model's channels or fixed size raise an error, and a mean / std that doesn't
+match the channel count is replaced by its average (with a warning).
+
+| Key | `args` keys | Description | Default |
+|---|---|---|---|
+| `input_size` | `input_size`, `img_size`, `in_chans` | `(C, H, W)` input size. With `use_test_size=True` the config's `test_input_size` is used if it has one | `(3, 224, 224)` |
+| `interpolation` | `interpolation` | Resize interpolation, `bilinear`, `bicubic`, ... | `bicubic` |
+| `mean`, `std` | `mean`, `std` | Normalization, a single value is repeated for each channel | ImageNet mean / std |
+| `crop_pct` | `crop_pct` | Eval crop, the image is resized to `size / crop_pct` before cropping to `size` (`test_crop_pct` with `use_test_size=True`) | `0.875` |
+| `crop_mode` | `crop_mode` | Eval crop mode, `center`, `squash` or `border` | `center` |
+
+The eval crop modes, for an output `size` and `scale_size = floor(size / crop_pct)`:
+
+| `crop_mode` | Behaviour |
+|---|---|
+| `center` | Resize the shortest edge to `scale_size` (aspect ratio preserved), center crop to `size` |
+| `squash` | Resize both edges to `scale_size` (aspect ratio not preserved), center crop to `size` |
+| `border` | Resize the longest edge to `scale_size`, center crop and pad with the mean color, the whole image is kept at `crop_pct=1.0` |
+
+### Transforms
+
+[`create_transform`](#timm.data.create_transform) returns a torchvision `Compose`. The eval transform resizes and
+crops as above, then converts to a tensor and normalizes. The training transform is a random resized crop
+(`scale=(0.08, 1.0)`, `ratio=(3/4, 4/3)` by default), horizontal flip (`hflip=0.5`), color jitter
+(`color_jitter=0.4`), the optional `auto_augment` policy, tensor conversion and normalization, and random erasing.
+`train_crop_mode='rkrc'` or `'rkrr'` replaces the random resized crop with a random resize that keeps the aspect
+ratio, followed by a center (`rkrc`) or random (`rkrr`) crop or pad. `interpolation='random'` (the `train.py` default
+for training) picks bilinear or bicubic per image. `no_aug=True` reduces training to a resize and center crop.
+
+| `auto_augment` | Augmentation | Options |
+|---|---|---|
+| `rand-m9-mstd0.5-inc1` | [`RandAugment`](https://arxiv.org/abs/1909.13719) via [`rand_augment_transform`](#timm.data.rand_augment_transform) | `m` magnitude (default 10), `n` ops per image (2), `p` probability per op (0.5), `mstd` magnitude noise std, `inc1` ops that increase in severity w/ magnitude, `t<name>` op set (`weights`, `3a`, `3aw`) |
+| `augmix-m5-w4-d2` | [AugMix](https://arxiv.org/abs/1912.02781) via [`augment_and_mix_transform`](#timm.data.auto_augment.augment_and_mix_transform) | `m` severity (3), `w` width (3), `d` depth (-1, random 1-3), `b1` blended, `mstd` |
+| `original`, `originalr`, `v0`, `v0r`, `3a` | [AutoAugment](https://arxiv.org/abs/1805.09501) policy via [`auto_augment_transform`](#timm.data.auto_augment_transform) | `mstd`, e.g. `original-mstd0.5` |
+
+- Color jitter is disabled when `auto_augment` is set, unless the string contains `3a`.
+- [`RandomErasing`](#timm.data.random_erasing.RandomErasing) (`re_prob`, `re_count`) runs on the normalized tensor.
+  `re_mode` fills with zeros (`const`, the default), a random normal color per region (`rand`) or random normal
+  pixels (`pixel`, the `train.py` default).
+- `use_prefetcher=True` ends the transform at a `uint8` tensor, normalization and random erasing are then done by the
+  loader on the device.
+- `create_transform` and `create_loader` default to `bilinear` interpolation and ImageNet mean / std, not the model's
+  values. Pass the resolved data config to match the model's pretraining.
+
+### Datasets
+
+[`create_dataset`](#timm.data.create_dataset) selects the dataset implementation and reader from a prefix of `name`:
+
+| `name` | Dataset | `root` | Requires |
+|---|---|---|---|
+| `''` or no prefix | [`ImageDataset`](#timm.data.ImageDataset), images in class sub-folders (searched recursively, the leaf folder name is the class), or a single `.tar` file of the same | Dataset folder or `.tar` file | |
+| `torch/<name>` | torchvision `cifar10`, `cifar100`, `mnist`, `kmnist`, `fashion_mnist`, `qmnist`, `inaturalist` (`inat`), `places365`, `imagenet` or `image_folder` (`folder`) | torchvision dataset root | |
+| `hfds/<name>` | [`ImageDataset`](#timm.data.ImageDataset) on a Hugging Face Hub dataset (or local path) via `datasets.load_dataset` | Cache dir (optional) | `datasets` |
+| `hfids/<name>` | [`IterableImageDataset`](#timm.data.IterableImageDataset), the Hugging Face dataset streamed, or downloaded and prepared first with `download=True` | Cache dir (optional) | `datasets` |
+| `tfds/<name>` | [`IterableImageDataset`](#timm.data.IterableImageDataset) on TensorFlow Datasets, `download=True` downloads and builds | TFDS data dir | `tensorflow`, `tensorflow-datasets` |
+| `wds/<name>` | [`IterableImageDataset`](#timm.data.IterableImageDataset) on WebDataset tar shards | Shard folder w/ an `_info.json` (or `info.json`) describing the splits | `webdataset` |
+
+For folder datasets with `search_split=True` (default), `split` selects the sub-folder of `root` named `split` or,
+failing that, a synonym of a train (`train`, `training`) or eval (`val`, `valid`, `validation`, `eval`, `evaluation`)
+split. The default split is `validation`, the default image extensions are `.png`, `.jpg` and `.jpeg`
+(`add_img_extensions` adds more). For the other readers `split` is the dataset's split name, for WebDataset it can
+also be a shard pattern with a sample count, `'imagenet-train-{0000..1023}.tar|1281167'`. `class_map` remaps class
+names to indices with a dict, a `.txt` (one class per line) or a `.pkl` file. The iterable datasets (`hfids`, `tfds`,
+`wds`) take `is_training` (shuffling), `batch_size`, `num_samples`, `seed` and `repeats`, call `dataset.set_epoch()`
+each epoch to reshuffle.
+
+Other keyword arguments pass through to the reader. For the Hugging Face, TFDS and WebDataset readers, `input_key`
+and `target_key` select the image and label fields (`image` and `label` by default, for `wds` a `jpg`, `png` or `webp`
+image and the `.cls` file, or a `.json` sidecar field named by `target_key`). For multi-label data the target holds a
+list of class indices, or a dense multi-hot vector with `target_format='multihot'`, and a comma separated
+`target_key` reads one binary field per class. `target_transform=MultiLabelTarget(num_classes)`
+([`MultiLabelTarget`](#timm.data.MultiLabelTarget), `dense=True` for multi-hot fields) encodes them as float
+multi-hot tensors. The folder and tar readers yield single class indices. See
+[multi-label classification](../training_script#multi-label-classification) for details.
+
+### Loaders
+
+[`create_loader`](#timm.data.create_loader) creates the transform with `create_transform` from its own arguments,
+assigns it to `dataset.transform` (replacing any existing transform) and returns a `DataLoader`. Training loaders
+(`is_training=True`) shuffle and drop the last incomplete batch.
+
+- **Prefetcher.** With `use_prefetcher=True` (default) the dataset yields `uint8` tensors, the batches are moved to
+  `device` (default `cuda`, on a side stream for CUDA), converted to `img_dtype`, normalized and randomly erased there.
+  Set `device` to the training device, or `use_prefetcher=False` for a plain `DataLoader` of normalized tensors.
+- **Distributed.** `distributed=True` uses a `DistributedSampler` for map-style training datasets (or a repeated
+  augmentation sampler w/ `num_aug_repeats`) and an ordered sampler for eval that pads each process to the same
+  number of samples, which can slightly alter validation results. Iterable datasets shard themselves across
+  processes and workers.
+- **Collate.** `collate_fn` replaces the default (`fast_collate` w/ the prefetcher, `default_collate` without), e.g.
+  with a [`FastCollateMixup`](#timm.data.FastCollateMixup).
+- **Augmentation splits.** For AugMix w/ the JSD loss (`--aug-splits`), wrap the dataset in
+  [`AugMixDataset`](#timm.data.AugMixDataset)`(dataset, num_splits=n)` and pass `num_aug_splits=n`. Each batch holds
+  a clean split and `n - 1` augmented splits, concatenated along the batch dimension by the prefetcher.
+- **Scheduled resolution.** `input_size_choices` (`--train-img-sizes`) picks the input size per batch, optionally
+  with a batch size per choice (`batch_size_choices`) and a `progressive` schedule from the first to the last choice.
+
+### Mixup and CutMix
+
+[`Mixup`](#timm.data.Mixup) mixes a batch of normalized images on the device, after the loader.
+[`FastCollateMixup`](#timm.data.FastCollateMixup) takes the same arguments and mixes `uint8` images while collating
+in the loader workers, it requires the prefetcher. Both return dense `(batch_size, num_classes)` targets with
+`label_smoothing` (default `0.1`) applied, to be used with a soft target loss such as
+`timm.loss.SoftTargetCrossEntropy`, and require an even batch size.
+
+```python
+from timm.data import Mixup, FastCollateMixup
+
+# Continuing the example above.
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+mixup_args = dict(mixup_alpha=0.8, cutmix_alpha=1.0, label_smoothing=0.1, num_classes=1000)
+
+# Prefetcher enabled (default), mixed in the loader's collate.
+loader = create_loader(
+    dataset,
+    **data_config,
+    batch_size=4,
+    is_training=True,
+    collate_fn=FastCollateMixup(**mixup_args),
+    device=device,
+)
+for images, targets in loader:
+    ...  # images normalized on device, targets (4, 1000)
+
+# Prefetcher disabled, mixed in the training loop.
+loader = create_loader(dataset, **data_config, batch_size=4, is_training=True, use_prefetcher=False)
+mixup_fn = Mixup(**mixup_args)
+for images, targets in loader:
+    images, targets = mixup_fn(images.to(device), targets.to(device))
+```
+
+Mixup is enabled by `mixup_alpha > 0` and CutMix by `cutmix_alpha > 0` (or a `cutmix_minmax` box size range), with
+both enabled one is chosen per mix (`switch_prob` for CutMix). `prob` is the probability of mixing at all, and `mode`
+draws the parameters once per `batch`, per `pair` of elements or per `elem` (element).
+`multi_label=True` mixes dense multi-label targets, smoothing each label towards 0.5. `mixup_enabled = False` turns
+mixing off, e.g. for the final epochs (`--mixup-off-epoch`). For `FastCollateMixup` it is read in the worker
+processes, persistent workers keep the value they started with.
+
+### NaFlex variable resolution
+
+[`create_naflex_loader`](#timm.data.create_naflex_loader) loads images as variable length sequences of patches,
+w/o resizing to a fixed square size, for models that take NaFlex patch inputs (e.g. the `naflexvit_*` models). Each
+batch is a dict of `patches`, `patch_coord`, `patch_valid` and `seq_len`, padded to the batch's sequence length.
+
+- **Training.** The dataset is wrapped in a [`NaFlexMapDatasetWrapper`](#timm.data.NaFlexMapDatasetWrapper) (map-style
+  datasets only), which picks one of `train_seq_lens` per batch and random resize crops each image to fit that many
+  patches. `batch_size` is the batch size at the longest sequence length, shorter lengths get proportionally larger
+  batches (rounded down to a multiple of 8) so the tokens per batch stay roughly constant. `patch_size_choices` (w/
+  `patch_size_choice_probs`) also varies the patch size per batch, for models that support it.
+- **Eval.** Images are resized to fit `max_seq_len` patches at the given `patch_size` (required for eval) and padded
+  to `max_seq_len`.
+- **Mixup.** Pass a [`NaFlexMixup`](#timm.data.NaFlexMixup) as `mixup_fn`, it mixes within each batch and does not
+  support `mode` or `cutmix_minmax`.
+
+The `train.py` options are `--naflex-loader`, `--naflex-train-seq-lens`, `--naflex-max-seq-len`,
+`--naflex-patch-sizes`, `--naflex-patch-size-probs` and `--naflex-loss-scale`.
+
+## API
+
+### Data config
+
+[[autodoc]] timm.data.resolve_data_config
+[[autodoc]] timm.data.resolve_model_data_config
+[[autodoc]] timm.data.resolve_input_data_config
+
+### Transforms
+
+[[autodoc]] timm.data.create_transform
+[[autodoc]] timm.data.rand_augment_transform
+[[autodoc]] timm.data.auto_augment_transform
+[[autodoc]] timm.data.auto_augment.augment_and_mix_transform
+[[autodoc]] timm.data.random_erasing.RandomErasing
+
+### Datasets
+
 [[autodoc]] timm.data.create_dataset
+[[autodoc]] timm.data.ImageDataset
+[[autodoc]] timm.data.IterableImageDataset
+[[autodoc]] timm.data.AugMixDataset
+[[autodoc]] timm.data.MultiLabelTarget
+
+### Loaders
 
 [[autodoc]] timm.data.create_loader
 
-[[autodoc]] timm.data.create_transform
+### Mixup and CutMix
 
-[[autodoc]] timm.data.resolve_data_config
+[[autodoc]] timm.data.Mixup
+[[autodoc]] timm.data.FastCollateMixup
+
+### NaFlex
+
+[[autodoc]] timm.data.create_naflex_loader
+[[autodoc]] timm.data.NaFlexMapDatasetWrapper
+[[autodoc]] timm.data.NaFlexMixup

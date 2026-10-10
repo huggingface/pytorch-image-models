@@ -1,5 +1,9 @@
 """ HRNet
 
+Papers:
+* `Deep High-Resolution Representation Learning for Visual Recognition` - https://arxiv.org/abs/1908.07919
+* `Beyond Self-Supervision: A Simple Yet Effective Network Distillation Alternative to Improve Backbones` - https://arxiv.org/abs/2103.05959
+
 Copied from https://github.com/HRNet/HRNet-Image-Classification
 
 Original header:
@@ -535,7 +539,12 @@ class HighResolutionNet(nn.Module):
         self.in_chans = in_chans
         assert output_stride == 32  # FIXME support dilation
 
-        cfg.update(**kwargs)
+        # kwargs override entries of the arch cfg, copied so the shared cfg is not mutated
+        unknown_kwargs = set(kwargs) - set(cfg) - {'head_conv_bias'}
+        if unknown_kwargs:
+            raise TypeError(
+                f'{type(self).__name__}.__init__() got unexpected keyword argument(s): {sorted(unknown_kwargs)}')
+        cfg = dict(cfg, **kwargs)
         stem_width = cfg['stem_width']
         self.conv1 = nn.Conv2d(in_chans, stem_width, kernel_size=3, stride=2, padding=1, bias=False, **dd)
         self.bn1 = nn.BatchNorm2d(stem_width, momentum=_BN_MOMENTUM, **dd)
@@ -763,9 +772,12 @@ class HighResolutionNet(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.classifier
 
-    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
+        if global_pool is None:
+            # keep current pooling, non-classification heads have none so default to 'avg'
+            global_pool = getattr(self.global_pool, 'pool_type', 'avg')
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, **dd)
         self.global_pool.train(self.training)

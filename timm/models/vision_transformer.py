@@ -2,14 +2,48 @@
 
 A PyTorch implement of Vision Transformers as described in:
 
-'An Image Is Worth 16 x 16 Words: Transformers for Image Recognition at Scale'
-    - https://arxiv.org/abs/2010.11929
+  * `An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale` - https://arxiv.org/abs/2010.11929
+  * `How to train your ViT? Data, Augmentation, and Regularization in Vision Transformers` - https://arxiv.org/abs/2106.10270
+  * `FlexiViT: One Model for All Patch Sizes` - https://arxiv.org/abs/2212.08013
 
-`How to train your ViT? Data, Augmentation, and Regularization in Vision Transformers`
-    - https://arxiv.org/abs/2106.10270
+Papers for additional architecture variants and pretrained weights supported here:
 
-`FlexiViT: One Model for All Patch Sizes`
-    - https://arxiv.org/abs/2212.08013
+  * Architecture variants
+    * `Scaling Vision Transformers` - https://arxiv.org/abs/2106.04560
+    * `Three things everyone should know about Vision Transformers` - https://arxiv.org/abs/2203.09795
+    * `Scaling Vision Transformers to 22 Billion Parameters` - https://arxiv.org/abs/2302.05442
+    * `Getting ViT in Shape: Scaling Laws for Compute-Optimal Model Design` - https://arxiv.org/abs/2305.13035
+    * `Vision Transformers Need Registers` - https://arxiv.org/abs/2309.16588
+    * `Differential Transformer` - https://arxiv.org/abs/2410.05258
+  * Supervised pretrained weights
+    * `When Vision Transformers Outperform ResNets without Pre-training or Strong Data Augmentations` - https://arxiv.org/abs/2106.01548
+    * `ImageNet-21K Pretraining for the Masses` - https://arxiv.org/abs/2104.10972
+  * Self-supervised pretrained weights
+    * `Emerging Properties in Self-Supervised Vision Transformers` - https://arxiv.org/abs/2104.14294
+    * `DINOv2: Learning Robust Visual Features without Supervision` - https://arxiv.org/abs/2304.07193
+    * `Masked Autoencoders Are Scalable Vision Learners` - https://arxiv.org/abs/2111.06377
+    * `Self-Supervised Learning from Images with a Joint-Embedding Predictive Architecture` - https://arxiv.org/abs/2301.08243
+    * `EVA: Exploring the Limits of Masked Visual Representation Learning at Scale` - https://arxiv.org/abs/2211.07636
+    * `Image as a Foreign Language: BEiT Pretraining for All Vision and Vision-Language Tasks` - https://arxiv.org/abs/2208.10442
+    * `Multimodal Autoregressive Pre-training of Large Vision Encoders` - https://arxiv.org/abs/2411.14402
+  * Image-text pretrained weights (CLIP, SigLIP, etc)
+    * `Learning Transferable Visual Models From Natural Language Supervision` - https://arxiv.org/abs/2103.00020
+    * `Reproducible scaling laws for contrastive language-image learning` - https://arxiv.org/abs/2212.07143
+    * `DataComp: In search of the next generation of multimodal datasets` - https://arxiv.org/abs/2304.14108
+    * `Data Filtering Networks` - https://arxiv.org/abs/2309.17425
+    * `Demystifying CLIP Data` - https://arxiv.org/abs/2309.16671
+    * `Altogether: Image Captioning via Re-aligning Alt-text` - https://arxiv.org/abs/2410.17251
+    * `Meta CLIP 2: A Worldwide Scaling Recipe` - https://arxiv.org/abs/2507.22062
+    * `TinyCLIP: CLIP Distillation via Affinity Mimicking and Weight Inheritance` - https://arxiv.org/abs/2309.12314
+    * `MobileCLIP2: Improving Multi-Modal Reinforced Training` - https://arxiv.org/abs/2508.20691
+    * `Sigmoid Loss for Language Image Pre-Training` - https://arxiv.org/abs/2303.15343
+    * `SigLIP 2: Multilingual Vision-Language Encoders with Improved Semantic Understanding, Localization, and Dense Features` - https://arxiv.org/abs/2502.14786
+    * `PaliGemma: A versatile 3B VLM for transfer` - https://arxiv.org/abs/2407.07726
+    * `PaliGemma 2: A Family of Versatile VLMs for Transfer` - https://arxiv.org/abs/2412.03555
+    * `TIPSv2: Advancing Vision-Language Pretraining with Enhanced Patch-Text Alignment` - https://arxiv.org/abs/2604.12012
+  * InternViT pretrained weights
+    * `Mini-InternVL: A Flexible-Transfer Pocket Multimodal Model with 5% Parameters and 90% Performance` - https://arxiv.org/abs/2410.16261
+    * `Expanding Performance Boundaries of Open-Source Multimodal Models with Model, Data, and Test-Time Scaling` - https://arxiv.org/abs/2412.05271
 
 The official jax code is released and available at
   * https://github.com/google-research/vision_transformer
@@ -73,6 +107,7 @@ from timm.layers import (
     LayerType,
     LayerScale,
 )
+from ._input import get_pretrained_grid_size, update_model_input_size
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._helpers import _load_npz_checkpoint
@@ -1034,7 +1069,7 @@ class VisionTransformer(nn.Module):
         if self.pos_embed is not None:
             num_prefix_tokens = 0 if self.no_embed_class else self.num_prefix_tokens
             num_new_tokens = self.patch_embed.num_patches + num_prefix_tokens
-            if num_new_tokens != self.pos_embed.shape[1]:
+            if num_new_tokens != self.pos_embed.shape[1] or self.patch_embed.grid_size != prev_grid_size:
                 self.pos_embed = nn.Parameter(resample_abs_pos_embed(
                     self.pos_embed,
                     new_size=self.patch_embed.grid_size,
@@ -1042,6 +1077,8 @@ class VisionTransformer(nn.Module):
                     num_prefix_tokens=num_prefix_tokens,
                     verbose=True,
                 ))
+
+        update_model_input_size(self, self.patch_embed.img_size, patch_size=patch_size)
 
     def _pos_embed(self, x: torch.Tensor) -> torch.Tensor:
         """Apply positional embedding to input."""
@@ -1900,17 +1937,25 @@ def checkpoint_filter_fn(
                     antialias=antialias,
                     verbose=True,
                 )
-        elif k == 'pos_embed' and v.shape[1] != model.pos_embed.shape[1]:
-            # To resize pos embedding when using model at different size from pretrained weights
+        elif k == 'pos_embed' and model.pos_embed is not None:
             num_prefix_tokens = 0 if getattr(model, 'no_embed_class', False) else getattr(model, 'num_prefix_tokens', 1)
-            v = resample_abs_pos_embed(
-                v,
-                new_size=model.patch_embed.grid_size,
-                num_prefix_tokens=num_prefix_tokens,
-                interpolation=interpolation,
-                antialias=antialias,
-                verbose=True,
+            old_size = get_pretrained_grid_size(
+                model,
+                state_dict.get('patch_embed.proj.weight'),
+                v.shape[1] - num_prefix_tokens,
             )
+            if v.shape[1] != model.pos_embed.shape[1] or (
+                old_size is not None and old_size != model.patch_embed.grid_size
+            ):
+                v = resample_abs_pos_embed(
+                    v,
+                    new_size=model.patch_embed.grid_size,
+                    old_size=old_size,
+                    num_prefix_tokens=num_prefix_tokens,
+                    interpolation=interpolation,
+                    antialias=antialias,
+                    verbose=True,
+                )
         elif adapt_layer_scale and 'gamma_' in k:
             # remap layer-scale gamma into sub-module (deit3 models)
             k = re.sub(r'gamma_([0-9])', r'ls\1.gamma', k)

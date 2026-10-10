@@ -2,7 +2,14 @@
 
 A PyTorch impl of MobileNet-V3, compatible with TF weights from official impl.
 
-Paper: Searching for MobileNetV3 - https://arxiv.org/abs/1905.02244
+Also covers related architectures built from the same blocks: FBNet-V3, LCNet, and MobileNet-V4.
+
+Papers:
+* `Searching for MobileNetV3` - https://arxiv.org/abs/1905.02244
+* `FBNetV3: Joint Architecture-Recipe Search using Predictor Pretraining` - https://arxiv.org/abs/2006.02049
+* `PP-LCNet: A Lightweight CPU Convolutional Neural Network` - https://arxiv.org/abs/2109.15099
+* `MobileNetV4 -- Universal Models for the Mobile Ecosystem` - https://arxiv.org/abs/2404.10518
+* `ImageNet-21K Pretraining for the Masses` - https://arxiv.org/abs/2104.10972
 
 Hacked together by / Copyright 2019, Ross Wightman
 """
@@ -188,15 +195,17 @@ class MobileNetV3(nn.Module):
         """Get the classifier head."""
         return self.classifier
 
-    def reset_classifier(self, num_classes: int, global_pool: str = 'avg') -> None:
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
         """Reset the classifier head.
 
         Args:
             num_classes: Number of classes for new classifier.
-            global_pool: Global pooling type.
+            global_pool: Global pooling type, current pooling is kept if None.
         """
         dd = get_device_dtype(self)
         self.num_classes = num_classes
+        if global_pool is None:
+            global_pool = self.global_pool.pool_type
         # NOTE: cannot meaningfully change pooling of efficient head after creation
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.global_pool.train(self.training)

@@ -5,6 +5,21 @@ additional dropout and dynamic global avg/max pool.
 
 ResNeXt, SE-ResNeXt, SENet, and MXNet Gluon stem/downsample variants, tiered stems added by Ross Wightman
 
+Papers:
+* `Deep Residual Learning for Image Recognition` - https://arxiv.org/abs/1512.03385
+* `Bag of Tricks for Image Classification with Convolutional Neural Networks` - https://arxiv.org/abs/1812.01187
+* `Aggregated Residual Transformations for Deep Neural Networks` - https://arxiv.org/abs/1611.05431
+* `Wide Residual Networks` - https://arxiv.org/abs/1605.07146
+* `Squeeze-and-Excitation Networks` - https://arxiv.org/abs/1709.01507
+* `ECA-Net: Efficient Channel Attention for Deep Convolutional Neural Networks` - https://arxiv.org/abs/1910.03151
+* `Making Convolutional Networks Shift-Invariant Again` - https://arxiv.org/abs/1904.11486
+* `Group Normalization` - https://arxiv.org/abs/1803.08494
+* `Revisiting ResNets: Improved Training and Scaling Strategies` - https://arxiv.org/abs/2103.07579
+* `ResNet strikes back: An improved training procedure in timm` - https://arxiv.org/abs/2110.00476
+* `Billion-scale semi-supervised learning for image classification` - https://arxiv.org/abs/1905.00546
+* `Exploring the Limits of Weakly Supervised Pretraining` - https://arxiv.org/abs/1805.00932
+* `Knapsack Pruning with Inner Distillation` - https://arxiv.org/abs/2002.08258
+
 Copyright 2019, Ross Wightman
 """
 import math
@@ -656,15 +671,17 @@ class ResNet(nn.Module):
         """
         return 'fc' if name_only else self.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: str = 'avg') -> None:
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
         """Reset the classifier head.
 
         Args:
             num_classes: Number of classes for new classifier.
-            global_pool: Global pooling type.
+            global_pool: Global pooling type, current pooling is kept if None.
         """
         dd = get_device_dtype(self)
         self.num_classes = num_classes
+        if global_pool is None:
+            global_pool = self.global_pool.pool_type
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool, **dd)
         self.global_pool.train(self.training)
         self.fc.train(self.training)
@@ -1867,11 +1884,11 @@ def ecaresnext26t_32x4d(pretrained: bool = False, **kwargs) -> ResNet:
 @register_model
 def ecaresnext50t_32x4d(pretrained: bool = False, **kwargs) -> ResNet:
     """Constructs an ECA-ResNeXt-50-T model.
-    This is technically a 28 layer ResNet, like a 'D' bag-of-tricks model but with tiered 24, 32, 64 channels
-    in the deep stem. This model replaces SE module with the ECA module
+    Like a 'D' bag-of-tricks model but with tiered 24, 32, 64 channels in the deep stem.
+    This model replaces SE module with the ECA module
     """
     model_args = dict(
-        block=Bottleneck, layers=(2, 2, 2, 2), cardinality=32, base_width=4, stem_width=32,
+        block=Bottleneck, layers=(3, 4, 6, 3), cardinality=32, base_width=4, stem_width=32,
         stem_type='deep_tiered', avg_down=True, block_args=dict(attn_layer='eca'))
     return _create_resnet('ecaresnext50t_32x4d', pretrained, **dict(model_args, **kwargs))
 

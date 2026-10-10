@@ -1,7 +1,8 @@
 """SwiftFormer
 SwiftFormer: Efficient Additive Attention for Transformer-based Real-time Mobile Vision Applications
 Code: https://github.com/Amshaker/SwiftFormer
-Paper: https://arxiv.org/pdf/2303.15446
+Paper:
+* `SwiftFormer: Efficient Additive Attention for Transformer-based Real-time Mobile Vision Applications` - https://arxiv.org/abs/2303.15446
 
 @InProceedings{Shaker_2023_ICCV,
     author    = {Shaker, Abdelrahman and Maaz, Muhammad and Rasheed, Hanoona and Khan, Salman and Yang, Ming-Hsuan and Khan, Fahad Shahbaz},
@@ -361,12 +362,13 @@ class SwiftFormer(nn.Module):
             global_pool: str = 'avg',
             output_stride: int = 32,
             in_chans: int = 3,
+            img_size: Optional[Union[int, Tuple[int, int]]] = None,
             device=None,
             dtype=None,
-            **kwargs,
     ):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
+        # img_size is unused, accepted as the builder passes it for fixed_input_size models.
         assert output_stride == 32
         self.num_classes = num_classes
         self.in_chans = in_chans

@@ -8,6 +8,11 @@ Currently used to implement experimental variants of:
   * Lambda ResNets
   * HaloNets
 
+Papers:
+  * `Bottleneck Transformers for Visual Recognition` - https://arxiv.org/abs/2101.11605
+  * `LambdaNetworks: Modeling Long-Range Interactions Without Attention` - https://arxiv.org/abs/2102.08602
+  * `Scaling Local Self-Attention for Parameter Efficient Visual Backbones` - https://arxiv.org/abs/2103.12731
+
 Consider all of the models definitions here as experimental WIP and likely to change.
 
 Hacked together by / copyright Ross Wightman, 2021.

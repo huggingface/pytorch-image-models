@@ -1,6 +1,9 @@
 """ NasNet-A (Large)
  nasnetalarge implementation grabbed from Cadene's pretrained models
  https://github.com/Cadene/pretrained-models.pytorch
+
+Papers:
+* `Learning Transferable Architectures for Scalable Image Recognition` - https://arxiv.org/abs/1707.07012
 """
 from functools import partial
 from typing import Optional, Type
@@ -636,9 +639,11 @@ class NASNetALarge(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.last_linear
 
-    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
+        if global_pool is None:
+            global_pool = self.global_pool.pool_type
         self.global_pool, self.last_linear = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, **dd)
         self.global_pool.train(self.training)

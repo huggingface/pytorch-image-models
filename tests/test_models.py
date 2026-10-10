@@ -16,6 +16,7 @@ import torch
 import platform
 import os
 import fnmatch
+import inspect
 from contextlib import nullcontext
 
 _IS_MAC = platform.system() == 'Darwin'
@@ -177,7 +178,7 @@ def test_model_inference(model_name, batch_size):
         _test_owl(pp(test_owl).unsqueeze(0), tol=(1e-1, 1e-1))  # re-process from original jpg, Pillow output can change a lot btw ver
 
 
-@pytest.mark.base
+@pytest.mark.forward
 @pytest.mark.timeout(timeout120)
 @pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS))
 @pytest.mark.parametrize('batch_size', [1])
@@ -210,7 +211,7 @@ def test_model_forward(model_name, batch_size):
         assert torch.allclose(outputs, outputs2, rtol=1e-4, atol=1e-5), 'Output does not match'
 
 
-@pytest.mark.base
+@pytest.mark.backward
 @pytest.mark.timeout(timeout120)
 @pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS, name_matches_cfg=True))
 @pytest.mark.parametrize('batch_size', [2])
@@ -262,6 +263,39 @@ EARLY_POOL_MODELS = (
 )
 
 
+def _assert_model_api_contract(model, model_name, cfg_device):
+    """Check parts of the model API the optimizer factory and model creation rely on, for every model."""
+    from timm.models._manipulate import group_parameters
+
+    # unknown constructor args must raise, not be silently ignored
+    with torch.device(cfg_device) if _HAS_DEVICE_CONTEXT else nullcontext():
+        with pytest.raises(TypeError):
+            create_model(model_name, pretrained=False, device=cfg_device, not_a_model_arg=1)
+
+    # reset_classifier keeps the current pooling by default
+    if hasattr(model, 'reset_classifier'):
+        param = inspect.signature(model.reset_classifier).parameters.get('global_pool')
+        if param is not None:
+            assert param.default is None, f'reset_classifier global_pool default is {param.default!r}, not None'
+
+    # group_matcher() / no_weight_decay() must match the model's params
+    param_names = [n for n, _ in model.named_parameters()]
+    if hasattr(model, 'group_matcher'):
+        groups = group_parameters(model, model.group_matcher(coarse=False), reverse=True)
+        assert len(set(groups.values())) > 1, 'group_matcher() puts all params in a single group'
+    if hasattr(model, 'no_weight_decay'):
+        for pattern in model.no_weight_decay():
+            if any(fnmatch.fnmatch(n, pattern) for n in param_names):
+                continue
+            # an optional param (e.g. a class or register token) can be listed when this config doesn't use it
+            obj = model
+            for attr in pattern.split('.'):
+                obj = getattr(obj, attr, None)
+                if obj is None:
+                    break
+            assert obj is None, f'no_weight_decay() entry {pattern!r} matches no parameter'
+
+
 def _assert_reset_classifier_preserves_parent_device_dtype(model):
     reset_classifier = getattr(model, 'reset_classifier', None)
     get_classifier = getattr(model, 'get_classifier', None)
@@ -304,11 +338,13 @@ def test_model_default_cfgs(model_name, batch_size, cfg_device):
     """Check config metadata and feature/head shapes without allocating weights on modern torch."""
     with torch.device(cfg_device) if _HAS_DEVICE_CONTEXT else nullcontext():
         model = create_model(model_name, pretrained=False, device=cfg_device, dtype=torch.float32).eval()
+    _assert_model_api_contract(model, model_name, cfg_device)
     assert getattr(model, 'num_classes') >= 0
     assert getattr(model, 'num_features') > 0
     assert getattr(model, 'head_hidden_size') > 0
     state_dict = model.state_dict()
     cfg = model.default_cfg
+    assert model.in_chans == cfg['input_size'][0]
 
     pool_size = cfg['pool_size']
     input_size = model.default_cfg['input_size']
@@ -384,11 +420,13 @@ def test_model_default_cfgs_non_std(model_name, batch_size, cfg_device):
     """Check non-standard model config metadata and feature/head shapes."""
     with torch.device(cfg_device) if _HAS_DEVICE_CONTEXT else nullcontext():
         model = create_model(model_name, pretrained=False, device=cfg_device, dtype=torch.float32).eval()
+    _assert_model_api_contract(model, model_name, cfg_device)
     assert getattr(model, 'num_classes') >= 0
     assert getattr(model, 'num_features') > 0
     assert getattr(model, 'head_hidden_size') > 0
     state_dict = model.state_dict()
     cfg = model.default_cfg
+    assert model.in_chans == cfg['input_size'][0]
 
     input_size = _get_input_size(model=model)
     if max(input_size) > 320:  # FIXME const
@@ -467,6 +505,22 @@ if 'GITHUB_ACTIONS' not in os.environ:
         create_model(model_name, pretrained=True, features_only=True)
 
 
+@pytest.mark.base
+@pytest.mark.parametrize('model_name', ['test_resnet', 'test_efficientnet', 'densenet121', 'test_convnext'])
+def test_reset_classifier_keeps_pool(model_name):
+    model = create_model(model_name, pretrained=False, global_pool='max').eval()
+    x = torch.randn(2, 3, 64, 64)
+    with torch.no_grad():
+        expected = model.forward_head(model.forward_features(x), pre_logits=True)
+        model.reset_classifier(5)
+        torch.testing.assert_close(model.forward_head(model.forward_features(x), pre_logits=True), expected)
+        assert model(x).shape == (2, 5)
+        model.reset_classifier(5, 'avg')
+        pooled_avg = model.forward_head(model.forward_features(x), pre_logits=True)
+        assert not torch.allclose(pooled_avg, expected)
+
+
+@pytest.mark.base
 @pytest.mark.parametrize(
     'model_name',
     ['efficientnet_b1_pruned', 'efficientnet_b2_pruned', 'efficientnet_b3_pruned'],
@@ -952,6 +1006,7 @@ def test_naflexvit_direct_grid_sample_export(ar_preserving):
     assert actual[1] == expected[1]
 
 
+@pytest.mark.base
 def test_naflexvit_forward_intermediates_dict_input():
     """NaFlex (pre-patchified dict) inputs through forward_intermediates: NLC-only, final-feature
     parity with forward_features, patch_valid surfaced for downstream masking/scatter."""
@@ -1164,6 +1219,7 @@ def test_naflexvit_sapiens2_conversion(num_kv_heads, attn_only_layer_scale):
                 torch.testing.assert_close(parameter.grad, reference_grads[name], rtol=2e-4, atol=2e-6)
 
 
+@pytest.mark.base
 def test_gemma4_forward_intermediates_dict_output():
     """gemma4_vit dict-output intermediates match the NaFlexVit contract (API symmetry):
     'image_intermediates' / 'image_features' / 'patch_valid' aligned with the token sequence."""
@@ -1761,27 +1817,27 @@ def test_hybrid_vit_set_input_size_dtype():
 
 _RELPOS_FAMILY = [
     # model, ctor kwargs, base img size, resized img size
-    ('maxvit_nano_rw_256', dict(), 256, 320),  # RelPosBias, window / grid partition attn
-    ('maxvit_rmlp_nano_rw_256', dict(), 256, 320),  # RelPosMlp
-    ('maxvit_tiny_tf_224', dict(), 224, 288),  # RelPosBiasTf
-    ('coatnet_nano_rw_224', dict(), 224, 288),  # full attn transformer stages w/ RelPosBias
-    ('maxvit_tiny_pm_256', dict(), 256, 320),  # parallel partition attn
+    ('test_maxvit', dict(), 160, 224),  # RelPosBias, window / grid partition attn
+    ('test_maxvit', dict(transformer_rel_pos_type='mlp'), 160, 224),  # RelPosMlp
+    ('test_maxvit', dict(transformer_rel_pos_type='bias_tf'), 160, 224),  # RelPosBiasTf
+    ('test_coatnet', dict(), 160, 224),  # full attn transformer stages w/ RelPosBias
+    ('test_maxvit', dict(block_type=('PM',) * 4), 160, 224),  # parallel partition attn
     ('beit_base_patch16_224', dict(embed_dim=64, depth=2, num_heads=2), 224, 256),
     ('beit_base_patch16_224', dict(embed_dim=64, depth=2, num_heads=2, use_shared_rel_pos_bias=True), 224, 256),
-    ('vit_relpos_small_patch16_224', dict(), 224, 256),  # RelPosMlp
-    ('vit_relpos_small_patch16_224', dict(rel_pos_type='bias'), 224, 256),
-    ('vit_srelpos_small_patch16_224', dict(), 224, 256),  # shared rel pos
+    ('test_vit_relpos', dict(), 160, 224),  # RelPosMlp
+    ('test_vit_relpos', dict(rel_pos_type='bias'), 160, 224),
+    ('test_vit_relpos', dict(shared_rel_pos=True), 160, 224),  # shared rel pos
     ('efficientvit_m0', dict(), 224, 256),
     ('efficientvit_m0', dict(), 224, 160),  # last stage feature size drops below the window size
 ]
 
 
 _RELPOS_NON_SQUARE = [
-    ('maxvit_nano_rw_256', dict()),
-    ('maxvit_tiny_tf_224', dict()),
-    ('coatnet_nano_rw_224', dict()),
+    ('test_maxvit', dict()),
+    ('test_maxvit', dict(transformer_rel_pos_type='bias_tf')),
+    ('test_coatnet', dict()),
     ('beit_base_patch16_224', dict(embed_dim=64, depth=2, num_heads=2)),
-    ('vit_relpos_small_patch16_224', dict(rel_pos_type='bias')),
+    ('test_vit_relpos', dict(rel_pos_type='bias')),
     ('swin_tiny_patch4_window7_224', dict(embed_dim=16, depths=(1, 1, 1, 1), num_heads=(1, 1, 1, 1))),
 ]
 

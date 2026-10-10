@@ -4,6 +4,9 @@ CPUBone: Efficient Vision Backbone Design for Devices with Low Parallelization C
 Moritz Nottebaum, Matteo Dunnhofer, Christian Micheloni
 Conference on Computer Vision and Pattern Recognition (CVPR) Findings, 2026
 
+Papers:
+* `CPUBone: Efficient Vision Backbone Design for Devices with Low Parallelization Capabilities` - https://arxiv.org/abs/2603.26425
+
 Adapted from the original implementation at https://github.com/altair199797/CPUBone.
 
 Special thanks to Simon Kundrat for initiating integration of CPUBone into the library. Most of the content was done by him.
@@ -650,6 +653,7 @@ class CPUBone(nn.Module):
         if downsample_expand_ratios is None:
             downsample_expand_ratios = (expand_ratio,) * num_stages
         assert len(downsample_expand_ratios) == num_stages
+        self.in_chans = in_chans
         self.num_classes = num_classes
         self.num_features = width_list[-1]
         self.head_hidden_size = head_widths[-1]

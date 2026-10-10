@@ -1,5 +1,8 @@
 """ EfficientFormer
 
+Papers:
+    * `EfficientFormer: Vision Transformers at MobileNet Speed` - https://arxiv.org/abs/2206.01191
+
 @article{li2022efficientformer,
   title={EfficientFormer: Vision Transformers at MobileNet Speed},
   author={Li, Yanyu and Yuan, Geng and Wen, Yang and Hu, Eric and Evangelidis, Georgios and Tulyakov,
@@ -409,12 +412,14 @@ class EfficientFormer(nn.Module):
             drop_rate: float = 0.,
             proj_drop_rate: float = 0.,
             drop_path_rate: float = 0.,
+            img_size: Optional[Union[int, Tuple[int, int]]] = None,
             device=None,
             dtype=None,
-            **kwargs
     ):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
+        # img_size is unused, accepted as the builder passes it for fixed_input_size models. The attention
+        # bias resolution is fixed at 7x7 (224x224 input).
         self.num_classes = num_classes
         self.in_chans = in_chans
         self.global_pool = global_pool

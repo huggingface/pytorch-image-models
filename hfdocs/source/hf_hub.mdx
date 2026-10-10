@@ -17,7 +17,7 @@ pip install huggingface_hub
 Then, you'll need to authenticate yourself. You can do this by running the following command:
 
 ```bash
-huggingface-cli login
+hf auth login
 ```
 
 Or, if you're using a notebook, you can use the `notebook_login` helper:
@@ -36,7 +36,7 @@ Or, if you're using a notebook, you can use the `notebook_login` helper:
 
 Here is where you would normally train or fine-tune the model. We'll skip that for the sake of this tutorial.
 
-Let's pretend we've now fine-tuned the model. The next step would be to push it to the Hub! We can do this with the `timm.models.hub.push_to_hf_hub` function.
+Let's pretend we've now fine-tuned the model. The next step would be to push it to the Hub! We can do this with the `timm.models.push_to_hf_hub` function. The exported config describes the model as it is now (e.g. its number of classes, or input size and channels if it was changed), see [adapt and export models](model_adaptation).
 
 ```py
 >>> model_cfg = dict(label_names=['a', 'b', 'c', 'd'])
@@ -47,8 +47,8 @@ Running the above would push the model to `<your-username>/resnet18-random` on t
 
 ## Loading a Model
 
-Loading a model from the Hub is as simple as calling `timm.create_model` with the `pretrained` argument set to the name of the model you want to load. In this case, we'll use [`nateraw/resnet18-random`](https://huggingface.co/nateraw/resnet18-random), which is the model we just pushed to the Hub.
+Loading a model from the Hub is as simple as calling `timm.create_model` with the Hub repo name, prefixed with `hf-hub:`, and `pretrained=True`. In this case, we'll use [`nateraw/resnet18-random`](https://huggingface.co/nateraw/resnet18-random), which is the model we just pushed to the Hub.
 
 ```py
->>> model_reloaded = timm.create_model('hf_hub:nateraw/resnet18-random', pretrained=True)
+>>> model_reloaded = timm.create_model('hf-hub:nateraw/resnet18-random', pretrained=True)
 ```

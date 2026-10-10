@@ -74,6 +74,11 @@ You can finetune any of the pre-trained models just by changing the classifier (
 
 To fine-tune on your own dataset, you have to write a PyTorch training loop or adapt `timm`'s [training script](training_script) to use your dataset.
 
+For different input channels, set `in_chans` to the model's target channel count;
+the pretrained configuration must describe the source weights. See
+[Adapt and Export Models](model_adaptation) for channel conversion and saving
+adapted models with their current configuration.
+
 ## Use a Pretrained Model for Feature Extraction
 
 Without modifying the network, one can call model.forward_features(input) on any model instead of the usual model(input). This will bypass the head classifier and global pooling for networks.
@@ -99,9 +104,9 @@ This will return a generic transform that uses reasonable defaults.
 ```py
 >>> timm.data.create_transform((3, 224, 224))
 Compose(
-    Resize(size=256, interpolation=bilinear, max_size=None, antialias=None)
+    Resize(size=256, interpolation=bilinear, max_size=None, antialias=True)
     CenterCrop(size=(224, 224))
-    ToTensor()
+    MaybeToTensor()
     Normalize(mean=tensor([0.4850, 0.4560, 0.4060]), std=tensor([0.2290, 0.2240, 0.2250]))
 )
 ```
@@ -113,39 +118,46 @@ To figure out which transformations were used for a given pretrained model, we c
 ```py
 >>> model.pretrained_cfg
 {'url': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_large_100_ra-f55367f5.pth',
- 'num_classes': 1000,
+ 'hf_hub_id': 'timm/mobilenetv3_large_100.ra_in1k',
+ 'architecture': 'mobilenetv3_large_100',
+ 'tag': 'ra_in1k',
+ 'custom_load': False,
  'input_size': (3, 224, 224),
- 'pool_size': (7, 7),
- 'crop_pct': 0.875,
+ 'fixed_input_size': False,
  'interpolation': 'bicubic',
+ 'crop_pct': 0.875,
+ 'crop_mode': 'center',
  'mean': (0.485, 0.456, 0.406),
  'std': (0.229, 0.224, 0.225),
+ 'num_classes': 1000,
+ 'pool_size': (7, 7),
  'first_conv': 'conv_stem',
  'classifier': 'classifier',
- 'architecture': 'mobilenetv3_large_100'}
+ 'license': 'apache-2.0'}
 ```
 
-We can then resolve only the data related configuration by using [`timm.data.resolve_data_config`].
+We can then resolve only the data related configuration by using [`timm.data.resolve_model_data_config`].
 
 ```py
->>> timm.data.resolve_data_config(model.pretrained_cfg)
+>>> timm.data.resolve_model_data_config(model)
 {'input_size': (3, 224, 224),
  'interpolation': 'bicubic',
  'mean': (0.485, 0.456, 0.406),
  'std': (0.229, 0.224, 0.225),
- 'crop_pct': 0.875}
+ 'crop_pct': 0.875,
+ 'crop_mode': 'center'}
 ```
 
 We can pass this data config to [`timm.data.create_transform`] to initialize the model's associated transform.
 
 ```py
->>> data_cfg = timm.data.resolve_data_config(model.pretrained_cfg)
+>>> data_cfg = timm.data.resolve_model_data_config(model)
 >>> transform = timm.data.create_transform(**data_cfg)
 >>> transform
 Compose(
-    Resize(size=256, interpolation=bicubic, max_size=None, antialias=None)
+    Resize(size=256, interpolation=bicubic, max_size=None, antialias=True)
     CenterCrop(size=(224, 224))
-    ToTensor()
+    MaybeToTensor()
     Normalize(mean=tensor([0.4850, 0.4560, 0.4060]), std=tensor([0.2290, 0.2240, 0.2250]))
 )
 ```
@@ -178,7 +190,7 @@ Now, we'll create our model and transforms again. This time, we make sure to set
 ```py
 >>> model = timm.create_model('mobilenetv3_large_100', pretrained=True).eval()
 >>> transform = timm.data.create_transform(
-    **timm.data.resolve_data_config(model.pretrained_cfg)
+    **timm.data.resolve_model_data_config(model)
 )
 ```
 

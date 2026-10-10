@@ -1,6 +1,6 @@
 """ Twins
-A PyTorch impl of : `Twins: Revisiting the Design of Spatial Attention in Vision Transformers`
-    - https://arxiv.org/pdf/2104.13840.pdf
+A PyTorch impl of:
+* `Twins: Revisiting the Design of Spatial Attention in Vision Transformers` - https://arxiv.org/abs/2104.13840
 
 Code/weights from https://github.com/Meituan-AutoML/Twins, original copyright/license info below
 

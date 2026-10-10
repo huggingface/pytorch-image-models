@@ -1,5 +1,8 @@
 """ Multi-Scale Vision Transformer v2
 
+Papers:
+* `MViTv2: Improved Multiscale Vision Transformers for Classification and Detection` - https://arxiv.org/abs/2112.01526
+
 @inproceedings{li2021improved,
   title={MViTv2: Improved multiscale vision transformers for classification and detection},
   author={Li, Yanghao and Wu, Chao-Yuan and Fan, Haoqi and Mangalam, Karttikeya and Xiong, Bo and Malik, Jitendra and Feichtenhofer, Christoph},

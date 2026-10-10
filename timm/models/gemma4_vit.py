@@ -3,7 +3,10 @@
 Vision encoder from Google's Gemma 4 multimodal model.
 Custom ViT with 2D RoPE, Gated MLP, QKV normalization, and 4-norm sandwich blocks.
 
-Paper: https://ai.google.dev/gemma/docs/core/model_card_4
+Papers:
+* `Gemma 4 Technical Report` - https://arxiv.org/abs/2607.02770
+
+Model card: https://ai.google.dev/gemma/docs/core/model_card_4
 Reference impl: https://github.com/huggingface/transformers (Gemma4VisionModel)
 
 Copyright 2025 Yonghye Kwon
@@ -680,6 +683,7 @@ class Gemma4VitEncoder(nn.Module):
         super().__init__()
         assert global_pool in ('soft', 'avg', 'none', ''), \
             f"global_pool must be one of 'soft', 'avg', 'none' (or ''); got {global_pool!r}"
+        self.in_chans = in_chans
         self.global_pool = global_pool
         self.num_features = self.head_hidden_size = self.embed_dim = embed_dim
         # Encoder has no classifier head; ``num_classes`` kept for timm API
@@ -1071,6 +1075,7 @@ class Gemma4VitClassifier(nn.Module):
             f"use Gemma4VitEncoder directly for 'soft' VLM-style pooling."
         assert encoder_pool in ('', 'none', 'soft'), \
             f"Gemma4VitClassifier encoder_pool must be '', 'none', or 'soft' (got {encoder_pool!r})."
+        self.in_chans = in_chans
         self.num_classes = num_classes
         self.global_pool = global_pool
         self.encoder_pool = encoder_pool

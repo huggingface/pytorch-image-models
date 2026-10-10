@@ -1,0 +1,278 @@
+# The timm Model API
+
+Every `timm` model is a `torch.nn.Module` that shares a common interface on top of `forward()`. The interface splits
+the model into a feature extractor and a classifier head, exposes intermediate features, and provides hooks for
+training (gradient checkpointing, parameter grouping) and for changing the input resolution. Code written against it
+works across architectures, which is how `timm`'s training script, feature extraction wrappers and optimizer factory
+handle every model the same way.
+
+This page describes the interface of a constructed model: which parts every model provides, which most provide, and
+which are specific to some families. How models are created (`create_model` arguments, pretrained tags, the
+pretrained config) is covered in the [models reference](reference/models).
+
+## Feature extractor and head
+
+A model's forward pass is `forward_head(forward_features(x))`.
+
+- **`forward_features(x)`** returns the unpooled output of the last stage, after the final norm layer if the model
+  has one: a `NCHW` feature map for convolutional models, `NLC` tokens (including any class / register prefix tokens)
+  for ViT style models.
+- **`forward_head(x, pre_logits=False)`** applies the global pooling (or token selection), any pre-logits layers and
+  the classifier. With `pre_logits=True` it stops before the classifier and returns the pooled features.
+
+Three attributes describe the sizes involved:
+
+| Attribute | Description |
+|---|---|
+| `num_classes` | Classifier output size, `0` if the classifier was removed |
+| `num_features` | Channels (or embedding dim) of the `forward_features` output |
+| `head_hidden_size` | Size of the `pre_logits=True` output, the classifier input. Equal to `num_features` unless the head has a hidden layer (e.g. ConvNeXt w/ `head_hidden_size` set) |
+
+```python
+import torch
+import timm
+
+model = timm.create_model('convnext_atto').eval()
+x = torch.randn(2, 3, 224, 224)
+
+features = model.forward_features(x)  # (2, 320, 7, 7), num_features = 320
+pooled = model.forward_head(features, pre_logits=True)  # (2, 320), head_hidden_size = 320
+logits = model.forward_head(features)  # (2, 1000), same as model(x)
+```
+
+A few models deviate from the single tensor in, single tensor out form: multi-branch models (CrossViT,
+EfficientViM) return a list from `forward_features`, and the NaFlex / Gemma4 ViTs accept extra patch coordinate and
+validity inputs for variable resolution.
+
+## Classifier
+
+- **`get_classifier()`** returns the classifier module.
+- **`reset_classifier(num_classes, global_pool=None)`** replaces the classifier with a new, randomly initialized one.
+  `num_classes=0` replaces it with an identity, so `model(x)` returns the pooled features. `global_pool` changes the
+  pooling at the same time, `''` disables it so `model(x)` returns unpooled features. In most models
+  `global_pool=None` keeps the current pooling, but a few default to `'avg'`, pass it explicitly if it matters.
+
+Creating a model with `num_classes` / `global_pool` set has the same effect as resetting the classifier afterwards,
+without allocating the original classifier. Encoder-only vision towers (the DeepSeek, Gemma4, MobileNetV5 and Qwen3
+encoders) have no classifier and don't implement these methods.
+
+## Intermediate features
+
+- **`forward_intermediates(x, indices=None, norm=False, stop_early=False, output_fmt='NCHW',
+  intermediates_only=False)`** runs the model and returns the final features plus a list of intermediate features,
+  or only the intermediates with `intermediates_only=True`. `indices` selects them: `None` for all, an `int` `n` for
+  the last `n`, or a list of indices (negative values count from the end). `stop_early=True` skips the blocks after
+  the last selected index (with `intermediates_only=True`), `norm=True` applies the final norm layer to each
+  intermediate.
+- **`feature_info`** describes the available intermediate features, one entry per index with the number of channels
+  (`num_chs`), the stride relative to the input (`reduction`) and the module name (`module`).
+- **`prune_intermediate_layers(indices=1, prune_norm=False, prune_head=True)`** removes the blocks after the last
+  index that will be used (and optionally the final norm and the head) and returns the absolute indices to take.
+  Use it when the model will only be used to extract intermediates, as a backbone for a detection or segmentation
+  head.
+
+```python
+model = timm.create_model('resnet18').eval()
+print([(f['num_chs'], f['reduction']) for f in model.feature_info])
+# [(64, 2), (64, 4), (128, 8), (256, 16), (512, 32)]
+
+final, intermediates = model.forward_intermediates(x)  # all 5 feature levels
+last_two = model.forward_intermediates(x, indices=2, intermediates_only=True)  # (2, 256, 14, 14), (2, 512, 7, 7)
+
+take_indices = model.prune_intermediate_layers(indices=2, prune_head=True)  # [3, 4], no classifier left
+```
+
+All features are returned as `NCHW` maps by default, including those of ViT style models, whose spatial tokens are
+reshaped to a grid with the prefix tokens dropped. The other `output_fmt` options are family specific (`NLC` for
+ViT style models, `NHWC` for some), as are extra arguments such as `return_prefix_tokens` (ViT family). Creating a
+model with `features_only=True` wraps it as a backbone that returns the feature maps from `model(x)`, see
+[feature extraction](feature_extraction) for both approaches in detail.
+
+## Input size
+
+Models fall into three groups by how they handle the input resolution:
+
+- **Any input size.** Most convolutional models, and convolutional hybrids without fixed size position embeddings or
+  window partitions, work at any input size larger than their total stride, without changes.
+- **Fixed input size, resizable.** Models with position embeddings, attention window partitions or relative position
+  tables are built for one size, set by the `img_size` argument at creation (default: the pretrained cfg
+  `input_size`). In the families that implement it (ViT, DeiT, BEiT, EVA, Swin, MaxViT and others, see the table
+  below), **`set_input_size(img_size=...)`** changes it afterwards, resampling the position embeddings and relative
+  position tables and updating the windows. Several accept further arguments, e.g. `patch_size` for ViT,
+  `window_size` / `window_ratio` for Swin. Calling it at the current size leaves the model unchanged. The others
+  must be created with the `img_size` they will be used at.
+- **Dynamic input size.** ViT and EVA family models created with `dynamic_img_size=True` resample their position
+  embedding to the input size on every forward pass, at some cost in speed. Swin, SwinV2 and SwinV2-CR models created
+  with `dynamic_img_size=True` (or the equivalent `strict_img_size=False`) compute their attention masks for the input
+  size on each forward pass instead. NaFlex ViTs handle variable resolution natively.
+
+```python
+model = timm.create_model('vit_tiny_patch16_224')
+model.set_input_size(img_size=(384, 384))
+model(torch.randn(1, 3, 384, 384))
+```
+
+## Training hooks
+
+- **`set_grad_checkpointing(enable=True)`** enables activation (gradient) checkpointing, recomputing the forward
+  activations of each block in the backward pass to save memory (`--grad-checkpointing` in `train.py`). Most models
+  support it, some older architectures (VGG, DPN, Inception, ...) raise an error.
+- **`group_matcher(coarse=False)`** returns regular expressions that assign each parameter to a stem or block group.
+  The optimizer factory uses it to scale learning rates per layer for layer-wise learning rate decay
+  (`layer_decay`, see the [optimizers reference](reference/optimizers#parameter-groups)).
+- **`no_weight_decay()`**, where implemented, returns the names of parameters that should not be weight decayed
+  (position embeddings, class tokens, ...). The optimizer factory excludes these and all 1D parameters (biases,
+  norm scales) from weight decay.
+
+## Pretrained config
+
+`model.pretrained_cfg` (and its older alias `model.default_cfg`) is a dict describing the source checkpoint: input
+size, interpolation, crop, normalization, classifier and first conv module names, license and source. It is used to
+adapt the classifier and input conv when pretrained weights are loaded, and as the preprocessing defaults. See the
+[models reference](reference/models#pretrained-config) for the fields.
+
+The pretrained cfg isn't changed when a model is created or modified to differ from its checkpoint (`in_chans`,
+`img_size`, `set_input_size()`). The model's current input is tracked separately,
+`timm.models.get_model_input_config(model)` returns its channels, size and fixed size constraint, and
+`timm.data.resolve_input_data_config(model)` resolves a data config for the transforms against it.
+`timm.models.get_model_args(model)` returns the arguments to rebuild the model as it is now, and `save_for_hf` writes
+them to the exported config, so a resized or adapted model can be reloaded. See
+[adapt and export models](model_adaptation).
+
+## Support by family
+
+The table below lists which optional parts of the interface each model family supports. It is generated by
+`hfdocs/generate_model_docs.py`, which builds and runs a small model of each model class in each family. Support can
+vary between the architectures of a family, see the family pages for details.
+
+<!-- BEGIN GENERATED SUPPORT MATRIX -->
+<!-- Generated by hfdocs/generate_model_docs.py, do not edit. Change the FAMILIES entry or the model code / docstring
+and regenerate. -->
+
+| Family | Classes | `features_only` | `forward_intermediates` | `prune_intermediate_layers` | Any input size | `set_input_size` | `dynamic_img_size` | Grad checkpointing | Layer decay | `reset_classifier` |
+|---|---|---|---|---|---|---|---|---|---|---|
+| [Aligned Xception](models/xception-aligned) | `XceptionAligned` | ✓ | ✗ | ✗ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [BEiT](models/beit) | `Beit` | ✓ | ✓ | ✓ | ✗ | ✓ | ✗ | ✓ | ✓ | ✓ |
+| [BYOANet (BoTNet, HaloNet, LambdaNet)](models/byoanet) | `ByobNet` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
+| [BYOBNet (GENet, RepVGG, MobileOne, ...)](models/byobnet) | `ByobNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [CaiT](models/cait) | `Cait` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
+| [CoaT](models/coat) | `CoaT` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ | ✓ |
+| [ConViT](models/convit) | `ConVit` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ | ✓ |
+| [ConvMixer](models/convmixer) | `ConvMixer` | ✗ | ✗ | ✗ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [ConvNeXt](models/convnext) | `ConvNeXt` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [CPUBone](models/cpubone) | `CPUBone` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [CrossViT](models/crossvit) | `CrossVit` | ✗ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [CSATv2](models/csatv2) | `CSATv2` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✗ | ✓ |
+| [CSPNet (CSPResNet, CSPDarkNet, DarkNet)](models/cspnet) | `CspNet` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [CSPNeXt](models/cspnext) | `CspNext` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [DaViT](models/davit) | `DaVit` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [DeepSeek ViT](models/deepseek-vit) | `DeepseekVitClassifier` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+|  | `DeepseekVitEncoder` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✗ |
+| [DeiT](models/deit) | `VisionTransformer`, `VisionTransformerDistilled` | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| [DenseNet](models/densenet) | `DenseNet` | ✓ | ✗ | ✗ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [DLA](models/dla) | `DLA` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [DPN](models/dpn) | `DPN` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [EdgeNeXt](models/edgenext) | `EdgeNeXt` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [EfficientFormer](models/efficientformer) | `EfficientFormer` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
+| [EfficientFormer-V2](models/efficientformer-v2) | `EfficientFormerV2` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
+| [EfficientNet](models/efficientnet) | `EfficientNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [EfficientViM](models/efficientvim) | `EfficientViM`, `EfficientViMDistilled` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [EfficientViT (MIT)](models/efficientvit-mit) | `EfficientVit`, `EfficientVitLarge` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [EfficientViT (MSRA)](models/efficientvit-msra) | `EfficientVitMsra` | ✓ | ✓ | ✓ | ✓ | ✓ | – | ✓ | ✓ | ✓ |
+| [EVA](models/eva) | `Eva` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| [FasterNet](models/fasternet) | `FasterNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [FastViT](models/fastvit) | `FastVit` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [FocalNet](models/focalnet) | `FocalNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [GCViT](models/gcvit) | `GlobalContextVit` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
+| [Gemma 4 ViT](models/gemma4-vit) | `Gemma4VitClassifier` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+|  | `Gemma4VitEncoder` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✗ |
+| [GhostNet](models/ghostnet) | `GhostNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [HardCoRe-NAS](models/hardcorenas) | `MobileNetV3` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [Hiera](models/hiera) | `Hiera` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
+| [HieraDet (SAM 2)](models/hieradet-sam2) | `HieraDet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [HRNet](models/hrnet) | `HighResolutionNet` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [Hybrid Vision Transformer](models/vision-transformer-hybrid) | `VisionTransformer` | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| [iFormer](models/iformer) | `IFormer` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [Inception-ResNet-v2](models/inception-resnet-v2) | `InceptionResnetV2` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [Inception-v3](models/inception-v3) | `InceptionV3` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [Inception-v4](models/inception-v4) | `InceptionV4` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [InceptionNeXt](models/inception-next) | `MetaNeXt` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [LeViT](models/levit) | `Levit`, `LevitDistilled` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
+| [LowFormer](models/lowformer) | `LowFormer` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [MambaOut](models/mambaout) | `MambaOut` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [MaxViT and CoAtNet](models/maxxvit) | `MaxxVit` | ✓ | ✓ | ✓ | ✗ | ✓ | ✗ | ✓ | ✓ | ✓ |
+| [MetaFormer (PoolFormer, ConvFormer, CAFormer)](models/metaformer) | `MetaFormer` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✗ | ✓ |
+| [MLP-Mixer, ResMLP and gMLP](models/mlp-mixer) | `MlpMixer` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
+| [MobileNet-V3](models/mobilenetv3) | `MobileNetV3` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [MobileNet-V5](models/mobilenetv5) | `MobileNetV5` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+|  | `MobileNetV5Encoder` | ✓ | ✓ | ✗ | ✓ | – | – | ✓ | ✗ | ✗ |
+| [MobileViT](models/mobilevit) | `ByobNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [MViTv2](models/mvitv2) | `MultiScaleVit` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
+| [NaFlex ViT](models/naflexvit) | `NaFlexVit` | ✓ | ✓ | ✗ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [NASNet](models/nasnet) | `NASNetALarge` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [NesT](models/nest) | `Nest` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
+| [Next-ViT](models/nextvit) | `NextViT` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [NFNet](models/nfnet) | `NormFreeNet` | ✓ | ✗ | ✗ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [PiT](models/pit) | `PoolingVisionTransformer` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ |
+| [PNASNet](models/pnasnet) | `PNASNet5Large` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [PP-HGNet](models/hgnet) | `HighPerfGpuNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [PP-LCNetV2](models/lcnetv2) | `LCNetV2` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [PVTv2](models/pvt-v2) | `PyramidVisionTransformerV2` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [Qwen3 ViT](models/qwen3-vit) | `Qwen3VitClassifier` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+|  | `Qwen3VitEncoder` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✗ |
+| [RDNet](models/rdnet) | `RDNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [RegNet](models/regnet) | `RegNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [RepGhost](models/repghost) | `RepGhostNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [RepViT](models/repvit) | `RepVit` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [Res2Net](models/res2net) | `ResNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [ResNeSt](models/resnest) | `ResNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [ResNet](models/resnet) | `ResNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [ResNetV2 (BiT)](models/resnetv2) | `ResNetV2` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [ReXNet](models/rexnet) | `RexNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [Segment Anything ViT](models/vision-transformer-sam) | `VisionTransformerSAM` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [SelecSLS](models/selecsls) | `SelecSls` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [SENet (legacy)](models/senet) | `SENet` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [Sequencer](models/sequencer) | `Sequencer2d` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [SHViT](models/shvit) | `SHViT` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [SKNet](models/sknet) | `ResNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [StarNet](models/starnet) | `StarNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [SwiftFormer](models/swiftformer) | `SwiftFormer` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [Swin Transformer](models/swin-transformer) | `SwinTransformer` | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| [Swin Transformer V2](models/swin-transformer-v2) | `SwinTransformerV2` | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| [Swin Transformer V2 (CR)](models/swin-transformer-v2-cr) | `SwinTransformerV2Cr` | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| [TinyViT](models/tiny-vit) | `TinyVit` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [TNT](models/tnt) | `TNT` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
+| [TResNet](models/tresnet) | `TResNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [Twins](models/twins) | `Twins` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [VGG](models/vgg) | `VGG` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [Visformer](models/visformer) | `Visformer` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
+| [Vision Transformer (relative position)](models/vision-transformer-relpos) | `VisionTransformerRelPos` | ✓ | ✓ | ✓ | ✗ | ✓ | ✗ | ✓ | ✓ | ✓ |
+| [Vision Transformer (ViT)](models/vision-transformer) | `VisionTransformer` | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| [ViTamin](models/vitamin) | `VisionTransformer` | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| [VOLO](models/volo) | `VOLO` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
+| [VoVNet](models/vovnet) | `VovNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [Xception (legacy)](models/xception) | `Xception` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [XCiT](models/xcit) | `Xcit` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+
+✓ supported, ✓ (square) works for square sizes only, ✗ not supported, – not needed (the model already accepts any input
+size). Each model class of a family is checked by running every feature on a randomly initialized model of its smallest
+(non-test) architecture in the family. Classes with the same results share a row, the family page lists the architecture
+used for each.
+<!-- END GENERATED SUPPORT MATRIX -->
+
+## Implementing a model
+
+A new model should implement the interface so it works with the training script, feature extraction and the
+optimizer factory without special cases:
+
+- `forward_features`, `forward_head(x, pre_logits=False)` and `forward` as their composition, with `num_classes`,
+  `num_features` and `head_hidden_size` set.
+- `get_classifier` and `reset_classifier(num_classes, global_pool=None)`.
+- `forward_intermediates`, `prune_intermediate_layers` and a `feature_info` list.
+- `set_grad_checkpointing`, `group_matcher`, and `no_weight_decay` for any parameter that shouldn't be decayed.
+- `set_input_size` if the model is built for a fixed input size.
+- The standard constructor arguments: `num_classes`, `in_chans`, `global_pool`, `drop_rate`, `drop_path_rate`,
+  and `device` / `dtype` for parameter creation.
+
+`tests/test_models.py` checks the forward, backward, features, intermediates, classifier reset and pretrained cfg
+parts of the interface for the registered models (the largest are excluded from some tests to keep CI time down).

@@ -352,7 +352,7 @@ def test_naflexvit_factory_remaps_classic_vit_checkpoint(tmp_path):
 _CUSTOM_LOAD_MODEL_KWARGS = {
     # default pretrained tags of these models are original JAX .npz weights (custom_load=True)
     'vit_tiny_patch16_224': dict(img_size=8, patch_size=4, embed_dim=8, depth=1, num_heads=2),
-    'resnetv2_50x1_bit': dict(),
+    'resnetv2_50x1_bit': dict(channels=(128, 128, 256, 256), stem_chs=32),
 }
 
 
@@ -515,7 +515,9 @@ def test_train_pretrained_cfg_overlay(monkeypatch, extra_args, expected):
     ])
     with pytest.raises(_Created) as e:
         train.main()
-    assert e.value.args[0]['pretrained_cfg_overlay'] == expected
+    # the overlay is resolved into the pretrained cfg passed to create_model (resolve_model_input_args)
+    pretrained_cfg = e.value.args[0]['pretrained_cfg']
+    assert {k: pretrained_cfg[k] for k in expected} == expected
 
 
 def test_teacher_pretrained_cfg_overlay_custom_load(tmp_path, monkeypatch):
@@ -527,7 +529,7 @@ def test_teacher_pretrained_cfg_overlay_custom_load(tmp_path, monkeypatch):
     checkpoint_path = str(tmp_path / 'ViT-Ti_16.npz')
 
     DistillationTeacher(
-        'vit_tiny_patch16_224',
+        'test_vit',
         num_classes=1000,
         pretrained_path=checkpoint_path,
         pretrained_cfg_overlay=dict(custom_load=True),

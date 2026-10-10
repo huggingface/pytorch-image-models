@@ -2,6 +2,9 @@
 
 Vision encoder of the DeepSeek-V4 / V4.1 multimodal models from DeepSeek-AI.
 
+Papers:
+* `DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression` - https://arxiv.org/abs/2609.19969
+
 A plain pre-norm ViT with RMSNorm, fused QKV with bias, a bias-free SwiGLU MLP and axial 2D RoPE
 (theta 10000, per-axis frequency blocks, 'half' rotation layout) as the only position encoding --
 there is no learned position embedding, so any patch grid works without resampling. Patches are
@@ -218,6 +221,7 @@ class DeepseekVitEncoder(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         assert global_pool in ('', 'avg', 'align')
         assert embed_dim % num_heads == 0
+        self.in_chans = in_chans
         self.num_classes = 0
         self.global_pool = global_pool
         self.num_features = self.head_hidden_size = self.embed_dim = embed_dim
@@ -455,6 +459,7 @@ class DeepseekVitClassifier(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         assert global_pool in ('', 'avg')
         assert encoder_pool in ('', 'align')
+        self.in_chans = in_chans
         self.num_classes = num_classes
         self.global_pool = global_pool
         self.encoder_pool = encoder_pool

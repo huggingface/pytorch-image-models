@@ -2,6 +2,10 @@
 
 NOTE: these models are experimental / WIP, expect changes
 
+Papers:
+* `An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale` - https://arxiv.org/abs/2010.11929
+* `Swin Transformer V2: Scaling Up Capacity and Resolution` - https://arxiv.org/abs/2111.09883
+
 Hacked together by / Copyright 2022, Ross Wightman
 """
 import logging
@@ -32,6 +36,7 @@ from timm.layers import (
     use_fused_attn,
     LayerType,
 )
+from ._input import update_model_input_size
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import named_apply, checkpoint
@@ -417,6 +422,8 @@ class VisionTransformerRelPos(nn.Module):
             if blk.attn.rel_pos is not None:
                 blk.attn.rel_pos.set_window_size(feat_size)
 
+        update_model_input_size(self, self.patch_embed.img_size, patch_size=patch_size)
+
     @torch.jit.ignore
     def no_weight_decay(self):
         return {'cls_token'}
@@ -633,6 +640,8 @@ default_cfgs = generate_default_cfgs({
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_relpos_medium_patch16_rpn_224-sw-5d2befd8.pth',
         hf_hub_id='timm/'),
     'vit_relpos_base_patch16_rpn_224.untrained': _cfg(),
+
+    'test_vit_relpos.untrained': _cfg(input_size=(3, 160, 160), crop_pct=0.95),
 })
 
 
@@ -778,4 +787,12 @@ def vit_relpos_base_patch16_rpn_224(pretrained=False, **kwargs) -> VisionTransfo
         patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False, block_fn=ResPostRelPosBlock)
     model = _create_vision_transformer_relpos(
         'vit_relpos_base_patch16_rpn_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def test_vit_relpos(pretrained: bool = False, **kwargs) -> VisionTransformerRelPos:
+    """ViT-RelPos test model, tiny for unit tests."""
+    model_args = dict(patch_size=16, embed_dim=96, depth=9, num_heads=3, mlp_ratio=2, qkv_bias=False, fc_norm=True)
+    model = _create_vision_transformer_relpos('test_vit_relpos', pretrained=pretrained, **dict(model_args, **kwargs))
     return model

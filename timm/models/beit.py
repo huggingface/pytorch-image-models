@@ -1,5 +1,9 @@
 """ BEiT: BERT Pre-Training of Image Transformers (https://arxiv.org/abs/2106.08254)
 
+Papers:
+    * `BEiT: BERT Pre-Training of Image Transformers` - https://arxiv.org/abs/2106.08254
+    * `BEiT v2: Masked Image Modeling with Vector-Quantized Visual Tokenizers` - https://arxiv.org/abs/2208.06366
+
 Model from official source: https://github.com/microsoft/unilm/tree/master/beit
 
 @inproceedings{beit,
@@ -64,6 +68,7 @@ from timm.layers import (
     to_2tuple,
 )
 
+from ._input import update_model_input_size
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint
@@ -712,6 +717,8 @@ class Beit(nn.Module):
             self.rel_pos_bias.set_window_size(grid_size)
         for blk in self.blocks:
             blk.attn.set_window_size(grid_size)
+
+        update_model_input_size(self, self.patch_embed.img_size, patch_size=patch_size)
 
     @torch.jit.ignore
     def no_weight_decay(self) -> Set[str]:

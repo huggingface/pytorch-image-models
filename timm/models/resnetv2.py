@@ -9,9 +9,12 @@ extra padding support to allow porting of official Hybrid ResNet pretrained weig
 https://github.com/google-research/vision_transformer
 
 Thanks to the Google team for the above two repositories and associated papers:
-* Big Transfer (BiT): General Visual Representation Learning - https://arxiv.org/abs/1912.11370
-* An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale - https://arxiv.org/abs/2010.11929
-* Knowledge distillation: A good teacher is patient and consistent - https://arxiv.org/abs/2106.05237
+* `Big Transfer (BiT): General Visual Representation Learning` - https://arxiv.org/abs/1912.11370
+* `An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale` - https://arxiv.org/abs/2010.11929
+* `Knowledge distillation: A good teacher is patient and consistent` - https://arxiv.org/abs/2106.05237
+
+Other papers:
+* `Identity Mappings in Deep Residual Networks` - https://arxiv.org/abs/1603.05027
 
 Original copyright of Google code below, modifications by Ross Wightman, Copyright 2020.
 """

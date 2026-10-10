@@ -1,12 +1,12 @@
 """ LeViT
 
-Paper: `LeViT: a Vision Transformer in ConvNet's Clothing for Faster Inference`
-    - https://arxiv.org/abs/2104.01136
+Papers:
+    * `LeViT: a Vision Transformer in ConvNet's Clothing for Faster Inference` - https://arxiv.org/abs/2104.01136
 
 @article{graham2021levit,
   title={LeViT: a Vision Transformer in ConvNet's Clothing for Faster Inference},
   author={Benjamin Graham and Alaaeldin El-Nouby and Hugo Touvron and Pierre Stock and Armand Joulin and Herv\'e J\'egou and Matthijs Douze},
-  journal={arXiv preprint arXiv:22104.01136},
+  journal={arXiv preprint arXiv:2104.01136},
   year={2021}
 }
 
@@ -772,8 +772,11 @@ class Levit(nn.Module):
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
         matcher = dict(
-            stem=r'^cls_token|pos_embed|patch_embed',  # stem and embed
-            blocks=[(r'^blocks\.(\d+)', None), (r'^norm', (99999,))]
+            stem=r'^stem',  # stem and embed
+            blocks=r'^stages\.(\d+)' if coarse else [
+                (r'^stages\.(\d+)\.downsample', (0,)),
+                (r'^stages\.(\d+)\.blocks\.(\d+)', None),
+            ]
         )
         return matcher
 

@@ -2,9 +2,9 @@
 
 DeiT model defs and weights from https://github.com/facebookresearch/deit, original copyright below
 
-paper: `DeiT: Data-efficient Image Transformers` - https://arxiv.org/abs/2012.12877
-
-paper: `DeiT III: Revenge of the ViT` - https://arxiv.org/abs/2204.07118
+Papers:
+* `Training data-efficient image transformers & distillation through attention` - https://arxiv.org/abs/2012.12877
+* `DeiT III: Revenge of the ViT` - https://arxiv.org/abs/2204.07118
 
 Modifications copyright 2021, Ross Wightman
 """
@@ -358,7 +358,7 @@ def deit3_small_patch16_384(pretrained=False, **kwargs) -> VisionTransformer:
 
 @register_model
 def deit3_medium_patch16_224(pretrained=False, **kwargs) -> VisionTransformer:
-    """ DeiT-3 medium model @ 224x224 (https://arxiv.org/abs/2012.12877).
+    """ DeiT-3 medium model @ 224x224 (https://arxiv.org/abs/2204.07118).
     ImageNet-1k weights from https://github.com/facebookresearch/deit.
     """
     model_args = dict(patch_size=16, embed_dim=512, depth=12, num_heads=8, no_embed_class=True, init_values=1e-6)
@@ -408,7 +408,7 @@ def deit3_large_patch16_384(pretrained=False, **kwargs) -> VisionTransformer:
 
 @register_model
 def deit3_huge_patch14_224(pretrained=False, **kwargs) -> VisionTransformer:
-    """ DeiT-3 base model @ 384x384 from paper (https://arxiv.org/abs/2204.07118).
+    """ DeiT-3 huge model @ 224x224 from paper (https://arxiv.org/abs/2204.07118).
     ImageNet-1k weights from https://github.com/facebookresearch/deit.
     """
     model_args = dict(patch_size=14, embed_dim=1280, depth=32, num_heads=16, no_embed_class=True, init_values=1e-6)

@@ -1,3 +1,12 @@
+""" MobileNet-V5
+
+The MobileNet-V5 vision encoder from Google's Gemma 3n. Built from MobileNet-V4 blocks (Universal Inverted
+Residual, Mobile MQA) with a Multi-Scale Fusion VLM adapter. There is no dedicated MobileNet-V5 paper at the time of
+writing, the MobileNet-V4 paper describes the building blocks.
+
+Papers:
+* `MobileNetV4 - Universal Models for the Mobile Ecosystem` - https://arxiv.org/abs/2404.10518
+"""
 from functools import partial
 from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
@@ -281,14 +290,15 @@ class MobileNetV5(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.classifier
 
-    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         # NOTE: cannot meaningfully change pooling of efficient head after creation
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.global_pool.train(self.training)
-        self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        self.flatten.train(self.training)
+        if global_pool is not None:
+            self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+            self.global_pool.train(self.training)
+            self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
+            self.flatten.train(self.training)
         self.classifier = Linear(self.head_hidden_size, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.classifier.train(self.training)
 
@@ -342,7 +352,10 @@ class MobileNetV5(nn.Module):
             blocks = self.blocks[:max_index]
         for blk in blocks:
             feat_idx += 1
-            x = blk(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint_seq(blk, x)
+            else:
+                x = blk(x)
             if feat_idx in take_indices:
                 intermediates.append(x)
 
@@ -388,10 +401,13 @@ class MobileNetV5(nn.Module):
                 intermediates.append(x)
             for blk in self.blocks:
                 feat_idx += 1
-                # FIXME fix grad checkpointing
-                x = blk(x)
+                if self.grad_checkpointing and not torch.jit.is_scripting():
+                    x = checkpoint_seq(blk, x)
+                else:
+                    x = blk(x)
                 if feat_idx in self.msfa_indices:
                     intermediates.append(x)
+            # NOTE: MSFA is not checkpointed, it takes a list of tensors which re-entrant checkpointing cannot track
             x = self.msfa(intermediates)
         else:
             x = self.conv_stem(x)
@@ -504,6 +520,10 @@ class MobileNetV5Encoder(nn.Module):
 
         efficientnet_init_weights(self)
 
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable: bool = True):
+        self.grad_checkpointing = enable
+
     def forward_intermediates(
             self,
             x: torch.Tensor,
@@ -562,7 +582,10 @@ class MobileNetV5Encoder(nn.Module):
 
         for blk in blocks:
             feat_idx += 1
-            x = blk(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint_seq(blk, x)
+            else:
+                x = blk(x)
             if feat_idx in take_indices:
                 intermediates.append(x)
             if feat_idx in self.msfa_indices:
@@ -583,11 +606,14 @@ class MobileNetV5Encoder(nn.Module):
 
         for blk in self.blocks:
             feat_idx += 1
-            # FIXME fix grad checkpointing
-            x = blk(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint_seq(blk, x)
+            else:
+                x = blk(x)
             if feat_idx in self.msfa_indices:
                 intermediates.append(x)
 
+        # NOTE: MSFA is not checkpointed, it takes a list of tensors which re-entrant checkpointing cannot track
         return self.msfa(intermediates)
 
     def forward_head(self, x: torch.Tensor) -> torch.Tensor:

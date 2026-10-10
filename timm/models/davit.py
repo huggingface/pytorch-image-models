@@ -1,6 +1,8 @@
 """ DaViT: Dual Attention Vision Transformers
 
-As described in https://arxiv.org/abs/2204.03645
+Papers:
+* `DaViT: Dual Attention Vision Transformers` - https://arxiv.org/abs/2204.03645
+* `Florence-2: Advancing a Unified Representation for a Variety of Vision Tasks` - https://arxiv.org/abs/2311.06242
 
 Input size invariant transformer architecture that combines channel and spacial
 attention in each block. The attention mechanisms used are linear in complexity.

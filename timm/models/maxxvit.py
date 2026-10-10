@@ -14,7 +14,7 @@ match paper, BUT, without any official pretrained weights it's difficult to conf
 
 Papers:
 
-MaxViT: Multi-Axis Vision Transformer - https://arxiv.org/abs/2204.01697
+* `MaxViT: Multi-Axis Vision Transformer` - https://arxiv.org/abs/2204.01697
 @article{tu2022maxvit,
   title={MaxViT: Multi-Axis Vision Transformer},
   author={Tu, Zhengzhong and Talebi, Hossein and Zhang, Han and Yang, Feng and Milanfar, Peyman and Bovik, Alan and Li, Yinxiao},
@@ -22,7 +22,7 @@ MaxViT: Multi-Axis Vision Transformer - https://arxiv.org/abs/2204.01697
   year={2022},
 }
 
-CoAtNet: Marrying Convolution and Attention for All Data Sizes - https://arxiv.org/abs/2106.04803
+* `CoAtNet: Marrying Convolution and Attention for All Data Sizes` - https://arxiv.org/abs/2106.04803
 @article{DBLP:journals/corr/abs-2106-04803,
   author    = {Zihang Dai and Hanxiao Liu and Quoc V. Le and Mingxing Tan},
   title     = {CoAtNet: Marrying Convolution and Attention for All Data Sizes},
@@ -73,6 +73,7 @@ from timm.layers import (
     use_fused_attn,
     resize_rel_pos_bias_table,
 )
+from ._input import update_model_input_size
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
@@ -1601,6 +1602,15 @@ class MaxxVit(nn.Module):
             feat_size = tuple([(r - 1) // 2 + 1 for r in feat_size])
             stage.set_input_size(feat_size=feat_size, window_size=window_size, grid_size=grid_size)
 
+        # record the partition sizes in use, the constructor overlays transformer_* args onto the transformer cfg
+        update_model_input_size(
+            self,
+            self.img_size,
+            transformer_window_size=window_size,
+            transformer_grid_size=grid_size,
+            transformer_partition_ratio=self.partition_ratio,
+        )
+
     @torch.jit.ignore
     def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
         matcher = dict(
@@ -2234,6 +2244,21 @@ model_cfgs = dict(
         head_hidden_size=1536,
         **_tf_cfg(),
     ),
+
+    # tiny test models
+    test_maxvit=MaxxVitCfg(
+        embed_dim=(32, 64, 96, 128),
+        depths=(1, 1, 1, 1),
+        block_type=('M',) * 4,
+        stem_width=(16, 32),
+        **_rw_max_cfg(),
+    ),
+    test_coatnet=MaxxVitCfg(
+        embed_dim=(32, 64, 96, 128),
+        depths=(1, 1, 2, 1),
+        stem_width=(16, 32),
+        **_rw_max_cfg(stride_mode='pool', conv_output_bias=True, conv_attn_ratio=0.25),
+    ),
 )
 
 
@@ -2502,6 +2527,9 @@ default_cfgs = generate_default_cfgs({
     'maxvit_xlarge_tf_512.in21k_ft_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 512, 512), pool_size=(16, 16), crop_pct=1.0, crop_mode='squash'),
+
+    'test_maxvit.untrained': _cfg(input_size=(3, 160, 160), pool_size=(5, 5)),
+    'test_coatnet.untrained': _cfg(input_size=(3, 160, 160), pool_size=(5, 5)),
 })
 
 
@@ -2839,3 +2867,15 @@ def maxvit_xlarge_tf_384(pretrained: bool = False, **kwargs: Any) -> MaxxVit:
 def maxvit_xlarge_tf_512(pretrained: bool = False, **kwargs: Any) -> MaxxVit:
     """MaxViT XLarge model from TensorFlow at 512x512."""
     return _create_maxxvit('maxvit_xlarge_tf_512', 'maxvit_xlarge_tf', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def test_maxvit(pretrained: bool = False, **kwargs: Any) -> MaxxVit:
+    """MaxViT test model, tiny for unit tests."""
+    return _create_maxxvit('test_maxvit', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def test_coatnet(pretrained: bool = False, **kwargs: Any) -> MaxxVit:
+    """CoAtNet test model, tiny for unit tests."""
+    return _create_maxxvit('test_coatnet', pretrained=pretrained, **kwargs)

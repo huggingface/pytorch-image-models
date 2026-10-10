@@ -1,8 +1,13 @@
 """
 An implementation of GhostNet & GhostNetV2 Models as defined in:
-GhostNet: More Features from Cheap Operations. https://arxiv.org/abs/1911.11907
-GhostNetV2: Enhance Cheap Operation with Long-Range Attention. https://proceedings.neurips.cc/paper_files/paper/2022/file/40b60852a4abdaa696b5a1a78da34635-Paper-Conference.pdf
-GhostNetV3: Exploring the Training Strategies for Compact Models. https://arxiv.org/abs/2404.11202
+
+Papers:
+    * `GhostNet: More Features from Cheap Operations` - https://arxiv.org/abs/1911.11907
+    * `GhostNetV2: Enhance Cheap Operation with Long-Range Attention` - https://arxiv.org/abs/2211.12905
+    * `GhostNetV3: Exploring the Training Strategies for Compact Models` - https://arxiv.org/abs/2404.11202
+
+GhostNetV2 NeurIPS 2022 paper:
+https://proceedings.neurips.cc/paper_files/paper/2022/file/40b60852a4abdaa696b5a1a78da34635-Paper-Conference.pdf
 
 The train script & code of models at:
 Original model: https://github.com/huawei-noah/CV-backbones/tree/master/ghostnet_pytorch
@@ -738,9 +743,11 @@ class GhostNet(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.classifier
 
-    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
+        if global_pool is None:
+            global_pool = self.global_pool.pool_type
         # cannot meaningfully change pooling of efficient head after creation
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.global_pool.train(self.training)
