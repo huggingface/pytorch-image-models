@@ -4,6 +4,7 @@ Hacked together by / Copyright 2019, Ross Wightman
 """
 import io
 import logging
+import os
 from typing import Optional
 
 import torch
@@ -15,7 +16,8 @@ from .readers import create_reader
 _logger = logging.getLogger(__name__)
 
 
-_ERROR_RETRY = 20
+# max consecutive samples that fail to load (skipped w/ a warning) before raising
+_ERROR_RETRY = int(os.environ.get('TIMM_DATASET_MAX_RETRIES') or 10)
 
 
 class ImageDataset(data.Dataset):
@@ -54,7 +56,12 @@ class ImageDataset(data.Dataset):
         for attempt in range(self._max_retries):
             try:
                 img, target, *features = self.reader[index]
-                img = img.read() if self.load_bytes else Image.open(img)
+                if self.load_bytes:
+                    img = img.read()
+                else:
+                    img = Image.open(img)
+                    if self.input_img_mode:
+                        img = img.convert(self.input_img_mode)  # decodes pixels, so decode errors are skipped
                 break
             except (IOError, OSError) as e:  # be specific
                 _logger.warning(f'Skipped sample (index {index}). {e}')
@@ -62,8 +69,6 @@ class ImageDataset(data.Dataset):
         else:
             raise RuntimeError(f"Failed to load {self._max_retries} consecutive samples")
 
-        if self.input_img_mode and not self.load_bytes:
-            img = img.convert(self.input_img_mode)
         if self.transform is not None:
             img = self.transform(img)
 
