@@ -1,3 +1,6 @@
+import io
+import tarfile
+
 import numpy as np
 import pytest
 import torch
@@ -15,6 +18,94 @@ from timm.data.auto_augment import (
     rand_augment_transform,
 )
 from timm.data.mixup import rand_bbox_minmax
+
+
+@pytest.fixture(params=['PNG', 'JPEG'])
+def truncated_imagefolder(tmp_path, request):
+    image_format = request.param
+    suffix = '.png' if image_format == 'PNG' else '.jpg'
+    image = Image.fromarray(np.random.default_rng(0).integers(0, 256, (64, 64, 3), dtype=np.uint8))
+    buffer = io.BytesIO()
+    image.save(buffer, format=image_format)
+    encoded = buffer.getvalue()
+    truncated = encoded[:len(encoded) // 2]
+    with Image.open(io.BytesIO(truncated)) as opened:
+        assert opened.size == (64, 64)  # The header opens; decoding the pixels fails later.
+    (tmp_path / 'bad').mkdir()
+    (tmp_path / 'good').mkdir()
+    (tmp_path / 'bad' / ('0' + suffix)).write_bytes(truncated)
+    Image.new('RGB', (64, 64), (0, 128, 0)).save(tmp_path / 'good' / ('1' + suffix))
+    return tmp_path, truncated
+
+
+def imagefolder_or_tar(root, backend):
+    if backend == 'tar':
+        archive = root / 'images.tar'
+        with tarfile.open(archive, 'w') as handle:
+            for path in sorted(root.glob('*/*')):
+                handle.add(path, arcname=path.relative_to(root).as_posix())
+        return archive
+    return root
+
+
+@pytest.mark.parametrize('backend', ['folder', 'tar'])
+@pytest.mark.parametrize('input_img_mode', ['RGB', 'L'])
+def test_image_dataset_retries_pixel_decode_errors(truncated_imagefolder, backend, input_img_mode, caplog):
+    root, _ = truncated_imagefolder
+    dataset = create_dataset('', root=str(imagefolder_or_tar(root, backend)), split='', input_img_mode=input_img_mode)
+
+    image, target = dataset[0]
+
+    assert target == 1
+    assert image.mode == input_img_mode
+    with Image.open(next((root / 'good').iterdir())) as original:
+        expected = original.convert(input_img_mode)
+        np.testing.assert_array_equal(np.asarray(image), np.asarray(expected))
+    assert len(caplog.records) == 1
+    assert 'Skipped sample (index 0)' in caplog.text
+
+
+@pytest.mark.parametrize('backend', ['folder', 'tar'])
+def test_image_dataset_limits_pixel_decode_retries(truncated_imagefolder, backend, caplog):
+    root, _ = truncated_imagefolder
+    next((root / 'good').iterdir()).unlink()
+    dataset = create_dataset('', root=str(imagefolder_or_tar(root, backend)), split='')
+
+    with pytest.raises(RuntimeError, match='Failed to load 20 consecutive samples'):
+        dataset[0]
+
+    assert len(caplog.records) == 20
+
+
+@pytest.mark.parametrize('backend', ['folder', 'tar'])
+@pytest.mark.parametrize('load_bytes', [False, True])
+def test_image_dataset_can_defer_pixel_decoding(truncated_imagefolder, backend, load_bytes, caplog):
+    root, truncated = truncated_imagefolder
+    dataset = create_dataset(
+        '', root=str(imagefolder_or_tar(root, backend)), split='', load_bytes=load_bytes, input_img_mode=None)
+
+    image, target = dataset[0]
+
+    assert target == 0
+    if load_bytes:
+        assert image == truncated
+    else:
+        assert image.size == (64, 64)
+        image.close()
+    assert not caplog.records
+
+
+def test_image_dataset_does_not_retry_transform_errors(tmp_path, caplog):
+    def transform(image):
+        raise OSError('transform failure')
+
+    Image.new('RGB', (64, 64)).save(tmp_path / 'image.png')
+    dataset = create_dataset('', root=str(tmp_path), split='', transform=transform)
+
+    with pytest.raises(OSError, match='transform failure'):
+        dataset[0]
+
+    assert not caplog.records
 
 
 def test_hfds_sliced_imagefolder_split(tmp_path, monkeypatch):

@@ -55,6 +55,8 @@ class ImageDataset(data.Dataset):
             try:
                 img, target, *features = self.reader[index]
                 img = img.read() if self.load_bytes else Image.open(img)
+                if self.input_img_mode and not self.load_bytes:
+                    img = img.convert(self.input_img_mode)
                 break
             except (IOError, OSError) as e:  # be specific
                 _logger.warning(f'Skipped sample (index {index}). {e}')
@@ -62,8 +64,6 @@ class ImageDataset(data.Dataset):
         else:
             raise RuntimeError(f"Failed to load {self._max_retries} consecutive samples")
 
-        if self.input_img_mode and not self.load_bytes:
-            img = img.convert(self.input_img_mode)
         if self.transform is not None:
             img = self.transform(img)
 
