@@ -64,8 +64,9 @@ model of the same name. `hf_hub:` is a deprecated alias of `hf-hub:`.
 
 - **`pretrained`** loads the weights of the pretrained cfg, from `state_dict` or `file` if set, otherwise from the
   Hub (`hf_hub_id`) when `huggingface_hub` is installed, or the `url`. If `num_classes` differs from the pretrained
-  cfg the classifier weights are discarded (left at random init), if `in_chans != 3` the first conv weights are
-  adapted, so a pretrained model can be created for fine-tuning in one call.
+  cfg, the classifier weights are discarded (left at random init). If `in_chans` differs from the source checkpoint's
+  channel count (`input_size[0]` in the pretrained cfg), the first conv weights are adapted where supported, so a
+  pretrained model can be created for fine-tuning in one call.
 - **`num_classes`** sets the classifier size, `0` removes the classifier. **`global_pool`** sets the pooling type,
   the options are model specific (e.g. `avg`, `max`, `avgmax`, `catavgmax` for most convnets, `token`, `avg`,
   `map` for ViT), `''` disables pooling. **`in_chans`** sets the input channels. The `num_classes` and `in_chans`
