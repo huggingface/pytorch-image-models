@@ -520,6 +520,18 @@ def test_reset_classifier_keeps_pool(model_name):
         assert not torch.allclose(pooled_avg, expected)
 
 
+
+@pytest.mark.base
+def test_gcvit_batch_consistency():
+    # each image's global query must reach only that image's windows: batched output == per-image output
+    torch.manual_seed(0)
+    model = create_model('gcvit_xxtiny', pretrained=False).eval()
+    x = torch.randn(3, 3, 224, 224)
+    with torch.no_grad():
+        batched = model(x)
+        single = torch.cat([model(x[i:i + 1]) for i in range(x.shape[0])])
+    torch.testing.assert_close(batched, single, rtol=1e-4, atol=1e-4)
+
 @pytest.mark.base
 @pytest.mark.parametrize(
     'model_name',
