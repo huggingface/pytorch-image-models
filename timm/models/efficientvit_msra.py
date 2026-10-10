@@ -614,13 +614,16 @@ class EfficientVitMsra(nn.Module):
                 the effective window resolution.
         """
         if img_size is not None:
-            self.img_size = min(to_2tuple(img_size))
+            img_size = to_2tuple(img_size)
+            self.img_size = min(img_size)
         resolution = self.img_size // self.patch_embed.patch_size
         for stage in self.stages:
             stage.set_input_size(resolution)
             resolution = stage.resolution
 
-        update_model_input_size(self, self.img_size)
+        if img_size is not None:
+            # record the full (h, w) size, self.img_size only keeps the min dim that sets the window resolution
+            update_model_input_size(self, img_size)
 
     @torch.jit.ignore
     def no_weight_decay(self):

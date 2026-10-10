@@ -377,6 +377,18 @@ def save_config_for_hf(
         except (TypeError, ValueError) as e:
             raise ValueError(f'Model argument {key!r} is not serializable; provide a model_args replacement.') from e
     pretrained_cfg.update(resolve_input_data_config(model, args=data_config, pretrained_cfg=pretrained_cfg))
+    # explicit export preprocessing replaces the source checkpoint's test time recommendations, unless given too
+    data_config = data_config or {}
+    if data_config.get('test_input_size') is not None:
+        pretrained_cfg['test_input_size'] = tuple(data_config['test_input_size'])
+        pretrained_cfg.pop('test_pool_size', None)
+    elif data_config.get('input_size') is not None or data_config.get('img_size') is not None:
+        pretrained_cfg.pop('test_input_size', None)
+        pretrained_cfg.pop('test_pool_size', None)
+    if data_config.get('test_crop_pct') is not None:
+        pretrained_cfg['test_crop_pct'] = data_config['test_crop_pct']
+    elif data_config.get('crop_pct') is not None:
+        pretrained_cfg.pop('test_crop_pct', None)
     pretrained_cfg['fixed_input_size'] = current_input['fixed_input_size']
     pretrained_cfg['first_conv'] = current_input['first_conv']
     pretrained_cfg['custom_load'] = False  # exports always contain native timm state dicts

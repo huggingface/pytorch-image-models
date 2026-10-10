@@ -297,6 +297,45 @@ def test_model_traits_are_independent_and_follow_resize_and_head_reset():
     assert get_model_args(model)['num_classes'] == 5
 
 
+@pytest.mark.parametrize('data_config,expected_test,expected', [
+    # explicit preprocessing replaces the source checkpoint's test time recommendations (288, crop 1.0)
+    (dict(input_size=(3, 384, 384), crop_pct=0.9), ((3, 384, 384), 0.9), ((3, 384, 384), 0.9)),
+    # unless test settings are given too
+    (
+        dict(input_size=(3, 384, 384), test_input_size=(3, 448, 448), crop_pct=0.9, test_crop_pct=1.0),
+        ((3, 448, 448), 1.0),
+        ((3, 384, 384), 0.9),
+    ),
+    # w/o explicit preprocessing the source recommendations are kept
+    (None, ((3, 288, 288), 1.0), ((3, 224, 224), 0.95)),
+])
+def test_export_data_config_test_size_roundtrip(tmp_path, data_config, expected_test, expected):
+    model = timm.create_model('resnet50.a1_in1k')
+    assert model.pretrained_cfg['test_input_size'] == (3, 288, 288)
+    save_for_hf(model, tmp_path, data_config=data_config)
+    restored = timm.create_model('local-dir:' + str(tmp_path))
+    for use_test_size, (input_size, crop_pct) in ((True, expected_test), (False, expected)):
+        config = resolve_input_data_config(restored, use_test_size=use_test_size)
+        assert (config['input_size'], config['crop_pct']) == (input_size, crop_pct)
+
+
+def test_efficientvit_msra_rectangular_resize_roundtrip(tmp_path):
+    # the model only keeps the min dim for its attention windows, the input config must keep the full size
+    model = timm.create_model('efficientvit_m0').eval()
+    model.set_input_size(img_size=(256, 320))
+    assert get_model_input_config(model)['input_size'] == (3, 256, 320)
+    model.set_input_size()
+    assert get_model_input_config(model)['input_size'] == (3, 256, 320)
+    data_config = resolve_input_data_config(model, dict(input_size=(3, 256, 320)))
+    assert data_config['input_size'] == (3, 256, 320)
+    save_for_hf(model, tmp_path, data_config=data_config)
+    restored = timm.create_model('local-dir:' + str(tmp_path), pretrained=True).eval()
+    assert get_model_input_config(restored)['input_size'] == (3, 256, 320)
+    x = torch.randn(1, 3, 256, 320)
+    with torch.no_grad():
+        torch.testing.assert_close(restored(x), model(x), rtol=0, atol=0)
+
+
 def test_export_tracks_reset_pool_and_omits_in_memory_weight_source(tmp_path):
     model = timm.create_model('resnet18', num_classes=7)
     model.reset_classifier(3, global_pool='catavgmax')
