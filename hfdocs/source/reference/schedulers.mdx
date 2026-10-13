@@ -50,10 +50,29 @@ Durations (`num_epochs`, `warmup_epochs`, `decay_epochs`, ...) are always given 
 to updates when `step_on_epochs=False`. Schedulers can also be constructed directly from their classes, durations are
 then in the unit they are stepped in (`t_in_epochs`).
 
-The training script (`train.py`) exposes the factory arguments as `--sched`, `--epochs`, `--warmup-epochs`,
-`--warmup-lr`, `--warmup-prefix`, `--min-lr`, `--decay-epochs`, `--decay-milestones`, `--decay-rate`,
-`--cooldown-epochs`, `--patience-epochs`, `--lr-noise*`, `--lr-cycle-*`, `--lr-k-decay`, `--lr-decay-fn` and
-`--lr-stable-timescale`. `--sched-on-updates` steps per update instead of per epoch.
+The training script (`train.py`) exposes the factory arguments through these flags:
+
+- **`--sched`** selects the schedule.
+- **`--epochs`** sets the schedule length.
+- **`--sched-on-updates`** steps per update instead of per epoch.
+- **`--warmup-epochs`** sets the warmup duration.
+- **`--warmup-lr`** sets the initial warmup learning rate.
+- **`--warmup-prefix`** adds warmup before the schedule instead of overlapping its start.
+- **`--min-lr`** sets the minimum learning rate.
+- **`--decay-epochs`** sets the step-decay interval or the final decay duration for WSD / rsqrt.
+- **`--decay-milestones`** sets the decay epochs for the multistep schedule.
+- **`--decay-rate`** sets the decay factor, or the power for the polynomial schedule.
+- **`--cooldown-epochs`** adds epochs at the minimum learning rate after the schedule ends.
+- **`--patience-epochs`** sets the plateau scheduler's patience.
+- **`--lr-noise`** selects the part of the schedule with learning rate noise.
+- **`--lr-noise-pct`** limits the noise magnitude.
+- **`--lr-noise-std`** sets the noise standard deviation.
+- **`--lr-cycle-mul`** sets the cycle length multiplier.
+- **`--lr-cycle-decay`** sets the peak learning rate multiplier between cycles.
+- **`--lr-cycle-limit`** sets the number of cycles.
+- **`--lr-k-decay`** sets k-decay for cosine / polynomial schedules.
+- **`--lr-decay-fn`** selects the final decay function for WSD / rsqrt.
+- **`--lr-stable-timescale`** sets the rsqrt stable-phase timescale.
 
 ### Schedules
 
@@ -91,13 +110,18 @@ The training script (`train.py`) exposes the factory arguments as `--sched`, `--
 
 ### WSD and rsqrt
 
-The [`WSDLRScheduler`](#timm.scheduler.wsd_lr.WSDLRScheduler) has three phases, a linear warmup, a stable phase and
-a decay to `min_lr` over the final `decay_epochs` (a value in (0, 1) is a fraction of the stable + decay length,
-20% by default). The decay function is selected w/ `decay_fn` (`--lr-decay-fn`): `1-sqrt` (default for `wsd`),
-`linear` (default for `rsqrt`), `cosine`, `power` or `exp`. The `rsqrt` stable phase decays as
-`(1 + t / timescale) ** -0.5` from the end of warmup, `stable_timescale` (`--lr-stable-timescale`, in epochs)
-defaults to the warmup length and must be set when there is no warmup. The class also supports a generalized
-`power` stable phase and custom decay functions.
+The [`WSDLRScheduler`](#timm.scheduler.wsd_lr.WSDLRScheduler) has three phases: a linear warmup, a stable phase and
+a decay to `min_lr`.
+
+- **`decay_epochs`** sets the final decay duration. A value in (0, 1) is a fraction of the stable + decay length,
+  20% by default.
+- **`decay_fn`** (`--lr-decay-fn`) selects `1-sqrt` (default for `wsd`), `linear` (default for `rsqrt`), `cosine`,
+  `power` or `exp`.
+- **`stable_timescale`** (`--lr-stable-timescale`, in epochs) controls the `rsqrt` stable phase, which decays as
+  `(1 + t / timescale) ** -0.5` from the end of warmup. It defaults to the warmup length and must be set when there
+  is no warmup.
+
+The class also supports a generalized `power` stable phase and custom decay functions.
 
 The final anneal is where WSD schedules get most of their benefit, so step per update (`--sched-on-updates`), or add
 a cooldown epoch, when the decay phase is only a few epochs long. Stepped per epoch, the last epoch of a short decay

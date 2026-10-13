@@ -21,7 +21,7 @@ To train an SE-ResNet34 on ImageNet, locally distributed, 4 GPUs, one process pe
 
 ### Config files
 
-Any training argument can be given in a YAML file via `--config`, keyed by the argument name with underscores (`--weight-decay` becomes `weight_decay`). Command line arguments override the file. Each run writes the full set of effective arguments to `args.yaml` in its output folder, and that file is itself a valid `--config`, so a run can be reproduced with `python train.py --config output/train/my-run/args.yaml`. Config keys are validated against the script's arguments: unknown keys warn, invalid choices or non-numeric values for numeric arguments error.
+Any training argument can be given in a YAML file via `--config`, keyed by the argument name with underscores (`--weight-decay` becomes `weight_decay`). Command line arguments override the file. Each run writes the full set of effective arguments to `args.yaml` in its output folder, and that file is itself a valid `--config`, so a run can be reproduced with `python train.py --config output/train/my-run/args.yaml --experiment my-run-2`. The file records `output`, `experiment` and `resume` too, so without a new experiment name the command writes into the original folder, and with `--resume auto` continues the original run rather than repeating it. Config keys are validated against the script's arguments: unknown keys warn, invalid choices or non-numeric values for numeric arguments error.
 
 ### Resuming and milestone checkpoints
 
@@ -57,7 +57,7 @@ python sweep.py run --name lr-wd --sweep lr=1e-4,3e-4,1e-3 --sweep weight_decay=
     -- --model vit_small_patch16_224 --data-dir /data/imagenet --sched cosine --epochs 100 --amp
 ```
 
-A WSD sweep shares one stable trunk per hyperparameter combination across many cooldowns. For each learning rate below, the trunk runs to 30 epochs with milestones at 18, 24 and 30, and a 6 epoch cooldown is branched from each milestone, 4 trunks and 12 cooldowns in total instead of 12 full runs. Jobs needing more than one GPU are launched with `torchrun`:
+A WSD sweep shares one stable trunk per hyperparameter combination across many cooldowns. For each learning rate below, the trunk runs to 30 epochs with milestones at 18, 24 and 30, and a 6 epoch cooldown is branched from each milestone, 4 trunks and 12 cooldowns in total instead of 12 full runs. Cooldowns start as soon as their milestone exists, while the trunk continues. Jobs needing more than one GPU are launched with `torchrun`:
 
 ```bash
 python sweep.py run --name vit-wsd --sweep lr=1e-3,5e-4,2e-4,1e-4 \
@@ -65,11 +65,26 @@ python sweep.py run --name vit-wsd --sweep lr=1e-3,5e-4,2e-4,1e-4 \
     -- --model vit_small_patch16_224 --data-dir /data/imagenet --warmup-epochs 3 --warmup-prefix --amp
 ```
 
-In a WSD sweep the planner owns `--sched`, `--epochs`, `--decay-epochs` and `--lr-decay-fn` (and `--output`, `--experiment`, `--resume`, `--stop-epoch`, `--save-epochs` in every sweep), so they can't be given on the command line or swept. Cooldowns start as soon as their milestone exists, while the trunk continues.
+The planner owns the following flags, so they can't be given on the command line or swept.
+
+In every sweep:
+
+* `--output`
+* `--experiment`
+* `--resume`
+* `--stop-epoch`
+* `--save-epochs`
+
+Additionally, in a WSD sweep:
+
+* `--sched` (it may be given as `wsd`, which the planner sets anyway)
+* `--epochs`
+* `--decay-epochs`
+* `--lr-decay-fn`
 
 A YAML spec adds random search with distributions, paired (zipped) axes, repeats over seeds and a base config file, see the docstring at the top of `sweep.py` for the schema. `python sweep.py plan spec.yaml` writes the configs and `graph.dot` without running anything.
 
-The sweep lives in `output/sweeps/<name>/` with one folder per trial, named after the swept values (`trial-000-lr0.001`), each containing the job experiment folders. While it runs, or afterwards:
+The sweep lives in `output/sweeps/<name>/`, relative to the spec file (or the working directory for a command line sweep), with one folder per trial, named after the swept values (`trial-000-lr0.001`), each containing the job experiment folders. While it runs, or afterwards:
 
 ```bash
 python sweep.py status output/sweeps/vit-wsd    # job states and progress
@@ -78,7 +93,7 @@ python sweep.py results output/sweeps/vit-wsd   # ranked endpoint metrics, writt
 
 Results report the final epoch metric of every job, with the best epoch as extra columns and mean / std over repeats. Compare runs of equal total epochs: a cooldown branched at 30 epochs is not budget equivalent to one branched at 18. Without a validation set the ranking falls back to the training loss, and the endpoint checkpoints can be evaluated with `validate.py`.
 
-Running `sweep.py run` again on an interrupted sweep resumes it: finished jobs are skipped and a job with a partial run continues from its own `last.pth.tar`. Workers on several machines sharing the sweep folder can each run it, jobs are claimed atomically. The generated paths are fixed when the plan is written, so plan again under a new location rather than moving a sweep folder.
+Running `sweep.py run` again on an interrupted sweep resumes it: finished jobs are skipped and a job with a partial run continues from its own `last.pth.tar`. Workers on several machines sharing the sweep folder can each run it, jobs are claimed atomically. A worker can tell when a job of its own host died, but not one on another host: if a remote worker went down mid-job, delete its claim folder `state/<job>.claim` (`/` in the job id becomes `__`) and the job is picked up on the next poll. The generated paths are fixed when the plan is written, so plan again under a new location rather than moving a sweep folder.
 
 
 ## Validation / Inference Scripts
@@ -101,7 +116,18 @@ python inference.py --data-dir /imagenet/validation/ --model mobilenetv3_large_1
 
 ### Multi-label classification
 
-Use `--task multilabel` for images with multiple independent labels. The target column contains a list of positive, zero-based class IDs; `--num-classes` sets the vocabulary size. Labels are converted to float multi-hot targets before batching, and empty lists represent images with no positive labels. Datasets that instead store a dense multi-hot vector of length `--num-classes` (bool, int, or float values in `[0, 1]`) pass `--target-format multihot`; the vector is used as-is, so soft values train directly with BCE and are binarized at 0.5 for the evaluation metrics. Class maps for multi-hot targets must be keyed by source class index. Without the flag every list is read as class indices, since an integer multi-hot vector is indistinguishable from an index list.
+Use `--task multilabel` for images with multiple independent labels.
+
+* **`--num-classes`** sets the vocabulary size.
+* **`--target-format indices`** (default) reads the target column as a list of positive, zero-based class IDs.
+  Labels are converted to float multi-hot targets before batching, and empty lists represent images with no
+  positive labels.
+* **`--target-format multihot`** reads a dense multi-hot vector of length `--num-classes` (bool, int, or float values
+  in `[0, 1]`). The vector is used as-is, so soft values train directly with BCE and are binarized at 0.5 for the
+  evaluation metrics. Class maps for multi-hot targets must be keyed by source class index.
+
+Without the flag every list is read as class indices, since an integer multi-hot vector is indistinguishable from an
+index list.
 
 The [plant pathology dataset](https://huggingface.co/datasets/timm/plant-pathology-2021) provides this format: an `image` column and a `labels` column containing a sequence of `ClassLabel` values. Its six classes are `complex`, `frog_eye_leaf_spot`, `healthy`, `powdery_mildew`, `rust`, and `scab`. For example, `[5, 1, 0]` becomes `[1, 1, 0, 0, 0, 1]`.
 
@@ -116,28 +142,86 @@ python validate.py --dataset hfds/timm/plant-pathology-2021 \
   --model resnet50 --checkpoint ./output/train/<experiment>/model_best.pth.tar
 ```
 
-`hfids/timm/plant-pathology-2021` supports streaming with the same target format. Multi-label targets are supported by the Hugging Face `hfds` and `hfids` readers, and by WebDataset (`wds`) shards that store a list of class IDs in each sample's `.json` sidecar under the field named by `--target-key` (without `--target-key` the `.cls` file supplies a single class index). The folder and tar readers yield single class indices.
+`hfids/timm/plant-pathology-2021` supports streaming with the same target format. Reader support:
 
-Datasets that store one binary field per label, such as [Wake Vision](https://www.tensorflow.org/datasets/catalog/wake_vision), can pass a comma separated list of field names instead: `--target-key person,depiction,body_part`. Each field becomes one class in the order listed, values greater than zero count as positive, and `--num-classes` must equal the number of fields. Multi-field keys define their own format, so `--target-format` stays at its default. This works for the `hfds`, `hfids`, and `tfds` readers, and for WebDataset when the fields are in the `.json` sidecar. Fields nested in sub-dicts are addressed with `/`, for example `--input-key input --target-key output/pollen_output,output/wasps_output` for the TFDS `bee_dataset`; single target keys accept the same paths, and a literal field name containing `/` (such as TFDS `image/filename`) takes precedence over a path. Standard and NaFlex loaders support multi-label targets, including mixup and cutmix; NaFlex training currently requires a map-style dataset such as `hfds`.
+* **Hugging Face `hfds` and `hfids`** support multi-label targets.
+* **WebDataset (`wds`)** supports lists of class IDs stored in each sample's `.json` sidecar under the field named
+  by `--target-key`. Without `--target-key`, the `.cls` file supplies a single class index.
+* **Folder and tar readers** yield single class indices.
+
+Datasets that store one binary field per label, such as
+[Wake Vision](https://www.tensorflow.org/datasets/catalog/wake_vision), use these settings:
+
+* **`--target-key person,depiction,body_part`** selects a comma separated list of fields. Each field becomes one class
+  in the order listed, and values greater than zero count as positive. This works for the `hfds`, `hfids`, and `tfds`
+  readers, and for WebDataset when the fields are in the `.json` sidecar.
+* **`--num-classes`** must equal the number of fields.
+* **`--target-format`** stays at its default, since multi-field keys define their own format.
+* **Nested field paths** use `/`, for example `--input-key input --target-key output/pollen_output,output/wasps_output`
+  for the TFDS `bee_dataset`. Single target keys accept the same paths. A literal field name containing `/`
+  (such as TFDS `image/filename`) takes precedence over a path.
+
+Standard and NaFlex loaders support multi-label targets, including mixup and cutmix; NaFlex training currently
+requires a map-style dataset such as `hfds`.
 
 The task trains with binary cross-entropy with logits. Smoothing defaults to zero for multi-label training; setting `--smoothing s` moves each binary target to `target * (1 - s) + 0.5 * s`, applied by Mixup/CutMix when they are active and by the loss otherwise. Existing `--bce-sum` and `--bce-target-thresh` options also apply. Distillation and JSD loss are not supported by this task.
 
 `--loss` selects other losses (`bce` is the multi-label default):
 
-* `asl`: [Asymmetric Loss](https://arxiv.org/abs/2009.14119), tuned with `--asl-gamma-neg` (default 4), `--asl-gamma-pos` (default 1), and `--asl-clip` (default 0.05). It follows the same smoothing and Mixup/CutMix behavior as BCE and is computed in float32 so it is safe with `--amp`. `--asl-reduction batchmean` (default) sums the loss over classes and averages over the batch; `sum` restores the original ASL reduction, which also sums over the batch so the effective learning rate scales with batch size.
-* `twoway`: [Two-way Multi-Label Loss](https://staff.aist.go.jp/takumi.kobayashi/publication/2023/CVPR2023.pdf), contrasting positive and negative logits across the classes of each sample and the samples of each class, with temperatures `--twoway-tp` (default 4) and `--twoway-tn` (default 1). Its logits are ranking scores, so mAP is the meaningful metric; F1 at a sigmoid threshold is not calibrated.
+* `asl`: [Asymmetric Loss](https://arxiv.org/abs/2009.14119). It follows the same smoothing and Mixup/CutMix behavior as
+  BCE and is computed in float32 so it is safe with `--amp`.
+
+  * **`--asl-gamma-neg`** sets focusing for negative targets (default 4).
+  * **`--asl-gamma-pos`** sets focusing for positive targets (default 1).
+  * **`--asl-clip`** sets the probability margin for negatives (default 0.05).
+  * **`--asl-reduction`** defaults to `batchmean`, summing the loss over classes and averaging over the batch.
+    `sum` restores the original ASL reduction, which also sums over the batch so the effective learning rate scales
+    with batch size.
+
+* `twoway`: [Two-way Multi-Label Loss](https://staff.aist.go.jp/takumi.kobayashi/publication/2023/CVPR2023.pdf),
+  contrasting positive and negative logits across the classes of each sample and the samples of each class.
+  Its logits are ranking scores, so mAP is the meaningful metric; F1 at a sigmoid threshold is not calibrated.
+
+  * **`--twoway-tp`** sets the positive logit temperature (default 4).
+  * **`--twoway-tn`** sets the negative logit temperature (default 1).
+
 * `zlpr`: [ZLPR](https://arxiv.org/abs/2208.02955), a hyperparameter-free multi-label extension of softmax cross-entropy with 0 as the built-in logit threshold.
-* `db`: [Distribution-Balanced Loss](https://arxiv.org/abs/2007.09654) for long-tailed multi-label data. BCE with per-sample re-balancing weights that account for label co-occurrence, a negative-tolerant regularization of the logits (`--db-neg-scale`, default 2, and `--db-init-bias`, default 0.05), and a focal term (`--db-focal-gamma`, default 2), with defaults from the reference DB configuration. It needs the training label counts, passed as a class stats file (below) with `--class-stats`. It supports Mixup/CutMix and smoothing.
+* `db`: [Distribution-Balanced Loss](https://arxiv.org/abs/2007.09654) for long-tailed multi-label data. BCE with
+  per-sample re-balancing weights that account for label co-occurrence, negative-tolerant regularization of the
+  logits, and a focal term. It supports Mixup/CutMix and smoothing, with defaults from the reference DB configuration:
+
+  * **`--db-neg-scale`** sets the negative logit scale (default 2).
+  * **`--db-init-bias`** sets the class-prior logit shift factor (default 0.05).
+  * **`--db-focal-gamma`** sets focal focusing (default 2).
+  * **`--class-stats`** supplies the required training label counts as a class stats file (below).
 
 `twoway` and `zlpr` need binary targets, so they do not support Mixup/CutMix or `--smoothing`.
 
-For skewed label distributions, `--loss-pos-weight` weights the positive term of each class and `--loss-class-weight` the whole loss of each class, for `bce` and `asl`. Positive weights balance positives against negatives within a class, which also shifts predictions towards positive (higher recall at a fixed threshold, less calibrated probabilities). Class weights balance the classes against each other and keep calibration. Each flag takes explicit weights (a single value, a comma separated list with one value per class, or a file) or a method name that derives the weights from the training label counts given with `--class-stats`:
+For skewed label distributions, `bce` and `asl` support two weighting flags:
+
+* **`--loss-pos-weight`** weights the positive term of each class, balancing positives against negatives within a
+  class. This also shifts predictions towards positive (higher recall at a fixed threshold, less calibrated
+  probabilities).
+* **`--loss-class-weight`** weights the whole loss of each class, balancing the classes against each other and
+  keeping calibration.
+
+Each flag takes explicit weights (a single value, a comma separated list with one value per class, or a file) or a
+method name that derives the weights from the training label counts given with `--class-stats`:
 
 * `--loss-pos-weight neg_pos`: negatives / positives per class.
 * `--loss-class-weight inv_freq`: inverse class frequency, normalized to a mean of 1.
-* `--loss-class-weight effective_num`: [class-balanced](https://arxiv.org/abs/1901.05555) weights from the effective number of samples (`--loss-weight-beta`, default 0.999), normalized to a mean of 1.
+* `--loss-class-weight effective_num`: [class-balanced](https://arxiv.org/abs/1901.05555) weights from the effective
+  number of samples, normalized to a mean of 1.
 
-`--loss-weight-power` (default 1) is the exponent for `neg_pos` and `inv_freq`, with 0.5 for a softer square root re-weighting, and `--loss-weight-max` caps the derived weights. Both flags can use the same stats. `class_weights.py` counts the labels of a split, with the same dataset arguments as `train.py`, and writes the class stats file (`--method` previews the weights of a method):
+Derived-weight options:
+
+* **`--loss-weight-power`** sets the exponent for `neg_pos` and `inv_freq` (default 1), with 0.5 for a softer square
+  root re-weighting.
+* **`--loss-weight-beta`** sets beta for `effective_num` weights (default 0.999).
+* **`--loss-weight-max`** caps the derived weights.
+
+Both weighting flags can use the same stats. `class_weights.py` counts the labels of a split, with the same dataset
+arguments as `train.py`, and writes the class stats file (`--method` previews the weights of a method):
 
 ```bash
 python class_weights.py --dataset hfds/timm/plant-pathology-2021 --split train \
@@ -148,7 +232,13 @@ python train.py --dataset hfds/timm/plant-pathology-2021 \
   --class-stats stats.json --loss-pos-weight neg_pos --loss-weight-power 0.5 ...
 ```
 
-The deprecated `--bce-loss`, `--jsd-loss`, and `--bce-pos-weight` flags map to `--loss bce`, `--loss jsd`, and `--loss-pos-weight`.
+Deprecated flags:
+
+| Old flag | Replacement |
+|---|---|
+| `--bce-loss` | `--loss bce` |
+| `--jsd-loss` | `--loss jsd` |
+| `--bce-pos-weight` | `--loss-pos-weight` |
 
 Validation reports BCE loss, `map` (mean average precision), `micro_f1`, `macro_f1`, and `sample_f1`. Metrics are percentages and use the complete validation set, including predictions gathered across distributed ranks. Ordered distributed sampler padding is excluded. Exact mAP retains predictions on CPU until evaluation finishes, so its memory use scales with the number of examples and classes. Classes without positives contribute zero AP; F1 values with a zero denominator are zero.
 

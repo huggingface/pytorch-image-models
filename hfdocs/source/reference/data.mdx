@@ -56,12 +56,54 @@ with torch.no_grad():
 
 The [quickstart](../quickstart#image-augmentation) walks through the config to transform steps for inference.
 
-The training script (`train.py`) passes `--input-size`, `--img-size`, `--in-chans`, `--interpolation`, `--mean`,
-`--std` and `--crop-pct` to `resolve_input_data_config` as overrides, `--dataset`, `--data-dir`, `--train-split`,
-`--val-split`, `--class-map`, `--input-img-mode`, `--input-key` and `--target-*` to `create_dataset`, the augmentation
-flags (`--aa`, `--reprob`, `--remode`, `--scale`, `--ratio`, `--hflip`, `--color-jitter`, `--train-interpolation`,
-...), `--workers` and `--no-prefetcher` to `create_loader`, and `--mixup*`, `--cutmix*` and `--smoothing` to
-[`Mixup`](#timm.data.Mixup). See [Scripts](../training_script) for examples.
+The training script (`train.py`) exposes these options for each part of the pipeline.
+
+Input config overrides (`resolve_input_data_config`):
+
+- **`--input-size`** sets the input shape `(C, H, W)`.
+- **`--img-size`** is the square shortcut for `--input-size`, keeping the model's channel count.
+- **`--in-chans`** sets the input channels.
+- **`--interpolation`** sets the resize interpolation.
+- **`--mean`** sets the normalization mean.
+- **`--std`** sets the normalization standard deviation.
+- **`--crop-pct`** sets the evaluation crop fraction.
+
+Dataset creation (`create_dataset`) and target setup:
+
+- **`--dataset`** selects the dataset and reader.
+- **`--data-dir`** sets the dataset root.
+- **`--train-split`** selects the training split.
+- **`--val-split`** selects the validation split.
+- **`--class-map`** supplies the class mapping.
+- **`--input-img-mode`** sets the image color conversion mode.
+- **`--input-key`** selects the image field.
+- **`--target-key`** selects the label field or fields.
+- **`--target-format`** selects class indices or dense multi-hot targets.
+
+Loader and augmentation options (`create_loader`) include:
+
+- **`--aa`** selects the auto-augmentation policy.
+- **`--reprob`** sets the random erasing probability.
+- **`--remode`** selects the random erasing fill mode.
+- **`--scale`** sets the random resized crop scale range.
+- **`--ratio`** sets the random resized crop aspect ratio range.
+- **`--hflip`** sets the horizontal flip probability.
+- **`--color-jitter`** sets color jitter strength.
+- **`--train-interpolation`** sets the training resize interpolation.
+- **`--workers`** sets the number of loader workers.
+- **`--no-prefetcher`** disables the prefetcher.
+
+Mixup and CutMix ([`Mixup`](#timm.data.Mixup)):
+
+- **`--mixup`** sets the Mixup alpha.
+- **`--cutmix`** sets the CutMix alpha.
+- **`--cutmix-minmax`** sets the CutMix box size range.
+- **`--mixup-prob`** sets the probability of mixing.
+- **`--mixup-switch-prob`** sets the probability of choosing CutMix when both methods are enabled.
+- **`--mixup-mode`** selects batch, pair or element-wise mixing.
+- **`--smoothing`** sets label smoothing.
+
+See [Scripts](../training_script) for examples.
 
 ### Data config
 
@@ -99,15 +141,38 @@ The eval crop modes, for an output `size` and `scale_size = floor(size / crop_pc
 crops as above, then converts to a tensor and normalizes. The training transform is a random resized crop
 (`scale=(0.08, 1.0)`, `ratio=(3/4, 4/3)` by default), horizontal flip (`hflip=0.5`), color jitter
 (`color_jitter=0.4`), the optional `auto_augment` policy, tensor conversion and normalization, and random erasing.
-`train_crop_mode='rkrc'` or `'rkrr'` replaces the random resized crop with a random resize that keeps the aspect
-ratio, followed by a center (`rkrc`) or random (`rkrr`) crop or pad. `interpolation='random'` (the `train.py` default
-for training) picks bilinear or bicubic per image. `no_aug=True` reduces training to a resize and center crop.
 
-| `auto_augment` | Augmentation | Options |
-|---|---|---|
-| `rand-m9-mstd0.5-inc1` | [`RandAugment`](https://arxiv.org/abs/1909.13719) via [`rand_augment_transform`](#timm.data.rand_augment_transform) | `m` magnitude (default 10), `n` ops per image (2), `p` probability per op (0.5), `mstd` magnitude noise std, `inc1` ops that increase in severity w/ magnitude, `t<name>` op set (`weights`, `3a`, `3aw`) |
-| `augmix-m5-w4-d2` | [AugMix](https://arxiv.org/abs/1912.02781) via [`augment_and_mix_transform`](#timm.data.auto_augment.augment_and_mix_transform) | `m` severity (3), `w` width (3), `d` depth (-1, random 1-3), `b1` blended, `mstd` |
-| `original`, `originalr`, `v0`, `v0r`, `3a` | [AutoAugment](https://arxiv.org/abs/1805.09501) policy via [`auto_augment_transform`](#timm.data.auto_augment_transform) | `mstd`, e.g. `original-mstd0.5` |
+- **`train_crop_mode='rkrc'` or `'rkrr'`** replaces the random resized crop with a random resize that keeps the aspect
+  ratio, followed by a center (`rkrc`) or random (`rkrr`) crop or pad.
+- **`interpolation='random'`** (the `train.py` default for training) picks bilinear or bicubic per image.
+- **`no_aug=True`** reduces training to a resize and center crop.
+
+| `auto_augment` | Augmentation |
+|---|---|
+| `rand-m9-mstd0.5-inc1` | [`RandAugment`](https://arxiv.org/abs/1909.13719) via [`rand_augment_transform`](#timm.data.rand_augment_transform) |
+| `augmix-m5-w4-d2` | [AugMix](https://arxiv.org/abs/1912.02781) via [`augment_and_mix_transform`](#timm.data.auto_augment.augment_and_mix_transform) |
+| `original`, `originalr`, `v0`, `v0r`, `3a` | [AutoAugment](https://arxiv.org/abs/1805.09501) policy via [`auto_augment_transform`](#timm.data.auto_augment_transform) |
+
+RandAugment option tokens:
+
+- **`m`** sets magnitude (default 10).
+- **`n`** sets the number of ops per image (default 2).
+- **`p`** sets the probability per op (default 0.5).
+- **`mstd`** sets magnitude noise std.
+- **`inc1`** selects ops that increase in severity w/ magnitude.
+- **`t<name>`** selects the op set (`weights`, `3a`, `3aw`).
+
+AugMix option tokens:
+
+- **`m`** sets severity (default 3).
+- **`w`** sets width (default 3).
+- **`d`** sets depth (default -1, random 1-3).
+- **`b1`** enables blended augmentation.
+- **`mstd`** sets magnitude noise std.
+
+AutoAugment accepts `mstd`, e.g. `original-mstd0.5`.
+
+Transform behavior:
 
 - Color jitter is disabled when `auto_augment` is set, unless the string contains `3a`.
 - [`RandomErasing`](#timm.data.random_erasing.RandomErasing) (`re_prob`, `re_count`) runs on the normalized tensor.
@@ -131,22 +196,36 @@ for training) picks bilinear or bicubic per image. `no_aug=True` reduces trainin
 | `tfds/<name>` | [`IterableImageDataset`](#timm.data.IterableImageDataset) on TensorFlow Datasets, `download=True` downloads and builds | TFDS data dir | `tensorflow`, `tensorflow-datasets` |
 | `wds/<name>` | [`IterableImageDataset`](#timm.data.IterableImageDataset) on WebDataset tar shards | Shard folder w/ an `_info.json` (or `info.json`) describing the splits | `webdataset` |
 
-For folder datasets with `search_split=True` (default), `split` selects the sub-folder of `root` named `split` or,
-failing that, a synonym of a train (`train`, `training`) or eval (`val`, `valid`, `validation`, `eval`, `evaluation`)
-split. The default split is `validation`, the default image extensions are `.png`, `.jpg` and `.jpeg`
-(`add_img_extensions` adds more). For the other readers `split` is the dataset's split name, for WebDataset it can
-also be a shard pattern with a sample count, `'imagenet-train-{0000..1023}.tar|1281167'`. `class_map` remaps class
-names to indices with a dict, a `.txt` (one class per line) or a `.pkl` file. The iterable datasets (`hfids`, `tfds`,
-`wds`) take `is_training` (shuffling), `batch_size`, `num_samples`, `seed` and `repeats`, call `dataset.set_epoch()`
-each epoch to reshuffle.
+Dataset options:
 
-Other keyword arguments pass through to the reader. For the Hugging Face, TFDS and WebDataset readers, `input_key`
-and `target_key` select the image and label fields (`image` and `label` by default, for `wds` a `jpg`, `png` or `webp`
-image and the `.cls` file, or a `.json` sidecar field named by `target_key`). For multi-label data the target holds a
-list of class indices, or a dense multi-hot vector with `target_format='multihot'`, and a comma separated
-`target_key` reads one binary field per class. `target_transform=MultiLabelTarget(num_classes)`
-([`MultiLabelTarget`](#timm.data.MultiLabelTarget), `dense=True` for multi-hot fields) encodes them as float
-multi-hot tensors. The folder and tar readers yield single class indices. See
+- **`split`** selects the dataset split (default `validation`). For WebDataset it can also be a shard pattern with a
+  sample count, `'imagenet-train-{0000..1023}.tar|1281167'`.
+- **`search_split=True`** (default) makes folder datasets look for the sub-folder of `root` named `split` or,
+  failing that, a synonym of a train (`train`, `training`) or eval (`val`, `valid`, `validation`, `eval`, `evaluation`)
+  split.
+- **`add_img_extensions`** adds to the default image extensions (`.png`, `.jpg` and `.jpeg`).
+- **`class_map`** remaps class names to indices with a dict, a `.txt` (one class per line) or a `.pkl` file.
+
+Iterable datasets (`hfids`, `tfds`, `wds`) also take:
+
+- **`is_training`** enables shuffling.
+- **`batch_size`** rounds each worker's share of the samples up to whole batches when training.
+- **`num_samples`** sets the sample count, required when the reader can't determine it (`hfids` without split info).
+- **`seed`** sets the random seed.
+- **`repeats`** multiplies the samples per epoch, the readers pass over the data that many times.
+
+Call `dataset.set_epoch()` each epoch to reshuffle.
+
+Other keyword arguments pass through to the reader. For the Hugging Face, TFDS and WebDataset readers:
+
+- **`input_key`** selects the image field (`image` by default, for `wds` a `jpg`, `png` or `webp` image).
+- **`target_key`** selects the label field (`label` by default, for `wds` the `.cls` file or a `.json` sidecar field
+  named by `target_key`). A comma separated value reads one binary field per class.
+- **`target_format='multihot'`** reads dense multi-hot vectors instead of lists of class indices for multi-label data.
+- **`target_transform=MultiLabelTarget(num_classes)`** encodes targets as float multi-hot tensors.
+  Pass `dense=True` to [`MultiLabelTarget`](#timm.data.MultiLabelTarget) for multi-hot fields.
+
+The folder and tar readers yield single class indices. See
 [multi-label classification](../training_script#multi-label-classification) for details.
 
 ### Loaders
@@ -204,12 +283,17 @@ for images, targets in loader:
     images, targets = mixup_fn(images.to(device), targets.to(device))
 ```
 
-Mixup is enabled by `mixup_alpha > 0` and CutMix by `cutmix_alpha > 0` (or a `cutmix_minmax` box size range), with
-both enabled one is chosen per mix (`switch_prob` for CutMix). `prob` is the probability of mixing at all, and `mode`
-draws the parameters once per `batch`, per `pair` of elements or per `elem` (element).
-`multi_label=True` mixes dense multi-label targets, smoothing each label towards 0.5. `mixup_enabled = False` turns
-mixing off, e.g. for the final epochs (`--mixup-off-epoch`). For `FastCollateMixup` it is read in the worker
-processes, persistent workers keep the value they started with.
+Mixup and CutMix controls:
+
+- **`mixup_alpha > 0`** enables Mixup.
+- **`cutmix_alpha > 0`** enables CutMix.
+- **`cutmix_minmax`** enables CutMix with a box size range.
+- **`switch_prob`** sets the probability of choosing CutMix when both methods are enabled.
+- **`prob`** sets the probability of mixing at all.
+- **`mode`** draws the parameters once per `batch`, per `pair` of elements or per `elem` (element).
+- **`multi_label=True`** mixes dense multi-label targets, smoothing each label towards 0.5.
+- **`mixup_enabled = False`** turns mixing off, e.g. for the final epochs (`--mixup-off-epoch`). For `FastCollateMixup`
+  it is read in the worker processes, persistent workers keep the value they started with.
 
 ### NaFlex variable resolution
 
@@ -227,8 +311,14 @@ batch is a dict of `patches`, `patch_coord`, `patch_valid` and `seq_len`, padded
 - **Mixup.** Pass a [`NaFlexMixup`](#timm.data.NaFlexMixup) as `mixup_fn`, it mixes within each batch and does not
   support `mode` or `cutmix_minmax`.
 
-The `train.py` options are `--naflex-loader`, `--naflex-train-seq-lens`, `--naflex-max-seq-len`,
-`--naflex-patch-sizes`, `--naflex-patch-size-probs` and `--naflex-loss-scale`.
+The `train.py` options are:
+
+- **`--naflex-loader`** enables the NaFlex loader.
+- **`--naflex-train-seq-lens`** sets the training sequence lengths.
+- **`--naflex-max-seq-len`** sets the maximum evaluation sequence length.
+- **`--naflex-patch-sizes`** sets the patch sizes for variable patch size training.
+- **`--naflex-patch-size-probs`** sets the probabilities for those patch sizes.
+- **`--naflex-loss-scale`** selects loss scaling by batch size (`none`, `sqrt` or `linear`).
 
 ## API
 

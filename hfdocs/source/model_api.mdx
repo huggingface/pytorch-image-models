@@ -48,9 +48,12 @@ validity inputs for variable resolution.
 
 - **`get_classifier()`** returns the classifier module.
 - **`reset_classifier(num_classes, global_pool=None)`** replaces the classifier with a new, randomly initialized one.
-  `num_classes=0` replaces it with an identity, so `model(x)` returns the pooled features. `global_pool` changes the
-  pooling at the same time, `''` disables it so `model(x)` returns unpooled features. In most models
-  `global_pool=None` keeps the current pooling, but a few default to `'avg'`, pass it explicitly if it matters.
+  - **`num_classes=0`** replaces the classifier with an identity, so `model(x)` returns pooled features when pooling
+    remains enabled.
+  - **`global_pool`** changes the pooling at the same time. `global_pool=''` disables it; combined with
+    `num_classes=0`, `model(x)` returns unpooled features.
+  - **`global_pool=None`** keeps the current pooling in most models, but a few default to `'avg'`, pass it explicitly
+    if it matters.
 
 Creating a model with `num_classes` / `global_pool` set has the same effect as resetting the classifier afterwards,
 without allocating the original classifier. Encoder-only vision towers (the DeepSeek, Gemma4, MobileNetV5 and Qwen3
@@ -59,11 +62,12 @@ encoders) have no classifier and don't implement these methods.
 ## Intermediate features
 
 - **`forward_intermediates(x, indices=None, norm=False, stop_early=False, output_fmt='NCHW',
-  intermediates_only=False)`** runs the model and returns the final features plus a list of intermediate features,
-  or only the intermediates with `intermediates_only=True`. `indices` selects them: `None` for all, an `int` `n` for
-  the last `n`, or a list of indices (negative values count from the end). `stop_early=True` skips the blocks after
-  the last selected index (with `intermediates_only=True`), `norm=True` applies the final norm layer to each
-  intermediate.
+  intermediates_only=False)`** runs the model and returns the final features plus a list of intermediate features.
+  - **`indices`** selects the intermediates: `None` for all, an `int` `n` for the last `n`, or a list of indices
+    (negative values count from the end).
+  - **`intermediates_only=True`** returns only the intermediate features.
+  - **`stop_early=True`** skips the blocks after the last selected index (with `intermediates_only=True`).
+  - **`norm=True`** applies the final norm layer to each intermediate.
 - **`feature_info`** describes the available intermediate features, one entry per index with the number of channels
   (`num_chs`), the stride relative to the input (`reduction`) and the module name (`module`).
 - **`prune_intermediate_layers(indices=1, prune_norm=False, prune_head=True)`** removes the blocks after the last

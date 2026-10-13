@@ -43,11 +43,26 @@ task = MultiLabelClassificationTask(model, criterion_kwargs=dict(loss_type='zlpr
 criterion = PolyCrossEntropy(epsilon=2.)
 ```
 
-The training script (`train.py`) maps `--loss` to `loss_type`, `--task multilabel` to `multi_label=True` and
-`--smoothing` (default 0.1, 0 for multi-label) to `smoothing`, and sets `soft_targets` when Mixup or CutMix is
-enabled. The `--asl-*`, `--poly-*`, `--twoway-*`, `--db-*`, `--bce-sum` and `--bce-target-thresh` flags map to the
-factory arguments of the same name and `--aug-splits` to `jsd_splits`. The class weighting flags (`--class-stats`,
-`--loss-pos-weight`, `--loss-class-weight`, `--loss-weight-*`) are resolved with the class weight functions below.
+The training script (`train.py`) maps its options to the loss factory as follows:
+
+| CLI option or condition | Factory argument or effect |
+|---|---|
+| `--loss` | `loss_type` |
+| `--task multilabel` | `multi_label=True` |
+| `--smoothing` | `smoothing`, default 0.1 for single-label and 0 for multi-label training |
+| Mixup or CutMix enabled | `soft_targets=True` |
+| `--asl-*` | Corresponding `asl_*` arguments |
+| `--poly-*` | Corresponding `poly_*` arguments |
+| `--twoway-*` | Corresponding `twoway_*` arguments |
+| `--db-*` | Corresponding `db_*` arguments |
+| `--bce-sum` | `bce_sum` |
+| `--bce-target-thresh` | `bce_target_thresh` |
+| `--aug-splits` | `jsd_splits` |
+| `--class-stats` | Class counts for the class weight functions below, and `class_counts` / `num_samples` for `db` |
+| `--loss-pos-weight` | `pos_weight`, resolved by the class weight functions below |
+| `--loss-class-weight` | `class_weight`, resolved by the class weight functions below |
+| `--loss-weight-*` | Options for the class weight functions below |
+
 See the [training docs](../training_script#multi-label-classification) for the command line usage.
 
 ### Loss types
@@ -74,10 +89,12 @@ the same one-hot smoothing for class index targets. For multi-label targets each
 `y * (1 - s) + 0.5 * s`.
 
 `timm.data.Mixup` applies its `label_smoothing` while mixing and outputs dense targets (with `multi_label=True` it mixes
-and smooths dense multi-label targets). Create the loss with `soft_targets=True` in this case: `ce` becomes
-`SoftTargetCrossEntropy` and `bce`, multi-label `asl`, `poly` and `db` don't smooth the targets again. Single-label
-`asl` raises with `soft_targets`, and `twoway` / `zlpr` raise with either `soft_targets` or `smoothing` as they binarize
-targets at 0.5.
+and smooths dense multi-label targets). Create the loss with `soft_targets=True` in this case:
+
+- **`ce`** becomes `SoftTargetCrossEntropy`.
+- **`bce`, multi-label `asl`, `poly` and `db`** don't smooth the targets again.
+- **Single-label `asl`** raises with `soft_targets`.
+- **`twoway` / `zlpr`** raise with either `soft_targets` or `smoothing` as they binarize targets at 0.5.
 
 The classes have their own defaults when constructed directly, `BinaryCrossEntropy`, `LabelSmoothingCrossEntropy`
 and `JsdCrossEntropy` default to `smoothing=0.1` and `AsymmetricLossSingleLabel` to `eps=0.1` (its label smoothing).
@@ -98,11 +115,15 @@ the final weights.
 | `effective_num` | `class_weight` | `(1 - beta) / (1 - beta ** n)` ([class-balanced](https://arxiv.org/abs/1901.05555)), normalized to a mean of 1 |
 
 The methods are in `CLASS_WEIGHT_METHODS`, and `CLASS_WEIGHT_METHOD_KINDS` maps each to its loss argument.
-[`load_class_stats`](#timm.loss.load_class_stats) reads the counts from a JSON file with `pos_counts` and
-`num_samples` entries, as written by `class_weights.py` in the repository root.
-[`load_class_weights`](#timm.loss.load_class_weights) parses explicit weights (a number, a comma separated string, a
-list, or a JSON / text file) and [`resolve_class_weights`](#timm.loss.resolve_class_weights) accepts either a method
-name or explicit weights, as `train.py` does for its flags. The `db` loss takes the counts directly.
+
+- [`load_class_stats`](#timm.loss.load_class_stats) reads the counts from a JSON file with `pos_counts` and
+  `num_samples` entries, as written by `class_weights.py` in the repository root.
+- [`load_class_weights`](#timm.loss.load_class_weights) parses explicit weights (a number, a comma separated string,
+  a list, or a JSON / text file).
+- [`resolve_class_weights`](#timm.loss.resolve_class_weights) accepts either a method name or explicit weights,
+  as `train.py` does for its flags.
+
+The `db` loss takes the counts directly.
 
 ```python
 import torch
@@ -127,11 +148,17 @@ criterion = create_classification_loss('db', multi_label=True, class_counts=pos_
 
 - **Precision.** The multi-label ASL, Poly-1, DB, Two-way and ZLPR losses compute in `float32` regardless of the
   logit dtype, low precision (`float16`) ASL probabilities would otherwise underflow its log clamp.
-- **Reduction.** Multi-label ASL defaults to `asl_reduction='batchmean'`, the loss is summed over classes and
-  averaged over the batch. `sum` is the original ASL reduction, it also sums over the batch so the loss scales with
-  batch size, `mean` averages over batch and classes like BCE. Single-label ASL sums over classes and averages over
-  the batch, the factory only accepts `batchmean` for it. `bce`, multi-label `poly` and `db` average over batch and
-  classes (`bce_sum` sums over classes for `bce`).
+- **Reduction.** Multi-label ASL supports these `asl_reduction` values:
+
+  | Value | Over classes | Over the batch | Notes |
+  |---|---|---|---|
+  | `batchmean` | Sum | Mean | Default |
+  | `sum` | Sum | Sum | Original ASL reduction; loss scales with batch size |
+  | `mean` | Mean | Mean | Like BCE |
+
+  Single-label ASL sums over classes and averages over the batch, the factory only accepts `batchmean` for it.
+  `bce`, multi-label `poly` and `db` average over batch and classes (`bce_sum` sums over classes for `bce`).
+
 - **Two-way** contrasts the hardest negative logit with the hardest positive logit across the classes of each sample
   and across the samples of each class, only samples / classes with a positive contribute. Its logits are ranking
   scores, not calibrated sigmoid probabilities, so thresholded metrics (F1) are not meaningful, use mAP.
