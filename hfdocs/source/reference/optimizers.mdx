@@ -31,8 +31,16 @@ optimizer = create_optimizer_v2(model.parameters(), opt='sgd', lr=0.1, momentum=
 print(list_optimizers(with_description=True))
 ```
 
-The training script (`train.py`) exposes the same through `--opt`, `--lr`, `--weight-decay`, `--momentum`,
-`--opt-eps`, `--opt-betas`, `--layer-decay` and `--opt-kwargs key=value ...` for any other optimizer argument.
+The training script (`train.py`) exposes the same through these flags:
+
+- **`--opt`** selects the optimizer.
+- **`--lr`** sets the learning rate.
+- **`--weight-decay`** sets weight decay.
+- **`--momentum`** sets momentum.
+- **`--opt-eps`** sets epsilon (`eps`).
+- **`--opt-betas`** sets the beta coefficients (`betas`).
+- **`--layer-decay`** sets layer-wise learning rate decay.
+- **`--opt-kwargs key=value ...`** passes any other optimizer arguments.
 
 ### Naming conventions
 
@@ -50,9 +58,7 @@ Registered names are lower case, a base optimizer name plus modifiers:
 
 A few names predate the conventions: `lambc` and `larc` are LAMB / LARS with trust ratio clipping (the corrected
 decay LAMB variant is `lambcd`), `momentum` is SGD with classical momentum and `sgd` is SGD with Nesterov momentum.
-`adam`, `adamw`, `nadam`, `radam`, `radamw`, `adamax`, `adadelta`, `adagrad`, `rmsprop`, `sgd`, `momentum` and
-`nesterov` pass through to `torch.optim`, the `timm` versions of AdamW / NAdam / RAdam that predate their inclusion
-in PyTorch are `adamwlegacy`, `nadamlegacy` and `radamlegacy`.
+The `legacy` implementations in the table below predate their inclusion in PyTorch.
 
 ### Optimizer families
 
@@ -111,11 +117,15 @@ optimizers accept which can be checked in the class signatures below, the factor
   (decoupled) weight decay is not clipped, StableAdamW also scales the decay by the clipped learning rate.
 - **`maximize`** maximizes the objective instead of minimizing.
 
-Low precision parameters (`bfloat16`, `float16`) are supported throughout. AdaBelief, RAdamLegacy and Adafactor keep
-their state in `float32` for low precision params, AdafactorBigVision keeps its momentum in a reduced precision
-(`momentum_dtype`) and Kron has separate `mu_dtype` / `precond_dtype` options. These state dtypes are preserved by
-`load_state_dict` (PyTorch's default loader casts state to the param dtype). The step functions avoid host syncs
-(data dependent Python branches on device tensors), AdamP / SGDP's projection check is the exception.
+Low precision parameters (`bfloat16`, `float16`) are supported throughout:
+
+- **AdaBelief, RAdamLegacy and Adafactor** keep their state in `float32` for low precision params.
+- **AdafactorBigVision** keeps its momentum in a reduced precision (`momentum_dtype`).
+- **Kron** has separate `mu_dtype` / `precond_dtype` options.
+
+These state dtypes are preserved by `load_state_dict` (PyTorch's default loader casts state to the param dtype).
+The step functions avoid host syncs (data dependent Python branches on device tensors), AdamP / SGDP's projection
+check is the exception.
 
 ### Parameter groups
 

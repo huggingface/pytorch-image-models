@@ -43,9 +43,21 @@ model.set_input_size(img_size=(384, 384))  # resample the position embedding for
 logits = model(torch.randn(2, 3, 384, 384))  # (2, 5)
 ```
 
-The training script (`train.py`) exposes the common arguments as `--model`, `--pretrained`, `--num-classes`,
-`--in-chans`, `--gp`, `--drop`, `--drop-path`, `--pretrained-path`, `--initial-checkpoint` and
-`--model-kwargs key=value ...` for any other model argument. See the [quickstart](../quickstart) for an introduction.
+The training script (`train.py`) exposes the common arguments through these flags:
+
+- **`--model`** selects the model.
+- **`--pretrained`** loads pretrained weights.
+- **`--num-classes`** sets the classifier size (`num_classes`).
+- **`--in-chans`** sets the input channels (`in_chans`).
+- **`--gp`** sets the global pooling type (`global_pool`).
+- **`--drop`** sets classifier dropout (`drop_rate`).
+- **`--drop-path`** sets stochastic depth (`drop_path_rate`).
+- **`--pretrained-path`** loads pretrained weights from a local file with classifier / input conv adaptation
+  (`pretrained_cfg_overlay=dict(file=...)`).
+- **`--initial-checkpoint`** loads a checkpoint after creating the model, without adaptation (`checkpoint_path`).
+- **`--model-kwargs key=value ...`** passes any other model arguments.
+
+See the [quickstart](../quickstart) for an introduction.
 
 ### Model names
 
@@ -63,31 +75,36 @@ model of the same name. `hf_hub:` is a deprecated alias of `hf-hub:`.
 ### Common arguments
 
 - **`pretrained`** loads the weights of the pretrained cfg, from `state_dict` or `file` if set, otherwise from the
-  Hub (`hf_hub_id`) when `huggingface_hub` is installed, or the `url`. If `num_classes` differs from the pretrained
-  cfg, the classifier weights are discarded (left at random init). If `in_chans` differs from the source checkpoint's
-  channel count (`input_size[0]` in the pretrained cfg), the first conv weights are adapted where supported, so a
-  pretrained model can be created for fine-tuning in one call.
-- **`num_classes`** sets the classifier size, `0` removes the classifier. **`global_pool`** sets the pooling type,
-  the options are model specific (e.g. `avg`, `max`, `avgmax`, `catavgmax` for most convnets, `token`, `avg`,
-  `map` for ViT), `''` disables pooling. **`in_chans`** sets the input channels. The `num_classes` and `in_chans`
-  defaults come from the pretrained cfg.
-- **`drop_rate`** (classifier dropout) and **`drop_path_rate`** (stochastic depth) are supported by most models.
+  Hub (`hf_hub_id`) when `huggingface_hub` is installed, or the `url`. Classifier / input conv adaptation below lets
+  a pretrained model be created for fine-tuning in one call.
+- **`num_classes`** sets the classifier size, `0` removes the classifier. The default comes from the pretrained cfg.
+  When loading pretrained weights, a different class count discards the classifier weights (left at random init).
+- **`global_pool`** sets the pooling type, the options are model specific (e.g. `avg`, `max`, `avgmax`, `catavgmax`
+  for most convnets, `token`, `avg`, `map` for ViT), `''` disables pooling.
+- **`in_chans`** sets the input channels. The default comes from the pretrained cfg. When loading pretrained weights,
+  the first conv weights are adapted where supported if this differs from the source checkpoint's channel count
+  (`input_size[0]` in the pretrained cfg).
+- **`drop_rate`** sets classifier dropout, supported by most models.
+- **`drop_path_rate`** sets stochastic depth, supported by most models.
 - **`img_size`** is an argument of ViT style and other models w/ a fixed input size, they're built for the pretrained
-  cfg `input_size` unless it's set. The ViT and EVA families also accept `dynamic_img_size=True` to resample the
-  position embedding to the input size on every forward pass.
+  cfg `input_size` unless it's set.
+- **`dynamic_img_size=True`** in the ViT and EVA families resamples the position embedding to the input size on every
+  forward pass.
 - **`features_only`** (w/ `out_indices`, `output_stride`, `feature_cls`) wraps the model as a feature backbone
   returning feature maps, see [feature extraction](../feature_extraction).
-- **`pretrained_cfg`** replaces the pretrained cfg (a tag, dict or [`PretrainedCfg`](#timm.models.PretrainedCfg)),
-  **`pretrained_cfg_overlay`** overrides some of its fields, e.g. `pretrained_cfg_overlay=dict(file='weights.pth')`
+- **`pretrained_cfg`** replaces the pretrained cfg (a tag, dict or [`PretrainedCfg`](#timm.models.PretrainedCfg)).
+- **`pretrained_cfg_overlay`** overrides some of its fields, e.g. `pretrained_cfg_overlay=dict(file='weights.pth')`
   loads `pretrained=True` weights from a local file, w/ the classifier / input conv adaptation above (as
   `--pretrained-path` does in `train.py`).
 - **`checkpoint_path`** loads a checkpoint w/ [`load_checkpoint`](#timm.models.load_checkpoint) after the model is
   created. It's a strict load w/o adaptation, EMA weights are used if the checkpoint has them.
 - **`cache_dir`** overrides the download cache for pretrained weights and Hub configs.
-- **`device`** and **`dtype`** are passed to the model class, params are created on the device and in the dtype
-  directly. `device='meta'` creates a model w/o allocating memory for its weights.
-- **`scriptable`**, **`exportable`** and **`no_jit`** set layer config flags for TorchScript scripting, export /
-  tracing, and to disable jit scripted layers.
+- **`device`** is passed to the model class, params are created on the device directly. `device='meta'` creates a
+  model w/o allocating memory for its weights.
+- **`dtype`** is passed to the model class, params are created in the dtype directly.
+- **`scriptable`** sets layer config flags for TorchScript scripting.
+- **`exportable`** sets layer config flags for export / tracing.
+- **`no_jit`** sets layer config flags to disable jit scripted layers.
 
 Arguments set to `None` are dropped before reaching the model, so the model defaults apply. Arguments the model class
 doesn't accept raise a `TypeError` in most models, a few ignore unknown arguments.
@@ -131,15 +148,20 @@ which parts.
 
 ### Checkpoints and the Hub
 
-[`load_checkpoint`](#timm.models.load_checkpoint) loads a checkpoint file (PyTorch or `.safetensors`) into a model,
-[`load_state_dict`](#timm.models.load_state_dict) returns its state dict. Both pick the EMA weights of a `train.py`
-checkpoint by default (`use_ema`) and remove `module.` (DDP) and `_orig_mod.` (`torch.compile`) key prefixes.
-[`resume_checkpoint`](#timm.models.resume_checkpoint) restores the model, optimizer and loss scaler state of a
-`train.py` checkpoint and returns the epoch to resume from.
+- [`load_checkpoint`](#timm.models.load_checkpoint) loads a checkpoint file (PyTorch or `.safetensors`) into a model.
+- [`load_state_dict`](#timm.models.load_state_dict) reads a checkpoint file and returns its state dict.
+- [`resume_checkpoint`](#timm.models.resume_checkpoint) restores the model, optimizer and loss scaler state of a
+  `train.py` checkpoint and returns the epoch to resume from.
 
-[`save_for_hf`](#timm.models.save_for_hf) writes the weights and a `config.json` (architecture, pretrained cfg,
-`model_args`, `label_names`) to a folder, [`push_to_hf_hub`](#timm.models.push_to_hf_hub) uploads them to a Hub repo
-w/ a generated model card if the repo has none. The model is then created w/ `hf-hub:` or `local-dir:`, see
+`load_checkpoint` and `load_state_dict` pick the EMA weights of a `train.py` checkpoint by default (`use_ema`)
+and remove `module.` (DDP) and `_orig_mod.` (`torch.compile`) key prefixes.
+
+- [`save_for_hf`](#timm.models.save_for_hf) writes the weights and a `config.json` (architecture, pretrained cfg,
+  `model_args`, `label_names`) to a folder.
+- [`push_to_hf_hub`](#timm.models.push_to_hf_hub) uploads the weights and config to a Hub repo w/ a generated model
+  card if the repo has none.
+
+The model is then created w/ `hf-hub:` or `local-dir:`, see
 [sharing and loading models](../hf_hub).
 
 ```python
