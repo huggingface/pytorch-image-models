@@ -24,12 +24,11 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import SelectAdaptivePool2d, Linear, make_divisible, get_device_dtype
-from timm.utils.model import reparameterize_model
 
 from ._builder import build_model_with_cfg
 from ._efficientnet_blocks import SqueezeExcite, ConvBnAct
 from ._features import feature_take_indices
-from ._manipulate import checkpoint_seq
+from ._manipulate import checkpoint_seq, reparameterize_model
 from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['GhostNet']
@@ -853,7 +852,7 @@ class GhostNet(nn.Module):
         return x
 
     def convert_to_deploy(self):
-        reparameterize_model(self, inplace=False)
+        reparameterize_model(self, inplace=True)
 
 
 def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: nn.Module) -> Dict[str, torch.Tensor]:

@@ -153,6 +153,7 @@ from ._manipulate import (
     checkpoint_seq as checkpoint_seq,
     checkpoint as checkpoint,
     adapt_input_conv as adapt_input_conv,
+    reparameterize_model as reparameterize_model,
 )
 from ._input import (
     get_model_args as get_model_args,
