@@ -8,6 +8,13 @@ import yaml
 from PIL import Image
 from torch import nn
 
+from timm.utils import load_checkpoint_metadata
+
+# torch < 2.5 (no safe_globals) can't load training checkpoints (floats, argparse.Namespace) with weights_only=True,
+# nor resume them
+needs_checkpoint_load = pytest.mark.skipif(
+    not hasattr(torch.serialization, 'safe_globals'), reason='requires torch.load weights_only w/ safe_globals')
+
 
 class _TinyClassifier(nn.Module):
     def __init__(self, num_classes=2):
@@ -67,10 +74,10 @@ def _summary_epochs(exp_dir):
 
 
 def _checkpoint_epoch(path):
-    with torch.serialization.safe_globals([__import__('argparse').Namespace]):
-        return torch.load(path, map_location='cpu', weights_only=True)['epoch']
+    return load_checkpoint_metadata(path)['epoch']
 
 
+@needs_checkpoint_load
 @pytest.mark.usefixtures('isolate_cli_backend_flags')
 def test_stop_epoch_and_milestones(monkeypatch, tmp_path, image_folder):
     exp_dir = tmp_path / 'stop'
@@ -92,6 +99,7 @@ def test_stop_epoch_out_of_range(monkeypatch, tmp_path, image_folder):
         _run_train(monkeypatch, _train_args(image_folder, tmp_path, experiment='bad', epochs=2, stop_epoch=3))
 
 
+@needs_checkpoint_load
 @pytest.mark.usefixtures('isolate_cli_backend_flags')
 def test_resume_auto_in_place(monkeypatch, tmp_path, image_folder):
     exp_dir = tmp_path / 'auto'

@@ -14,6 +14,8 @@ from PIL import Image
 
 import sweep
 
+pytestmark = pytest.mark.skipif(not sweep.TORCH_SUPPORTED, reason=sweep.TORCH_REQUIREMENT)
+
 
 @pytest.fixture
 def restore_parser_defaults():

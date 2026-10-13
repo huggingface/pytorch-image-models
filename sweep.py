@@ -57,6 +57,9 @@ directory can each `run` it, jobs are claimed atomically.
 Paths in the generated configs and scripts are fixed when the plan is written, so a sweep directory can't be moved or
 copied elsewhere and run from there: plan it again under the new location instead.
 
+Requires PyTorch >= 2.5: job completion and milestone recovery read training checkpoints with
+`torch.load(weights_only=True)`, which needs `safe_globals` for the `argparse.Namespace` they hold.
+
 Hacked together by / Copyright 2026 Ross Wightman
 """
 import argparse
@@ -89,6 +92,9 @@ from timm.utils import load_checkpoint_metadata
 _logger = logging.getLogger('sweep')
 
 PLAN_VERSION = 1
+# training checkpoints are read with torch.load(weights_only=True), their argparse.Namespace needs safe_globals
+TORCH_SUPPORTED = hasattr(torch.serialization, 'safe_globals')
+TORCH_REQUIREMENT = 'sweep.py requires PyTorch >= 2.5 (torch.serialization.safe_globals), found ' + torch.__version__
 PLAN_FILE = 'plan.json'
 STATE_DIR = 'state'
 TIMM_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -1345,6 +1351,9 @@ def add_spec_arguments(p: argparse.ArgumentParser):
 
 def main():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s', datefmt='%H:%M:%S')
+    if not TORCH_SUPPORTED:
+        _logger.error(TORCH_REQUIREMENT)
+        sys.exit(1)
     argv = sys.argv[1:]
     train_argv: List[str] = []
     if '--' in argv:

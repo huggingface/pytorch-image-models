@@ -156,7 +156,11 @@ class CheckpointSaver:
 
     def load_state_dict_from_checkpoint(self, checkpoint_path):
         """Restore bookkeeping from a checkpoint file, reading only its metadata where the torch version allows."""
-        checkpoint = load_checkpoint_metadata(checkpoint_path)
+        try:
+            checkpoint = load_checkpoint_metadata(checkpoint_path)
+        except RuntimeError as e:  # e.g. torch too old to load a training checkpoint with weights_only=True
+            _logger.warning(f"Could not read checkpoint history from '{checkpoint_path}' ({e}), starting fresh.")
+            return False
         state_dict = checkpoint.get('saver') if isinstance(checkpoint, dict) else None
         if state_dict is None:
             _logger.warning(f"No checkpoint history in '{checkpoint_path}', ranked checkpoints start fresh.")
