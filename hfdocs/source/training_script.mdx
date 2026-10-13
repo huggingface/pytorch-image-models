@@ -48,7 +48,7 @@ The decay occupies the last `--decay-epochs` of the schedule, so a cooldown of `
 
 ## Hyperparameter Sweeps
 
-`sweep.py` plans and runs sweeps over any `train.py` arguments, optionally with WSD branching. It writes one complete `train.py --config` file per job plus an immutable `plan.json` with the job dependency graph, then runs ready jobs on a pool of local GPUs. Every job is an ordinary `train.py` invocation with its own experiment folder, and each generated `run.sh` can be run by hand or handed to another scheduler.
+`sweep.py` (PyTorch 2.5 or newer) plans and runs sweeps over any `train.py` arguments, optionally with WSD branching. It writes one complete `train.py --config` file per job plus an immutable `plan.json` with the job dependency graph, then runs ready jobs on a pool of local GPUs. Every job is an ordinary `train.py` invocation with its own experiment folder, and each generated `run.sh` can be run by hand or handed to another scheduler.
 
 A quick sweep needs no spec file. Search axes come from `--sweep`, the base configuration from the trailing `train.py` arguments after `--`:
 

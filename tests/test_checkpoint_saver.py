@@ -5,6 +5,10 @@ import torch
 
 from timm.utils.checkpoint_saver import CheckpointSaver
 
+# torch < 2.5 (no safe_globals) can't load training checkpoints (floats, argparse.Namespace) with weights_only=True
+needs_checkpoint_load = pytest.mark.skipif(
+    not hasattr(torch.serialization, 'safe_globals'), reason='requires torch.load weights_only w/ safe_globals')
+
 
 def _create_saver(checkpoint_dir: Path, max_history: int = 2, decreasing: bool = False) -> CheckpointSaver:
     model = torch.nn.Linear(2, 1)
@@ -87,6 +91,7 @@ def test_save_checkpoint_tie_keeps_earlier_epoch_first(tmp_path: Path):
     assert not (tmp_path / 'checkpoint-1.pth.tar').exists()
 
 
+@needs_checkpoint_load
 def test_milestone_is_outside_ranked_history(tmp_path: Path):
     saver = _create_saver(tmp_path, max_history=1)
 
@@ -101,6 +106,7 @@ def test_milestone_is_outside_ranked_history(tmp_path: Path):
     assert [Path(p).name for p, _ in saver.checkpoint_files] == ['checkpoint-2.pth.tar']
 
 
+@needs_checkpoint_load
 def test_state_round_trip_restores_history_and_pending_checkpoint(tmp_path: Path):
     saver = _create_saver(tmp_path, max_history=2)
     saver.save_checkpoint(0, metric=0.8)
@@ -122,6 +128,7 @@ def test_state_round_trip_restores_history_and_pending_checkpoint(tmp_path: Path
     assert (resumed.best_metric, resumed.best_epoch) == (0.95, 3)
 
 
+@needs_checkpoint_load
 def test_load_state_dict_drops_missing_files(tmp_path: Path):
     saver = _create_saver(tmp_path, max_history=3)
     for epoch, metric in enumerate((0.5, 0.6, 0.7)):
