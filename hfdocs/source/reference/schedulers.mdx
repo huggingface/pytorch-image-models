@@ -8,8 +8,10 @@ overview of how they are created and stepped.
 Schedulers are created by name with
 [`create_scheduler_v2`](#timm.scheduler.scheduler_factory.create_scheduler_v2), which returns the scheduler and the
 total number of epochs to train (including any warmup prefix, cycles and cooldown, see below).
-Unlike `torch.optim.lr_scheduler`, `timm` schedulers do not count steps themselves. The training loop passes the
-epoch or update count in explicitly:
+Unlike `torch.optim.lr_scheduler`, `timm` schedulers do not count steps themselves. They are designed to be
+stateless: the lr is a function of the schedule configuration and an explicit epoch or update count, so resuming a
+run only needs the epoch, and no scheduler state is stored in checkpoints. The training loop passes the epoch or
+update count in explicitly:
 
 * `scheduler.step(epoch)` at the end of each epoch, with the index of the next epoch (`epoch + 1`)
 * `scheduler.step_update(num_updates)` after each optimizer update, with the number of updates so far
@@ -83,7 +85,7 @@ The training script (`train.py`) exposes the factory arguments through these fla
 | `poly` | [`PolyLRScheduler`](#timm.scheduler.poly_lr.PolyLRScheduler) | Polynomial decay to `min_lr`, the power is given by `decay_rate`, optional restarts and k-decay |
 | `step` | [`StepLRScheduler`](#timm.scheduler.step_lr.StepLRScheduler) | lr multiplied by `decay_rate` every `decay_epochs` |
 | `multistep` | [`MultiStepLRScheduler`](#timm.scheduler.multistep_lr.MultiStepLRScheduler) | lr multiplied by `decay_rate` at each of the `decay_milestones` epochs |
-| `plateau` | [`PlateauLRScheduler`](#timm.scheduler.plateau_lr.PlateauLRScheduler) | lr multiplied by `decay_rate` when the eval metric hasn't improved for `patience_epochs`, per epoch stepping only |
+| `plateau` | [`PlateauLRScheduler`](#timm.scheduler.plateau_lr.PlateauLRScheduler) | **Deprecated.** lr multiplied by `decay_rate` when the eval metric hasn't improved for `patience_epochs`, per epoch stepping only |
 | `wsd` | [`WSDLRScheduler`](#timm.scheduler.wsd_lr.WSDLRScheduler) | Warmup-stable-decay ([MiniCPM](https://arxiv.org/abs/2404.06395)), constant lr then a decay to `min_lr` over the final `decay_epochs`, `1-sqrt` decay by default ([paper](https://arxiv.org/abs/2405.18392)) |
 | `rsqrt` | [`WSDLRScheduler`](#timm.scheduler.wsd_lr.WSDLRScheduler) | Reciprocal square root decay w/ a linear cooldown over the final `decay_epochs` ([Big Vision](https://arxiv.org/abs/2106.04560)) |
 
@@ -97,6 +99,14 @@ The training script (`train.py`) exposes the factory arguments through these fla
     phases are fitted into `num_epochs - warmup_epochs` so `num_epochs` remains the total.
 - **`min_lr`**: the lr the decaying schedules (`cosine`, `tanh`, `poly`, `wsd`, `rsqrt`) reach at the end, and a
   lower bound for `plateau`.
+
+The `plateau` schedule is deprecated and will be removed in a future release. It never fit the stateless design
+above: its lr depends on the history of the eval metric rather than on the epoch, and that history (best metric,
+patience and cooldown counters) is not saved in checkpoints, so a resumed run restarts the plateau logic. Checkpoint
+support will not be added. A validation plateau is also a weak signal for when to anneal; a fixed schedule such as
+`cosine` or `wsd` is reproducible and resumes exactly, and a WSD sweep
+(see [Hyperparameter Sweeps](../training_script#hyperparameter-sweeps)) compares cooldowns at several budgets from one
+stable run.
 - **`cooldown_epochs`**: epochs held at `min_lr` after the schedule ends (`cosine`, `tanh`, `poly`, `wsd`, `rsqrt`),
   added to the returned `num_epochs`. As the schedule reaches `min_lr` one step after its last step, a cooldown
   epoch is also a way to train at `min_lr` when stepping per epoch.

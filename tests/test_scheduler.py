@@ -19,6 +19,8 @@ from timm.scheduler import (
 )
 from timm.scheduler.scheduler import Scheduler
 
+pytestmark = pytest.mark.filterwarnings('ignore:PlateauLRScheduler is deprecated:FutureWarning')
+
 
 def _create_optimizer(lr: float = 0.1, num_groups: int = 1) -> torch.optim.Optimizer:
     """Create a mock optimizer with simple parameters for testing."""

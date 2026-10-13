@@ -232,7 +232,7 @@ group.add_argument('--opt-kwargs', nargs='*', default={}, action=utils.ParseKwar
 # Learning rate schedule parameters
 group = parser.add_argument_group('Learning rate schedule parameters')
 group.add_argument('--sched', type=str, default='cosine', metavar='SCHEDULER',
-                   help='LR scheduler, "none" for constant LR (default: "cosine"')
+                   help='LR scheduler, "none" for constant LR, "plateau" is deprecated (default: "cosine")')
 group.add_argument('--sched-on-updates', action='store_true', default=False,
                    help='Apply LR scheduler step on update instead of epoch end.')
 group.add_argument('--lr', type=float, default=None, metavar='LR',
@@ -288,7 +288,7 @@ group.add_argument('--warmup-prefix', action='store_true', default=False,
 group.add_argument('--cooldown-epochs', type=int, default=0, metavar='N',
                    help='epochs to cooldown LR at min_lr, after cyclic schedule ends')
 group.add_argument('--patience-epochs', type=int, default=10, metavar='N',
-                   help='patience epochs for Plateau LR scheduler (default: 10)')
+                   help='patience epochs for the deprecated Plateau LR scheduler (default: 10)')
 group.add_argument('--decay-rate', '--dr', type=float, default=0.1, metavar='RATE',
                    help='LR decay rate (default: 0.1)')
 

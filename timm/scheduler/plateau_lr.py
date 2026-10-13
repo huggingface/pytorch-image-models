@@ -4,14 +4,23 @@ Adapts PyTorch plateau scheduler and allows application of noise, warmup.
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
-import torch
+import warnings
 from typing import Any, Dict, List, Optional, Tuple, Union
+
+import torch
 
 from .scheduler import Scheduler
 
 
 class PlateauLRScheduler(Scheduler):
-    """Decay the LR by a factor every time the validation loss plateaus."""
+    """Decay the LR by a factor every time the validation loss plateaus.
+
+    Deprecated: this scheduler will be removed in a future release. timm schedulers are designed to be stateless
+    functions of the epoch or update count, which this metric-driven schedule never was. Its state (best metric,
+    patience and cooldown counters) is not saved in training checkpoints, so a resumed run restarts the plateau logic,
+    and checkpoint support will not be added. Prefer a fixed schedule such as `cosine` or `wsd`, the WSD cooldown
+    branching in `sweep.py` compares annealing at several budgets with reproducible schedules.
+    """
 
     def __init__(
             self,
@@ -40,6 +49,13 @@ class PlateauLRScheduler(Scheduler):
             noise_std=noise_std,
             noise_seed=noise_seed,
             initialize=initialize,
+        )
+        warnings.warn(
+            'PlateauLRScheduler is deprecated and will be removed in a future timm release. Its metric-driven state '
+            '(best metric, patience and cooldown counters) is not saved in checkpoints, so a resumed run restarts the '
+            'plateau logic, and checkpoint support will not be added. Use a fixed schedule such as cosine or wsd, '
+            'sweep.py can branch WSD cooldowns at several budgets to compare against a plateau-driven decay.',
+            FutureWarning, stacklevel=2,
         )
 
         self.lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(

@@ -1,5 +1,72 @@
 # Changelog
 
+## October 13, 2026
+
+* Hyperparameter sweeps via a new `sweep.py`: grid / random search over any `train.py` argument, one effective `--config` per job, run on a pool of local GPUs and resumable. WSD sweeps train one stable trunk per hyperparameter combination and branch independent cooldowns from its milestone checkpoints, comparing annealing at several budgets for a fraction of the cost of full runs. See the [training docs](https://huggingface.co/docs/timm/training_script#hyperparameter-sweeps).
+* `train.py`: `--resume auto` resumes in place from the experiment's own `last.pth.tar` (checkpoint history, `model_best` and `summary.csv` stay consistent), `--stop-epoch N` stops without changing the schedule, `--save-epochs N [N ...]` keeps `milestone-N.pth.tar` snapshots, and YAML `--config` values are validated against the script's arguments.
+* Deprecate `PlateauLRScheduler` (`--sched plateau`). `timm` schedulers are stateless functions of the epoch or update count, the metric-driven plateau schedule never fit that and its state is not checkpointed, so resume was never exact. Use `cosine` or `wsd`.
+* Docs: new [Model API](https://huggingface.co/docs/timm/model_api) page, generated model family pages for every model module replacing the old per-model pages, and expanded data / loss / models reference pages.
+* Model API consistency fixes: `reset_classifier()` keeps the current pooling in all models, unknown constructor args raise `TypeError` everywhere, Swin family `dynamic_img_size`, LeViT layer-wise lr decay, `no_weight_decay` names that matched no params (NesT, SwinV2, XCiT, FocalNet), resize state recorded for all `set_input_size` families.
+* Fixes: GCViT global query mixed images within a batch, gradient checkpointing for RDNet and MobileNetV5, `save_for_hf` stale test input size, EfficientViT (MSRA) rectangular resize, ImageDataset image conversion errors (#2846). `reparameterize_model` moved to `timm.models`.
+
+## October 9, 2026
+
+* Add [CSPNeXt](https://arxiv.org/abs/2212.07784) (RTMDet backbone) `cspnext_{tiny,s,m,l,x}` with ImageNet-1k classification weights converted from OpenMMLab. Thanks [Munehiro Kobayashi](https://github.com/munehiro-k).
+* Optimizer improvements
+  * Foreach (multi-tensor) impls for RMSpropTF, LaProp, LAMB, LARS, AdaBelief. Foreach steps are chunked by device L2 cache size (`TIMM_FOREACH_CHUNK_SIZE` to override).
+  * RMS update clipping (`clipping_threshold`) for AdamWLegacy / NAdamW, new decoupled / corrected weight decay NovoGrad variants (`novogradw`, `novogradc`).
+  * Correctness fixes across many optimizers, including corrected weight decay w/ in-place updated tensor lr, FP16 update stalls at small lr, low precision state handling (Kron, AdaBelief, NovoGrad), and no more in-place `p.grad`
+modification.
+  * `torch.compile` / CUDA graph fixes for Adopt, SGDW, AdafactorBV.
+  * New optimizer docs covering usage, naming conventions, and families.
+* Add WSD (warmup-stable-decay) LR scheduler (`--sched wsd`, `--lr-decay-fn`, `--lr-stable-timescale`).
+* Model EMA fixes for bfloat16 / float16 models. ModelEmaV3 bfloat16 EMAs use stochastic rounding by default, float16 models keep a float32 EMA.
+* Model resizing via `set_input_size()`
+  * Expanded support for windowed models (MaxViT, CoAtNet, BEiT, EfficientViT-MSRA, relpos ViT, Swin family).
+  * Swin / SwinV2 / SwinV2-CR keep each stage's window to grid ratio on resize, a call at the current size is now a no-op. Per-stage `window_size` / `window_ratio` supported. Fixes Swin S3 and SwinV2 `window16` / `window12` models
+changing outputs on a same-size call.
+  * Fix SwinV2 NaN w/ a window size of 1, odd stage feature sizes, and hybrid ViT resize on CUDA / low precision.
+* Fix grad accumulation remainder handling (#2821), distributed sampling / repeated augmentation on small datasets, pretrained source overrides and distillation teacher setup, `train.py` w/ `--sched none`, and eval center crop
+interpolation for non-square inputs.
+* ONNX export compatibility fixes across PyTorch versions, dropout consistency fixes, and more meta-device init fixes.
+
+## September 25, 2026
+
+* Multi-label classification support
+  * Add `--task multilabel` to `train.py` / `validate.py`, trained with BCE (`MultiLabelClassificationTask`). See the
+    [training docs](https://huggingface.co/docs/timm/training_script) for details.
+  * Targets can be lists of class indices, dense multi-hot vectors (`--target-format multihot`), or one binary field
+    per class (`--target-key a,b,c`), with `/` paths into nested fields. Supported by the `hfds`, `hfids`, `tfds`
+    (multi-field keys), and `wds` readers.
+  * Mixup / CutMix and NaFlex loaders support multi-label targets. Label smoothing moves each target towards 0.5
+    and defaults to 0 for multi-label.
+  * Validation reports mAP (the default `--eval-metric`) plus micro, macro, and sample F1, with an F1 threshold set by
+    `--multilabel-threshold`.
+  * New dataset-level evaluators compute metrics over the full validation set across distributed ranks, excluding
+    distributed sampler padding.
+  * See the [timm multi-label image datasets](https://huggingface.co/collections/timm/timm-multi-label-image-datasets)
+    collection on the Hub for example / benchmark datasets that work out of the box.
+* New loss options via `--loss`
+  * Poly-1, Two-way, ZLPR, and Distribution-Balanced losses.
+  * Class-frequency weighting for BCE / ASL, computed from label counts gathered by `class_weights.py`.
+  * ASL is now fp16-safe and defaults to `batchmean` reduction
+* RoPE Refactor
+  * Extend training-only RoPE coordinate augmentation (shift, jitter, rescale) to axial, mixed, and MRoPE embeddings,
+    sharing helpers with DINOv3 while preserving its existing augmentation behavior.
+  * Add `grid_type` and `normalize_coords` options to the Fourier / rotary builders (`build_fourier_pos_embed`,
+    `build_rotary_pos_embed`) and axial RoPE modules, and configurable MRoPE sections in EVA.
+  * Support `rotate_half` in the tuple-output `RotaryEmbedding` and the `base` factory variant.
+  * Correct rotation-layout forwarding in EVA, NaFlexViT, and MRoPE attention pooling.
+  * Keep non-learned RoPE frequency and coordinate buffers at least float32 in half/bfloat16 models, and compute mixed
+    RoPE phases in float32 under autocast. These precision fixes can change low-precision model outputs.
+  * Fix batched RoPE embeddings for pixel grids and reference-shape rescaling. DINOv3 `grid_indexing='xy'` now swaps
+    coordinate channels as requested; outputs for these previously incorrect configurations change.
+  * Make `apply_rot_embed`, `apply_rot_embed_cat`, and `apply_rot_embed_list` return each input's dtype, casting after
+    the rotation without first downcasting sin/cos.
+  * Consolidate the two axial RoPE modules behind a private base. Existing calls remain compatible, but the `bands`
+    buffer is now retained in both cached and dynamic modes (`rope.bands` is no longer `None` in cached mode).
+* Train/eval mode switch and dtype change fixes for LeViT and related models (EfficentFormer*, EfficientViT-MSRA, TinyViT) w/ cached attention biases.
+
 ## September 22, 2026
 
 * Add Qwen-Drive-1.0-4B vision tower weights.
