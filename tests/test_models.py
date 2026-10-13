@@ -623,6 +623,18 @@ def test_model_forward_features(model_name, batch_size):
 
 @pytest.mark.features
 @pytest.mark.timeout(120)
+@pytest.mark.parametrize('model_name', list_models('efficientnet_[hx]_*'))
+def test_model_features_space2depth_reduction(model_name):
+    """The space2depth first block downsamples, feature_info reductions must include it."""
+    model = create_model(model_name, pretrained=False, features_only=True)
+    model.eval()
+    outputs = model(torch.randn((1, 3, 224, 224)))
+    assert model.feature_info.reduction() == [2, 4, 8, 16, 32]
+    assert [o.shape[-1] for o in outputs] == [224 // r for r in model.feature_info.reduction()]
+
+
+@pytest.mark.features
+@pytest.mark.timeout(120)
 @pytest.mark.parametrize('model_name', list_models(module=FEAT_INTER_FILTERS, exclude_filters=EXCLUDE_FILTERS))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward_intermediates_features(model_name, batch_size):
