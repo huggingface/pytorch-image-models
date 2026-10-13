@@ -44,10 +44,13 @@ class ClassificationTask(TrainingTask):
         dtype: Dtype for task tensors/buffers
         verbose: Enable info logging
 
-    Example:
-        >>> task = ClassificationTask(model, criterion_kwargs=dict(smoothing=0.1), device=torch.device('cuda'))
-        >>> result = task(input, target)
-        >>> result['loss'].backward()
+    Examples:
+
+        ```python
+        task = ClassificationTask(model, criterion_kwargs=dict(smoothing=0.1), device=torch.device('cuda'))
+        result = task(input, target)
+        result['loss'].backward()
+        ```
     """
 
     multi_label = False

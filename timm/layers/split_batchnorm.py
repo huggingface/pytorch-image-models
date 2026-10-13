@@ -57,9 +57,12 @@ def convert_splitbn_model(module, num_splits=2):
     Args:
         module (torch.nn.Module): input module
         num_splits: number of separate batchnorm layers to split input across
-    Example::
-        >>> # model is an instance of torch.nn.Module
-        >>> model = timm.models.convert_splitbn_model(model, num_splits=2)
+    Examples:
+
+        ```python
+        # model is an instance of torch.nn.Module
+        model = timm.layers.convert_splitbn_model(model, num_splits=2)
+        ```
     """
     mod = module
     if isinstance(module, torch.nn.modules.instancenorm._InstanceNorm):

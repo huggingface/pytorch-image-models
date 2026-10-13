@@ -71,8 +71,11 @@ def trunc_normal_(tensor, mean=0., std=1., a=-2., b=2.):
         a: the minimum cutoff value
         b: the maximum cutoff value
     Examples:
-        >>> w = torch.empty(3, 5)
-        >>> nn.init.trunc_normal_(w)
+
+        ```python
+        w = torch.empty(3, 5)
+        trunc_normal_(w)
+        ```
     """
     with torch.no_grad():
         return _trunc_normal_(tensor, mean, std, a, b)
@@ -98,8 +101,11 @@ def trunc_normal_tf_(tensor, mean=0., std=1., a=-2., b=2.):
         a: the minimum cutoff value
         b: the maximum cutoff value
     Examples:
-        >>> w = torch.empty(3, 5)
-        >>> nn.init.trunc_normal_(w)
+
+        ```python
+        w = torch.empty(3, 5)
+        trunc_normal_tf_(w)
+        ```
     """
     with torch.no_grad():
         _trunc_normal_(tensor, 0, 1.0, a, b)

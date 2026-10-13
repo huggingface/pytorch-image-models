@@ -30,16 +30,19 @@ class TrainingTask(nn.Module):
         dtype: Dtype for task tensors/buffers (defaults to torch default)
         verbose: Enable info logging
 
-    Example:
-        >>> task = SomeTask(model, criterion, device=torch.device('cuda'))
-        >>>
-        >>> # Prepare for distributed training (if needed)
-        >>> if distributed:
-        >>>     task.prepare_distributed(device_ids=[local_rank])
-        >>>
-        >>> # Training loop
-        >>> result = task(input, target)
-        >>> result['loss'].backward()
+    Examples:
+
+        ```python
+        task = SomeTask(model, criterion, device=torch.device('cuda'))
+
+        # prepare for distributed training (if needed)
+        if distributed:
+            task.prepare_distributed(device_ids=[local_rank])
+
+        # training loop
+        result = task(input, target)
+        result['loss'].backward()
+        ```
     """
 
     def __init__(
@@ -79,10 +82,13 @@ class TrainingTask(nn.Module):
         Returns:
             self (for method chaining)
 
-        Example:
-            >>> task = LogitDistillationTask(student, teacher, criterion)
-            >>> task.compile()
-            >>> task.prepare_distributed(device_ids=[args.local_rank])
+        Examples:
+
+            ```python
+            task = LogitDistillationTask(student, teacher, criterion)
+            task.compile()
+            task.prepare_distributed(device_ids=[args.local_rank])
+            ```
         """
         # Default implementation - subclasses override if they need DDP
         return self
