@@ -142,7 +142,7 @@ def _freeze_unfreeze(root_module, submodules=[], include_bn_running_stats=True, 
     submodules = [root_module.get_submodule(m) for m in submodules]
 
     if not len(submodules):
-        named_modules, submodules = list(zip(*root_module.named_children()))
+        named_modules, submodules = [''], [root_module]
 
     for n, m in zip(named_modules, submodules):
         # (Un)freeze parameters
