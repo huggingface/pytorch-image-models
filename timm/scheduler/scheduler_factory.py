@@ -94,14 +94,14 @@ def create_scheduler_v2(
 
     Args:
         optimizer: optimizer to schedule
-        sched: scheduler name, one of 'cosine', 'tanh', 'step', 'multistep', 'plateau', 'poly', 'wsd', 'rsqrt',
-            or 'none' for a constant lr (returns None)
+        sched: scheduler name, one of 'cosine', 'tanh', 'step', 'multistep', 'poly', 'wsd', 'rsqrt', 'plateau'
+            (deprecated), or 'none' for a constant lr (returns None)
         num_epochs: number of epochs in the schedule (excluding warmup if warmup_prefix, excluding cooldown)
         decay_epochs: lr decay interval (step), or the length of the decay phase (wsd / rsqrt) in epochs, a value
             in (0, 1) is a fraction of the schedule length. None = 90 (step), 0.2 (wsd / rsqrt)
         decay_milestones: epochs to decay the lr at (multistep)
         cooldown_epochs: epochs to hold the lr at min_lr after the schedule ends
-        patience_epochs: epochs w/o improvement before decaying the lr (plateau)
+        patience_epochs: epochs w/o improvement before decaying the lr (plateau, deprecated)
         decay_rate: lr decay rate (step, multistep, plateau), the polynomial power (poly)
         min_lr: lr lower bound for schedulers that decay to it
         warmup_lr: lr at the start of warmup

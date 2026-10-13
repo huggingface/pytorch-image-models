@@ -12,6 +12,15 @@
 
 ## What's New
 
+## October 13, 2026
+
+* Hyperparameter sweeps via a new `sweep.py`: grid / random search over any `train.py` argument, one effective `--config` per job, run on a pool of local GPUs and resumable. WSD sweeps train one stable trunk per hyperparameter combination and branch independent cooldowns from its milestone checkpoints, comparing annealing at several budgets for a fraction of the cost of full runs. See the [training docs](https://huggingface.co/docs/timm/training_script#hyperparameter-sweeps).
+* `train.py`: `--resume auto` resumes in place from the experiment's own `last.pth.tar` (checkpoint history, `model_best` and `summary.csv` stay consistent), `--stop-epoch N` stops without changing the schedule, `--save-epochs N [N ...]` keeps `milestone-N.pth.tar` snapshots, and YAML `--config` values are validated against the script's arguments.
+* Deprecate `PlateauLRScheduler` (`--sched plateau`). `timm` schedulers are stateless functions of the epoch or update count, the metric-driven plateau schedule never fit that and its state is not checkpointed, so resume was never exact. Use `cosine` or `wsd`.
+* Docs: new [Model API](https://huggingface.co/docs/timm/model_api) page, generated model family pages for every model module replacing the old per-model pages, and expanded data / loss / models reference pages.
+* Model API consistency fixes: `reset_classifier()` keeps the current pooling in all models, unknown constructor args raise `TypeError` everywhere, Swin family `dynamic_img_size`, LeViT layer-wise lr decay, `no_weight_decay` names that matched no params (NesT, SwinV2, XCiT, FocalNet), resize state recorded for all `set_input_size` families.
+* Fixes: GCViT global query mixed images within a batch, gradient checkpointing for RDNet and MobileNetV5, `save_for_hf` stale test input size, EfficientViT (MSRA) rectangular resize, ImageDataset image conversion errors (#2846). `reparameterize_model` moved to `timm.models`.
+
 ## October 9, 2026
 
 * Add [CSPNeXt](https://arxiv.org/abs/2212.07784) (RTMDet backbone) `cspnext_{tiny,s,m,l,x}` with ImageNet-1k classification weights converted from OpenMMLab. Thanks [Munehiro Kobayashi](https://github.com/munehiro-k).
