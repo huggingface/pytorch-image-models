@@ -2,6 +2,7 @@ import collections.abc
 import math
 import re
 from collections import defaultdict
+from copy import deepcopy
 from itertools import chain
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Type, Union
 
@@ -365,3 +366,33 @@ def reinit_non_persistent_buffers(model: nn.Module) -> List[str]:
             module.init_non_persistent_buffers()
             reinitialized.append(name if name else '(root)')
     return reinitialized
+
+
+def reparameterize_model(model: nn.Module, inplace: bool = False) -> nn.Module:
+    """Fuse / re-parameterize a model for inference.
+
+    Walks the module tree and, for each child that supports it, replaces it with ``child.fuse()`` or calls
+    ``child.reparameterize()`` / ``child.switch_to_deploy()`` in place (e.g. conv + bn fusion, RepVGG style branches).
+
+    Args:
+        model: Model to re-parameterize.
+        inplace: Modify the model directly, otherwise a deep copy is converted and returned.
+
+    Returns:
+        The re-parameterized model.
+    """
+    if not inplace:
+        model = deepcopy(model)
+
+    def _fuse(m):
+        for child_name, child in m.named_children():
+            if hasattr(child, 'fuse'):
+                setattr(m, child_name, child.fuse())
+            elif hasattr(child, "reparameterize"):
+                child.reparameterize()
+            elif hasattr(child, "switch_to_deploy"):
+                child.switch_to_deploy()
+            _fuse(child)
+
+    _fuse(model)
+    return model

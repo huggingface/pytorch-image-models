@@ -42,15 +42,21 @@ def _torch_load(
         checkpoint_path: str,
         map_location: Union[str, torch.device] = 'cpu',
         weights_only: bool = True,
+        mmap: bool = False,
 ):
     use_safe_globals = weights_only and hasattr(torch.serialization, 'safe_globals')
+    load_kwargs = dict(map_location=map_location, weights_only=weights_only)
+    if mmap:
+        load_kwargs['mmap'] = True  # cheap metadata reads of large checkpoints, torch >= 2.1
     try:
         if use_safe_globals:
             # Compatibility: timm training checkpoints often include argparse.Namespace in `args`.
             with torch.serialization.safe_globals([argparse.Namespace]):
-                return torch.load(checkpoint_path, map_location=map_location, weights_only=weights_only)
-        return torch.load(checkpoint_path, map_location=map_location, weights_only=weights_only)
+                return torch.load(checkpoint_path, **load_kwargs)
+        return torch.load(checkpoint_path, **load_kwargs)
     except TypeError as e:
+        if mmap:
+            return _torch_load(checkpoint_path, map_location=map_location, weights_only=weights_only)
         if not weights_only:
             return torch.load(checkpoint_path, map_location=map_location)
         raise RuntimeError(

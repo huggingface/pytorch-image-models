@@ -18,7 +18,7 @@ feature map. The distillation variant (`_dist` models) adds a parallel `heads_di
 `weights_dist` path that returns a `(logits, logits_dist)` tuple when training and their
 mean in eval, mirroring `LevitDistilled`.
 
-For deployment, timm.utils.reparameterize_model(model.eval()) folds Conv-BatchNorm
+For deployment, timm.models.reparameterize_model(model.eval()) folds Conv-BatchNorm
 pairs and depthwise residual branches without changing the feature or classifier APIs.
 
 Ported from the official implementation (MIT license, Copyright (c) 2024 MLVlab), fvcore

@@ -136,7 +136,8 @@ group.add_argument('--pretrained-cfg-overlay', nargs='*', default={}, action=uti
 group.add_argument('--initial-checkpoint', default='', type=str, metavar='PATH',
                    help='Load this checkpoint into model after initialization (default: none)')
 group.add_argument('--resume', default='', type=str, metavar='PATH',
-                   help='Resume full model and optimizer state from checkpoint (default: none)')
+                   help='Resume full model and optimizer state from checkpoint, "auto" resumes from last.pth.tar in '
+                        'the --output/--experiment dir when present and otherwise starts fresh (default: none)')
 group.add_argument('--no-resume-opt', action='store_true', default=False,
                    help='prevent resume of optimizer state when resuming model')
 group.add_argument('--num-classes', type=int, default=None, metavar='N',
@@ -272,6 +273,9 @@ group.add_argument('--epoch-repeats', type=float, default=0., metavar='N',
                    help='epoch repeat multiplier (number of times to repeat dataset epoch per train epoch).')
 group.add_argument('--start-epoch', default=None, type=int, metavar='N',
                    help='manual epoch number (useful on restarts)')
+group.add_argument('--stop-epoch', default=None, type=int, metavar='N',
+                   help='stop after N completed epochs without changing the schedule horizon set by --epochs, '
+                        'the final epoch is always evaluated and checkpointed (default: run to the end)')
 group.add_argument('--decay-milestones', default=[90, 180, 270], type=int, nargs='+', metavar="MILESTONES",
                    help='list of decay epoch indices for multistep lr. must be increasing')
 group.add_argument('--decay-epochs', type=float, default=None, metavar='N',
@@ -445,6 +449,9 @@ group.add_argument('--recovery-interval', type=int, default=0, metavar='N',
                    help='how many batches to wait before writing recovery checkpoint')
 group.add_argument('--checkpoint-hist', type=int, default=10, metavar='N',
                    help='number of checkpoints to keep (default: 10)')
+group.add_argument('--save-epochs', type=int, default=[], nargs='+', metavar='N',
+                   help='completed epoch counts at which to keep a resumable milestone-N checkpoint outside the '
+                        'ranked history (default: none)')
 group.add_argument('-j', '--workers', type=int, default=4, metavar='N',
                    help='how many training processes to use (default: 4)')
 persistent_workers_group = group.add_mutually_exclusive_group()
@@ -537,17 +544,80 @@ parser.add_argument('--kd-token-distill-type', default='soft', type=str, choices
                     help='Token distillation type: "soft" for KL-div with temperature, "hard" for CE with teacher argmax (default: soft)')
 
 
+def config_arguments(argument_parser=None):
+    """Argument name -> argparse action for the arguments a YAML config (or a sweep) can set."""
+    argument_parser = argument_parser or parser
+    return {a.dest: a for a in argument_parser._actions if a.dest not in ('help', 'config')}
+
+
+def load_config(path, argument_parser=None):
+    """Load a YAML config and validate it against the training arguments before it becomes their defaults."""
+    argument_parser = argument_parser or parser
+    with open(path, 'r') as f:
+        cfg = yaml.safe_load(f) or {}
+    if not isinstance(cfg, dict):
+        argument_parser.error(f'config {path} must be a mapping of argument names to values.')
+    return validate_config(cfg, argument_parser)
+
+
+def validate_config(cfg, argument_parser=None):
+    """Validate config values against the training arguments.
+
+    Unknown keys warn (stale configs keep working), invalid choices and non-numeric values for numeric arguments
+    error, since argparse applies neither check to values set through ``set_defaults``. Numeric strings (YAML reads
+    ``3e-4`` as a string) are converted in place.
+    """
+    argument_parser = argument_parser or parser
+    actions = config_arguments(argument_parser)
+    store_actions = (argparse._StoreAction, argparse._StoreTrueAction, argparse._StoreFalseAction)
+    for key, value in cfg.items():
+        action = actions.get(key)
+        if action is None:
+            _logger.warning(f'Config key "{key}" matches no training argument and will be ignored.')
+            continue
+        if value is None or type(action) not in store_actions:
+            continue  # None leaves an argument unset, custom actions (e.g. ParseKwargs) validate themselves
+        expects_list = action.nargs in ('+', '*') or (isinstance(action.nargs, int) and action.nargs > 0)
+        if expects_list and not isinstance(value, (list, tuple)):
+            argument_parser.error(f'Config key "{key}" expects a list of values, got {value!r}.')
+        values = value if expects_list else [value]
+        if action.choices is not None:
+            bad = [v for v in values if v not in action.choices]
+            if bad:
+                argument_parser.error(
+                    f'Config key "{key}" has invalid value(s) {bad}, choose from {tuple(action.choices)}.')
+        if action.type in (int, float):
+            # YAML 1.1 reads 3e-4 as a string, convert numeric strings as the command line would
+            converted = []
+            for v in values:
+                if isinstance(v, str):
+                    try:
+                        v = action.type(v)
+                    except ValueError:
+                        pass
+                if isinstance(v, bool) or not isinstance(v, (int, float)):
+                    argument_parser.error(f'Config key "{key}" expects {action.type.__name__} value(s), got {v!r}.')
+                converted.append(v)
+            cfg[key] = converted if expects_list else converted[0]
+    return cfg
+
+
 def _parse_args():
     # Do we have a config file to parse?
     args_config, remaining = config_parser.parse_known_args()
     if args_config.config:
-        with open(args_config.config, 'r') as f:
-            cfg = yaml.safe_load(f)
-            parser.set_defaults(**cfg)
+        parser.set_defaults(**load_config(args_config.config))
 
     # The main arg parser parses the rest of the args, the usual
     # defaults will have been overridden if config file specified.
     args = parser.parse_args(remaining)
+
+    if args.resume == 'auto' and not args.experiment:
+        parser.error('--resume auto requires --experiment so the output dir to resume from is known.')
+    if args.stop_epoch is not None and args.stop_epoch < 1:
+        parser.error('--stop-epoch must be a positive number of completed epochs.')
+    if any(e < 1 for e in args.save_epochs):
+        parser.error('--save-epochs values are completed epoch counts and must be positive.')
 
     # map deprecated loss flags
     for flag, loss_type in (('bce_loss', 'bce'), ('jsd_loss', 'jsd')):
@@ -1149,6 +1219,13 @@ def main():
 
     # optionally resume from a checkpoint
     resume_epoch = None
+    if args.resume == 'auto':
+        # resume in place from the experiment's own last checkpoint if there is one, otherwise start fresh
+        args.resume = os.path.join(args.output or './output/train', args.experiment, 'last.pth.tar')
+        if not os.path.isfile(args.resume):
+            if utils.is_primary(args):
+                _logger.info(f"No checkpoint at '{args.resume}', starting a new run.")
+            args.resume = ''
     if args.resume:
         resume_epoch = resume_task_checkpoint(
             task,
@@ -1240,6 +1317,9 @@ def main():
             max_history=args.checkpoint_hist,
             task=task,
         )
+        if args.resume and os.path.dirname(os.path.abspath(args.resume)) == os.path.abspath(output_dir):
+            # resuming in place, carry on the ranked checkpoint history and best metric tracking
+            saver.load_state_dict_from_checkpoint(args.resume)
         with open(os.path.join(output_dir, 'args.yaml'), 'w') as f:
             f.write(args_text)
 
@@ -1277,6 +1357,16 @@ def main():
             lr_scheduler.step_update(start_epoch * updates_per_epoch)
         else:
             lr_scheduler.step(start_epoch)
+    end_epoch = num_epochs
+    if args.stop_epoch is not None:
+        if not start_epoch <= args.stop_epoch <= num_epochs:
+            raise ValueError(
+                f'--stop-epoch {args.stop_epoch} must be within the start epoch {start_epoch} and the scheduled '
+                f'{num_epochs} epochs.')
+        end_epoch = args.stop_epoch
+    if output_dir is not None:
+        # a resumed run re-logs from start_epoch, a fresh run into an existing dir starts a new summary
+        utils.trim_summary(os.path.join(output_dir, 'summary.csv'), start_epoch)
 
     if utils.is_primary(args):
         if args.warmup_prefix:
@@ -1288,10 +1378,12 @@ def main():
         else:
             sched_step = f'LR stepped per {"epoch" if lr_scheduler.t_in_epochs else "update"}.'
         _logger.info(f'Scheduled epochs: {num_epochs} {sched_explain}. {sched_step}')
+        if end_epoch != num_epochs:
+            _logger.info(f'Stopping after {end_epoch} completed epochs.')
 
     results = []
     try:
-        for epoch in range(start_epoch, num_epochs):
+        for epoch in range(start_epoch, end_epoch):
             _set_loader_epoch(loader_train, epoch)
 
             train_metrics = train_one_epoch(
@@ -1321,7 +1413,7 @@ def main():
                 utils.distribute_bn(model, args.world_size, args.dist_bn == 'reduce')
 
             epoch_p_1 = epoch + 1
-            if epoch_p_1 % args.val_interval != 0 and epoch_p_1 != num_epochs:
+            if epoch_p_1 % args.val_interval != 0 and epoch_p_1 != end_epoch and epoch_p_1 not in args.save_epochs:
                 if utils.is_primary(args):
                     _logger.info("Skipping eval and checkpointing ")
                 if lr_scheduler is not None:
@@ -1370,7 +1462,6 @@ def main():
                     eval_metrics,
                     filename=os.path.join(output_dir, 'summary.csv'),
                     lr=sum(lrs) / len(lrs),
-                    write_header=best_metric is None,
                     log_wandb=args.log_wandb and has_wandb,
                 )
 
@@ -1382,6 +1473,8 @@ def main():
             if saver is not None:
                 # save proper checkpoint with eval metric
                 best_metric, best_epoch = saver.save_checkpoint(epoch, metric=latest_metric)
+                if epoch_p_1 in args.save_epochs:
+                    saver.save_milestone(epoch_p_1)
 
             if lr_scheduler is not None:
                 # step LR for next epoch

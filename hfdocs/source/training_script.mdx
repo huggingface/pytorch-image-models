@@ -19,6 +19,67 @@ To train an SE-ResNet34 on ImageNet, locally distributed, 4 GPUs, one process pe
     It is recommended to use PyTorch 1.9+ w/ PyTorch native AMP and DDP instead of APEX AMP. --amp defaults to native AMP as of timm ver 0.4.3.  --apex-amp will force use of APEX components if they are installed.
 </Tip>
 
+### Config files
+
+Any training argument can be given in a YAML file via `--config`, keyed by the argument name with underscores (`--weight-decay` becomes `weight_decay`). Command line arguments override the file. Each run writes the full set of effective arguments to `args.yaml` in its output folder, and that file is itself a valid `--config`, so a run can be reproduced with `python train.py --config output/train/my-run/args.yaml`. Config keys are validated against the script's arguments: unknown keys warn, invalid choices or non-numeric values for numeric arguments error.
+
+### Resuming and milestone checkpoints
+
+Each run writes `last.pth.tar` (always the latest epoch, with model, optimizer, EMA and AMP scaler state), `model_best.pth.tar`, and a ranked history of `checkpoint-N.pth.tar` files limited by `--checkpoint-hist`.
+
+* `--resume PATH` restores that state and continues the schedule from the checkpoint's epoch. This is the usual way to start a new experiment folder from an existing checkpoint.
+* `--resume auto` resumes in place: with `--output` and `--experiment` set, it continues from `last.pth.tar` in that experiment folder if one exists and otherwise starts a fresh run. The same command can be re-run after an interruption. The checkpoint history, best metric tracking and `summary.csv` all carry on consistently, so `--checkpoint-hist` eviction and `model_best` stay correct across the restart.
+* `--stop-epoch N` stops after `N` completed epochs without changing the schedule set by `--epochs`. The final epoch is always evaluated and checkpointed, so a run can be trained in segments.
+* `--save-epochs N [N ...]` keeps immutable `milestone-N.pth.tar` snapshots (N is a completed epoch count) outside the ranked history. They are hardlinked from `last.pth.tar` where the filesystem allows so they cost no extra space, and an evaluation is forced at those epochs.
+
+Together these make warmup-stable-decay (WSD) experiments easy to run by hand: train a stable trunk once, then branch independent cooldowns from its milestones with full optimizer state.
+
+```bash
+# stable trunk through 30 completed epochs, keeping milestones at 18, 24 and 30. The 1 epoch decay is never reached.
+python train.py --config configs/vit.yaml --sched wsd --sched-on-updates --epochs 31 --decay-epochs 1 \
+    --stop-epoch 30 --save-epochs 18 24 30 --output output/wsd --experiment stable --resume auto
+
+# a 6 epoch 1-sqrt cooldown branched from epoch 24, i.e. a 30 epoch run that shares the first 24 epochs with the trunk
+python train.py --config configs/vit.yaml --sched wsd --sched-on-updates --epochs 30 --decay-epochs 6 --lr-decay-fn 1-sqrt \
+    --resume output/wsd/stable/milestone-24.pth.tar --output output/wsd --experiment decay-p24-d6
+```
+
+The decay occupies the last `--decay-epochs` of the schedule, so a cooldown of `D` epochs from `P` completed epochs is `--epochs P+D --decay-epochs D` (subtract `--warmup-epochs` from `--epochs` when `--warmup-prefix` is used). `sweep.py` below automates this.
+
+## Hyperparameter Sweeps
+
+`sweep.py` plans and runs sweeps over any `train.py` arguments, optionally with WSD branching. It writes one complete `train.py --config` file per job plus an immutable `plan.json` with the job dependency graph, then runs ready jobs on a pool of local GPUs. Every job is an ordinary `train.py` invocation with its own experiment folder, and each generated `run.sh` can be run by hand or handed to another scheduler.
+
+A quick sweep needs no spec file. Search axes come from `--sweep`, the base configuration from the trailing `train.py` arguments after `--`:
+
+```bash
+python sweep.py run --name lr-wd --sweep lr=1e-4,3e-4,1e-3 --sweep weight_decay=0.05,0.1 --gpus 0,1,2,3 \
+    -- --model vit_small_patch16_224 --data-dir /data/imagenet --sched cosine --epochs 100 --amp
+```
+
+A WSD sweep shares one stable trunk per hyperparameter combination across many cooldowns. For each learning rate below, the trunk runs to 30 epochs with milestones at 18, 24 and 30, and a 6 epoch cooldown is branched from each milestone, 4 trunks and 12 cooldowns in total instead of 12 full runs. Jobs needing more than one GPU are launched with `torchrun`:
+
+```bash
+python sweep.py run --name vit-wsd --sweep lr=1e-3,5e-4,2e-4,1e-4 \
+    --wsd-points 18 24 30 --wsd-decay-epochs 6 --wsd-decay-fn 1-sqrt --gpus-per-job 2 --gpus 0,1 \
+    -- --model vit_small_patch16_224 --data-dir /data/imagenet --warmup-epochs 3 --warmup-prefix --amp
+```
+
+In a WSD sweep the planner owns `--sched`, `--epochs`, `--decay-epochs` and `--lr-decay-fn` (and `--output`, `--experiment`, `--resume`, `--stop-epoch`, `--save-epochs` in every sweep), so they can't be given on the command line or swept. Cooldowns start as soon as their milestone exists, while the trunk continues.
+
+A YAML spec adds random search with distributions, paired (zipped) axes, repeats over seeds and a base config file, see the docstring at the top of `sweep.py` for the schema. `python sweep.py plan spec.yaml` writes the configs and `graph.dot` without running anything.
+
+The sweep lives in `output/sweeps/<name>/` with one folder per trial, named after the swept values (`trial-000-lr0.001`), each containing the job experiment folders. While it runs, or afterwards:
+
+```bash
+python sweep.py status output/sweeps/vit-wsd    # job states and progress
+python sweep.py results output/sweeps/vit-wsd   # ranked endpoint metrics, written to results.csv
+```
+
+Results report the final epoch metric of every job, with the best epoch as extra columns and mean / std over repeats. Compare runs of equal total epochs: a cooldown branched at 30 epochs is not budget equivalent to one branched at 18. Without a validation set the ranking falls back to the training loss, and the endpoint checkpoints can be evaluated with `validate.py`.
+
+Running `sweep.py run` again on an interrupted sweep resumes it: finished jobs are skipped and a job with a partial run continues from its own `last.pth.tar`. Workers on several machines sharing the sweep folder can each run it, jobs are claimed atomically. The generated paths are fixed when the plan is written, so plan again under a new location rather than moving a sweep folder.
+
 
 ## Validation / Inference Scripts
 

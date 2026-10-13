@@ -19,6 +19,16 @@ from .model import unwrap_model, get_state_dict
 _logger = logging.getLogger(__name__)
 
 
+def load_checkpoint_metadata(checkpoint_path):
+    """Load a training checkpoint for its non-tensor entries (epoch, args, metric, saver state).
+
+    Tensors are memory mapped where the torch version allows, so this is cheap even for large checkpoints.
+    """
+    # local import to avoid a circular import (timm.utils -> timm.models)
+    from timm.models._helpers import _torch_load
+    return _torch_load(checkpoint_path, map_location='cpu', weights_only=True, mmap=True)
+
+
 class CheckpointSaver:
     def __init__(
             self,
@@ -107,7 +117,55 @@ class CheckpointSaver:
                 save_state['state_dict_ema'] = get_state_dict(self.model_ema, self.unwrap_fn)
         if metric is not None:
             save_state['metric'] = metric
+        save_state['saver'] = self.state_dict(epoch, metric)
         torch.save(save_state, save_path)
+
+    def state_dict(self, epoch=None, metric=None):
+        """Bookkeeping needed to continue checkpoint management after a resume into the same directory.
+
+        Args:
+            epoch: Epoch of the checkpoint being written, it is not yet in the history when the state is captured.
+            metric: Metric of the checkpoint being written.
+        """
+        return {
+            'checkpoint_files': [(os.path.basename(f), m) for f, m in self.checkpoint_files],
+            'best_epoch': self.best_epoch,
+            'best_metric': self.best_metric,
+            'pending': (epoch, metric),
+        }
+
+    def load_state_dict(self, state_dict):
+        """Restore checkpoint history and best metric tracking from a checkpoint saved into ``checkpoint_dir``.
+
+        History entries whose files no longer exist are dropped. The checkpoint the state was captured from is added
+        to the history if it was retained on disk, so a resumed run keeps evicting and ranking exactly as before.
+        """
+        self.checkpoint_files = [
+            (os.path.join(self.checkpoint_dir, f), m) for f, m in state_dict.get('checkpoint_files', [])
+            if os.path.exists(os.path.join(self.checkpoint_dir, f))
+        ]
+        self.best_epoch = state_dict.get('best_epoch')
+        self.best_metric = state_dict.get('best_metric')
+        epoch, metric = state_dict.get('pending', (None, None))
+        if epoch is not None:
+            save_path = self._checkpoint_path(epoch)
+            if os.path.exists(save_path) and save_path not in [f for f, _ in self.checkpoint_files]:
+                self._track_checkpoint(save_path, epoch, metric, update_best_file=False)
+        _logger.info(f'Restored checkpoint history ({len(self.checkpoint_files)} files), best metric '
+                     f'{self.best_metric} (epoch {self.best_epoch}).')
+
+    def load_state_dict_from_checkpoint(self, checkpoint_path):
+        """Restore bookkeeping from a checkpoint file, reading only its metadata where the torch version allows."""
+        checkpoint = load_checkpoint_metadata(checkpoint_path)
+        state_dict = checkpoint.get('saver') if isinstance(checkpoint, dict) else None
+        if state_dict is None:
+            _logger.warning(f"No checkpoint history in '{checkpoint_path}', ranked checkpoints start fresh.")
+            return False
+        self.load_state_dict(state_dict)
+        return True
+
+    def _checkpoint_path(self, epoch):
+        return os.path.join(self.checkpoint_dir, '-'.join([self.save_prefix, str(epoch)]) + self.extension)
 
     def _cleanup_checkpoints(self, trim=0):
         trim = min(len(self.checkpoint_files), trim)
@@ -152,34 +210,52 @@ class CheckpointSaver:
         ):
             if len(self.checkpoint_files) >= self.max_history:
                 self._cleanup_checkpoints(1)
-            filename = '-'.join([self.save_prefix, str(epoch)]) + self.extension
-            save_path = os.path.join(self.checkpoint_dir, filename)
+            save_path = self._checkpoint_path(epoch)
             self._duplicate(last_save_path, save_path)
-
-            self.checkpoint_files.append((save_path, metric))
-            ranked_files = sorted(
-                [c for c in self.checkpoint_files if c[1] is not None],
-                key=lambda c: c[1],
-                reverse=not self.decreasing  # sort in descending order if a lower metric is not better
-            )
-            unranked_files = [c for c in self.checkpoint_files if c[1] is None]
-            if metric is None:
-                # Existing unranked entries are already newest first; move only the newly appended entry.
-                unranked_files.insert(0, unranked_files.pop())
-            self.checkpoint_files = ranked_files + unranked_files
-
-            checkpoints_str = "Current checkpoints:\n"
-            for c in self.checkpoint_files:
-                checkpoints_str += ' {}\n'.format(c)
-            _logger.info(checkpoints_str)
-
-            if metric is not None and (self.best_metric is None or self.cmp(metric, self.best_metric)):
-                self.best_epoch = epoch
-                self.best_metric = metric
-                best_save_path = os.path.join(self.checkpoint_dir, 'model_best' + self.extension)
-                self._duplicate(last_save_path, best_save_path)
+            self._track_checkpoint(save_path, epoch, metric)
 
         return (None, None) if self.best_metric is None else (self.best_metric, self.best_epoch)
+
+    def _track_checkpoint(self, save_path, epoch, metric=None, update_best_file=True):
+        """Add a retained checkpoint to the ranked history and update the best metric tracking."""
+        self.checkpoint_files.append((save_path, metric))
+        ranked_files = sorted(
+            [c for c in self.checkpoint_files if c[1] is not None],
+            key=lambda c: c[1],
+            reverse=not self.decreasing  # sort in descending order if a lower metric is not better
+        )
+        unranked_files = [c for c in self.checkpoint_files if c[1] is None]
+        if metric is None:
+            # Existing unranked entries are already newest first; move only the newly appended entry.
+            unranked_files.insert(0, unranked_files.pop())
+        self.checkpoint_files = ranked_files + unranked_files
+
+        checkpoints_str = "Current checkpoints:\n"
+        for c in self.checkpoint_files:
+            checkpoints_str += ' {}\n'.format(c)
+        _logger.info(checkpoints_str)
+
+        if metric is not None and (self.best_metric is None or self.cmp(metric, self.best_metric)):
+            self.best_epoch = epoch
+            self.best_metric = metric
+            if update_best_file:
+                best_save_path = os.path.join(self.checkpoint_dir, 'model_best' + self.extension)
+                self._duplicate(os.path.join(self.checkpoint_dir, 'last' + self.extension), best_save_path)
+
+    def save_milestone(self, completed_epochs):
+        """Snapshot the ``last`` checkpoint as an immutable ``milestone-N`` file, N the completed epoch count.
+
+        Milestones are outside the ranked history so they are never evicted, and they hardlink ``last`` where the
+        filesystem allows so no extra copy of the tensors is made. Call after ``save_checkpoint()`` for the epoch.
+
+        Returns:
+            Path of the milestone file.
+        """
+        last_save_path = os.path.join(self.checkpoint_dir, 'last' + self.extension)
+        save_path = os.path.join(self.checkpoint_dir, f'milestone-{completed_epochs}' + self.extension)
+        self._duplicate(last_save_path, save_path)
+        _logger.info(f'Saved milestone checkpoint {save_path}')
+        return save_path
 
     def save_recovery(self, epoch, batch_idx=0):
         assert epoch >= 0
