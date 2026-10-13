@@ -232,20 +232,27 @@ class LogitDistillationTask(TrainingTask):
         dtype: Dtype for task tensors/buffers
         verbose: Enable info logging
 
-    Example:
-        >>> # With model name string (num_classes/in_chans inferred from student)
-        >>> task = LogitDistillationTask(
-        ...     student_model=model, teacher_model='resnet50',
-        ...     criterion=nn.CrossEntropyLoss(),
-        ...     task_loss_weight=0.3, temperature=4.0,
-        ...     device=torch.device('cuda'),
-        ... )
-        >>> # With raw model
-        >>> task = LogitDistillationTask(
-        ...     student_model=model, teacher_model=my_teacher_model,
-        ...     criterion=nn.CrossEntropyLoss(),
-        ...     task_loss_weight=0.3, temperature=4.0,
-        ... )
+    Examples:
+        With a teacher model name, `num_classes` and `in_chans` are inferred from the student:
+
+        ```python
+        task = LogitDistillationTask(
+            student_model=model, teacher_model='resnet50',
+            criterion=nn.CrossEntropyLoss(),
+            task_loss_weight=0.3, temperature=4.0,
+            device=torch.device('cuda'),
+        )
+        ```
+
+        With a teacher model instance:
+
+        ```python
+        task = LogitDistillationTask(
+            student_model=model, teacher_model=my_teacher_model,
+            criterion=nn.CrossEntropyLoss(),
+            task_loss_weight=0.3, temperature=4.0,
+        )
+        ```
     """
 
     def __init__(
@@ -514,14 +521,17 @@ class FeatureDistillationTask(TrainingTask):
         dtype: Dtype for task tensors/buffers
         verbose: Enable info logging
 
-    Example:
-        >>> # With model name string (num_classes/in_chans inferred from student)
-        >>> task = FeatureDistillationTask(
-        ...     student_model=model, teacher_model='resnet50',
-        ...     criterion=nn.CrossEntropyLoss(),
-        ...     distill_loss_weight=5.0, task_loss_weight=1.0,
-        ...     device=torch.device('cuda'),
-        ... )
+    Examples:
+        With a teacher model name, `num_classes` and `in_chans` are inferred from the student:
+
+        ```python
+        task = FeatureDistillationTask(
+            student_model=model, teacher_model='resnet50',
+            criterion=nn.CrossEntropyLoss(),
+            distill_loss_weight=5.0, task_loss_weight=1.0,
+            device=torch.device('cuda'),
+        )
+        ```
     """
 
     def __init__(

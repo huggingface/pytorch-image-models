@@ -193,8 +193,9 @@ def freeze(root_module, submodules=[], include_bn_running_stats=True):
 
     Hint: If you want to freeze batch norm ONLY, use `timm.utils.model.freeze_batch_norm_2d`.
 
-    Examples::
+    Examples:
 
+        ```python
         >>> model = timm.create_model('resnet18')
         >>> # Freeze up to and including layer2
         >>> submodules = [n for n, _ in model.named_children()]
@@ -208,6 +209,7 @@ def freeze(root_module, submodules=[], include_bn_running_stats=True):
         True
         >>> # Unfreeze
         >>> unfreeze(model)
+        ```
     """
     _freeze_unfreeze(root_module, submodules, include_bn_running_stats=include_bn_running_stats, mode="freeze")
 

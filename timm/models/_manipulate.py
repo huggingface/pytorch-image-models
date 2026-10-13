@@ -250,9 +250,12 @@ def checkpoint_seq(
     Returns:
         Output of running :attr:`functions` sequentially on :attr:`*inputs`
 
-    Example:
-        >>> model = nn.Sequential(...)
-        >>> input_var = checkpoint_seq(model, input_var, every=2)
+    Examples:
+
+        ```python
+        model = nn.Sequential(...)
+        input_var = checkpoint_seq(model, input_var, every=2)
+        ```
     """
     if use_reentrant is None:
         use_reentrant = use_reentrant_ckpt()
@@ -354,11 +357,14 @@ def reinit_non_persistent_buffers(model: nn.Module) -> List[str]:
     Returns:
         List of module names that were reinitialized
 
-    Example:
-        >>> model = create_model('vit_base', pretrained=True)
-        >>> # After loading checkpoint or moving to new device
-        >>> reinitialized = reinit_non_persistent_buffers(model)
-        >>> print(f"Reinitialized {len(reinitialized)} modules")
+    Examples:
+
+        ```python
+        model = create_model('vit_base', pretrained=True)
+        # after loading a checkpoint or moving to a new device
+        reinitialized = reinit_non_persistent_buffers(model)
+        print(f"Reinitialized {len(reinitialized)} modules")
+        ```
     """
     reinitialized = []
     for name, module in model.named_modules():

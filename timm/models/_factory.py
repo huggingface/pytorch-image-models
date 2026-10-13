@@ -195,28 +195,28 @@ def create_model(
         drop_path_rate (float): Stochastic depth drop rate for training.
         global_pool (str): Classifier global pooling type.
 
-    Example:
+    Examples:
 
-    ```py
-    >>> from timm import create_model
+        ```python
+        >>> from timm import create_model
 
-    >>> # Create a MobileNetV3-Large model with no pretrained weights.
-    >>> model = create_model('mobilenetv3_large_100')
+        >>> # Create a MobileNetV3-Large model with no pretrained weights.
+        >>> model = create_model('mobilenetv3_large_100')
 
-    >>> # Create a MobileNetV3-Large model with pretrained weights.
-    >>> model = create_model('mobilenetv3_large_100', pretrained=True)
-    >>> model.num_classes
-    1000
+        >>> # Create a MobileNetV3-Large model with pretrained weights.
+        >>> model = create_model('mobilenetv3_large_100', pretrained=True)
+        >>> model.num_classes
+        1000
 
-    >>> # Create a MobileNetV3-Large model with pretrained weights and a new head with 10 classes.
-    >>> model = create_model('mobilenetv3_large_100', pretrained=True, num_classes=10)
-    >>> model.num_classes
-    10
+        >>> # Create a MobileNetV3-Large model with pretrained weights and a new head with 10 classes.
+        >>> model = create_model('mobilenetv3_large_100', pretrained=True, num_classes=10)
+        >>> model.num_classes
+        10
 
-    >>> # Create a Dinov2 small model with pretrained weights and save weights in a custom directory.
-    >>> model = create_model('vit_small_patch14_dinov2.lvd142m', pretrained=True, cache_dir="/data/my-models")
-    >>> # Data will be stored at `/data/my-models/models--timm--vit_small_patch14_dinov2.lvd142m/`
-    ```
+        >>> # Create a Dinov2 small model with pretrained weights and save weights in a custom directory.
+        >>> model = create_model('vit_small_patch14_dinov2.lvd142m', pretrained=True, cache_dir="/data/my-models")
+        >>> # Data will be stored at `/data/my-models/models--timm--vit_small_patch14_dinov2.lvd142m/`
+        ```
     """
     # Parameters that aren't supported by all models or are intended to only override model defaults if set
     # should default to None in command line args/cfg. Remove them if they are present and not set so that

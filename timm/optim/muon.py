@@ -714,18 +714,25 @@ class Muon(torch.optim.Optimizer):
                 tensor learning rates and requires optimizer state tensors to live on the parameter device.
             verbose: Log parameter routing decisions (Muon vs AdamW)
 
-        Example:
+        Examples:
+            Muon for 2D+ parameters and the AdamW fallback for 1D parameters, selected automatically:
+
             ```python
-            # Simple usage - automatically uses Muon for 2D+ params, AdamW for 1D
             optimizer = Muon(model.parameters(), lr=0.02)
+            ```
 
-            # Use AdaMuon algorithm for adaptive scaling
+            The AdaMuon algorithm for adaptive scaling:
+
+            ```python
             optimizer = Muon(model.parameters(), lr=6e-4, algo="adamuon")
+            ```
 
-            # Manual control over parameter groups
+            Manual control over the parameter groups, `use_fallback=True` selects AdamW for a group:
+
+            ```python
             optimizer = Muon([
                 {'params': weight_matrices, 'lr': 0.02},
-                {'params': biases, 'use_fallback': True, 'lr': 3e-4}, # use AdamW if use_fallback=True
+                {'params': biases, 'use_fallback': True, 'lr': 3e-4},
             ])
             ```
         """

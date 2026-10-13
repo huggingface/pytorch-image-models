@@ -48,20 +48,27 @@ class TokenDistillationTask(TrainingTask):
         dtype: Dtype for task tensors/buffers
         verbose: Enable info logging
 
-    Example:
-        >>> # With model name string (num_classes/in_chans inferred from student)
-        >>> task = TokenDistillationTask(
-        ...     student_model=model, teacher_model='deit_base_patch16_224',
-        ...     criterion=nn.CrossEntropyLoss(),
-        ...     distill_type='soft', temperature=3.0, task_loss_weight=0.5,
-        ...     device=torch.device('cuda'),
-        ... )
-        >>> # With raw model
-        >>> task = TokenDistillationTask(
-        ...     student_model=model, teacher_model=my_teacher_model,
-        ...     criterion=nn.CrossEntropyLoss(),
-        ...     distill_type='hard', task_loss_weight=0.5,
-        ... )
+    Examples:
+        With a teacher model name, `num_classes` and `in_chans` are inferred from the student:
+
+        ```python
+        task = TokenDistillationTask(
+            student_model=model, teacher_model='deit_base_patch16_224',
+            criterion=nn.CrossEntropyLoss(),
+            distill_type='soft', temperature=3.0, task_loss_weight=0.5,
+            device=torch.device('cuda'),
+        )
+        ```
+
+        With a teacher model instance:
+
+        ```python
+        task = TokenDistillationTask(
+            student_model=model, teacher_model=my_teacher_model,
+            criterion=nn.CrossEntropyLoss(),
+            distill_type='hard', task_loss_weight=0.5,
+        )
+        ```
     """
 
     def __init__(

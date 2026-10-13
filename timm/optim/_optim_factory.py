@@ -1161,6 +1161,8 @@ def list_optimizers(
             List of tuples of (name, description) (e.g., [('adam', 'Adaptive Moment...'), ...])
 
     Examples:
+
+        ```python
         >>> list_optimizers()
         ['adam', 'adamw', 'sgd', ...]
 
@@ -1175,6 +1177,7 @@ def list_optimizers(
          ('adadelta', 'torch.optim Adadelta, Adapts learning rates based on running windows of gradients'),
          ('adafactor', 'Memory-efficient implementation of Adam with factored gradients'),
         ...]
+        ```
     """
     return default_registry.list_optimizers(filter, exclude_filters, with_description)
 
@@ -1219,14 +1222,19 @@ def get_optimizer_class(
         ValueError: If optimizer name is not found in registry
 
     Examples:
-        >>> # Get SGD with nesterov momentum default
-        >>> SGD = get_optimizer_class('sgd')  # nesterov=True bound
-        >>> opt = SGD(model.parameters(), lr=0.1, momentum=0.9)
+        With the registry defaults bound, `sgd` has nesterov momentum enabled:
 
-        >>> # Get raw optimizer class
-        >>> SGD = get_optimizer_class('sgd')
-        >>> opt = SGD(model.parameters(), lr=1e-3, momentum=0.9)
+        ```python
+        SGD = get_optimizer_class('sgd')
+        opt = SGD(model.parameters(), lr=0.1, momentum=0.9)
+        ```
 
+        The raw optimizer class:
+
+        ```python
+        SGD = get_optimizer_class('sgd', bind_defaults=False)
+        opt = SGD(model.parameters(), lr=1e-3, momentum=0.9, nesterov=True)
+        ```
     """
     return default_registry.get_optimizer_class(name, bind_defaults=bind_defaults)
 
@@ -1283,28 +1291,35 @@ def create_optimizer_v2(
         Configured optimizer instance.
 
     Examples:
-        >>> # Basic usage with a model
-        >>> optimizer = create_optimizer_v2(model, 'adamw', lr=1e-3)
+        AdamW from a model, the parameter groups are created automatically:
 
-        >>> # SGD with momentum and weight decay
-        >>> optimizer = create_optimizer_v2(
-        ...     model, 'sgd', lr=0.1, momentum=0.9, weight_decay=1e-4
-        ... )
+        ```python
+        optimizer = create_optimizer_v2(model, 'adamw', lr=1e-3)
+        ```
 
-        >>> # Adam with layer-wise learning rate decay
-        >>> optimizer = create_optimizer_v2(
-        ...     model, 'adam', lr=1e-3, layer_decay=0.7
-        ... )
+        SGD with momentum and weight decay:
 
-        >>> # Custom parameter groups
-        >>> def group_fn(model):
-        ...     return [
-        ...         {'params': model.backbone.parameters(), 'lr': 1e-4},
-        ...         {'params': model.head.parameters(), 'lr': 1e-3}
-        ...     ]
-        >>> optimizer = create_optimizer_v2(
-        ...     model, 'sgd', param_group_fn=group_fn
-        ... )
+        ```python
+        optimizer = create_optimizer_v2(model, 'sgd', lr=0.1, momentum=0.9, weight_decay=1e-4)
+        ```
+
+        Adam with layer-wise learning rate decay:
+
+        ```python
+        optimizer = create_optimizer_v2(model, 'adam', lr=1e-3, layer_decay=0.7)
+        ```
+
+        Custom parameter groups:
+
+        ```python
+        def group_fn(model):
+            return [
+                {'params': model.backbone.parameters(), 'lr': 1e-4},
+                {'params': model.head.parameters(), 'lr': 1e-3},
+            ]
+
+        optimizer = create_optimizer_v2(model, 'sgd', param_group_fn=group_fn)
+        ```
 
     Note:
         Parameter group handling precedence:
