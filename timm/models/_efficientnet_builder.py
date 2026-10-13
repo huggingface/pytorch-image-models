@@ -446,8 +446,9 @@ class EfficientNetBuilder:
         current_stride = 2
         current_dilation = 1
         stages = []
-        if model_block_args[0][0]['stride'] > 1:
-            # if the first block starts with a stride, we need to extract first level feat from stem
+        if model_block_args[0][0]['stride'] > 1 or model_block_args[0][0].get('s2d', False):
+            # if the first block starts with a stride (or a space2depth downsample), we need to extract
+            # first level feat from stem
             feature_info = dict(module='bn1', num_chs=in_chs, stage=0, reduction=current_stride)
             self.features.append(feature_info)
 
@@ -471,6 +472,7 @@ class EfficientNetBuilder:
                 if not space2depth and block_args.pop('s2d', False):
                     assert block_args['stride'] == 1
                     space2depth = 1
+                    current_stride *= 2  # the space2depth conv downsamples by 2
 
                 if space2depth > 0:
                     # FIXME s2d is a WIP
@@ -485,8 +487,10 @@ class EfficientNetBuilder:
                 extract_features = False
                 if last_block:
                     next_stack_idx = stack_idx + 1
+                    # the stride of the block that ends a space2depth region is dropped, so it
+                    # doesn't start a new feature level
                     extract_features = next_stack_idx >= len(model_block_args) or \
-                        model_block_args[next_stack_idx][0]['stride'] > 1
+                        (model_block_args[next_stack_idx][0]['stride'] > 1 and not space2depth)
 
                 next_dilation = current_dilation
                 if block_args['stride'] > 1:
