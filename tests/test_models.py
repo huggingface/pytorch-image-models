@@ -61,7 +61,7 @@ FEAT_INTER_FILTERS = [
     'mambaout', 'inception_next', 'inception_v4', 'hgnet', 'gcvit', 'focalnet', 'efficientformer_v2', 'edgenext',
     'davit', 'rdnet', 'convnext', 'pit', 'starnet', 'shvit', 'fasternet', 'swiftformer', 'ghostnet', 'naflexvit',
     'csatv2', 'cpubone', 'lcnetv2', 'lowformer', 'qwen3_vit', 'iformer', 'efficientvim', 'deepseek_vit',
-    'efficientvit_mit', 'cspnext', 'dpn',
+    'efficientvit_mit', 'cspnext', 'dpn', 'mobilenetv5',
 ]
 
 # transformer / hybrid models don't support full set of spatial / feature APIs and/or have spatial output.
@@ -722,6 +722,24 @@ def test_model_forward_intermediates(model_name, batch_size):
         )
         torch.testing.assert_close(output, output3, rtol=1e-4, atol=1e-5)
 
+
+
+@pytest.mark.features
+@pytest.mark.parametrize('use_msfa', [True, False])
+@pytest.mark.parametrize('indices', [None, [0], [-1]])
+def test_mobilenetv5_intermediate_final_features(use_msfa, indices):
+    model = create_model(
+        'mobilenetv5_base', channel_multiplier=0.125, num_features=64,
+        msfa_output_resolution=4, num_classes=7, use_msfa=use_msfa,
+    ).eval()
+    x = torch.randn(2, 3, 96, 128)
+    with torch.no_grad():
+        output, intermediates = model.forward_intermediates(x, indices=indices)
+        torch.testing.assert_close(output, model.forward_features(x))
+        torch.testing.assert_close(model.forward_head(output), model(x))
+        selected = model.forward_intermediates(x, indices=indices, intermediates_only=True)
+        for actual, expected in zip(intermediates, selected):
+            torch.testing.assert_close(actual, expected, rtol=0, atol=0)
 
 
 def _create_fx_model(model, train=False):
