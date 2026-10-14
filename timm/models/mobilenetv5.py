@@ -329,6 +329,7 @@ class MobileNetV5(nn.Module):
         if stop_early:
             assert intermediates_only, 'Must use intermediates_only for early stopping.'
         intermediates = []
+        msfa_intermediates = []
         if extra_blocks:
             take_indices, max_index = feature_take_indices(len(self.blocks) + 1, indices)
         else:
@@ -336,15 +337,13 @@ class MobileNetV5(nn.Module):
             take_indices = [self.stage_ends[i] for i in take_indices]
             max_index = self.stage_ends[max_index]
 
-        # FIXME MFSA and forward_intermediates overlap, they both take indices from specific features
-        # When a user wants to grab specific feature maps for a downstream task AND have the msfa output
-        # what should we do? Accumulate two intermediates? One for msfa and one for take_indices?
-
         # forward pass
         feat_idx = 0  # stem is index 0
         x = self.conv_stem(x)
         if feat_idx in take_indices:
             intermediates.append(x)
+        if self.msfa is not None and feat_idx in self.msfa_indices:
+            msfa_intermediates.append(x)
 
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             blocks = self.blocks
@@ -358,12 +357,14 @@ class MobileNetV5(nn.Module):
                 x = blk(x)
             if feat_idx in take_indices:
                 intermediates.append(x)
+            if self.msfa is not None and feat_idx in self.msfa_indices:
+                msfa_intermediates.append(x)
 
         if intermediates_only:
             return intermediates
 
-        # FIXME see note above
-        # self.msfa(msfa_intermediatse)
+        if self.msfa is not None:
+            x = self.msfa(msfa_intermediates)
 
         return x, intermediates
 

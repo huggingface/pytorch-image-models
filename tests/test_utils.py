@@ -74,6 +74,30 @@ def test_freeze_unfreeze():
     unfreeze(model.layer1[0], ['bn1'])
     assert isinstance(model.layer1[0].bn1, BatchNorm2d)
 
+
+@pytest.mark.parametrize('model_name',['vit_tiny_patch16_224', 'deit_tiny_distilled_patch16_224', None])
+@pytest.mark.parametrize('include_bn_running_stats', [False, True])
+@pytest.mark.parametrize('requires_grad', [False, True])
+def test_freeze_unfreeze_root_parameters(model_name, include_bn_running_stats, requires_grad):
+    model = timm.create_model(model_name) if model_name else torch.nn.Linear(4, 2)
+    model.requires_grad_(not requires_grad)
+    change_grad = unfreeze if requires_grad else freeze
+
+    change_grad(model, include_bn_running_stats=include_bn_running_stats)
+
+    assert all(p.requires_grad == requires_grad for p in model.parameters())
+
+
+def test_vit_linear_probe_freezes_backbone():
+    model = timm.create_model('vit_tiny_patch16_224', num_classes=5, img_size=32)
+    freeze(model)
+    unfreeze(model, 'head')
+
+    model(torch.randn(2, 3, 32, 32)).sum().backward()
+
+    assert {n for n, p in model.named_parameters() if p.grad is not None} == {'head.weight', 'head.bias'}
+
+
 def test_activation_stats_hook_validation():
     model = timm.create_model('test_resnet')
     
