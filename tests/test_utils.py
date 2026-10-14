@@ -74,7 +74,8 @@ def test_freeze_unfreeze():
     unfreeze(model.layer1[0], ['bn1'])
     assert isinstance(model.layer1[0].bn1, BatchNorm2d)
 
-@pytest.mark.parametrize('model_name', ['vit_tiny_patch16_224', 'deit_tiny_distilled_patch16_224', None])
+
+@pytest.mark.parametrize('model_name',['vit_tiny_patch16_224', 'deit_tiny_distilled_patch16_224', None])
 @pytest.mark.parametrize('include_bn_running_stats', [False, True])
 @pytest.mark.parametrize('requires_grad', [False, True])
 def test_freeze_unfreeze_root_parameters(model_name, include_bn_running_stats, requires_grad):
