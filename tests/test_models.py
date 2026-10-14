@@ -532,6 +532,25 @@ def test_gcvit_batch_consistency():
         single = torch.cat([model(x[i:i + 1]) for i in range(x.shape[0])])
     torch.testing.assert_close(batched, single, rtol=1e-4, atol=1e-4)
 
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name', ['resnet18', 'resnet50d', 'convnext_atto'])
+def test_features_only_grad_checkpointing_backward(model_name):
+    # backbones built with features_only=True are trained with gradient checkpointing in detection/segmentation
+    # pipelines; backward must work and give the same gradients as without checkpointing
+    x = torch.randn(2, 3, 64, 64)
+    grads = []
+    for grad_checkpointing in (False, True):
+        torch.manual_seed(0)
+        model = create_model(model_name, pretrained=False, features_only=True).train()
+        model.set_grad_checkpointing(grad_checkpointing)
+        sum(f.pow(2).mean() for f in model(x)).backward()
+        grads.append([p.grad for p in model.parameters() if p.grad is not None])
+    assert len(grads[0]) == len(grads[1])
+    for g0, g1 in zip(*grads):
+        torch.testing.assert_close(g1, g0)
+
+
 @pytest.mark.base
 @pytest.mark.parametrize(
     'model_name',
