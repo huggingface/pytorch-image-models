@@ -48,7 +48,7 @@ The decay occupies the last `--decay-epochs` of the schedule, so a cooldown of `
 
 ## Hyperparameter Sweeps
 
-`sweep.py` (PyTorch 2.5 or newer) plans and runs sweeps over any `train.py` arguments, optionally with WSD branching. It writes one complete `train.py --config` file per job plus an immutable `plan.json` with the job dependency graph, then runs ready jobs on a pool of local GPUs. Every job is an ordinary `train.py` invocation with its own experiment folder, and each generated `run.sh` can be run by hand or handed to another scheduler.
+`sweep.py` (PyTorch 2.5 or newer) plans and runs sweeps over any `train.py` arguments, optionally with WSD branching. It writes one complete `train.py --config` file per job plus a `plan.json` with the job dependency graph, then runs ready jobs on a pool of local GPUs. The plan stays fixed while workers run. Every job is an ordinary `train.py` invocation with its own experiment folder, and each generated `run.sh` can be run by hand or handed to another scheduler.
 
 A quick sweep needs no spec file. Search axes come from `--sweep`, the base configuration from the trailing `train.py` arguments after `--`:
 
@@ -56,6 +56,8 @@ A quick sweep needs no spec file. Search axes come from `--sweep`, the base conf
 python sweep.py run --name lr-wd --sweep lr=1e-4,3e-4,1e-3 --sweep weight_decay=0.05,0.1 --gpus 0,1,2,3 \
     -- --model vit_small_patch16_224 --data-dir /data/imagenet --sched cosine --epochs 100 --amp
 ```
+
+`--gpus` lists the GPUs to run on, as indices into `CUDA_VISIBLE_DEVICES` when it is set (in a Slurm allocation, for example).
 
 A WSD sweep shares one stable trunk per hyperparameter combination across many cooldowns. For each learning rate below, the trunk runs to 30 epochs with milestones at 18, 24 and 30, and a 6 epoch cooldown is branched from each milestone, 4 trunks and 12 cooldowns in total instead of 12 full runs. Cooldowns start as soon as their milestone exists, while the trunk continues. Jobs needing more than one GPU are launched with `torchrun`:
 
@@ -84,16 +86,37 @@ Additionally, in a WSD sweep:
 
 A YAML spec adds random search with distributions, paired (zipped) axes, repeats over seeds and a base config file, see the docstring at the top of `sweep.py` for the schema. `python sweep.py plan spec.yaml` writes the configs and `graph.dot` without running anything.
 
-The sweep lives in `output/sweeps/<name>/`, relative to the spec file (or the working directory for a command line sweep), with one folder per trial, named after the swept values (`trial-000-lr0.001`), each containing the job experiment folders. While it runs, or afterwards:
+The sweep lives in `output/sweeps/<name>/`, relative to the spec file (or the working directory for a command line sweep), with one folder per trial, named after the swept values (`trial-000-lr0.001`), each containing the job experiment folders. Every kept checkpoint is a full copy with optimizer state, so sweep jobs keep one ranked checkpoint besides `last.pth.tar` and `model_best.pth.tar` (`--checkpoint-hist 1`), and WSD sweeps step the schedule per update (`--sched-on-updates`). Setting either in the base configuration overrides it. While it runs, or afterwards:
 
 ```bash
 python sweep.py status output/sweeps/vit-wsd    # job states and progress
 python sweep.py results output/sweeps/vit-wsd   # ranked endpoint metrics, written to results.csv
 ```
 
-Results report the final epoch metric of every job, with the best epoch as extra columns and mean / std over repeats. Compare runs of equal total epochs: a cooldown branched at 30 epochs is not budget equivalent to one branched at 18. Without a validation set the ranking falls back to the training loss, and the endpoint checkpoints can be evaluated with `validate.py`.
+Results compare trials at equal budgets. A WSD sweep shows one row per trial and one column per cooldown (`p24-d6` is a 6 epoch cooldown from 24 epochs) with the final metric, averaged over repeats, and the best of each column marked. A plain sweep is ranked by its final metric within each epoch budget. `results.csv` holds every job, trunk segments included, with the best epoch of each. Without a validation set the ranking falls back to the training loss, and the endpoint checkpoints can be evaluated with `validate.py`.
 
-Running `sweep.py run` again on an interrupted sweep resumes it: finished jobs are skipped and a job with a partial run continues from its own `last.pth.tar`. Workers on several machines sharing the sweep folder can each run it, jobs are claimed atomically. A worker can tell when a job of its own host died, but not one on another host: if a remote worker went down mid-job, delete its claim folder `state/<job>.claim` (`/` in the job id becomes `__`) and the job is picked up on the next poll. The generated paths are fixed when the plan is written, so plan again under a new location rather than moving a sweep folder.
+Running `sweep.py run` again on an interrupted sweep resumes it: finished jobs are skipped and a job with a partial run continues from its own `last.pth.tar`. Workers on several machines sharing the sweep folder can each run it. They coordinate through `flock` locks under `state/locks`, which every training process of a job holds as well, so a job whose worker died is neither started again nor replanned until its last process has exited. A sweep shared by several machines needs a filesystem whose `flock` works across all of them, such as NFSv4 or Lustre mounted with `-o flock`. Mounts with local-only locking don't coordinate across machines, so check locking from each client. Stopping a worker (Ctrl-C, or SIGTERM from `scancel`) stops its jobs, and running a job's `run.sh` by hand bypasses the coordination.
+
+Lock files under `state/locks` are permanent: never delete or replace them to clear a busy sweep. Stop or wait for its workers and training processes instead. A `running (gone)` status means the training lock is free but the attempt has not been reconciled; run a worker to settle it and resume unfinished work. `status` and `results` do not repair job state.
+
+A worker reads the plan once when it starts. To change a sweep, stop all of its workers and training processes, plan again with `--force`, then start them again. Before any job has started, anything about the plan can change. Afterwards its training jobs can only be extended: more trials, cooldowns, or WSD points after the existing ones, where each trunk continues from where it stopped. Changes to existing training jobs need a new sweep. The generated paths are fixed when the plan is written, so plan again under a new location rather than moving a sweep folder.
+
+If planning is interrupted, workers detect configs or launchers from an incomplete plan write and refuse to start. Re-run the original planning command with `--force` to finish or repair the plan, then restart the workers. Each successful plan write publishes a matching generation in `plan.json`, the configs and the launchers; an unchanged, complete plan writes nothing.
+
+For example, to extend the CLI WSD sweep above to 36 stable epochs, stop its workers and jobs, then repeat the original planning arguments with the later point appended:
+
+```bash
+python sweep.py plan --force --name vit-wsd --sweep lr=1e-3,5e-4,2e-4,1e-4 \
+    --wsd-points 18 24 30 36 --wsd-decay-epochs 6 --wsd-decay-fn 1-sqrt --gpus-per-job 2 \
+    -- --model vit_small_patch16_224 --data-dir /data/imagenet --warmup-epochs 3 --warmup-prefix --amp
+python sweep.py run output/sweeps/vit-wsd --gpus 0,1
+```
+
+For a YAML sweep, append the point in the original spec and run `python sweep.py plan spec.yaml --force` before restarting. Keep `wsd.decay_epochs` explicit and unchanged (`[6]` in this example): its default is 20% of the final point, so extending the horizon can otherwise change existing cooldowns. Preserve existing trial IDs; reordering or expanding grid axes can renumber trials. With `lr_noise`, the trunk's schedule depends on its horizon, so adding a later point to a started sweep requires a new sweep.
+
+Training settings belong in the plan: use the spec's `train` block, or arguments after `--` when creating a CLI sweep. There are no runtime training overrides. Reporting settings, such as the ranking metric, and output settings (`checkpoint_hist`, `log_wandb`, `wandb_project`, `wandb_tags`) may be changed offline with `--force` without resetting job state or changing training identity. Output settings apply to future attempts; completed jobs are not rerun.
+
+`sweep.py` requires Unix `flock`: tested on Linux, expected to work but untested on macOS. Native Windows is unsupported; use WSL2. Locks don't survive a network partition that outlasts an NFS lease: a disconnected process may keep training after losing its locks, so another machine can start an overlapping attempt.
 
 
 ## Validation / Inference Scripts

@@ -83,6 +83,11 @@ _logger = logging.getLogger('train')
 config_parser = parser = argparse.ArgumentParser(description='Training Config', add_help=False)
 parser.add_argument('-c', '--config', default='', type=str, metavar='FILE',
                     help='YAML config file specifying default arguments')
+# set by sweep.py for the jobs it launches, parsed here so they stay out of the training args, configs and checkpoints
+parser.add_argument('--sweep-locks', nargs='+', default=None, metavar='FILE',
+                    help='lock files to hold shared until this process exits')
+parser.add_argument('--sweep-attempt', nargs=2, default=None, metavar=('FILE', 'ID'),
+                    help='exit unless FILE names attempt ID, checked while holding the locks')
 
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
@@ -602,9 +607,32 @@ def validate_config(cfg, argument_parser=None):
     return cfg
 
 
+_sweep_lock_fds = []  # held until the process exits
+
+
+def _join_sweep_attempt(lock_paths, attempt_file, attempt_id):
+    """Hold a sweep's locks shared for the life of this process, and exit unless the attempt is still live.
+
+    While any rank of a sweep job holds them, the sweep can't be replanned and the job can't be started again, also
+    after the sweep.py that launched it died. A rank starting after its attempt was retired exits before writing
+    anything. Retirement may clear the attempt ID while ranks run, but a replacement needs the exclusive lock.
+    """
+    import fcntl
+    for path in lock_paths:
+        fd = os.open(path, os.O_RDWR)
+        fcntl.flock(fd, fcntl.LOCK_SH)
+        _sweep_lock_fds.append(fd)
+    with open(attempt_file) as f:
+        live = f.read().strip()
+    if live != attempt_id:
+        raise SystemExit(f'Sweep attempt {attempt_id} is not the live one ({live or "retired"}), exiting.')
+
+
 def _parse_args():
     # Do we have a config file to parse?
     args_config, remaining = config_parser.parse_known_args()
+    if args_config.sweep_attempt:
+        _join_sweep_attempt(args_config.sweep_locks or [], *args_config.sweep_attempt)
     if args_config.config:
         parser.set_defaults(**load_config(args_config.config))
 

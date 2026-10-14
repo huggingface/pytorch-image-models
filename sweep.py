@@ -4,9 +4,9 @@
 Plan and run sweeps over train.py arguments, optionally with warmup-stable-decay (WSD) branching where one stable
 trunk per hyperparameter combination feeds many independent cooldown branches resumed from its milestone checkpoints.
 
-The planner writes one complete, effective train.py config per job (the same YAML --config accepts) and an immutable
-plan.json with the job dependency graph, then the executor launches ready jobs on a pool of local GPUs. Nothing about
-the search lives in train.py: every job is a plain `train.py --config` invocation that can also be run by hand.
+The planner writes one complete, effective train.py config per job (the same YAML --config accepts) and a plan.json
+with the job dependency graph, fixed while workers run. The executor launches ready jobs on a pool of local GPUs.
+Nothing about the search lives in train.py: every job is a plain `train.py --config` invocation that can be run by hand.
 
 Quick sweeps need no spec file, the search space comes from --sweep and the base config from the trailing train.py
 arguments:
@@ -52,13 +52,35 @@ A YAML spec adds random search, paired axes, repeats and WSD branching:
 
 `run` on a sweep that was interrupted picks up where it stopped: finished jobs are skipped and a job with a partial
 run resumes from its own last.pth.tar (train.py --resume auto). Workers on several machines sharing the sweep
-directory can each `run` it, jobs are claimed atomically.
+directory can each `run` it. They coordinate through flock locks under state/locks, which every rank of a job holds
+too: when a worker dies, its job isn't started again, nor the sweep replanned, until the job's last rank has exited.
+A sweep shared by several hosts needs a filesystem whose flock works across them (e.g. NFSv4, or Lustre mounted with
+-o flock).
+Lock files are permanent: never delete or replace them to clear a busy sweep. A `running (gone)` status means the
+training lock is free; run a worker to reconcile the recorded attempt. `status` only observes, it doesn't repair state.
+
+A worker loads the plan once. Changing the plan needs --force and every worker and job of the sweep stopped, and once
+the sweep has started its training jobs can only be extended: trials, cooldowns, or WSD points after the existing ones
+(each trunk then continues from where it stopped). Reporting, checkpoint retention and W&B settings may also be updated
+offline without retraining. Plan changes to existing training jobs as a new sweep.
+Workers check that configs and launchers match the published plan generation. If planning was interrupted, re-run
+the original planning command with --force to repair the files before restarting workers.
+
+To extend a WSD sweep, stop every worker and training process, append a later point in the original spec, then:
+
+    python sweep.py plan sweep.yaml --force
+    python sweep.py run output/sweeps/vit-wsd --gpus 0,1,2,3
+
+Keep wsd.decay_epochs explicit and unchanged: its default is 20% of the final point. Preserve existing trial IDs;
+reordering or expanding grid axes can change them. With lr_noise, a trunk's schedule depends on its horizon, so adding
+a later point to a started sweep requires a new sweep.
 
 Paths in the generated configs and scripts are fixed when the plan is written, so a sweep directory can't be moved or
 copied elsewhere and run from there: plan it again under the new location instead.
 
-Requires PyTorch >= 2.5: job completion and milestone recovery read training checkpoints with
-`torch.load(weights_only=True)`, which needs `safe_globals` for the `argparse.Namespace` they hold.
+Requires Unix flock and PyTorch >= 2.5. Tested on Linux; macOS is expected to work but untested. On Windows use WSL2.
+Job completion and milestone recovery read training checkpoints with `torch.load(weights_only=True)`, which needs
+`safe_globals` for the `argparse.Namespace` they hold.
 
 Hacked together by / Copyright 2026 Ross Wightman
 """
@@ -71,19 +93,27 @@ import logging
 import math
 import os
 import random
+import re
 import shutil
+import signal
 import socket
 import stat
 import subprocess
 import sys
 import threading
 import time
+import uuid
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 import yaml
+
+try:
+    import fcntl
+except ImportError:  # native Windows, see main()
+    fcntl = None
 
 import train as train_script
 from timm.scheduler import create_scheduler_v2, scheduler_kwargs
@@ -97,6 +127,7 @@ TORCH_SUPPORTED = hasattr(torch.serialization, 'safe_globals')
 TORCH_REQUIREMENT = 'sweep.py requires PyTorch >= 2.5 (torch.serialization.safe_globals), found ' + torch.__version__
 PLAN_FILE = 'plan.json'
 STATE_DIR = 'state'
+LOCK_DIR = os.path.join(STATE_DIR, 'locks')
 TIMM_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 # train.py arguments the planner or the executor owns, they can't be set in a base config or swept
@@ -106,8 +137,19 @@ RESERVED_KEYS = {
 }
 # additionally derived by the planner for every job of a WSD sweep
 WSD_RESERVED_KEYS = {'sched', 'epochs', 'decay_epochs', 'lr_decay_fn'}
-# left out of the logical config hash, they describe where a job runs rather than what it trains
-UNHASHED_KEYS = {'output', 'experiment', 'resume', 'log_wandb', 'wandb_project', 'wandb_tags'}
+# left out of the logical config hash, they describe where a job runs and what it keeps rather than what it trains
+OUTPUT_SETTINGS = ('checkpoint_hist', 'log_wandb', 'wandb_project', 'wandb_tags')
+UNHASHED_KEYS = {'output', 'experiment', 'resume'} | set(OUTPUT_SETTINGS)
+# derived from the sweep's WSD points for the trunk, the stable phase they bound trains the same at any horizon, so
+# adding a later point extends a trunk instead of invalidating it
+TRUNK_HORIZON_KEYS = {'epochs', 'save_epochs', 'decay_epochs', 'lr_decay_fn'}
+# a job keeps these when a plan is updated, besides training the same, or it counts as changed
+JOB_GRAPH_KEYS = ('trial', 'kind', 'dir', 'config', 'script', 'deps', 'inputs', 'gpus', 'end_epoch', 'wsd', 'artifacts')
+PLAN_SETTINGS = ('metric', 'search', 'space_keys', 'wsd', 'trials')
+# sweep defaults that differ from train.py's, any explicit setting overrides them
+SWEEP_DEFAULTS = {
+    'checkpoint_hist': 1,  # each kept checkpoint is a full copy w/ optimizer state, for every job of the sweep
+}
 
 SLUG_ABBREV = {
     'lr': 'lr', 'lr_base': 'lrb', 'weight_decay': 'wd', 'batch_size': 'bs', 'drop': 'drop', 'drop_path': 'dp',
@@ -144,9 +186,20 @@ def trial_slug(params: Dict[str, Any], max_len: int = 48) -> str:
     return slug[:max_len].rstrip('-')
 
 
-def config_hash(cfg: Dict[str, Any]) -> str:
-    logical = {k: v for k, v in cfg.items() if k not in UNHASHED_KEYS}
+def job_config_hash(cfg: Dict[str, Any], kind: str) -> str:
+    """Identity of what a job trains, two jobs with the same hash produce the same run."""
+    exclude = UNHASHED_KEYS
+    if kind == 'wsd_stable':
+        exclude = exclude | {'stop_epoch'}  # the segments of a trunk train one run, they share its identity
+        if cfg.get('lr_noise') is None:  # lr noise windows scale with the horizon
+            exclude = exclude | TRUNK_HORIZON_KEYS
+    logical = {k: v for k, v in cfg.items() if k not in exclude}
     return hashlib.sha1(json.dumps(logical, sort_keys=True, default=str).encode()).hexdigest()[:8]
+
+
+def train_defaults() -> Dict[str, Any]:
+    """train.py's argument defaults, as a config dict."""
+    return vars(train_script.parser.parse_args([]))
 
 
 def parse_cli_value(text: str) -> Any:
@@ -305,7 +358,8 @@ def validate_train_keys(cfg: Dict[str, Any], where: str):
 def build_base_config(train_block: Dict[str, Any], spec_dir: str, wsd: bool = False) -> Dict[str, Any]:
     """Full effective train.py config: parser defaults <- sweep defaults <- optional base config file <- train block."""
     train_block = dict(train_block or {})
-    cfg = vars(train_script.parser.parse_args([]))
+    cfg = train_defaults()
+    cfg.update(SWEEP_DEFAULTS)
     if wsd:
         cfg['sched_on_updates'] = True  # short decays are poorly sampled per epoch, any explicit setting overrides
     base_path = train_block.pop('config', None)
@@ -314,7 +368,6 @@ def build_base_config(train_block: Dict[str, Any], spec_dir: str, wsd: bool = Fa
         base_cfg = train_script.load_config(base_path)
         check_reserved(base_cfg, f'base config {base_path}')
         cfg.update(base_cfg)
-    check_reserved(train_block, 'the train block')
     validate_train_keys(train_block, 'the train block')
     cfg.update(train_block)
     return cfg
@@ -381,11 +434,18 @@ def normalize_wsd(wsd: Dict[str, Any], base_cfg: Dict[str, Any], train_block: Di
     return {'points': points, 'decay_epochs': sorted(set(decay_epochs)), 'decay_fn': list(decay_fn), 'min_lr': min_lr}
 
 
+def job_dir_of(job_id: str) -> str:
+    """Directory of a job relative to the sweep root, `<trial>/<job>`, except that the WSD trunk segments of a trial
+    (`<trial>/stable-<point>`) share `<trial>/stable`.
+    """
+    trial, name = job_id.split('/', 1)
+    return os.path.join(trial, 'stable') if re.fullmatch(r'stable-\d+', name) else job_id
+
+
 def make_job(
         job_id: str,
         trial_id: str,
         kind: str,
-        job_dir: str,
         cfg: Dict[str, Any],
         config_name: str = 'config.yaml',
         deps: Optional[List[str]] = None,
@@ -395,6 +455,7 @@ def make_job(
         wsd: Optional[Dict[str, Any]] = None,
         artifacts: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
+    job_dir = job_dir_of(job_id)
     return {
         'id': job_id,
         'trial': trial_id,
@@ -402,7 +463,8 @@ def make_job(
         'dir': job_dir,
         'config': os.path.join(job_dir, config_name),
         'script': os.path.join(job_dir, config_name.replace('config', 'run').replace('.yaml', '.sh')),
-        'config_hash': config_hash(cfg),
+        'config_hash': job_config_hash(cfg, kind),
+        'output_settings': {k: cfg[k] for k in OUTPUT_SETTINGS},
         'deps': deps or [],
         'inputs': inputs or [],
         'gpus': gpus,
@@ -423,11 +485,11 @@ def plan_sweep(spec: Dict[str, Any], spec_dir: str = '.') -> Dict[str, Any]:
     root = os.path.abspath(os.path.join(spec_dir, output, name) if not os.path.isabs(output) else
                            os.path.join(output, name))
     wsd_spec = spec.get('wsd')
+    check_reserved(spec.get('train') or {}, 'the train block', WSD_RESERVED_KEYS - {'sched'} if wsd_spec else ())
     base_cfg = build_base_config(spec.get('train'), spec_dir, wsd=bool(wsd_spec))
     search = dict(spec.get('search') or {})
     space_keys = set(search.get('space') or {}) | {k for g in normalize_zip_groups(search.get('zip')) for k in g}
     check_reserved(space_keys, 'the search space', WSD_RESERVED_KEYS if wsd_spec else ())
-    check_reserved(spec.get('train') or {}, 'the train block', WSD_RESERVED_KEYS - {'sched'} if wsd_spec else ())
     validate_train_keys({k: None for k in space_keys}, 'the search space')
     repeats = int(search.get('repeats', 1) or 1)
     if repeats > 1 and 'seed' in space_keys:
@@ -459,8 +521,7 @@ def plan_sweep(spec: Dict[str, Any], spec_dir: str = '.') -> Dict[str, Any]:
 
             if wsd is None:
                 cfg = dict(trial_cfg, output=trial_dir, experiment='train', resume='auto')
-                job = make_job(f'{trial_id}/train', trial_id, 'train', os.path.join(trial_id, 'train'), cfg,
-                               gpus=gpus_per_job)
+                job = make_job(f'{trial_id}/train', trial_id, 'train', cfg, gpus=gpus_per_job)
                 jobs.append(job)
                 trial['jobs'].append(job['id'])
                 continue
@@ -476,7 +537,7 @@ def plan_sweep(spec: Dict[str, Any], spec_dir: str = '.') -> Dict[str, Any]:
             for point in points:
                 cfg = dict(trunk_cfg, stop_epoch=point)
                 job = make_job(
-                    f'{trial_id}/stable-{point}', trial_id, 'wsd_stable', stable_dir, cfg,
+                    f'{trial_id}/stable-{point}', trial_id, 'wsd_stable', cfg,
                     config_name=f'config-{point}.yaml', deps=[prev_job] if prev_job else [], gpus=gpus_per_job,
                     end_epoch=point, wsd={'point': point},
                     artifacts=[os.path.join(stable_dir, f'milestone-{point}.pth.tar')],
@@ -501,7 +562,7 @@ def plan_sweep(spec: Dict[str, Any], spec_dir: str = '.') -> Dict[str, Any]:
                                 cfg['min_lr'] = min_lr
                                 cfg['experiment'] = branch
                             bjob = make_job(
-                                f'{trial_id}/{branch}', trial_id, 'wsd_cooldown', os.path.join(trial_id, branch), cfg,
+                                f'{trial_id}/{branch}', trial_id, 'wsd_cooldown', cfg,
                                 deps=[job['id']], inputs=[os.path.join(stable_dir, f'milestone-{point}.pth.tar')],
                                 gpus=gpus_per_job, end_epoch=point + decay_epochs + trial_cfg['cooldown_epochs'],
                                 wsd=branch_wsd,
@@ -517,7 +578,7 @@ def plan_sweep(spec: Dict[str, Any], spec_dir: str = '.') -> Dict[str, Any]:
         'version': PLAN_VERSION,
         'name': name,
         'root': root,
-        'created': datetime.now().isoformat(timespec='seconds'),
+        'created': datetime.now(timezone.utc).isoformat(timespec='seconds'),
         'python': sys.executable,
         'train_script': os.path.join(TIMM_ROOT, 'train.py'),
         'metric': metric,
@@ -541,6 +602,7 @@ def run_script_text(job: Dict[str, Any], plan: Dict[str, Any]) -> str:
         launcher += f' -m torch.distributed.run --standalone --nproc_per_node={job["gpus"]}'
     return (
         '#!/bin/bash\n'
+        f'# plan_generation: {plan["generation"]}\n'
         f'# {job["id"]} ({job["kind"]}), generated by sweep.py for sweep "{plan["name"]}"\n'
         '# Extra arguments are passed through to train.py, e.g. --resume auto to continue an interrupted run.\n'
         'set -e\n'
@@ -565,97 +627,182 @@ def graph_dot(plan: Dict[str, Any]) -> str:
     return '\n'.join(lines) + '\n'
 
 
-def plan_signature(plan: Dict[str, Any]) -> Dict[str, str]:
-    return {j['id']: j['config_hash'] for j in plan['jobs']}
+def write_file(path: str, text: str, executable: bool = False):
+    """Atomically replace a file whose content changed, a job launching meanwhile never reads a partial file."""
+    try:
+        with open(path) as f:
+            if f.read() == text:
+                return
+    except OSError:
+        pass
+    tmp = f'{path}.{os.getpid()}.tmp'
+    with open(tmp, 'w') as f:
+        f.write(text)
+    if executable:
+        os.chmod(tmp, os.stat(tmp).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    os.replace(tmp, path)
+
+
+def plan_lock(root: str) -> 'Lock':
+    """The sweep's plan lock. A planner writes under it exclusively, every worker and every rank of a job it started
+    hold it shared, so the plan only changes once all of them have stopped.
+    """
+    return Lock(os.path.join(root, LOCK_DIR, 'plan.lock'))
 
 
 def write_plan(plan: Dict[str, Any], spec: Dict[str, Any], force: bool = False) -> str:
+    """Write a plan into its sweep directory.
+
+    An unchanged plan writes nothing, also while the sweep runs. A change needs `force` and every worker and job of
+    the sweep stopped. Once started, existing training is preserved: jobs may be added, reporting and output settings
+    changed.
+    """
     root = plan['root']
-    plan_path = os.path.join(root, PLAN_FILE)
-    if os.path.exists(plan_path):
-        existing = load_plan(root)
-        old_sig, new_sig = plan_signature(existing), plan_signature(plan)
-        if old_sig != new_sig:
-            if not force:
-                raise SweepError(
-                    f'{plan_path} exists with a different set of jobs or configs. Use a new sweep name, or --force to '
-                    f'overwrite the plan (jobs whose config changed are reset, their old results are set aside).')
-            _logger.warning(f'Overwriting the existing plan in {root}.')
-        else:
-            _logger.info(f'Plan in {root} is unchanged.')
-    invalidate_changed_jobs(plan)
-    os.makedirs(os.path.join(root, STATE_DIR), exist_ok=True)
-    for job in plan['jobs']:
-        job_dir = os.path.join(root, job['dir'])
-        os.makedirs(job_dir, exist_ok=True)
-        with open(os.path.join(root, job['config']), 'w') as f:
-            f.write(f'# {job["id"]} ({job["kind"]}), effective train.py config generated by sweep.py\n')
-            f.write(f'# config_hash: {job["config_hash"]}\n')
-            yaml.safe_dump(job['_cfg'], f, default_flow_style=False, sort_keys=False)
-        script_path = os.path.join(root, job['script'])
-        with open(script_path, 'w') as f:
-            f.write(run_script_text(job, plan))
-        os.chmod(script_path, os.stat(script_path).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    with open(os.path.join(root, 'sweep.yaml'), 'w') as f:
-        yaml.safe_dump(spec, f, default_flow_style=False, sort_keys=False)
-    with open(os.path.join(root, 'graph.dot'), 'w') as f:
-        f.write(graph_dot(plan))
-    serializable = dict(plan, jobs=[{k: v for k, v in j.items() if k != '_cfg'} for j in plan['jobs']])
-    tmp_path = plan_path + '.tmp'
-    with open(tmp_path, 'w') as f:
-        json.dump(serializable, f, indent=2)
-    os.replace(tmp_path, plan_path)
+    lock = plan_lock(root)
+    lock.acquire(exclusive=False, block=True)  # compare without reading through another planner's writes
+    try:
+        changes = plan_changes(plan)
+    finally:
+        lock.release()
+    if changes is not None and not any(changes.values()):
+        _logger.info(f'Plan in {root} is unchanged.')
+        return root
+    check_plan_update(plan, changes, force)
+    if not lock.acquire(exclusive=True):
+        raise SweepError(
+            f'{root} is in use, its workers or jobs hold {lock.path}. Stop all of them before changing the plan.')
+    try:
+        changes = plan_changes(plan)  # another planner may have written meanwhile
+        check_plan_update(plan, changes, force)
+        if changes is not None and not any(changes.values()):
+            return root
+        if changes is not None:
+            _logger.warning(f'Updating the plan in {root} ({describe_changes(changes)}).')
+        os.makedirs(os.path.join(root, STATE_DIR), exist_ok=True)
+        plan['generation'] = uuid.uuid4().hex
+        for job in plan['jobs']:
+            os.makedirs(os.path.join(root, job['dir']), exist_ok=True)
+            config_text = (
+                f'# {job["id"]} ({job["kind"]}), effective train.py config generated by sweep.py\n'
+                f'# plan_generation: {plan["generation"]}\n'
+                f'# config_hash: {job["config_hash"]}\n'
+                + yaml.safe_dump(job['_cfg'], default_flow_style=False, sort_keys=False)
+            )
+            write_file(os.path.join(root, job['config']), config_text)
+            write_file(os.path.join(root, job['script']), run_script_text(job, plan), executable=True)
+        write_file(os.path.join(root, 'sweep.yaml'), yaml.safe_dump(spec, default_flow_style=False, sort_keys=False))
+        write_file(os.path.join(root, 'graph.dot'), graph_dot(plan))
+        serializable = dict(plan, jobs=[{k: v for k, v in j.items() if k != '_cfg'} for j in plan['jobs']])
+        write_file(os.path.join(root, PLAN_FILE), json.dumps(serializable, indent=2))  # publish the generation last
+    finally:
+        lock.release()
     return root
 
 
-def recorded_config_hash(config_path: str) -> Optional[str]:
-    """The config hash sweep.py wrote into a generated config file's header, None if absent."""
-    try:
-        with open(config_path) as f:
-            for line in f:
-                if not line.startswith('#'):
-                    break
-                if line.startswith('# config_hash:'):
-                    return line.split(':', 1)[1].strip()
-    except OSError:
-        pass
-    return None
-
-
-def invalidate_changed_jobs(plan: Dict[str, Any]):
-    """Reset jobs whose directory holds outputs of a different config, so stale results are never reported under
-    the new config and --resume auto can't continue the old run.
-
-    Identity comes from the hash recorded in each directory's existing config file, not from the previous plan, so a
-    job removed and later reintroduced with another config is caught too.
-    """
+def check_plan_update(plan: Dict[str, Any], changes: Optional[Dict[str, List[str]]], force: bool):
+    """Raise unless the sweep's plan may be updated with these changes."""
+    if changes is None or not any(changes.values()):
+        return
     root = plan['root']
-    # read every recorded hash first: WSD trunk segments share a directory, moving it for one segment would hide the
-    # config files of the others
-    old_hashes = {job['id']: recorded_config_hash(os.path.join(root, job['config'])) for job in plan['jobs']}
-    changed = [j for j in plan['jobs'] if old_hashes[j['id']] not in (None, j['config_hash'])]
-    moved = set()
-    for job in changed:
-        job_dir = os.path.join(root, job['dir'])
-        has_outputs = any(os.path.exists(os.path.join(job_dir, f)) for f in ('summary.csv', 'last.pth.tar', 'run.log'))
-        if job_dir in moved or not has_outputs:
-            continue
-        old_hash = old_hashes[job['id']]
-        stale_dir = f'{job_dir}.stale-{old_hash}'
-        n = 1
-        while os.path.exists(stale_dir):
-            n += 1
-            stale_dir = f'{job_dir}.stale-{old_hash}-{n}'
-        os.rename(job_dir, stale_dir)
-        moved.add(job_dir)
-        _logger.warning(f'{job["id"]} config changed, previous outputs moved to {stale_dir}')
-    # reset every changed job, and every job whose outputs went with a moved directory
+    if not force:
+        raise SweepError(
+            f'{os.path.join(root, PLAN_FILE)} exists with a different plan ({describe_changes(changes)}). Use a new '
+            f'sweep name, or --force to update it.')
+    if (changes['removed'] or changes['changed']) and sweep_started(root):
+        hint = (' New WSD points must come after the existing ones, and wsd.decay_epochs (by default 20% of the last '
+                'point) must stay the same.') if plan['wsd'] else ''
+        raise SweepError(
+            f'{root} has started, so its plan can only be extended with new jobs, this one has '
+            f'{describe_changes(changes)}. Plan the change as a new sweep.{hint}')
+
+
+def mismatched_plan_files(plan: Dict[str, Any]) -> List[str]:
+    """Configs and launchers missing the published generation. Called under the plan lock.
+
+    Each file is replaced atomically, with the generation on its second line. A planner interrupted before publishing
+    plan.json leaves different generations, which workers must refuse to run.
+    """
+    expected = f'# plan_generation: {plan["generation"]}\n'
+    mismatched = []
     for job in plan['jobs']:
-        if job in changed or os.path.join(root, job['dir']) in moved:
-            state = JobState(root, job)
-            state.release()
-            if os.path.exists(state.path):
-                os.remove(state.path)
+        for rel in (job['config'], job['script']):
+            try:
+                with open(os.path.join(plan['root'], rel)) as f:
+                    f.readline()
+                    if f.readline() == expected:
+                        continue
+            except OSError:
+                pass
+            mismatched.append(rel)
+    return mismatched
+
+
+def plan_changes(plan: Dict[str, Any]) -> Optional[Dict[str, List[str]]]:
+    """Plan changes and incomplete generated files, None if the sweep has no plan yet."""
+    root = plan['root']
+    if not os.path.exists(os.path.join(root, PLAN_FILE)):
+        return None
+    old_plan = load_plan(root)
+    old = {j['id']: j for j in old_plan['jobs']}
+    new = {j['id']: j for j in plan['jobs']}
+    changed = [
+        job_id for job_id, job in new.items() if job_id in old and (
+            any(old[job_id].get(k) != job.get(k) for k in JOB_GRAPH_KEYS)
+            or old[job_id]['config_hash'] != job['config_hash'])
+    ]
+    return {
+        'added': [i for i in new if i not in old],
+        'removed': [i for i in old if i not in new],
+        'changed': changed,
+        'output_settings': [
+            job_id for job_id, job in new.items()
+            if job_id in old and old[job_id]['output_settings'] != job['output_settings']
+        ],
+        'settings': [k for k in PLAN_SETTINGS if old_plan.get(k) != plan.get(k)],
+        'files': mismatched_plan_files(old_plan),
+    }
+
+
+def describe_changes(changes: Dict[str, List[str]]) -> str:
+    parts = []
+    for what, ids in changes.items():
+        if ids:
+            if what == 'settings':
+                parts.append('settings changed (' + ', '.join(ids) + ')')
+                continue
+            if what == 'output_settings':
+                what = 'with changed output settings'
+            unit = 'files' if what == 'files' else 'jobs'
+            if what == 'files':
+                what = 'missing or from another generation'
+            listed = '' if what == 'added' else ' (' + ', '.join(ids[:3]) + (', ...' if len(ids) > 3 else '') + ')'
+            parts.append(f'{len(ids)} {unit} {what}{listed}')
+    return ', '.join(parts)
+
+
+def sweep_started(root: str) -> bool:
+    """Whether any job of the sweep has started. Attempts are recorded before a job starts, outputs count too (a job
+    run by hand has no record).
+    """
+    state_dir = os.path.join(root, STATE_DIR)
+    if os.path.isdir(state_dir) and any(n.endswith('.json') for n in os.listdir(state_dir)):
+        return True
+    return any(
+        os.path.exists(os.path.join(root, job['dir'], name))
+        for job in load_plan(root)['jobs'] for name in ('summary.csv', 'last.pth.tar')
+    )
+
+
+def milestone_source(job_dir: str, point: int) -> Optional[str]:
+    """A checkpoint in a trunk directory holding the state at `point` completed epochs, to recreate its milestone.
+
+    `last.pth.tar` (if it hasn't moved on) or the ranked `checkpoint-N` for that epoch hold the identical state.
+    """
+    for candidate in ('last.pth.tar', f'checkpoint-{point - 1}.pth.tar'):
+        source = os.path.join(job_dir, candidate)
+        if os.path.isfile(source) and checkpoint_epochs(source) == point:
+            return source
+    return None
 
 
 def load_plan(root: str) -> Dict[str, Any]:
@@ -701,15 +848,60 @@ def checkpoint_epochs(path: str) -> Optional[int]:
     return checkpoint['epoch'] + (1 if checkpoint.get('version', 1) > 1 else 0)
 
 
+class Lock:
+    """An flock on a file under the sweep's state/locks, taken through a descriptor of its own.
+
+    Lock files are never removed or replaced, a replaced file would split the lock. A held lock is never upgraded in
+    place either: a failed non-blocking upgrade drops the shared lock already held on local filesystems.
+    """
+
+    def __init__(self, path: str):
+        self.path = path
+        self.fd: Optional[int] = None
+
+    def acquire(self, exclusive: bool, block: bool = False) -> bool:
+        """Take the lock, False if it is held elsewhere (and `block` is not set)."""
+        assert self.fd is None, 'release a held lock before taking it again'
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        self.fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o666)
+        try:
+            fcntl.flock(self.fd, (fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH) | (0 if block else fcntl.LOCK_NB))
+        except BlockingIOError:
+            self.release()
+            return False
+        except OSError as e:
+            self.release()
+            raise SweepError(
+                f'could not lock {self.path} ({e}). Sweeps need a filesystem with working flock, across all hosts for '
+                f'a sweep shared by several.') from e
+        return True
+
+    def share(self):
+        """Turn the held exclusive lock shared. Not atomic, a waiting shared locker may get in between."""
+        fcntl.flock(self.fd, fcntl.LOCK_SH)
+
+    def release(self):
+        if self.fd is not None:
+            os.close(self.fd)
+            self.fd = None
+
+
 class JobState:
-    """Per-job status record under <root>/state, plus an atomic claim directory while a worker runs the job."""
+    """Per-job status record under <root>/state, plus the locks of the job's folder under <root>/state/locks.
+
+    The jobs training in one folder (the segments of a WSD trunk) share its locks:
+        * `.coord`: held exclusively by a worker while it starts, finishes or settles an attempt
+        * `.train`: exclusive while an attempt is reserved or settled, shared while it runs by its worker and by
+          every rank of the job, so a job whose worker died stays protected until its last rank exits
+        * `.attempt`: the id of the attempt ranks may join, empty once it is retired
+    """
 
     def __init__(self, root: str, job: Dict[str, Any]):
         self.root = root
         self.job = job
-        flat = job['id'].replace('/', '__')
-        self.path = os.path.join(root, STATE_DIR, flat + '.json')
-        self.claim_dir = os.path.join(root, STATE_DIR, flat + '.claim')
+        self.path = os.path.join(root, STATE_DIR, job['id'].replace('/', '__') + '.json')
+        locks = os.path.join(root, LOCK_DIR, job['dir'].replace('/', '__'))
+        self.coord_path, self.train_path, self.attempt_path = (locks + s for s in ('.coord', '.train', '.attempt'))
         self.reload()
 
     def reload(self):
@@ -736,43 +928,35 @@ class JobState:
             json.dump(self.data, f, indent=2)
         os.replace(tmp, self.path)
 
-    def claim(self) -> bool:
-        try:
-            os.mkdir(self.claim_dir)
-        except FileExistsError:
-            return False
-        with open(os.path.join(self.claim_dir, 'owner'), 'w') as f:
-            f.write(f'{socket.gethostname()}:{os.getpid()}\n')
-        return True
-
-    def release(self):
-        shutil.rmtree(self.claim_dir, ignore_errors=True)
-
-    def claim_owner(self) -> Optional[Tuple[str, int]]:
-        try:
-            with open(os.path.join(self.claim_dir, 'owner')) as f:
-                host, pid = f.read().strip().rsplit(':', 1)
-            return host, int(pid)
-        except (OSError, ValueError):
-            return None
-
     def set(self, status: str, **attempt_update):
         self.data['status'] = status
         if attempt_update and self.attempts:
             self.attempts[-1].update(attempt_update)
         self.save()
 
-    def start_attempt(self, pid: int, gpus: List[int], command: List[str]):
+    def start_attempt(self, attempt_id: str, gpus: List[int], command: List[str]):
         self.attempts.append({
             'attempt': len(self.attempts) + 1,
+            'id': attempt_id,
             'host': socket.gethostname(),
-            'pid': pid,
             'gpus': gpus,
             'command': command,
-            'start': datetime.now().isoformat(timespec='seconds'),
+            'start': datetime.now(timezone.utc).isoformat(timespec='seconds'),
         })
         self.data['status'] = 'running'
         self.save()
+
+    def set_live_attempt(self, attempt_id: str = ''):
+        """Name the attempt the job's ranks may join, '' retires it: a rank starting late then exits untrained."""
+        write_file(self.attempt_path, attempt_id)
+
+    def attempt_gone(self) -> bool:
+        """Whether nothing holds the folder's training lock, so a 'running' record has outlived its attempt."""
+        probe = Lock(self.train_path)  # a descriptor of its own, it can't disturb a lock held here
+        if not probe.acquire(exclusive=True):
+            return False
+        probe.release()
+        return True
 
 
 def short_job_id(job_id: str) -> str:
@@ -782,16 +966,6 @@ def short_job_id(job_id: str) -> str:
     if len(parts) >= 2 and parts[0] == 'trial':
         trial = '-'.join(parts[:2]) + ('-' + parts[-1] if parts[-1].startswith('r') and parts[-1][1:].isdigit() else '')
     return f'{trial}/{job}' if job else trial
-
-
-def pid_alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
 
 
 # --------------------------------------------------------------------------------------------------------------------
@@ -807,9 +981,23 @@ class Executor:
             retries: int = 0,
             poll_interval: float = 10.,
             dry_run: bool = False,
-            extra_args: Optional[List[str]] = None,
             echo: bool = True,
     ):
+        # --gpus ids index into an inherited CUDA_VISIBLE_DEVICES (e.g. a Slurm allocation), as CUDA itself would
+        visible = os.environ.get('CUDA_VISIBLE_DEVICES')
+        self.devices = None if visible is None else [d.strip() for d in visible.split(',') if d.strip()]
+        if gpus is not None and self.devices is not None:
+            outside = [g for g in gpus if not 0 <= g < len(self.devices)]
+            if outside:
+                raise SweepError(
+                    f'--gpus {outside} are outside the inherited CUDA_VISIBLE_DEVICES={visible}, the ids index into '
+                    f'it ({len(self.devices)} devices).')
+        if gpus is not None:
+            too_big = sorted({j['gpus'] for j in plan['jobs'] if j['gpus'] > len(gpus)})
+            if too_big:
+                raise SweepError(
+                    f'jobs need {too_big[-1]} GPUs but the pool has {len(gpus)} ({gpus}), they could never start. '
+                    f'Give more GPUs with --gpus or plan the sweep with fewer GPUs per job.')
         self.plan = plan
         self.root = plan['root']
         self.jobs = OrderedDict((j['id'], j) for j in plan['jobs'])
@@ -821,39 +1009,84 @@ class Executor:
         self.retries = retries
         self.poll_interval = poll_interval
         self.dry_run = dry_run
-        self.extra_args = extra_args or []
         self.echo = echo  # mirror job output to the console (always written to the job's run.log)
-        self.running: Dict[str, Tuple[subprocess.Popen, List[int], Any, threading.Thread]] = {}
+        # job id -> process, its gpus, the reader of its output, the attempt's shared training lock
+        self.running: Dict[str, Tuple[subprocess.Popen, List[int], threading.Thread, Lock]] = {}
+        # Retired attempts whose ranks still run: keep only their GPU allocation and parallel slot, never write
+        # their state again. Another worker may settle or retry them before this one next polls.
+        self.draining: Dict[str, Tuple[str, List[int]]] = {}
         self.free_gpus = list(gpus) if gpus else []
-        self.launched_attempts: Dict[str, int] = {}
+        self.initial_attempts = {job_id: len(state.attempts) for job_id, state in self.states.items()}
 
-    # -- reconciliation with what is on disk
+    def visible_devices(self, gpus: List[int]) -> str:
+        """CUDA_VISIBLE_DEVICES for a job on pool `gpus`, mapped through the inherited value if there is one."""
+        return ','.join(self.devices[g] if self.devices is not None else str(g) for g in gpus)
+
+    # -- settling attempts, under the folder's exclusive locks
+
+    def lock_folder(self, job: Dict[str, Any]) -> Optional[Tuple[Lock, Lock]]:
+        """The job folder's coordination and training locks, both exclusive, so no other worker acts on the folder and
+        nothing trains there. None while either is held elsewhere.
+        """
+        state = self.states[job['id']]
+        coord, train = Lock(state.coord_path), Lock(state.train_path)
+        if coord.acquire(exclusive=True):
+            if train.acquire(exclusive=True):
+                return coord, train
+            coord.release()
+        return None
+
+    def settle(self, job: Dict[str, Any]):
+        """Retire the job's last attempt and record its outcome, completing the job if its outputs are, with a missing
+        milestone recovered. Called with the folder's exclusive locks held.
+        """
+        state = self.states[job['id']]
+        state.reload()
+        state.set_live_attempt('')
+        if state.status == 'completed':
+            return
+        self.recover_artifacts(job)
+        last = state.attempts[-1] if state.attempts else {}
+        end = datetime.now(timezone.utc).isoformat(timespec='seconds')
+        if self.on_disk_complete(job):
+            if state.status == 'running':
+                _logger.info(f'Completed {job["id"]}')
+                state.set('completed', end=end)
+            else:
+                _logger.info(f'{job["id"]} already has {job["end_epoch"]} epochs on disk, marking completed.')
+                state.set('completed')
+        elif state.status == 'running':
+            returncode = last.get('returncode')
+            if returncode is None:  # stopped, or its worker died
+                _logger.warning(f'{job["id"]} attempt {last.get("attempt")} on {last.get("host")} was stopped or '
+                                f'lost its worker, marking interrupted.')
+                state.set('interrupted', end=end)
+            elif returncode != 0:
+                log_path = os.path.join(self.root, job['dir'], 'run.log')
+                _logger.error(f'{job["id"]} failed with exit code {returncode}, see {log_path}')
+                state.set('failed', end=end)
+            else:
+                epochs = summary_epochs(self.root, job)
+                _logger.error(f'{job["id"]} exited cleanly but its summary has {epochs} of {job["end_epoch"]} epochs.')
+                state.set('failed', end=end, reason='incomplete')
 
     def reconcile(self):
-        """Bring state files in line with the filesystem: finished jobs are completed, dead runners are failed."""
+        """Settle the 'running' records of attempts that no longer run anywhere, e.g. those of a worker that died."""
         for job_id, job in self.jobs.items():
+            if job_id in self.running or self.states[job_id].status != 'running':
+                continue
+            locks = self.lock_folder(job)
+            if locks is not None:
+                try:
+                    self.settle(job)
+                finally:
+                    for lock in locks:
+                        lock.release()
+        for job_id, (attempt_id, gpus) in list(self.draining.items()):
             state = self.states[job_id]
-            if state.status == 'completed' or job_id in self.running:
-                continue  # a job this worker is running is settled by finish(), its files may still be in flight
-            if state.status == 'running':
-                owner = state.claim_owner()
-                last = state.attempts[-1] if state.attempts else {}
-                host = owner[0] if owner else last.get('host')
-                # the claim records the orchestrator, the attempt records the training process: either alive
-                # means the job is still in progress (an orchestrator can die and leave its child training)
-                pids = [p for p in ((owner[1] if owner else None), last.get('pid')) if p]
-                if host == socket.gethostname() and any(pid_alive(p) for p in pids):
-                    continue
-                if host != socket.gethostname() and owner is not None:
-                    continue  # a worker elsewhere holds the claim, don't steal it
-                _logger.warning(f'{job_id} was running (pids {pids} on {host}) but is gone, marking interrupted.')
-                state.release()
-                state.set('interrupted', end=datetime.now().isoformat(timespec='seconds'))
-            self.recover_artifacts(job)
-            if self.on_disk_complete(job):
-                _logger.info(f'{job_id} already has {job["end_epoch"]} epochs on disk, marking completed.')
-                state.release()
-                state.set('completed', end=datetime.now().isoformat(timespec='seconds'), reconciled=True)
+            if state.status != 'running' or state.attempts[-1]['id'] != attempt_id:
+                self.free_gpus.extend(gpus)
+                del self.draining[job_id]
 
     def refresh_states(self):
         """Pick up state changes made by other workers for jobs this worker isn't running."""
@@ -865,25 +1098,27 @@ class Executor:
         """Recreate a missing milestone from a checkpoint already at its epoch, as train.py would have.
 
         If the milestone save failed after the final epoch, a retry would resume at the stop epoch, train nothing and
-        never produce it. `last.pth.tar` (if it hasn't moved on) or the ranked `checkpoint-N` for that epoch hold the
-        identical state.
+        never produce it.
         """
         job_dir = os.path.join(self.root, job['dir'])
-        for rel in job.get('artifacts', []):
+        epochs = None
+        for rel in job['artifacts']:
             path = os.path.join(self.root, rel)
             name = os.path.basename(path)
             if os.path.isfile(path) or not name.startswith('milestone-'):
                 continue
             point = int(name[len('milestone-'):].split('.')[0])
-            for candidate in ('last.pth.tar', f'checkpoint-{point - 1}.pth.tar'):
-                source = os.path.join(job_dir, candidate)
-                if os.path.isfile(source) and checkpoint_epochs(source) == point:
-                    try:
-                        os.link(source, path)
-                    except OSError:
-                        shutil.copy2(source, path)
-                    _logger.warning(f'{job["id"]}: recreated missing {name} from {candidate}')
-                    break
+            if epochs is None:
+                epochs = summary_epochs(self.root, job) or 0
+            if epochs < point:
+                continue  # summary rows are written before checkpoints, no checkpoint can be at the point yet
+            source = milestone_source(job_dir, point)
+            if source is not None:
+                try:
+                    os.link(source, path)
+                except OSError:
+                    shutil.copy2(source, path)
+                _logger.warning(f'{job["id"]}: recreated missing {name} from {os.path.basename(source)}')
 
     def on_disk_complete(self, job: Dict[str, Any]) -> bool:
         """The summary has reached the end epoch and so have the job's checkpoints.
@@ -894,7 +1129,7 @@ class Executor:
         epochs = summary_epochs(self.root, job)
         if epochs is None or epochs < job['end_epoch']:
             return False
-        for rel in job.get('artifacts', []):
+        for rel in job['artifacts']:
             path = os.path.join(self.root, rel)
             if not os.path.isfile(path):
                 return False
@@ -917,97 +1152,123 @@ class Executor:
         state = self.states[job['id']]
         if state.status in ('completed', 'running'):
             return False
-        if state.status == 'failed' and self.launched_attempts.get(job['id'], 0) > self.retries:
+        if state.status == 'failed' and self.attempts_since_start(state) > self.retries:
             return False
         if self.deps_status(job) != 'ready':
             return False
         return self.dry_run or all(os.path.exists(os.path.join(self.root, p)) for p in job['inputs'])
 
+    def attempts_since_start(self, state: JobState) -> int:
+        """Attempts at a job by any worker since this one started, so workers sharing a sweep share the retries."""
+        return len(state.attempts) - self.initial_attempts[state.job['id']]
+
     def ready_jobs(self) -> List[Dict[str, Any]]:
-        return [j for j in self.jobs.values() if self.is_ready(j)]
+        # WSD trunk segments first: they are the critical path, every later point and its cooldowns wait on them
+        return sorted((j for j in self.jobs.values() if self.is_ready(j)), key=lambda j: j['kind'] != 'wsd_stable')
 
     # -- launching
 
     def launch(self, job: Dict[str, Any], gpus: List[int]) -> bool:
-        """Start a job, returning False if nothing was started (dry run, lost claim, already done elsewhere)."""
-        state = self.states[job['id']]
-        job_dir = os.path.join(self.root, job['dir'])
-        command = [os.path.join(self.root, job['script'])] + list(self.extra_args)
-        if os.path.exists(os.path.join(job_dir, 'last.pth.tar')) and '--resume' not in command:
-            command += ['--resume', 'auto']  # pick the job's own partial run back up
-        env = dict(os.environ)
-        if self.gpus is not None:
-            env['CUDA_VISIBLE_DEVICES'] = ','.join(str(g) for g in gpus)
-        env.setdefault('PYTHON', self.plan.get('python') or sys.executable)
-        env.setdefault('PYTHONUNBUFFERED', '1')  # prompt pass-through of the job's console output
+        """Start an attempt at a job, returning False if nothing was started (dry run, or the job is no longer ready
+        once its folder is locked: another worker started, finished or used up the job meanwhile).
+        """
         if self.dry_run:
-            _logger.info(f'[dry run] {job["id"]} ({job["gpus"]} gpu): {" ".join(command)}')
+            _logger.info(f'[dry run] {job["id"]} ({job["gpus"]} gpu): {os.path.join(self.root, job["script"])}')
             return False
-        if not state.claim():
-            owner = state.claim_owner()
-            _logger.info(f'{job["id"]} is claimed by {owner}, skipping.')
+        locks = self.lock_folder(job)
+        if locks is None:
             return False
-        # under the claim, make sure another worker didn't finish or start it since our last look
-        state.reload()
-        if state.status == 'running':
-            state.release()
-            _logger.info(f'{job["id"]} is being run by another worker, skipping.')
-            return False
-        self.recover_artifacts(job)
-        if state.status == 'completed' or self.on_disk_complete(job):
-            if state.status != 'completed':
-                state.set('completed', end=datetime.now().isoformat(timespec='seconds'), reconciled=True)
-            state.release()
-            _logger.info(f'{job["id"]} was finished by another worker, skipping.')
-            return False
-        attempt = len(state.attempts) + 1
-        log_path = os.path.join(job_dir, 'run.log')
-        log = open(log_path, 'a')
-        log.write(f'\n===== sweep.py attempt {attempt} {datetime.now().isoformat(timespec="seconds")} '
-                  f'{" ".join(command)}\n')
-        log.flush()
-        proc = subprocess.Popen(
-            command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=TIMM_ROOT,
-            text=True, errors='replace', bufsize=1,
-        )
-        reader = threading.Thread(target=self._tee, args=(proc, log, short_job_id(job['id'])), daemon=True)
-        reader.start()
-        state.start_attempt(proc.pid, gpus, command)
-        self.launched_attempts[job['id']] = self.launched_attempts.get(job['id'], 0) + 1
-        self.running[job['id']] = (proc, gpus, log, reader)
+        coord, train = locks
+        try:
+            self.settle(job)  # whatever attempt the record names is over, nothing trains in the folder
+            state = self.states[job['id']]
+            if not self.is_ready(job):
+                train.release()
+                return False
+            job_dir = os.path.join(self.root, job['dir'])
+            command = [os.path.join(self.root, job['script'])]
+            if os.path.exists(os.path.join(job_dir, 'last.pth.tar')):
+                command += ['--resume', 'auto']  # pick the job's own partial run back up
+            attempt_id = uuid.uuid4().hex
+            # the ranks hold the plan and training locks shared until they exit, and only join this attempt
+            launch_command = command + [
+                '--sweep-locks', plan_lock(self.root).path, state.train_path,
+                '--sweep-attempt', state.attempt_path, attempt_id,
+            ]
+            env = dict(os.environ)
+            if self.gpus is not None:
+                env['CUDA_VISIBLE_DEVICES'] = self.visible_devices(gpus)
+            env.setdefault('PYTHON', self.plan['python'])
+            env.setdefault('PYTHONUNBUFFERED', '1')  # prompt pass-through of the job's console output
+            attempt = len(state.attempts) + 1
+            log_path = os.path.join(job_dir, 'run.log')
+            log = open(log_path, 'a')
+            log.write(f'\n===== sweep.py attempt {attempt} {datetime.now(timezone.utc).isoformat(timespec="seconds")} '
+                      f'{" ".join(command)}\n')
+            log.flush()
+            state.start_attempt(attempt_id, gpus, command)  # recorded before it starts, the sweep has now started
+            state.set_live_attempt(attempt_id)
+            train.share()
+            try:
+                proc = subprocess.Popen(
+                    launch_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=TIMM_ROOT,
+                    text=True, errors='replace', bufsize=1,
+                )
+            except OSError as e:
+                _logger.error(f'Could not start {job["id"]}: {e}')
+                state.set_live_attempt('')
+                state.set('failed', end=datetime.now(timezone.utc).isoformat(timespec='seconds'), reason=str(e))
+                train.release()
+                log.close()
+                return False
+            state.set('running', pid=proc.pid)
+            reader = threading.Thread(target=self._tee, args=(proc, log, short_job_id(job['id'])), daemon=True)
+            reader.start()
+            self.running[job['id']] = (proc, gpus, reader, train)
+        finally:
+            coord.release()
         _logger.info(f'Started {job["id"]} (attempt {attempt}, pid {proc.pid}'
                      f'{", gpus " + str(gpus) if gpus else ""}), log: {log_path}')
         return True
 
     def _tee(self, proc: subprocess.Popen, log, prefix: str):
-        """Copy a job's output to its run.log and, unless quiet, to the console with a job prefix."""
-        for line in proc.stdout:
-            log.write(line)
-            log.flush()
-            if self.echo:
-                sys.stdout.write(f'[{prefix}] {line}')
-                sys.stdout.flush()
+        """Copy a job's output to its run.log and, unless quiet, to the console with a job prefix, until every
+        process writing it has exited (ranks can outlive their torchrun, and would block on a full pipe).
+        """
+        with log:
+            for line in proc.stdout:
+                log.write(line)
+                log.flush()
+                if self.echo:
+                    sys.stdout.write(f'[{prefix}] {line}')
+                    sys.stdout.flush()
 
-    def finish(self, job_id: str, returncode: int):
-        proc, gpus, log, reader = self.running.pop(job_id)
-        reader.join(timeout=10)
-        log.close()
-        self.free_gpus.extend(gpus)
+    def finish(self, job_id: str, returncode: Optional[int]):
+        """Retire the attempt of a job whose process exited (`returncode` None: stopped by this worker), and settle it
+        once every rank has exited. A killed torchrun can leave ranks running, the job stays 'running' until they exit
+        and a later reconcile settles it.
+        """
+        proc, gpus, reader, train = self.running.pop(job_id)
         job, state = self.jobs[job_id], self.states[job_id]
-        end = datetime.now().isoformat(timespec='seconds')
-        # publish the terminal state before releasing the claim, so no other worker sees a claimable 'running' job
-        if returncode != 0:
-            log_path = os.path.join(self.root, job['dir'], 'run.log')
-            _logger.error(f'{job_id} failed with exit code {returncode}, see {log_path}')
-            state.set('failed', end=end, returncode=returncode)
-        elif not self.on_disk_complete(job):
-            epochs = summary_epochs(self.root, job)
-            _logger.error(f'{job_id} exited cleanly but its summary has {epochs} of {job["end_epoch"]} epochs.')
-            state.set('failed', end=end, returncode=returncode, reason='incomplete')
-        else:
-            _logger.info(f'Completed {job_id}')
-            state.set('completed', end=end, returncode=returncode)
-        state.release()
+        coord = Lock(state.coord_path)
+        coord.acquire(exclusive=True, block=True)
+        try:
+            state.set_live_attempt('')  # no rank of the attempt may join from here on
+            state.set('running', returncode=returncode)
+            train.release()
+            if train.acquire(exclusive=True):  # never an in-place upgrade, see Lock
+                try:
+                    self.settle(job)
+                finally:
+                    train.release()
+                self.free_gpus.extend(gpus)
+            else:
+                self.draining[job_id] = (state.attempts[-1]['id'], gpus)
+                _logger.warning(f'{job_id} exited but processes of its attempt still run, it settles once they exit.')
+        finally:
+            coord.release()
+        # Retire before waiting on output: a delayed rank must not join while this reader drains its pipe.
+        reader.join(timeout=0 if job_id in self.draining else 10)
 
     def poll(self):
         for job_id in list(self.running):
@@ -1017,32 +1278,41 @@ class Executor:
                 self.finish(job_id, code)
 
     def terminate(self):
-        for job_id, (proc, gpus, log, reader) in list(self.running.items()):
+        for job_id, (proc, *_) in self.running.items():
             _logger.warning(f'Stopping {job_id} (pid {proc.pid})')
             proc.terminate()
         deadline = time.time() + 30
-        for job_id, (proc, gpus, log, reader) in list(self.running.items()):
+        for job_id, (proc, *_) in list(self.running.items()):
             try:
                 proc.wait(timeout=max(0., deadline - time.time()))
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.wait()
-            reader.join(timeout=5)
-            log.close()
-            self.states[job_id].set('interrupted', end=datetime.now().isoformat(timespec='seconds'))
-            self.states[job_id].release()
-        self.running.clear()
+            self.finish(job_id, None)
 
     def run(self) -> Dict[str, int]:
-        self.reconcile()
+        """Run ready jobs until nothing is left. The plan lock is held shared throughout, so the sweep can't be
+        replanned while this worker runs, also while it only waits on jobs of other workers.
+        """
+        lock = plan_lock(self.root)
+        if not lock.acquire(exclusive=False):
+            _logger.info(f'{self.root} is being planned, waiting for it.')
+            lock.acquire(exclusive=False, block=True)
         try:
+            changes = plan_changes(self.plan)
+            if changes is not None and changes['files']:
+                raise SweepError(
+                    f'{self.root} has an incomplete plan write ({describe_changes({"files": changes["files"]})}). '
+                    'Re-run `sweep.py plan <original spec or CLI arguments> --force` before starting workers.')
+            if changes is None or any(changes.values()):
+                raise SweepError(f'{self.root} was replanned after this worker loaded its plan, start it again.')
             while True:
                 self.poll()
                 if not self.dry_run:
                     self.refresh_states()
-                    self.reconcile()  # notices jobs finished, or abandoned, by other workers
+                    self.reconcile()  # settles jobs abandoned by other workers
                 for job in self.ready_jobs():
-                    if len(self.running) >= self.max_parallel:
+                    if len(self.running) + len(self.draining) >= self.max_parallel:
                         break
                     gpus: List[int] = []
                     if self.gpus is not None and not self.dry_run:
@@ -1057,7 +1327,7 @@ class Executor:
                     if not self.ready_jobs():
                         break
                     continue
-                if not self.running and not self.ready_jobs():
+                if not self.running and not self.draining and not self.ready_jobs():
                     elsewhere = [j for j, st in self.states.items() if st.status == 'running']
                     if not elsewhere:
                         break
@@ -1066,14 +1336,23 @@ class Executor:
         except KeyboardInterrupt:
             _logger.warning('Interrupted, stopping running jobs. Re-run to resume.')
             self.terminate()
+        finally:
+            lock.release()
         return self.counts()
+
+    def display_status(self, job: Dict[str, Any], show_ready: bool = False) -> str:
+        """The job's status, 'blocked' when a dependency failed, optionally 'ready' for a pending job that can run."""
+        status = self.states[job['id']].status
+        if status in ('pending', 'interrupted', 'failed') and self.deps_status(job) == 'blocked':
+            return 'blocked'
+        if show_ready and status == 'pending' and self.is_ready(job):
+            return 'ready'
+        return status
 
     def counts(self) -> Dict[str, int]:
         counts: Dict[str, int] = {}
         for job in self.jobs.values():
-            status = self.states[job['id']].status
-            if status in ('pending', 'interrupted', 'failed') and self.deps_status(job) == 'blocked':
-                status = 'blocked'
+            status = self.display_status(job)
             counts[status] = counts.get(status, 0) + 1
         return counts
 
@@ -1092,19 +1371,19 @@ def print_table(rows: List[Dict[str, Any]], columns: List[str]):
 
 
 def show_status(plan: Dict[str, Any]):
+    """Print job states as recorded, changing nothing: a 'running' job whose attempt no longer runs anywhere shows as
+    'running (gone)' until a worker settles it.
+    """
     executor = Executor(plan)
-    executor.reconcile()
     rows = []
     for job in plan['jobs']:
-        state = executor.states[job['id']]
-        status = state.status
-        if status in ('pending', 'interrupted', 'failed') and executor.deps_status(job) == 'blocked':
-            status = 'blocked'
-        elif status == 'pending' and executor.is_ready(job):
-            status = 'ready'
         epochs = min(summary_epochs(plan['root'], job) or 0, job['end_epoch'])
+        status = executor.display_status(job, show_ready=True)
+        if status == 'running' and executor.states[job['id']].attempt_gone():
+            status = 'running (gone)'
         rows.append({
-            'job': job['id'], 'status': status, 'attempts': len(state.attempts),
+            'job': job['id'], 'status': status,
+            'attempts': len(executor.states[job['id']].attempts),
             'epochs': f'{epochs}/{job["end_epoch"]}',
         })
     print_table(rows, ['job', 'status', 'attempts', 'epochs'])
@@ -1135,8 +1414,6 @@ def collect_results(plan: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], str]:
     reports, and the endpoint checkpoints can be evaluated separately (validate.py).
     """
     metric_name = plan['metric']['name']
-    executor = Executor(plan)
-    executor.reconcile()
     trials = {t['id']: t for t in plan['trials']}
     results, metric_col = [], None
     for job in plan['jobs']:
@@ -1174,19 +1451,91 @@ def collect_results(plan: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], str]:
         wsd = job.get('wsd') or {}
         row.update(point=wsd.get('point', ''), decay_epochs=wsd.get('decay_epochs', ''),
                    decay_fn=wsd.get('decay_fn', ''))
+        if (plan.get('wsd') or {}).get('min_lr'):
+            row['decay_min_lr'] = wsd.get('min_lr', '')
         row.update({
-            'epochs': final_epoch + 1,
+            'budget': job['end_epoch'],
+            'completed_epochs': final_epoch + 1,  # not 'epochs', which may be a swept argument
             metric_col: final_value,
             f'best_{metric_col}': best_value,
             'best_epoch': best_epoch,
-            'status': executor.states[job['id']].status,
+            'status': JobState(plan['root'], job).status,
             'config_hash': job['config_hash'],
             'dir': job['dir'],
         })
         results.append(row)
     if results:
-        results.sort(key=lambda r: r[metric_col], reverse=metric_maximize(plan, metric_col))
+        sign = -1 if metric_maximize(plan, metric_col) else 1
+        results.sort(key=lambda r: (r['budget'], sign * r[metric_col]))  # best first within each budget
     return results, metric_col or metric_name
+
+
+def cooldown_label(wsd: Dict[str, Any], plan: Dict[str, Any]) -> str:
+    """Short name of a cooldown setting, e.g. 'p24-d6', naming the decay fn / min lr only when they are swept."""
+    label = f'p{wsd["point"]}-d{wsd["decay_epochs"]}'
+    if len(plan['wsd']['decay_fn']) > 1:
+        label += f'-{wsd["decay_fn"]}'
+    if len(plan['wsd']['min_lr'] or []) > 1:
+        label += f'-minlr{value_slug(wsd["min_lr"])}'
+    return label
+
+
+def cooldown_table(
+        plan: Dict[str, Any],
+        results: List[Dict[str, Any]],
+        metric_col: str,
+        top: int = 20,
+) -> Tuple[List[Dict[str, Any]], List[str]]:
+    """WSD results as one row per trial and one column per cooldown, so trials compare at equal budgets.
+
+    Cells are the final metric of completed cooldowns, averaged over repeats, '*' marks the best of each column and
+    '-' a cooldown not completed yet. Rows are ordered by the longest budget with results.
+
+    Returns:
+        Table rows and their columns.
+    """
+    maximize = metric_maximize(plan, metric_col)
+    trials = {t['id']: t for t in plan['trials']}
+    repeats = plan['search'].get('repeats') or 1
+    keys = [k for k in plan['space_keys'] if not (repeats > 1 and k == 'seed')]
+    budgets = OrderedDict()
+    for job in plan['jobs']:
+        if job['kind'] == 'wsd_cooldown':
+            budgets[cooldown_label(job['wsd'], plan)] = job['end_epoch']
+    values: Dict[Tuple[int, str], List[float]] = {}
+    for r in results:
+        if r['kind'] == 'wsd_cooldown' and r['status'] == 'completed':
+            wsd = dict(point=r['point'], decay_epochs=r['decay_epochs'], decay_fn=r['decay_fn'],
+                       min_lr=r.get('decay_min_lr'))
+            values.setdefault((trials[r['trial']]['index'], cooldown_label(wsd, plan)), []).append(r[metric_col])
+    means = {k: sum(v) / len(v) for k, v in values.items()}
+    best = {}
+    for label in budgets:
+        column = [v for (_, lab), v in means.items() if lab == label]
+        if column:
+            best[label] = (max if maximize else min)(column)
+    rows, seen = [], set()
+    for trial in plan['trials']:
+        if trial['index'] in seen:
+            continue  # repeats share a row
+        seen.add(trial['index'])
+        row = OrderedDict(trial=f'{trial["index"]:03d}')
+        row.update((k, trial['params'].get(k, '')) for k in keys)
+        for label in budgets:
+            mean = means.get((trial['index'], label))
+            n = len(values.get((trial['index'], label), []))
+            if mean is None:
+                row[label] = '-'
+                continue
+            cell = f'{mean:.4f}' + ('*' if mean == best[label] else '')
+            row[label] = cell + (f' ({n}/{repeats})' if n < repeats else '')
+        row['_key'] = means.get((trial['index'], next((lab for lab in reversed(budgets) if lab in best), '')))
+        rows.append(row)
+    sign = -1 if maximize else 1
+    rows.sort(key=lambda r: (r['_key'] is None, sign * (r['_key'] or 0.)))
+    for row in rows:
+        del row['_key']
+    return rows[:top], ['trial'] + keys + list(budgets)
 
 
 def aggregate_repeats(results: List[Dict[str, Any]], metric_col: str, space_keys: List[str]) -> List[Dict[str, Any]]:
@@ -1216,29 +1565,36 @@ def show_results(plan: Dict[str, Any], top: int = 20, csv_path: Optional[str] = 
         print('No results yet.')
         return
     csv_path = csv_path or os.path.join(plan['root'], 'results.csv')
-    columns = list(results[0].keys())
+    columns = list(dict.fromkeys(k for r in results for k in r))
     with open(csv_path, 'w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=columns)
         writer.writeheader()
         for r in results:
             writer.writerow({k: r.get(k, '') for k in columns})
-    show = ['trial', 'job'] + list(plan['space_keys'])
-    if plan.get('wsd'):
-        show += ['point', 'decay_epochs', 'decay_fn']
-    show += ['epochs', metric_col, f'best_{metric_col}', 'best_epoch', 'status']
-    for r in results:
-        for k in (metric_col, f'best_{metric_col}'):
-            r[k] = round(r[k], 4)
     direction = 'maximize' if metric_maximize(plan, metric_col) else 'minimize'
-    print(f'Top {min(top, len(results))} of {len(results)} runs by final {metric_col} '
-          f'({direction}), budgets differ so compare like with like:')
-    print_table(results[:top], show)
-    repeats = (plan.get('search') or {}).get('repeats') or 1
-    if repeats > 1:
-        agg = aggregate_repeats(results, metric_col, plan['space_keys'])
-        agg.sort(key=lambda r: r[f'mean_{metric_col}'], reverse=metric_maximize(plan, metric_col))
-        print(f'\nOver {repeats} repeats:')
-        print_table(agg[:top], list(agg[0].keys()) if agg else [])
+    repeats = plan['search'].get('repeats') or 1
+    if plan.get('wsd'):
+        rows, table_columns = cooldown_table(plan, results, metric_col, top=top)
+        mean_of = f', mean of {repeats} repeats' if repeats > 1 else ''
+        print(f'Final {metric_col} ({direction}) of each cooldown{mean_of}, * best per column, - not completed:')
+        print_table(rows, table_columns)
+    else:
+        show = ['trial'] + list(plan['space_keys'])
+        show += ['completed_epochs', metric_col, f'best_{metric_col}', 'best_epoch', 'status']
+        budgets = sorted({r['budget'] for r in results})
+        for budget in budgets:
+            group = [dict(r) for r in results if r['budget'] == budget]
+            for r in group:
+                for k in (metric_col, f'best_{metric_col}'):
+                    r[k] = round(r[k], 4)
+            print(f'{"" if budget == budgets[0] else chr(10)}Top {min(top, len(group))} of {len(group)} runs by final '
+                  f'{metric_col} ({direction}){f", {budget} epoch budget" if len(budgets) > 1 else ""}:')
+            print_table(group[:top], show)
+        if repeats > 1:
+            agg = aggregate_repeats(results, metric_col, plan['space_keys'])
+            agg.sort(key=lambda r: r[f'mean_{metric_col}'], reverse=metric_maximize(plan, metric_col))
+            print(f'\nOver {repeats} repeats:')
+            print_table(agg[:top], list(agg[0].keys()) if agg else [])
     print(f'\nWrote {csv_path}')
 
 
@@ -1267,10 +1623,15 @@ def spec_from_cli(args: argparse.Namespace, train_argv: List[str]) -> Dict[str, 
         space[key] = [parse_cli_value(v.strip()) for v in values.split(',') if v.strip()]
     train_block: Dict[str, Any] = {}
     if train_argv:
-        # only the arguments the user actually gave, the planner fills in the parser defaults
-        given = train_script.parser.parse_args(train_argv)
-        defaults = train_script.parser.parse_args([])
-        train_block = {k: v for k, v in vars(given).items() if v != getattr(defaults, k)}
+        # only the arguments the user actually gave, the planner fills in the defaults. One given explicitly is kept
+        # even at train.py's default, the sweep's own defaults (e.g. checkpoint_hist) must not override it
+        given = vars(train_script.parser.parse_args(train_argv))
+        defaults = train_defaults()
+        explicit = {
+            a.dest for a in train_script.parser._actions
+            if any(arg == opt or arg.startswith(opt + '=') for opt in a.option_strings for arg in train_argv)
+        }
+        train_block = {k: v for k, v in given.items() if v != defaults[k] or k in explicit}
     search: Dict[str, Any] = {'mode': 'random' if args.random else 'grid', 'seed': args.seed, 'space': space}
     if args.random:
         search['n_trials'] = args.random
@@ -1300,6 +1661,8 @@ def spec_from_cli(args: argparse.Namespace, train_argv: List[str]) -> Dict[str, 
 def resolve_target(args: argparse.Namespace, train_argv: List[str]) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
     """Return (plan, spec). A plan comes from a sweep dir, or is built from a spec file / CLI axes."""
     target = args.target
+    if target and train_argv:
+        raise SweepError('Training arguments after -- are only for CLI sweeps. Put them in the spec before planning.')
     if target and os.path.isdir(target):
         return load_plan(target), None
     if target:
@@ -1346,13 +1709,21 @@ def add_spec_arguments(p: argparse.ArgumentParser):
     p.add_argument('--wsd-points', type=int, nargs='+', default=None, metavar='N', help='WSD branch points')
     p.add_argument('--wsd-decay-epochs', type=int, nargs='+', default=None, metavar='N')
     p.add_argument('--wsd-decay-fn', nargs='+', default=None, metavar='FN')
-    p.add_argument('--force', action='store_true', help='overwrite an existing, different plan in the sweep dir')
+    p.add_argument('--force', action='store_true',
+                   help='update an offline plan; once started, only add jobs or change reporting/output settings')
+
+
+def stop_on_sigterm(signum, frame):
+    raise KeyboardInterrupt
 
 
 def main():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s', datefmt='%H:%M:%S')
     if not TORCH_SUPPORTED:
         _logger.error(TORCH_REQUIREMENT)
+        sys.exit(1)
+    if fcntl is None:
+        _logger.error('sweep.py does not support native Windows, use Linux or WSL2 with a Linux Python environment.')
         sys.exit(1)
     argv = sys.argv[1:]
     train_argv: List[str] = []
@@ -1366,12 +1737,12 @@ def main():
     add_spec_arguments(p_plan)
     p_run = sub.add_parser('run', help='plan if needed, then run ready jobs on local GPUs until nothing is left')
     add_spec_arguments(p_run)
-    p_run.add_argument('--gpus', default=None, metavar='IDS', help='GPU ids to use, e.g. 0,1,2,3 or 0-7')
+    p_run.add_argument('--gpus', default=None, metavar='IDS',
+                       help='GPU ids to use, e.g. 0,1,2,3 or 0-7, indices into CUDA_VISIBLE_DEVICES if it is set')
     p_run.add_argument('--max-parallel', type=int, default=None, help='concurrent jobs (default: one per GPU, else 1)')
     p_run.add_argument('--retries', type=int, default=0, help='automatic retries of a failed job in this run')
     p_run.add_argument('--poll', type=float, default=10., metavar='SEC', help='poll interval')
     p_run.add_argument('--dry-run', action='store_true', help='print the launch order without running')
-    p_run.add_argument('--train-args', default='', metavar='ARGS', help='extra args appended to every train.py call')
     p_run.add_argument('--quiet', action='store_true',
                        help='do not echo job output to the console, it is always written to each job\'s run.log')
     p_status = sub.add_parser('status', help='show job states and progress')
@@ -1398,10 +1769,10 @@ def main():
             plan, spec = resolve_target(args, train_argv)
             if spec is not None:
                 write_plan(plan, spec, force=args.force)
-                plan = load_plan(plan['root'])
+            signal.signal(signal.SIGTERM, stop_on_sigterm)  # e.g. scancel, stop the jobs as on Ctrl-C
             executor = Executor(
                 plan, gpus=parse_gpus(args.gpus), max_parallel=args.max_parallel, retries=args.retries,
-                poll_interval=args.poll, dry_run=args.dry_run, extra_args=args.train_args.split(),
+                poll_interval=args.poll, dry_run=args.dry_run,
                 echo=not args.quiet,
             )
             counts = executor.run()
