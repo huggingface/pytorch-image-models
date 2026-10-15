@@ -86,6 +86,8 @@ class Adafactor(torch.optim.Optimizer):
         super().__setstate__(state)
         for group in self.param_groups:
             group.setdefault('caution', False)
+            if 'min_dim_size_to_factor' not in group:
+                group.setdefault('_legacy_factorization', True)
             group.setdefault('min_dim_size_to_factor', 16)
 
     def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
@@ -118,7 +120,9 @@ class Adafactor(torch.optim.Optimizer):
         # always use -2, -1 BUT this will not pick correct dims for convolutions. This is a simple
         # approach that should work in most cases, compare to the slightly more involved approach
         # in AdafactorBigVision that sorts dims by size, please report if wrong dims chosen.
-        if ndim > 2 and param_shape[0] > min_size_to_factor and param_shape[1] > min_size_to_factor:
+        if param_group.get('_legacy_factorization', False):
+            factored = (ndim - 2, ndim - 1) if ndim >= 2 else None
+        elif ndim > 2 and param_shape[0] > min_size_to_factor and param_shape[1] > min_size_to_factor:
             # nD convs in torch are ND + 2 dim weights with leading in/out chs
             factored = 0, 1
         elif ndim >= 2 and param_shape[-2] > min_size_to_factor and param_shape[-1] > min_size_to_factor:
