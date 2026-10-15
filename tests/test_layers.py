@@ -461,3 +461,41 @@ def test_attn2d(bias, expand_first, head_first, attn_mask):
     o2 = attn(x, mask)
     
     assert torch.allclose(o1, o2, atol=1e-5), f"{torch.abs(o1 - o2).max()}"
+
+
+@pytest.mark.parametrize('pool_type', ['', 'avg'])
+@pytest.mark.parametrize('weight_grad,bias_grad', [(False, False), (False, True), (True, False), (True, True)])
+def test_norm_mlp_pool_reset_preserves_projection_gradients(pool_type, weight_grad, bias_grad):
+    old_pool = 'avg' if not pool_type else ''
+    head = NormMlpClassifierHead(4, 2, hidden_size=3, pool_type=old_pool).eval()
+    old_fc = head.pre_logits.fc
+    old_fc.weight.requires_grad_(weight_grad)
+    old_fc.bias.requires_grad_(bias_grad)
+
+    head.reset(0, pool_type)
+
+    assert head.pre_logits.fc.weight.requires_grad == weight_grad
+    assert head.pre_logits.fc.bias.requires_grad == bias_grad
+    assert not head.pre_logits.fc.training
+    torch.testing.assert_close(head.pre_logits.fc.weight.reshape(old_fc.weight.shape), old_fc.weight)
+    torch.testing.assert_close(head.pre_logits.fc.bias, old_fc.bias)
+    x = torch.randn(2, 4, 3, 3, requires_grad=True)
+    head(x).square().sum().backward()
+    assert x.grad is not None
+    assert (head.pre_logits.fc.weight.grad is not None) == weight_grad
+    assert (head.pre_logits.fc.bias.grad is not None) == bias_grad
+
+
+def test_convnext_frozen_teacher_stays_frozen_without_pool():
+    from timm.models.convnext import ConvNeXt
+
+    # Small ConvNeXt with the same MLP head path as convnext_large_mlp.
+    teacher = ConvNeXt(depths=(1, 1, 1, 1), dims=(8, 16, 24, 32), head_hidden_size=32).eval()
+    teacher.requires_grad_(False)
+    teacher.reset_classifier(0, '')
+
+    assert not any(p.requires_grad for p in teacher.parameters())
+    output = teacher(torch.randn(2, 3, 32, 32))
+    assert output.shape == (2, 32, 1, 1)
+    assert not output.requires_grad
+    assert torch.isfinite(output).all()

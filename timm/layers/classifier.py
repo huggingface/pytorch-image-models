@@ -225,7 +225,9 @@ class NormMlpClassifierHead(nn.Module):
                 with torch.no_grad():
                     new_fc = linear_layer(self.in_features, self.hidden_size, **dd)
                     new_fc.weight.copy_(self.pre_logits.fc.weight.reshape(new_fc.weight.shape))
+                    new_fc.weight.requires_grad_(self.pre_logits.fc.weight.requires_grad)
                     new_fc.bias.copy_(self.pre_logits.fc.bias)
+                    new_fc.bias.requires_grad_(self.pre_logits.fc.bias.requires_grad)
                     self.pre_logits.fc = new_fc
                     self.pre_logits.fc.train(self.pre_logits.training)
         self.fc = linear_layer(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
