@@ -99,6 +99,13 @@ class Adan(Optimizer):
         for group in self.param_groups:
             group.setdefault('no_prox', False)
             group.setdefault('caution', False)
+            group.setdefault('foreach', None)
+        for param_state in self.state.values():
+            if 'pre_grad' in param_state and 'neg_pre_grad' not in param_state:
+                # Pre-foreach Adan used a positive previous gradient and reversed moment keys.
+                param_state['neg_pre_grad'] = -param_state.pop('pre_grad')
+                param_state['exp_avg_sq'], param_state['exp_avg_diff'] = (
+                    param_state['exp_avg_diff'], param_state['exp_avg_sq'])
 
     @torch.no_grad()
     def restart_opt(self):
