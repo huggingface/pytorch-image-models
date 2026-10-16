@@ -36,7 +36,7 @@ else:
 
 
 if 'TIMM_REENTRANT_CKPT' in os.environ:
-    _USE_REENTRANT_CKPT = bool(os.environ['TIMM_REENTRANT_CKPT'])
+    _USE_REENTRANT_CKPT = os.environ['TIMM_REENTRANT_CKPT'].lower() in ('1', 'true', 'yes', 'on')
 else:
     _USE_REENTRANT_CKPT = False  # defaults to disabled (off)
 
