@@ -28,7 +28,7 @@ from timm.data import (
     DatasetInfoLabelMapper,
 )
 from timm.layers import apply_test_time_pool
-from timm.models import create_model, resolve_model_input_args
+from timm.models import create_model, parse_model_name, resolve_model_input_args
 from timm.utils import AverageMeter, setup_default_logging, set_jit_fuser, ParseKwargs
 
 try:
@@ -357,9 +357,17 @@ def main():
             # remove it as it will be added back
             results_filename = filename_no_ext
     else:
-        # base default filename on model name + img-size
+        # base default filename on model name + img-size, w/o any source prefix or path separators
         img_size = data_config["input_size"][1]
-        results_filename = f'{args.model}-{img_size}'
+        source, model_id = parse_model_name(args.model)
+        if source == 'local-dir':
+            # dir basename alone is often meaningless (checkpoint, final, ...), prefix w/ the architecture
+            dir_name = os.path.basename(os.path.normpath(model_id))
+            model_name = f"{pretrained_cfg.get('architecture', 'model')}-{dir_name}"
+        else:
+            # registry name incl. any pretrained tag, or hf-hub repo name w/o the owner
+            model_name = model_id.rsplit('/', 1)[-1]
+        results_filename = f'{model_name}-{img_size}'
 
     if args.results_dir:
         os.makedirs(args.results_dir, exist_ok=True)
