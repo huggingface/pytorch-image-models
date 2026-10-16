@@ -2,8 +2,6 @@
 
 Contributions to `timm` for code, documentation, tests are more than welcome!
 
-There haven't been any formal guidelines to date so please bear with me, and feel free to add to this guide.
-
 # Before opening an issue or PR
 
 Maintainer time is limited, so please focus on changes that matter to users.
@@ -11,7 +9,9 @@ Maintainer time is limited, so please focus on changes that matter to users.
 * Please don't open issues or PRs for edge cases unlikely to be hit in real use. Small fixes like these add review load without helping users. Focus on bugs that affect real training, inference, or model-loading workflows, and include a realistic scenario that triggers the bug.
 * Keep PRs focused, avoid reformatting or refactoring code unrelated to the change.
 * Existing models, pretrained weights, and public functions should produce the same outputs unless the change is fixing a real bug.
-* If you're using AI coding agents, the same guidance is in [AGENTS.md](AGENTS.md).
+* Search open and closed PRs first, and read related discussions. Don't resubmit a declined proposal without addressing the reason it was declined.
+* Keep one PR per root cause. Check related code for the same mistake and include any affected sites in the same PR.
+* If you're using AI coding agents, see [AGENTS.md](AGENTS.md) for the kinds of agent-found issues that will be closed, and disclose AI assistance in the PR.
 
 # Coding style
 
