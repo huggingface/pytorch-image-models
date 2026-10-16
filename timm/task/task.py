@@ -58,10 +58,13 @@ class TrainingTask(nn.Module):
 
     def to(self, *args, **kwargs):
         """Move task to device/dtype, keeping self.device and self.dtype in sync."""
-        dummy = torch.empty(0).to(*args, **kwargs)
+        # Memory format applies to model tensors, not device/dtype metadata.
+        tensor_kwargs = {key: value for key, value in kwargs.items() if key != 'memory_format'}
+        dummy = torch.empty(0, device=self.device, dtype=self.dtype).to(*args, **tensor_kwargs)
+        result = super().to(*args, **kwargs)
         self.device = dummy.device
         self.dtype = dummy.dtype
-        return super().to(*args, **kwargs)
+        return result
 
     def prepare_distributed(
             self,
