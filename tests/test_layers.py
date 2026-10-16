@@ -6,6 +6,7 @@ import timm.layers.fast_norm as fast_norm
 from timm.layers import (
     Attention2d,
     AttentionPool2d,
+    BatchNormAct2d,
     ClassifierHead,
     ClNormMlpClassifierHead,
     HybridEmbed,
@@ -14,6 +15,7 @@ from timm.layers import (
     PatchEmbed,
     PatchEmbedInterpolator,
     RotAttentionPool2d,
+    convert_splitbn_model,
     create_act_layer,
     get_act_fn,
     get_act_layer,
@@ -499,3 +501,24 @@ def test_convnext_frozen_teacher_stays_frozen_without_pool():
     assert output.shape == (2, 32, 1, 1)
     assert not output.requires_grad
     assert torch.isfinite(output).all()
+
+
+class _HalfDrop(nn.Module):
+    # deterministic non-identity stand-in for a drop layer
+    def forward(self, x):
+        return x * 0.5
+
+
+def test_convert_splitbn_norm_act():
+    # BatchNormAct2d act and drop must still be applied after conversion to SplitBatchNorm2d
+    model = nn.Sequential(nn.Conv2d(3, 8, 3), BatchNormAct2d(8, act_layer=nn.ReLU, drop_layer=_HalfDrop)).eval()
+    x = torch.randn(4, 3, 8, 8)
+    with torch.no_grad():
+        ref = model(x)
+    keys = set(model.state_dict().keys())
+    model = convert_splitbn_model(model, num_splits=2).eval()
+    with torch.no_grad():
+        out = model(x)
+    torch.testing.assert_close(out, ref)
+    assert keys <= set(model.state_dict().keys())
+    assert model.train()(x).min() >= 0
