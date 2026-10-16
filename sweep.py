@@ -1444,7 +1444,8 @@ def collect_results(plan: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], str]:
         if not values:
             continue
         final_value, final_epoch = values[-1]
-        best_value, best_epoch = (max if maximize else min)(values, key=lambda v: (v[0], -v[1]))  # ties: earlier
+        finite = [v for v in values if not math.isnan(v[0])] or values  # a diverged (nan) epoch is never the best
+        best_value, best_epoch = (max if maximize else min)(finite, key=lambda v: (v[0], -v[1]))  # ties: earlier
         trial = trials[job['trial']]
         row = OrderedDict(trial=job['trial'], job=job['id'].split('/', 1)[1], kind=job['kind'], repeat=trial['repeat'])
         row.update(trial['params'])
@@ -1466,7 +1467,8 @@ def collect_results(plan: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], str]:
         results.append(row)
     if results:
         sign = -1 if metric_maximize(plan, metric_col) else 1
-        results.sort(key=lambda r: (r['budget'], sign * r[metric_col]))  # best first within each budget
+        # best first within each budget, nan (diverged) last
+        results.sort(key=lambda r: (r['budget'], math.isnan(r[metric_col]), sign * r[metric_col]))
     return results, metric_col or metric_name
 
 
@@ -1511,7 +1513,7 @@ def cooldown_table(
     means = {k: sum(v) / len(v) for k, v in values.items()}
     best = {}
     for label in budgets:
-        column = [v for (_, lab), v in means.items() if lab == label]
+        column = [v for (_, lab), v in means.items() if lab == label and not math.isnan(v)]
         if column:
             best[label] = (max if maximize else min)(column)
     rows, seen = [], set()
@@ -1527,12 +1529,12 @@ def cooldown_table(
             if mean is None:
                 row[label] = '-'
                 continue
-            cell = f'{mean:.4f}' + ('*' if mean == best[label] else '')
+            cell = f'{mean:.4f}' + ('*' if mean == best.get(label) else '')
             row[label] = cell + (f' ({n}/{repeats})' if n < repeats else '')
         row['_key'] = means.get((trial['index'], next((lab for lab in reversed(budgets) if lab in best), '')))
         rows.append(row)
     sign = -1 if maximize else 1
-    rows.sort(key=lambda r: (r['_key'] is None, sign * (r['_key'] or 0.)))
+    rows.sort(key=lambda r: (r['_key'] is None, math.isnan(r['_key'] or 0.), sign * (r['_key'] or 0.)))
     for row in rows:
         del row['_key']
     return rows[:top], ['trial'] + keys + list(budgets)
@@ -1592,7 +1594,8 @@ def show_results(plan: Dict[str, Any], top: int = 20, csv_path: Optional[str] = 
             print_table(group[:top], show)
         if repeats > 1:
             agg = aggregate_repeats(results, metric_col, plan['space_keys'])
-            agg.sort(key=lambda r: r[f'mean_{metric_col}'], reverse=metric_maximize(plan, metric_col))
+            sign = -1 if metric_maximize(plan, metric_col) else 1
+            agg.sort(key=lambda r: (math.isnan(r[f'mean_{metric_col}']), sign * r[f'mean_{metric_col}']))
             print(f'\nOver {repeats} repeats:')
             print_table(agg[:top], list(agg[0].keys()) if agg else [])
     print(f'\nWrote {csv_path}')
