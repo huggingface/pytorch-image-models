@@ -166,11 +166,13 @@ class FeatureHooks:
         # setup feature hooks
         self._feature_outputs = defaultdict(OrderedDict)
         self._handles = []
+        self._hook_ids = []
         modules = {k: v for k, v in named_modules}
         for i, h in enumerate(hooks):
             hook_name = h if isinstance(h, str) else h['module']
             m = modules[hook_name]
             hook_id = out_map[i] if out_map else hook_name
+            self._hook_ids.append(hook_id)
             hook_fn = partial(self._collect_output_hook, hook_id)
             hook_type = default_hook_type
             if isinstance(h, dict):
@@ -192,7 +194,9 @@ class FeatureHooks:
     def get_output(self, device) -> Dict[str, torch.tensor]:
         output = self._feature_outputs[device]
         self._feature_outputs[device] = OrderedDict()  # clear after reading
-        return output
+        # return in hook registration order, insertion order is not reliable (e.g. grad checkpoint recompute
+        # re-fires hooks after the clear above, leaving stale keys in their old positions for the next forward)
+        return OrderedDict((k, output[k]) for k in self._hook_ids if k in output)
 
 
 def _module_list(module, flatten_sequential=False):
