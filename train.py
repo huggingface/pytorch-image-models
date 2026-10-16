@@ -1784,9 +1784,14 @@ def validate(
             if not args.prefetcher:
                 input = input.to(device=device, dtype=model_dtype)
                 target = target.to(device=device)
-            elif model_dtype is not None and input.dtype != model_dtype:
+            elif model_dtype is not None:
                 # prefetcher outputs the training dtype, a float32 EMA of a half precision model needs float32 input
-                input = input.to(dtype=model_dtype)
+                if isinstance(input, dict):
+                    # NaFlex batch, only the patches are float, leave the coords / valid mask as is
+                    if input['patches'].dtype != model_dtype:
+                        input = {**input, 'patches': input['patches'].to(dtype=model_dtype)}
+                elif input.dtype != model_dtype:
+                    input = input.to(dtype=model_dtype)
             if args.channels_last:
                 input = input.contiguous(memory_format=torch.channels_last)
 
