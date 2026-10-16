@@ -373,12 +373,23 @@ def main():
         os.makedirs(args.results_dir, exist_ok=True)
         results_filename = os.path.join(args.results_dir, results_filename)
 
+    unique_names = df[args.filename_col].is_unique
+    if not unique_names:
+        # e.g. the same basename in different class folders, use --fullname to disambiguate
+        _logger.warning(
+            f'Sample names in "{args.filename_col}" are not unique (use --fullname), '
+            'json results will be written as a list of records instead of keyed by name.'
+        )
+
     for fmt in args.results_format:
         save_results(df, results_filename, fmt, filename_col=args.filename_col)
 
     if not args.no_console_results:
         print(f'--result')
-        print(df.set_index(args.filename_col).to_json(orient='index', indent=4))
+        if unique_names:
+            print(df.set_index(args.filename_col).to_json(orient='index', indent=4))
+        else:
+            print(df.to_json(orient='records', indent=4))
 
 
 def save_results(df, results_filename, results_format='csv', filename_col='filename'):
@@ -387,7 +398,11 @@ def save_results(df, results_filename, results_format='csv', filename_col='filen
     if results_format == 'parquet':
         df.set_index(filename_col).to_parquet(results_filename)
     elif results_format == 'json':
-        df.set_index(filename_col).to_json(results_filename, indent=4, orient='index')
+        if df[filename_col].is_unique:
+            df.set_index(filename_col).to_json(results_filename, indent=4, orient='index')
+        else:
+            # orient='index' requires unique names, fall back to records
+            df.to_json(results_filename, indent=4, orient='records')
     elif results_format == 'json-records':
         df.to_json(results_filename, lines=True, orient='records')
     elif results_format == 'json-split':
