@@ -100,6 +100,12 @@ def test_task_to_keeps_device_dtype_in_sync():
         task.to(torch.int64)
     assert task.dtype == torch.float32
 
+    # conversions that bypass .to(), directly or via a parent module
+    task.half()
+    assert task.dtype == next(task.parameters()).dtype == torch.float16
+    nn.Sequential(task).double()
+    assert task.dtype == next(task.parameters()).dtype == torch.float64
+
 
 @pytest.mark.parametrize('task_cls', [LogitDistillationTask, FeatureDistillationTask, TokenDistillationTask])
 def test_distillation_train_keeps_teacher_in_eval(task_cls):
