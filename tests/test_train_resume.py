@@ -195,3 +195,27 @@ def test_load_config_converts_numeric_strings(monkeypatch, tmp_path):
     # YAML 1.1 reads 3e-4 as a string, the config loader converts it like the command line would
     args = _parse_with_config(monkeypatch, tmp_path, dict(lr='3e-4', epochs='10', mean=['0.5', 0.4, '0.3']))
     assert args.lr == 3e-4 and args.epochs == 10 and args.mean == [0.5, 0.4, 0.3]
+
+
+@pytest.mark.parametrize('wall_clock', ['frozen', 'backwards'])
+def test_training_elapsed_time_uses_monotonic_clock(monkeypatch, tmp_path, image_folder, caplog, wall_clock):
+    import itertools
+    import re
+    import time
+    from types import SimpleNamespace
+
+    import train
+
+    ticks = itertools.count(1000., -1.)
+    clock = (lambda: 1000.) if wall_clock == 'frozen' else (lambda: next(ticks))
+    monkeypatch.setattr(train, 'time', SimpleNamespace(time=clock, perf_counter=time.perf_counter))
+    _run_train(monkeypatch, _train_args(image_folder, tmp_path, experiment='clock', epochs=1))
+    assert _summary_epochs(tmp_path / 'clock') == [0]
+    durations = [
+        float(match.group(1))
+        for record in caplog.records
+        for match in [re.search(r'Time:\s+(-?[0-9.]+)s,', record.getMessage())]
+        if match is not None
+    ]
+    assert durations
+    assert all(duration >= 0 for duration in durations)
