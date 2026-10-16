@@ -45,9 +45,15 @@ class SplitBatchNorm2d(torch.nn.BatchNorm2d):
             x = [super().forward(split_input[0])]
             for i, a in enumerate(self.aux_bn):
                 x.append(a(split_input[i + 1]))
-            return torch.cat(x, dim=0)
+            x = torch.cat(x, dim=0)
         else:
-            return super().forward(input)
+            x = super().forward(input)
+        # drop / act are present when converted from a timm BatchNormAct2d (see convert_splitbn_model)
+        if hasattr(self, 'drop'):
+            x = self.drop(x)
+        if hasattr(self, 'act'):
+            x = self.act(x)
+        return x
 
 
 def convert_splitbn_model(module, num_splits=2):
