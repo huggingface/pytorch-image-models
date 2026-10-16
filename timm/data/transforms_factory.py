@@ -472,7 +472,7 @@ def create_transform(
             interpolation=interpolation,
         )
     else:
-        if is_training and no_aug:
+        if is_training and no_aug and not naflex:
             assert not separate, "Cannot perform split augmentation with no_aug"
             transform = transforms_noaug_train(
                 img_size,
@@ -482,7 +482,7 @@ def create_transform(
                 use_prefetcher=use_prefetcher,
                 normalize=normalize,
             )
-        elif is_training:
+        elif is_training and not no_aug:
             transform = transforms_imagenet_train(
                 img_size,
                 train_crop_mode=train_crop_mode,
@@ -512,7 +512,10 @@ def create_transform(
                 patchify_channels_last=patchify_channels_last,
             )
         else:
-            assert not separate, "Separate transforms not supported for validation preprocessing"
+            # eval, or NaFlex train w/ no_aug which uses the eval resize (aspect preserved to fit max_seq_len, no crop)
+            assert not separate, "Separate transforms not supported for validation or no_aug preprocessing"
+            if is_training and interpolation == 'random':
+                interpolation = 'bilinear'
             transform = transforms_imagenet_eval(
                 img_size,
                 interpolation=interpolation,
