@@ -42,7 +42,8 @@ has_compile = hasattr(torch, 'compile')
 
 _FMT_EXT = {
     'json': '.json',
-    'json-record': '.json',
+    'json-records': '.json',
+    'json-record': '.json',  # alias of json-records, kept for backwards compat
     'json-split': '.json',
     'parquet': '.parquet',
     'csv': '.csv',
@@ -128,7 +129,7 @@ parser.add_argument('--results-dir', type=str, default=None,
 parser.add_argument('--results-file', type=str, default=None,
                     help='results filename (relative to results-dir)')
 parser.add_argument('--results-format', type=str, nargs='+', default=['csv'],
-                    help='results format (one of "csv", "json", "json-split", "parquet")')
+                    help='results format (one of "csv", "json", "json-records", "json-split", "parquet")')
 parser.add_argument('--results-separate-col', action='store_true', default=False,
                     help='separate output columns per result index.')
 parser.add_argument('--topk', default=1, type=int,
@@ -403,7 +404,7 @@ def save_results(df, results_filename, results_format='csv', filename_col='filen
         else:
             # orient='index' requires unique names, fall back to records
             df.to_json(results_filename, indent=4, orient='records')
-    elif results_format == 'json-records':
+    elif results_format in ('json-records', 'json-record'):
         df.to_json(results_filename, lines=True, orient='records')
     elif results_format == 'json-split':
         df.to_json(results_filename, indent=4, orient='split', index=False)
