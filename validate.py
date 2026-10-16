@@ -206,6 +206,10 @@ def validate(args):
     # might as well try to validate something
     args.pretrained = args.pretrained or not args.checkpoint
     args.prefetcher = not args.no_prefetcher
+    if args.naflex_loader and args.no_prefetcher:
+        raise ValueError('--naflex-loader requires the prefetcher, --no-prefetcher is not supported.')
+    if args.naflex_loader and args.channels_last:
+        raise ValueError('--channels-last does not apply to --naflex-loader.')
 
     if torch.cuda.is_available():
         torch.backends.cuda.matmul.allow_tf32 = True
