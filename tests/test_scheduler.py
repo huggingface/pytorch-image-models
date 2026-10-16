@@ -450,6 +450,28 @@ class TestMultipleParamGroups:
         for i, (initial, final) in enumerate(zip(initial_lrs, final_lrs)):
             assert final <= initial, f"Param group {i} LR should decrease or stay same"
 
+    def test_factory_constant_applies_warmup_and_lr_scale(self):
+        """sched='constant' warms up then holds the base lr, w/ param group lr_scale (layer-wise lr decay) applied."""
+        optimizer = _create_optimizer(lr=0.1, num_groups=2)
+        optimizer.param_groups[1]['lr_scale'] = 0.5
+        scheduler, num_epochs = create_scheduler_v2(
+            optimizer, sched='constant', num_epochs=10, warmup_epochs=2, warmup_lr=0.)
+        assert num_epochs == 10
+        scheduler.step(1)
+        assert [pg['lr'] for pg in optimizer.param_groups] == pytest.approx([0.05, 0.025])
+        for epoch in (2, 9):
+            scheduler.step(epoch)
+            assert [pg['lr'] for pg in optimizer.param_groups] == pytest.approx([0.1, 0.05])
+
+    def test_factory_none_leaves_lr_untouched(self):
+        """sched='none' has no scheduler, the optimizer lr is left as is (e.g. resumed mid-schedule)."""
+        optimizer = _create_optimizer(lr=0.1, num_groups=2)
+        for pg in optimizer.param_groups:
+            pg.update(initial_lr=0.1, lr_scale=0.5, lr=0.00955)
+        scheduler, _ = create_scheduler_v2(optimizer, sched='none', num_epochs=10)
+        assert scheduler is None
+        assert [pg['lr'] for pg in optimizer.param_groups] == [0.00955, 0.00955]
+
 
 class TestNoise:
     """Test noise application in schedulers."""
