@@ -72,6 +72,28 @@ def test_naflex_eval_patchify_can_preserve_spatial_patch_dimensions():
     assert flattened['patches'].shape[-1] == 2 * 2 * 3
 
 
+def test_naflex_no_aug_train_fits_seq_len_without_erasing():
+    transform = create_transform(
+        is_training=True, no_aug=True, naflex=True, patch_size=16, max_seq_len=64, patchify=True)
+    out = transform(Image.new('RGB', (500, 300)))
+    num_patches_h, num_patches_w = (out['patch_coord'].amax(0) + 1).tolist()
+    assert num_patches_h * num_patches_w <= 64
+    assert num_patches_w > num_patches_h  # aspect preserved, not a square center crop
+
+    dataset = torch.utils.data.TensorDataset(torch.zeros((4, 3, 8, 8)), torch.arange(4))
+    loader = create_naflex_loader(
+        dataset,
+        patch_size=1,
+        train_seq_lens=(1,),
+        batch_size=2,
+        is_training=True,
+        no_aug=True,
+        re_prob=1.,
+        device=torch.device('cpu'),
+    )
+    assert loader.random_erasing is None
+
+
 def test_create_loader_disables_persistent_workers_without_workers():
     dataset = torch.utils.data.TensorDataset(torch.zeros((4, 3, 8, 8)), torch.arange(4))
 

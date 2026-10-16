@@ -416,7 +416,7 @@ def create_naflex_loader(
                 std=std,
                 img_dtype=img_dtype,
                 device=device,
-                re_prob=re_prob,
+                re_prob=re_prob if not no_aug else 0.,
                 re_mode=re_mode,
                 re_count=re_count,
                 patchify_channels_last=patchify_channels_last,
