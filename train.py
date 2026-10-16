@@ -755,6 +755,13 @@ def main():
         parser.error('--naflex-loader and --train-img-sizes are alternative loader modes.')
     if args.naflex_loader and args.use_multi_epochs_loader:
         parser.error('--use-multi-epochs-loader is not supported with --naflex-loader.')
+    if args.naflex_loader and args.no_prefetcher:
+        parser.error('--naflex-loader requires the prefetcher, --no-prefetcher is not supported.')
+    if args.naflex_loader and args.channels_last:
+        parser.error(
+            '--channels-last does not apply to --naflex-loader, '
+            'patch layout is set by --naflex-patchify-channels-first.'
+        )
     device = utils.init_distributed_device(args)
     if args.distributed:
         _logger.info(
