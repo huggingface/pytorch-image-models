@@ -326,3 +326,105 @@ def test_compiled_eval_checkpoint_load_uses_unwrapped_state_dict_target():
     assert hasattr(task.get_eval_model(), '_orig_mod')
 
     task.load_checkpoint_state(state_dict)
+
+
+@pytest.fixture(params=['classification', 'logit', 'feature'])
+def conversion_task(request):
+    if request.param == 'classification':
+        return ClassificationTask(TinyClassifier(), verbose=False)
+    student, teacher = TinyFeatureModel(hidden=4), TinyFeatureModel(hidden=6)
+    task_cls = LogitDistillationTask if request.param == 'logit' else FeatureDistillationTask
+    return task_cls(student, teacher, criterion=nn.CrossEntropyLoss(), verbose=False)
+
+
+@pytest.mark.parametrize('conversion,initial_dtype,expected_dtype', [
+    ('double', torch.float32, torch.float64),
+    ('float', torch.float64, torch.float32),
+    ('half', torch.float32, torch.float16),
+    ('bfloat16', torch.float32, torch.bfloat16),
+    ('type', torch.float32, torch.float64),
+    ('parent_to', torch.float32, torch.float64),
+    ('to_dtype', torch.float64, torch.float32),
+    ('to_device', torch.float64, torch.float64),
+    ('memory_format', torch.float64, torch.float64),
+])
+def test_task_module_conversion_keeps_metadata(conversion_task, conversion, initial_dtype, expected_dtype):
+    task = conversion_task.to(dtype=initial_dtype)
+    if conversion == 'type':
+        result = task.type(torch.DoubleTensor)
+    elif conversion == 'parent_to':
+        parent = ModuleWrapper(task)
+        assert parent.to(dtype=expected_dtype) is parent
+        result = task
+    elif conversion == 'to_dtype':
+        result = task.to(dtype=expected_dtype)
+    elif conversion == 'to_device':
+        result = task.to('cpu')
+    elif conversion == 'memory_format':
+        result = task.to(memory_format=torch.channels_last)
+    else:
+        result = getattr(task, conversion)()
+    assert result is task
+    assert task.dtype == next(task.parameters()).dtype == expected_dtype
+    assert task.device == next(task.parameters()).device == torch.device('cpu')
+    if expected_dtype in (torch.float32, torch.float64):
+        batch = torch.randn(4, 3, 8, 8, device=task.device, dtype=task.dtype)
+        output = task(batch, torch.tensor([0, 1, 2, 0]))
+        assert torch.isfinite(output['loss'])
+        output['loss'].backward()
+        assert any(p.grad is not None for p in task.get_trainable_module().parameters())
+
+
+def test_task_parent_device_conversion_keeps_metadata(conversion_task):
+    task = conversion_task
+    ModuleWrapper(task).to('meta')
+    assert task.device == next(task.parameters()).device == torch.device('meta')
+
+
+@pytest.mark.parametrize('initial_dtype,method,expected_dtype', [
+    (torch.float32, 'double', torch.float64),
+    (torch.float64, 'float', torch.float32),
+    (torch.complex64, 'double', torch.complex64),
+    (torch.complex128, 'float', torch.complex128),
+])
+def test_parameterless_task_conversion_metadata(initial_dtype, method, expected_dtype):
+    from timm.task.task import TrainingTask
+
+    task = TrainingTask(dtype=initial_dtype, verbose=False)
+    assert getattr(task, method)() is task
+    assert task.dtype == expected_dtype
+    assert not list(task.parameters())
+    assert not list(task.buffers())
+
+
+@pytest.mark.parametrize('parent_conversion', [False, True])
+def test_task_converted_resnet_training_batch(parent_conversion):
+    from timm import create_model
+
+    task = ClassificationTask(create_model('resnet18', pretrained=False, num_classes=3), verbose=False)
+    if parent_conversion:
+        ModuleWrapper(task).to(dtype=torch.float64)
+    else:
+        task.double()
+    batch = torch.randn(2, 3, 32, 32, device=task.device, dtype=task.dtype)
+    result = task(batch, torch.tensor([0, 2]))
+    assert torch.isfinite(result['loss'])
+    result['loss'].backward()
+    assert task.get_trainable_module().conv1.weight.grad is not None
+
+
+@pytest.mark.parametrize('parent_conversion', [False, True])
+def test_task_memory_format_keeps_metadata(parent_conversion):
+    from timm import create_model
+
+    task = ClassificationTask(create_model('resnet18', pretrained=False, num_classes=3), verbose=False)
+    task.to(dtype=torch.float64)
+    converted = ModuleWrapper(task) if parent_conversion else task
+    converted.to(memory_format=torch.channels_last)
+    assert task.dtype == next(task.parameters()).dtype == torch.float64
+    assert task.get_trainable_module().conv1.weight.is_contiguous(memory_format=torch.channels_last)
+    batch = torch.randn(2, 3, 32, 32, device=task.device, dtype=task.dtype)
+    result = task(batch, torch.tensor([0, 2]))
+    assert torch.isfinite(result['loss'])
+    result['loss'].backward()
+    assert task.get_trainable_module().conv1.weight.grad is not None

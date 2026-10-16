@@ -5,7 +5,7 @@ forward pass including loss computation. Tasks return a dictionary with loss
 components and outputs for logging.
 """
 from contextlib import nullcontext
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 import torch
 import torch.nn as nn
@@ -56,12 +56,15 @@ class TrainingTask(nn.Module):
         self.dtype = dtype if dtype is not None else torch.get_default_dtype()
         self.verbose = verbose
 
-    def to(self, *args, **kwargs):
-        """Move task to device/dtype, keeping self.device and self.dtype in sync."""
-        # Memory format applies to model tensors, not device/dtype metadata.
-        tensor_kwargs = {key: value for key, value in kwargs.items() if key != 'memory_format'}
-        dummy = torch.empty(0, device=self.device, dtype=self.dtype).to(*args, **tensor_kwargs)
-        result = super().to(*args, **kwargs)
+    def _apply(
+            self,
+            fn: Callable[[torch.Tensor], torch.Tensor],
+            *args: Any,
+            **kwargs: Any,
+    ) -> 'TrainingTask':
+        """Keep task metadata in sync with direct and parent module conversions."""
+        dummy = fn(torch.empty(0, device=self.device, dtype=self.dtype))
+        result = super()._apply(fn, *args, **kwargs)
         self.device = dummy.device
         self.dtype = dummy.dtype
         return result
