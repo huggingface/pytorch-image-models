@@ -497,12 +497,14 @@ class MultiEpochsDataLoader(torch.utils.data.DataLoader):
         else:
             self.batch_sampler = _RepeatSampler(self.batch_sampler)
         self._DataLoader__initialized = True
-        self.iterator = super().__iter__()
+        self.iterator = None  # created on first iter so a sampler set_epoch() before then is used
 
     def __len__(self):
         return len(self.sampler) if self.batch_sampler is None else len(self.batch_sampler.sampler)
 
     def __iter__(self):
+        if self.iterator is None:
+            self.iterator = super().__iter__()
         for i in range(len(self)):
             yield next(self.iterator)
 
@@ -518,5 +520,11 @@ class _RepeatSampler(object):
         self.sampler = sampler
 
     def __iter__(self):
+        # the next pass is started (prefetched) before the train loop calls set_epoch(), so advance the epoch here
+        sampler = getattr(self.sampler, 'sampler', self.sampler)  # unwrap batch sampler
+        epoch = getattr(sampler, 'epoch', None) if hasattr(sampler, 'set_epoch') else None
         while True:
+            if epoch is not None:
+                sampler.set_epoch(epoch)
+                epoch += 1
             yield from iter(self.sampler)

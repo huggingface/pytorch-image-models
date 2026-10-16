@@ -4,6 +4,7 @@ import torch
 from PIL import Image
 
 from timm.data import create_dataset, create_loader, create_naflex_loader, create_transform
+from timm.data.loader import MultiEpochsDataLoader
 from timm.data.naflex_loader import NaFlexPrefetchLoader
 from timm.data.auto_augment import (
     _HPARAMS_DEFAULT,
@@ -108,6 +109,16 @@ def test_create_loader_disables_persistent_workers_without_workers():
 
     assert loader.num_workers == 0
     assert not loader.persistent_workers
+
+
+def test_multi_epochs_loader_follows_sampler_epoch():
+    dataset = torch.utils.data.TensorDataset(torch.arange(32))
+    sampler = torch.utils.data.DistributedSampler(dataset, num_replicas=1, rank=0, shuffle=True)
+    loader = MultiEpochsDataLoader(dataset, batch_size=4, sampler=sampler, num_workers=2)
+    for epoch in (2, 3, 4):  # start past 0 as when resuming
+        sampler.set_epoch(epoch)
+        expected = list(sampler)
+        assert torch.cat([x for x, in loader]).tolist() == expected
 
 
 class _PatchDictDataset(torch.utils.data.Dataset):
