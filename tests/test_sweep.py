@@ -1025,6 +1025,27 @@ def test_plain_results_rank_within_each_budget(tmp_path, capsys):
 
 
 @pytest.mark.usefixtures('restore_parser_defaults')
+def test_diverged_runs_rank_last(tmp_path, capsys):
+    """A nan metric (diverged run) ranks last and is never the best value, instead of scrambling the ranking."""
+    spec = _spec(tmp_path, search=dict(mode='grid', space=dict(lr=[0.1, 0.2, 0.4]), repeats=2))
+    root, plan = _write(spec)
+    trials = {t['id']: t for t in plan['trials']}
+    final = {0.1: '60.0', 0.2: 'nan', 0.4: '70.0'}
+    for job in plan['jobs']:
+        path = root / job['dir'] / 'summary.csv'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        lr = trials[job['trial']]['params']['lr']
+        path.write_text(f'epoch,train_loss,eval_top1\n0,1.0,55.0\n1,1.0,{final[lr]}\n')
+    _mark_all(root, plan, 'completed')
+    results, metric_col = sweep.collect_results(plan)
+    assert [r['lr'] for r in results] == [0.4, 0.4, 0.1, 0.1, 0.2, 0.2]
+    assert [r[f'best_{metric_col}'] for r in results if r['lr'] == 0.2] == [55.0, 55.0]
+    sweep.show_results(plan)
+    agg = capsys.readouterr().out.split('Over 2 repeats:')[1].strip().splitlines()[1:4]
+    assert [line.split()[0] for line in agg] == ['0.4', '0.1', '0.2']
+
+
+@pytest.mark.usefixtures('restore_parser_defaults')
 def test_unchanged_wsd_plan_with_lr_noise_replans_cleanly(tmp_path):
     spec = _spec(tmp_path, train=dict(WSD_TRAIN, lr_noise=[0.5, 1.0]), search=dict(mode='grid', space=dict(lr=[0.1])),
                  wsd=dict(points=[2, 4], decay_epochs=[1]))
