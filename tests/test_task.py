@@ -82,6 +82,25 @@ def _create_tiny_distilled_student():
     )
 
 
+def test_task_to_keeps_device_dtype_in_sync():
+    task = ClassificationTask(TinyClassifier(), verbose=False).to(dtype=torch.float64)
+
+    # moves that don't specify dtype must keep the current dtype
+    for args, kwargs in [(('cpu',), {}), ((), {}), ((), {'memory_format': torch.channels_last})]:
+        assert task.to(*args, **kwargs) is task
+        assert task.dtype == next(task.parameters()).dtype == torch.float64
+
+    # dtype-only move must keep the current device
+    task.to('meta').to(torch.float32)
+    assert task.device == next(task.parameters()).device == torch.device('meta')
+    assert task.dtype == next(task.parameters()).dtype == torch.float32
+
+    # rejected conversion leaves metadata untouched
+    with pytest.raises(TypeError):
+        task.to(torch.int64)
+    assert task.dtype == torch.float32
+
+
 @pytest.mark.parametrize('task_cls', [LogitDistillationTask, FeatureDistillationTask, TokenDistillationTask])
 def test_distillation_train_keeps_teacher_in_eval(task_cls):
     if task_cls is TokenDistillationTask:
