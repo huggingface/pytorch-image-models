@@ -127,3 +127,9 @@ def test_wds_target_key_errors_are_not_swallowed(wds_root, split, target_key, ma
     dataset = create_dataset('wds/', root=wds_root, split=split, target_key=target_key)
     with pytest.raises(ValueError, match=match):
         list(dataset)
+
+
+def test_wds_zero_loader_workers_keeps_length(wds_root):
+    dataset = create_dataset('wds/', root=wds_root, split='validation')
+    dataset.set_loader_cfg(num_workers=0)
+    assert len(dataset) == 8

@@ -376,7 +376,7 @@ class ReaderWds(Reader):
         if self.ds is not None:
             return
         if num_workers is not None:
-            self.num_workers = num_workers
+            self.num_workers = max(1, num_workers)  # zero loader workers still has the main process
             self.global_num_workers = self.dist_num_replicas * self.num_workers
 
     def _lazy_init(self):
