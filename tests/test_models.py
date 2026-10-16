@@ -552,6 +552,22 @@ def test_features_only_grad_checkpointing_backward(model_name):
 
 
 @pytest.mark.base
+def test_feature_hook_net_grad_checkpointing_order():
+    # checkpoint recompute in backward re-fires feature hooks, output order must not change on next forward
+    model = create_model('xception41', pretrained=False, features_only=True).train()
+    x = torch.randn(2, 3, 64, 64)
+    with torch.no_grad():
+        ref = model(x)
+    model.set_grad_checkpointing(True)
+    for _ in range(2):
+        out = model(x)
+        assert len(out) == len(ref)
+        for o, r in zip(out, ref):
+            torch.testing.assert_close(o, r)
+        sum(o.mean() for o in out).backward()
+
+
+@pytest.mark.base
 @pytest.mark.parametrize(
     'model_name',
     ['efficientnet_b1_pruned', 'efficientnet_b2_pruned', 'efficientnet_b3_pruned'],
