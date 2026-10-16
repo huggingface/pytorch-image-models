@@ -1061,7 +1061,7 @@ def _register_bnb_optimizers(registry: OptimizerRegistry) -> None:
         ),
         OptimInfo(
             name='bnbadam8bit',
-            opt_class='bitsandbytes.optim.Adam',
+            opt_class='bitsandbytes.optim.Adam8bit',
             description='bitsandbytes 8-bit Adam with dynamic quantization',
             has_betas=True
         ),
@@ -1073,7 +1073,7 @@ def _register_bnb_optimizers(registry: OptimizerRegistry) -> None:
         ),
         OptimInfo(
             name='bnbadamw8bit',
-            opt_class='bitsandbytes.optim.AdamW',
+            opt_class='bitsandbytes.optim.AdamW8bit',
             description='bitsandbytes 8-bit AdamW with dynamic quantization',
             has_betas=True
         ),
