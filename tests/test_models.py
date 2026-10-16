@@ -318,6 +318,42 @@ def _assert_reset_classifier_preserves_parent_device_dtype(model):
     assert all(module.training == expected_training for module in model.modules())
 
 
+# NOTE the helpers below run on the meta device for every model, they cover structure and device / dtype / requires_grad
+# propagation only. Numerical and cache correctness still need targeted real-tensor tests.
+def _assert_frozen_survives_reset_and_resize(model_name, cfg_device, reset_pool=True):
+    """reset_classifier(0, ...) and set_input_size() rebuild modules from existing weights, must keep them frozen."""
+    model = create_model(model_name, pretrained=False, device=cfg_device, dtype=torch.float32)
+    model.requires_grad_(False)
+    reset_classifier = getattr(model, 'reset_classifier', None)
+    if callable(reset_classifier):
+        reset_classifier(0)
+        if reset_pool and not isinstance(model, EARLY_POOL_MODELS):
+            reset_classifier(0, '')
+    set_input_size = getattr(model, 'set_input_size', None)
+    if callable(set_input_size):
+        set_input_size(img_size=tuple(2 * s for s in model.default_cfg['input_size'][-2:]))
+    trainable = [n for n, p in model.named_parameters() if p.requires_grad]
+    assert not trainable, f'frozen parameters became trainable: {trainable[:5]}'
+
+
+def _assert_factory_device(model_name, cfg_device):
+    """create_model(device=...) without a device context must place every param and buffer on that device."""
+    model = create_model(model_name, pretrained=False, device=cfg_device, dtype=torch.float32)
+    expected = torch.device(cfg_device)
+    misplaced = [n for n, t in [*model.named_parameters(), *model.named_buffers()] if t.device != expected]
+    assert not misplaced, f'tensors not created on {expected}: {misplaced[:5]}'
+
+
+def _assert_dtype_change_after_forward(model, input_tensor, dtype=torch.bfloat16):
+    """Converting dtype after a forward must not leave stale caches or upcast activations."""
+    model.to(dtype)
+    output = model(input_tensor.to(dtype))
+    if isinstance(output, (tuple, list)):
+        output = output[0]
+    assert output.dtype == dtype, f'output dtype {output.dtype} != {dtype} after .to({dtype})'
+    model.to(torch.float32)
+
+
 @pytest.fixture
 def cfg_device():
     # Config tests only inspect structure and shapes; retain real tensors on older torch.
@@ -366,6 +402,8 @@ def test_model_default_cfgs(model_name, batch_size, cfg_device):
         assert outputs.shape[spatial_axis[1]] == pool_size[1], f'unpooled feature shape {outputs.shape} != config'
         assert outputs.shape[feat_axis] == model.num_features, f'unpooled feature dim {outputs.shape[feat_axis]} != model.num_features {model.num_features}'
         assert outputs_pre.shape[1] == model.head_hidden_size, f'pre_logits feature dim {outputs_pre.shape[1]} != model.head_hidden_size {model.head_hidden_size}'
+        if _HAS_DEVICE_CONTEXT:
+            _assert_dtype_change_after_forward(model, input_tensor)
 
         # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
         model.reset_classifier(0)
@@ -409,6 +447,10 @@ def test_model_default_cfgs(model_name, batch_size, cfg_device):
         assert fc + ".weight" in state_dict.keys(), f'{fc} not in model params'
 
     _assert_reset_classifier_preserves_parent_device_dtype(model)
+    if _HAS_DEVICE_CONTEXT:
+        # extra model creations are only cheap on the meta device
+        _assert_factory_device(model_name, cfg_device)
+        _assert_frozen_survives_reset_and_resize(model_name, cfg_device)
 
 
 @pytest.mark.cfg
@@ -446,6 +488,8 @@ def test_model_default_cfgs_non_std(model_name, batch_size, cfg_device):
             feat_dim = -1 if outputs.ndim == 3 else 1
         assert outputs.shape[feat_dim] == model.num_features
         assert outputs_pre.shape[1] == model.head_hidden_size
+    if _HAS_DEVICE_CONTEXT:
+        _assert_dtype_change_after_forward(model, input_tensor)
 
     # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
     model.reset_classifier(0)
@@ -486,6 +530,11 @@ def test_model_default_cfgs_non_std(model_name, batch_size, cfg_device):
         assert fc + ".weight" in state_dict.keys(), f'{fc} not in model params'
 
     _assert_reset_classifier_preserves_parent_device_dtype(model)
+    if _HAS_DEVICE_CONTEXT:
+        # extra model creations are only cheap on the meta device
+        _assert_factory_device(model_name, cfg_device)
+        # non-std models don't all support global_pool=''
+        _assert_frozen_survives_reset_and_resize(model_name, cfg_device, reset_pool=False)
 
 
 if 'GITHUB_ACTIONS' not in os.environ:
@@ -648,10 +697,16 @@ def test_model_forward_features(model_name, batch_size):
     outputs = model(torch.randn((batch_size, *input_size)))
     assert len(expected_channels) == len(outputs)
     spatial_size = input_size[-2:]
+    # unpadded convs shrink small inputs well below input / reduction
+    valid_padding = any(fnmatch.fnmatch(model_name, f) for f in ('inception_v3*', 'inception_v4*', 'inception_resnet_v2*'))
     for e, r, o in zip(expected_channels, expected_reduction, outputs):
         assert e == o.shape[feat_axis]
         assert o.shape[spatial_axis[0]] <= math.ceil(spatial_size[0] / r) + 1
         assert o.shape[spatial_axis[1]] <= math.ceil(spatial_size[1] / r) + 1
+        if not valid_padding:
+            # catch feature_info reductions that are off by 2x or more
+            assert o.shape[spatial_axis[0]] > spatial_size[0] / (2 * r), f'feature reduction {r} too small'
+            assert o.shape[spatial_axis[1]] > spatial_size[1] / (2 * r), f'feature reduction {r} too small'
         assert o.shape[0] == batch_size
         assert not torch.isnan(o).any()
 

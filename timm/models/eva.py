@@ -954,7 +954,7 @@ class Eva(nn.Module):
                     old_size=prev_grid_size,
                     num_prefix_tokens=num_prefix_tokens,
                     verbose=True,
-                ))
+                ), requires_grad=self.pos_embed.requires_grad)
 
         if self.rope is not None:
             if hasattr(self.rope, 'update_feat_shape'):

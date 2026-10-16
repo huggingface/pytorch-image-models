@@ -1076,7 +1076,7 @@ class VisionTransformer(nn.Module):
                     old_size=prev_grid_size,
                     num_prefix_tokens=num_prefix_tokens,
                     verbose=True,
-                ))
+                ), requires_grad=self.pos_embed.requires_grad)
 
         update_model_input_size(self, self.patch_embed.img_size, patch_size=patch_size)
 
