@@ -94,8 +94,9 @@ def create_scheduler_v2(
 
     Args:
         optimizer: optimizer to schedule
-        sched: scheduler name, one of 'cosine', 'tanh', 'step', 'multistep', 'poly', 'wsd', 'rsqrt', 'plateau'
-            (deprecated), or 'none' for a constant lr (returns None)
+        sched: scheduler name, one of 'cosine', 'tanh', 'step', 'multistep', 'poly', 'wsd', 'rsqrt', 'constant',
+            'plateau' (deprecated), or 'none' for no scheduler (returns None, the optimizer lr is left untouched).
+            'constant' holds the lr after warmup w/ param group lr_scale (layer-wise lr decay) applied.
         num_epochs: number of epochs in the schedule (excluding warmup if warmup_prefix, excluding cooldown)
         decay_epochs: lr decay interval (step), or the length of the decay phase (wsd / rsqrt) in epochs, a value
             in (0, 1) is a fraction of the schedule length. None = 90 (step), 0.2 (wsd / rsqrt)
@@ -203,6 +204,16 @@ def create_scheduler_v2(
             optimizer,
             decay_t=decay_t,
             decay_rate=decay_rate,
+            t_in_epochs=step_on_epochs,
+            **warmup_args,
+            **noise_args,
+        )
+    elif sched == 'constant':
+        # step schedule that never decays, unlike 'none' this applies warmup and param group lr_scale
+        lr_scheduler = StepLRScheduler(
+            optimizer,
+            decay_t=1,
+            decay_rate=1.,
             t_in_epochs=step_on_epochs,
             **warmup_args,
             **noise_args,
