@@ -56,12 +56,13 @@ class TrainingTask(nn.Module):
         self.dtype = dtype if dtype is not None else torch.get_default_dtype()
         self.verbose = verbose
 
-    def to(self, *args, **kwargs):
-        """Move task to device/dtype, keeping self.device and self.dtype in sync."""
-        # Memory format applies to model tensors, not device/dtype metadata.
-        tensor_kwargs = {key: value for key, value in kwargs.items() if key != 'memory_format'}
-        dummy = torch.empty(0, device=self.device, dtype=self.dtype).to(*args, **tensor_kwargs)
-        result = super().to(*args, **kwargs)
+    def _apply(self, fn, *args, **kwargs):
+        """Keep self.device and self.dtype in sync with any module conversion.
+
+        Covers .to(), .half(), .cuda() etc. and conversions applied via a parent module.
+        """
+        dummy = fn(torch.empty(0, device=self.device, dtype=self.dtype))
+        result = super()._apply(fn, *args, **kwargs)  # pass through, no `recurse` arg in older PyTorch
         self.device = dummy.device
         self.dtype = dummy.dtype
         return result
