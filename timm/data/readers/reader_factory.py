@@ -12,12 +12,13 @@ def create_reader(
         **kwargs,
 ):
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
-    name = name.lower()
     name = name.split('/', 1)
     prefix = ''
     if len(name) > 1:
-        prefix = name[0]
+        prefix = name[0].lower()
     name = name[-1]
+    if prefix not in ('hfds', 'hfids'):
+        name = name.lower()
 
     # FIXME the additional features are only supported by ReaderHfds for now.
     additional_features = kwargs.pop("additional_features", None)

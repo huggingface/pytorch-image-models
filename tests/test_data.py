@@ -37,6 +37,29 @@ def test_hfds_sliced_imagefolder_split(tmp_path, monkeypatch):
     assert sliced[0][1] == 0
 
 
+@pytest.mark.parametrize('prefix', ['hfds', 'hfids', 'HFDS', 'HFIDS'])
+def test_hf_dataset_preserves_local_path_case(tmp_path, prefix):
+    pytest.importorskip('datasets')
+    root = tmp_path / 'Photos'
+    for class_name in ('cat', 'dog'):
+        class_dir = root / 'train' / class_name
+        class_dir.mkdir(parents=True)
+        Image.new('RGB', (2, 2)).save(class_dir / '0.png')
+
+    dataset = create_dataset(
+        f'{prefix}/{root}',
+        root=str(tmp_path / 'cache'),
+        split='train',
+        is_training=True,
+        download=True,
+        batch_size=2,
+    )
+    samples = list(dataset)
+    assert len(samples) == len(dataset) == 2
+    assert sorted(target for _, target in samples) == [0, 1]
+    assert all(image.size == (2, 2) for image, _ in samples)
+
+
 @pytest.mark.parametrize('count', [None, 4])
 def test_rand_bbox_minmax_can_reach_bottom_right_border(monkeypatch, count):
     def sample_last(low, high, size=None):

@@ -90,6 +90,7 @@ def create_dataset(
 
     Args:
         name: Dataset name, empty is okay for folder based datasets
+            Hugging Face dataset names and local paths are case-sensitive.
         root: Root folder of dataset (All)
         split: Dataset split (All)
         search_split: Search for split specific child fold from root so one can specify
@@ -110,9 +111,9 @@ def create_dataset(
         Dataset object
     """
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
-    name = name.lower()
-    if name.startswith('torch/'):
-        name = name.split('/', 2)[-1]
+    name_lower = name.lower()
+    if name_lower.startswith('torch/'):
+        name = name_lower.split('/', 2)[-1]
         torch_kwargs = dict(root=root, download=download, **kwargs)
         if name in _TORCH_BASIC_DS:
             ds_class = _TORCH_BASIC_DS[name]
@@ -157,7 +158,7 @@ def create_dataset(
             ds = ImageFolder(root, **kwargs)
         else:
             assert False, f"Unknown torchvision dataset {name}"
-    elif name.startswith('hfds/'):
+    elif name_lower.startswith('hfds/'):
         # NOTE right now, HF datasets default arrow format is a random-access Dataset,
         # There will be a IterableDataset variant too, TBD
         ds = ImageDataset(
@@ -169,7 +170,7 @@ def create_dataset(
             trust_remote_code=trust_remote_code,
             **kwargs,
         )
-    elif name.startswith('hfids/'):
+    elif name_lower.startswith('hfids/'):
         ds = IterableImageDataset(
             root,
             reader=name,
@@ -185,7 +186,7 @@ def create_dataset(
             trust_remote_code=trust_remote_code,
             **kwargs,
         )
-    elif name.startswith('tfds/'):
+    elif name_lower.startswith('tfds/'):
         ds = IterableImageDataset(
             root,
             reader=name,
@@ -200,7 +201,7 @@ def create_dataset(
             input_img_mode=input_img_mode,
             **kwargs
         )
-    elif name.startswith('wds/'):
+    elif name_lower.startswith('wds/'):
         ds = IterableImageDataset(
             root,
             reader=name,
