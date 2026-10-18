@@ -25,6 +25,7 @@ def resample_abs_pos_embed(
         interpolation: str = 'bicubic',
         antialias: bool = True,
         verbose: bool = False,
+        align_corners: Optional[bool] = None,
 ):
     # sort out sizes, assume square if old size not provided
     num_pos_tokens = posemb.shape[1]
@@ -50,7 +51,7 @@ def resample_abs_pos_embed(
     orig_dtype = posemb.dtype
     posemb = posemb.float()  # interpolate needs float32
     posemb = posemb.reshape(1, old_size[0], old_size[1], -1).permute(0, 3, 1, 2)
-    posemb = F.interpolate(posemb, size=new_size, mode=interpolation, antialias=antialias)
+    posemb = F.interpolate(posemb, size=new_size, mode=interpolation, align_corners=align_corners, antialias=antialias)
     posemb = posemb.permute(0, 2, 3, 1).reshape(1, -1, embed_dim)
     posemb = posemb.to(orig_dtype)
 

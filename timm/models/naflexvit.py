@@ -26,7 +26,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
+from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD, OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from timm.layers import (
     get_device_dtype,
     AttentionPoolLatent,
@@ -48,7 +48,7 @@ from ._features_fx import register_notrace_function, register_notrace_module
 from ._manipulate import checkpoint, named_apply
 from ._registry import register_model, generate_default_cfgs
 from .eva import EvaBlock
-from .vision_transformer import Block, global_pool_nlc
+from .vision_transformer import Block, global_pool_nlc, _convert_radio
 
 __all__ = ['NaFlexVitCfg', 'NaFlexVit']
 
@@ -98,6 +98,8 @@ class NaFlexVitCfg:
     pos_embed_grid_size: Optional[Tuple[int, int]] = (16, 16)  # Grid size for position embedding initialization
     pos_embed_interp_mode: str = 'bicubic'  # Interpolation mode for position embedding resizing
     pos_embed_ar_preserving: bool = False  # Whether to preserve aspect ratio during position embedding interpolation
+    pos_embed_antialias: bool = True  # Whether to antialias when downsampling learned position embeddings
+    pos_embed_align_corners: bool = False  # Use align_corners when resampling learned position embeddings
     pos_embed_use_grid_sample: bool = False  # Whether to use grid_sample for naflex position embedding interpolation
 
     # ROPE specific configuration
@@ -221,12 +223,15 @@ def calculate_naflex_grid_sizes(_coord: torch.Tensor):
 def _normalize_naflex_grid_sample_coords(
         patch_coord: torch.Tensor,
         ar_preserving: bool = False,
+        align_corners: bool = False,
 ) -> torch.Tensor:
-    """Normalize NaFlex patch coordinates for ``grid_sample`` with ``align_corners=False``."""
+    """Normalize NaFlex patch coordinates for ``grid_sample`` with matching ``align_corners``."""
     shapes = patch_coord.amax(dim=1) + 1
     if ar_preserving:
         shapes = shapes.amax(dim=1, keepdim=True).expand_as(shapes)
 
+    if align_corners:
+        return 2.0 * patch_coord.to(dtype=torch.float32) / (shapes[:, None, :] - 1).clamp(min=1) - 1.0
     return (2.0 * patch_coord.to(dtype=torch.float32) + 1.0) / shapes[:, None, :] - 1.0
 
 
@@ -387,6 +392,8 @@ class NaFlexEmbeds(nn.Module):
         pos_embed_grid_size: Grid size for position embedding initialization
         pos_embed_interp_mode: Interpolation mode for position embedding resizing
         pos_embed_ar_preserving: Whether to preserve aspect ratio during position embedding interpolation
+        pos_embed_antialias: Whether to antialias when downsampling learned position embeddings
+        pos_embed_align_corners: Whether to use align_corners when resampling learned position embeddings
         default_img_size: Default image size for position embedding grid calculation
     """
 
@@ -405,6 +412,8 @@ class NaFlexEmbeds(nn.Module):
             pos_embed_grid_size: Optional[Tuple[int, int]] = (14, 14),
             pos_embed_interp_mode: str = 'bicubic',
             pos_embed_ar_preserving: bool = False,
+            pos_embed_antialias: bool = True,
+            pos_embed_align_corners: bool = False,
             pos_embed_use_grid_sample: bool = False,
             input_norm_layer: Optional[Type[nn.Module]] = None,
             proj_norm_layer: Union[bool, Optional[Type[nn.Module]]] = None,
@@ -431,6 +440,8 @@ class NaFlexEmbeds(nn.Module):
             pos_embed_grid_size: Grid size for position embedding initialization.
             pos_embed_interp_mode: Interpolation mode for position embedding resizing.
             pos_embed_ar_preserving: Whether to preserve aspect ratio during interpolation.
+            pos_embed_antialias: Whether to antialias when downsampling learned position embeddings.
+            pos_embed_align_corners: Whether to use align_corners when resampling learned position embeddings.
             input_norm_layer: Normalization layer applied to input (linear mode only).
             proj_norm_layer: Normalization layer applied after projection.
             norm_layer: Default normalization layer.
@@ -444,6 +455,8 @@ class NaFlexEmbeds(nn.Module):
         self.num_reg_tokens = reg_tokens
         self.pos_embed_interp_mode = pos_embed_interp_mode
         self.pos_embed_ar_preserving = pos_embed_ar_preserving
+        self.pos_embed_antialias = pos_embed_antialias
+        self.pos_embed_align_corners = pos_embed_align_corners
         self.pos_embed_use_grid_sample = pos_embed_use_grid_sample
         self.patch_size = to_2tuple(patch_size)
         self.in_chans = in_chans
@@ -657,8 +670,8 @@ class NaFlexEmbeds(nn.Module):
                     pos_embed_nchw,
                     size=_interp_size,
                     mode=self.pos_embed_interp_mode,
-                    align_corners=False,
-                    antialias=True,
+                    align_corners=self.pos_embed_align_corners,
+                    antialias=self.pos_embed_antialias,
                 )[:, :, :size[0], :size[1]].flatten(2).transpose(1, 2)
             return pos_embed_flat.to(dtype=x.dtype)
 
@@ -698,12 +711,13 @@ class NaFlexEmbeds(nn.Module):
         grid = _normalize_naflex_grid_sample_coords(
             patch_coord,
             ar_preserving=self.pos_embed_ar_preserving,
+            align_corners=self.pos_embed_align_corners,
         ).flip(-1).unsqueeze(2)  # (B, N, 1, 2), grid_sample coordinate order is (x, y)
         pos_embed = F.grid_sample(
             self.pos_embed.permute(0, 3, 1, 2).expand(B, -1, -1, -1).float(),
             grid,
             mode=self.pos_embed_interp_mode,
-            align_corners=False,
+            align_corners=self.pos_embed_align_corners,
             padding_mode='border',
         ).to(dtype=x.dtype)  # (B, C, N, 1)
 
@@ -737,8 +751,8 @@ class NaFlexEmbeds(nn.Module):
                 self.pos_embed.permute(0, 3, 1, 2).float(),  # B,C,H,W
                 size=_interp_size,
                 mode=self.pos_embed_interp_mode,
-                align_corners=False,
-                antialias=True,
+                align_corners=self.pos_embed_align_corners,
+                antialias=self.pos_embed_antialias,
             )[:, :, :grid_size[0], :grid_size[1]].flatten(2).transpose(1, 2)
         pos_embed_flat = pos_embed_flat.to(dtype=x.dtype)
 
@@ -1234,6 +1248,8 @@ class NaFlexVit(nn.Module):
             pos_embed_grid_size=cfg.pos_embed_grid_size,
             pos_embed_interp_mode=cfg.pos_embed_interp_mode,
             pos_embed_ar_preserving=cfg.pos_embed_ar_preserving,
+            pos_embed_antialias=cfg.pos_embed_antialias,
+            pos_embed_align_corners=cfg.pos_embed_align_corners,
             pos_embed_use_grid_sample=cfg.pos_embed_use_grid_sample,
             proj_norm_layer=embed_norm_layer,
             pos_drop_rate=cfg.pos_drop_rate,
@@ -2011,6 +2027,8 @@ def get_init_weights_vit(mode: str = 'jax', head_bias: float = 0.0, needs_reset:
 
 def checkpoint_filter_fn(state_dict: Dict[str, Any], model: NaFlexVit) -> Dict[str, Any]:
     """Handle state dict conversion from original ViT to the new version with combined embedding."""
+    if 'radio_model.model.patch_generator.embedder.weight' in state_dict:
+        state_dict = _convert_radio(state_dict)
 
     # Handle CombinedEmbed module pattern
     out_dict = {}
@@ -2101,6 +2119,19 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
     }
 
 
+def _radio_cfg(**kwargs) -> Dict[str, Any]:
+    return _cfg(
+        hf_hub_filename='model.safetensors',
+        num_classes=0,
+        input_size=(3, 512, 512),
+        mean=OPENAI_CLIP_MEAN,
+        std=OPENAI_CLIP_STD,
+        license='nvidia-open-model-license',
+        origin_url='https://github.com/NVlabs/RADIO',
+        **kwargs,
+    )
+
+
 default_cfgs = generate_default_cfgs({
     'naflexvit_base_patch16_gap.e300_s576_in1k': _cfg(
         hf_hub_id='timm/',
@@ -2122,6 +2153,20 @@ default_cfgs = generate_default_cfgs({
     'naflexvit_so400m_patch16_siglip.v2_webli': _cfg(
         hf_hub_id='timm/',
         num_classes=0),
+
+    # NVIDIA C-RADIO backbones (https://github.com/NVlabs/RADIO), loaded from original HF Hub weights
+    'naflexvit_base_patch16_radio_v3.c_radio': _radio_cfg(
+        hf_hub_id='nvidia/C-RADIOv3-B', paper_ids='arXiv:2412.07679'),
+    'naflexvit_large_patch16_radio_v3.c_radio': _radio_cfg(
+        hf_hub_id='nvidia/C-RADIOv3-L', paper_ids='arXiv:2412.07679'),
+    'naflexvit_huge_patch16_radio_v3.c_radio': _radio_cfg(
+        hf_hub_id='nvidia/C-RADIOv3-H', paper_ids='arXiv:2412.07679'),
+    'naflexvit_giant_patch16_radio_v3.c_radio': _radio_cfg(
+        hf_hub_id='nvidia/C-RADIOv3-g', paper_ids='arXiv:2412.07679'),
+    'naflexvit_so400m_patch16_radio_v4.c_radio': _radio_cfg(
+        hf_hub_id='nvidia/C-RADIOv4-SO400M', paper_ids='arXiv:2601.17237'),
+    'naflexvit_huge_patch16_radio_v4.c_radio': _radio_cfg(
+        hf_hub_id='nvidia/C-RADIOv4-H', paper_ids='arXiv:2601.17237'),
 })
 
 
@@ -2415,4 +2460,79 @@ def naflexvit_so400m_patch16_siglip(pretrained: bool = False, **kwargs) -> NaFle
         pos_embed_interp_mode='bilinear',
     )
     model = _create_naflexvit('naflexvit_so400m_patch16_siglip', pretrained=pretrained, cfg=cfg, **kwargs)
+    return model
+
+
+def _radio_vit_cfg(**kwargs) -> NaFlexVitCfg:
+    """ RADIO ViT, pos embed stored on a 128x128 grid (2048px max), bilinearly resized to a square of the
+    largest grid dim then cropped top-left. Per-teacher summary CLS tokens beyond the first are treated as registers.
+
+    NOTE pos_embed_align_corners matches each checkpoint's HF Hub code. All C-RADIOv3 were released w/
+    align_corners=True, the v3-L/g repo code switched to False in 2025-07 (weights unchanged), C-RADIOv4 uses False.
+    """
+    return NaFlexVitCfg(
+        patch_size=16,
+        class_token=True,
+        global_pool='token',
+        final_norm=False,
+        pos_embed_grid_size=(128, 128),
+        pos_embed_interp_mode='bilinear',
+        pos_embed_ar_preserving=True,
+        pos_embed_antialias=False,
+        **kwargs,
+    )
+
+
+@register_model
+def naflexvit_base_patch16_radio_v3(pretrained: bool = False, **kwargs) -> NaFlexVit:
+    """ViT-B/16 C-RADIOv3 backbone.
+    """
+    cfg = _radio_vit_cfg(
+        embed_dim=768, depth=12, num_heads=12, init_values=1e-5, reg_tokens=7, pos_embed_align_corners=True)
+    model = _create_naflexvit('naflexvit_base_patch16_radio_v3', pretrained=pretrained, cfg=cfg, **kwargs)
+    return model
+
+
+@register_model
+def naflexvit_large_patch16_radio_v3(pretrained: bool = False, **kwargs) -> NaFlexVit:
+    """ViT-L/16 C-RADIOv3 backbone.
+    """
+    cfg = _radio_vit_cfg(embed_dim=1024, depth=24, num_heads=16, init_values=1e-5, reg_tokens=7)
+    model = _create_naflexvit('naflexvit_large_patch16_radio_v3', pretrained=pretrained, cfg=cfg, **kwargs)
+    return model
+
+
+@register_model
+def naflexvit_huge_patch16_radio_v3(pretrained: bool = False, **kwargs) -> NaFlexVit:
+    """ViT-H/16 C-RADIOv3 backbone.
+    """
+    cfg = _radio_vit_cfg(embed_dim=1280, depth=32, num_heads=16, reg_tokens=7, pos_embed_align_corners=True)
+    model = _create_naflexvit('naflexvit_huge_patch16_radio_v3', pretrained=pretrained, cfg=cfg, **kwargs)
+    return model
+
+
+@register_model
+def naflexvit_giant_patch16_radio_v3(pretrained: bool = False, **kwargs) -> NaFlexVit:
+    """ViT-g/16 C-RADIOv3 backbone.
+    """
+    cfg = _radio_vit_cfg(embed_dim=1536, depth=40, num_heads=24, reg_tokens=7)
+    model = _create_naflexvit('naflexvit_giant_patch16_radio_v3', pretrained=pretrained, cfg=cfg, **kwargs)
+    return model
+
+
+@register_model
+def naflexvit_so400m_patch16_radio_v4(pretrained: bool = False, **kwargs) -> NaFlexVit:
+    """ViT-SO400M/16 C-RADIOv4 backbone.
+    """
+    cfg = _radio_vit_cfg(embed_dim=1152, depth=27, num_heads=16, mlp_ratio=4304 / 1152, reg_tokens=9)
+    model = _create_naflexvit('naflexvit_so400m_patch16_radio_v4', pretrained=pretrained, cfg=cfg, **kwargs)
+    return model
+
+
+@register_model
+def naflexvit_huge_patch16_radio_v4(pretrained: bool = False, **kwargs) -> NaFlexVit:
+    """ViT-H/16 C-RADIOv4 backbone.
+    """
+    cfg = _radio_vit_cfg(embed_dim=1280, depth=32, num_heads=16, reg_tokens=9)
+    model = _create_naflexvit('naflexvit_huge_patch16_radio_v4', pretrained=pretrained, cfg=cfg, **kwargs)
     return model
