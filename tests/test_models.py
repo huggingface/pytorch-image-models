@@ -1304,6 +1304,70 @@ def test_naflexvit_key_only_attn_mask_output_parity(global_pool):
 
 
 @pytest.mark.base
+@pytest.mark.parametrize('model_name,use_naflex', [
+    ('naflexvit_base_patch16_radio_v3', None),
+    ('vit_base_patch16_radio_v3', False),
+    ('vit_base_patch16_radio_v3', True),
+])
+@pytest.mark.parametrize('grid_size', [(3, 5), (16, 64)])  # (16, 64) has the token count of the 512px default
+def test_radio_checkpoint_filter(model_name, use_naflex, grid_size, tmp_path):
+    """RADIO backbone keys remap and load strictly, embeds match RADIO's bias-free (C, ph, pw) patch linear
+    and its eval-mode pos embed (bilinear, no antialias, resize to square of max grid dim then crop top-left).
+    NaFlexVit keeps the full 128x128 grid, ViT resamples it once at load for its fixed img_size.
+    """
+    D, num_tokens = 32, 8
+    gh, gw = grid_size
+    model_kwargs = dict(embed_dim=D, depth=1, num_heads=2, img_size=(gh * 16, gw * 16))
+    if use_naflex is not None:
+        model_kwargs['use_naflex'] = use_naflex
+    is_naflex = model_name.startswith('naflexvit') or use_naflex
+    model = create_model(model_name, **model_kwargs)
+    radio_sd = {
+        'radio_model.input_conditioner.norm_mean': torch.zeros(3, 1, 1),
+        'radio_model.summary_idxs': torch.tensor([0, 1, 2]),
+        'radio_model.model.patch_generator.embedder.weight': torch.randn(D, 3 * 16 * 16),
+        'radio_model.model.patch_generator.pos_embed': torch.randn(1, 128 * 128, D),
+        'radio_model.model.patch_generator.cls_token.token': torch.randn(num_tokens, D),
+    }
+    for k, v in model.blocks.state_dict().items():
+        radio_sd['radio_model.model.blocks.' + k.replace('.gamma', '.grandma')] = torch.randn_like(v)
+    torch.save(radio_sd, tmp_path / 'radio.pth')
+    model = create_model(
+        model_name,
+        pretrained=True,
+        pretrained_cfg_overlay=dict(file=str(tmp_path / 'radio.pth')),
+        **model_kwargs,
+    ).eval()
+    assert model.num_prefix_tokens == num_tokens
+
+    x = torch.randn(2, 3, gh * 16, gw * 16)
+    patches = x.reshape(2, 3, gh, 16, gw, 16).permute(0, 2, 4, 1, 3, 5).reshape(2, gh * gw, -1)
+    expected = patches @ radio_sd['radio_model.model.patch_generator.embedder.weight'].t()
+    pos_embed = radio_sd['radio_model.model.patch_generator.pos_embed'].reshape(1, 128, 128, D).permute(0, 3, 1, 2)
+    # C-RADIOv3 release behaviour is align_corners=True
+    pos_embed = torch.nn.functional.interpolate(pos_embed, size=(gw, gw), mode='bilinear', align_corners=True)
+    pos_embed = pos_embed[:, :, :gh, :gw]
+    expected = expected + pos_embed.flatten(2).transpose(1, 2)
+    expected = torch.cat([radio_sd['radio_model.model.patch_generator.cls_token.token'].expand(2, -1, -1), expected], 1)
+    with torch.no_grad():
+        if is_naflex:
+            actual, _ = model.embeds(x)
+        else:
+            actual = model._pos_embed(model.patch_embed(x))
+    torch.testing.assert_close(actual, expected, rtol=1e-4, atol=1e-4)
+
+    if is_naflex:
+        # NaFlex pre-patchified input w/ grid_sample pos embed must match
+        from timm.models.naflexvit import batch_patchify
+        patches, _ = batch_patchify(x, (16, 16))
+        patch_coord = torch.cartesian_prod(torch.arange(gh), torch.arange(gw)).expand(2, -1, -1)
+        model.embeds.pos_embed_use_grid_sample = True
+        with torch.no_grad():
+            actual, _ = model.embeds(patches, patch_coord=patch_coord)
+        torch.testing.assert_close(actual, expected, rtol=1e-4, atol=1e-4)
+
+
+@pytest.mark.base
 @pytest.mark.parametrize('num_kv_heads', [4, 2, (4, 2, 4)])
 @pytest.mark.parametrize('attn_only_layer_scale', [False, True])
 def test_naflexvit_sapiens2_conversion(num_kv_heads, attn_only_layer_scale):
