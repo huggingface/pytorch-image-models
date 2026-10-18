@@ -1,9 +1,12 @@
+import sys
+import types
+
 import numpy as np
 import pytest
 import torch
 from PIL import Image
 
-from timm.data import create_dataset, create_loader, create_naflex_loader, create_transform
+from timm.data import create_dataset, create_loader, create_naflex_loader, create_reader, create_transform
 from timm.data.loader import MultiEpochsDataLoader
 from timm.data.naflex_loader import NaFlexPrefetchLoader
 from timm.data.auto_augment import (
@@ -35,6 +38,37 @@ def test_hfds_sliced_imagefolder_split(tmp_path, monkeypatch):
     assert full.reader.num_samples == len(full) == 3
     assert sliced.reader.num_samples == len(sliced) == 1
     assert sliced[0][1] == 0
+
+
+
+@pytest.mark.parametrize('prefix', ['hfds', 'hfids', 'HFDS', 'HFIDS'])
+def test_hf_dataset_preserves_local_path_case(tmp_path, prefix):
+    pytest.importorskip('datasets')
+    root = tmp_path / 'Photos'
+    for class_name in ('cat', 'dog'):
+        class_dir = root / 'train' / class_name
+        class_dir.mkdir(parents=True)
+        Image.new('RGB', (2, 2)).save(class_dir / '0.png')
+
+    dataset = create_dataset(f'{prefix}/{root}', root=str(tmp_path / 'cache'), split='train', download=True)
+    assert sorted(target for _, target in dataset) == [0, 1]
+
+
+@pytest.mark.parametrize('prefix', ['tfds', 'TFDS'])
+def test_create_reader_preserves_tfds_name_case(monkeypatch, prefix):
+    fake = types.ModuleType('timm.data.readers.reader_tfds')
+    fake.ReaderTfds = lambda name, **kwargs: name
+    monkeypatch.setitem(sys.modules, 'timm.data.readers.reader_tfds', fake)
+    name = 'diabetic_retinopathy_detection/1M'
+    assert create_reader(f'{prefix}/{name}') == name
+    assert create_dataset(f'{prefix}/{name}').reader == name
+
+
+def test_torch_dataset_name_case_insensitive(tmp_path):
+    (tmp_path / 'cat').mkdir()
+    Image.new('RGB', (2, 2)).save(tmp_path / 'cat' / '0.png')
+    dataset = create_dataset('Torch/Image_Folder', root=str(tmp_path), search_split=False)
+    assert len(dataset) == 1
 
 
 @pytest.mark.parametrize('count', [None, 4])

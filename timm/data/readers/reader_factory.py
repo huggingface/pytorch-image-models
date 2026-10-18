@@ -12,12 +12,13 @@ def create_reader(
         **kwargs,
 ):
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
-    name = name.lower()
-    name = name.split('/', 1)
-    prefix = ''
-    if len(name) > 1:
-        prefix = name[0]
-    name = name[-1]
+    # only the reader prefix is case-insensitive, HF / TFDS names and local paths can be case-sensitive
+    prefix, sep, rest = name.partition('/')
+    if sep:
+        prefix = prefix.lower()
+        name = rest
+    else:
+        prefix = ''
 
     # FIXME the additional features are only supported by ReaderHfds for now.
     additional_features = kwargs.pop("additional_features", None)
