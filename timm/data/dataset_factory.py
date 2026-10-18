@@ -89,7 +89,8 @@ def create_dataset(
       * All - any of the above
 
     Args:
-        name: Dataset name, empty is okay for folder based datasets
+        name: Dataset name, empty is okay for folder based datasets. The prefix (e.g. `hfds/`) is case-insensitive,
+            the remainder is passed through as-is (case-sensitive) except for `torch/` names.
         root: Root folder of dataset (All)
         split: Dataset split (All)
         search_split: Search for split specific child fold from root so one can specify
@@ -110,9 +111,11 @@ def create_dataset(
         Dataset object
     """
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
-    name = name.lower()
-    if name.startswith('torch/'):
-        name = name.split('/', 2)[-1]
+    # only the prefix is case-insensitive, the rest of the name is passed through as-is except for torch
+    prefix, sep, _ = name.partition('/')
+    prefix = prefix.lower() if sep else ''
+    if prefix == 'torch':
+        name = name.split('/', 2)[-1].lower()
         torch_kwargs = dict(root=root, download=download, **kwargs)
         if name in _TORCH_BASIC_DS:
             ds_class = _TORCH_BASIC_DS[name]
@@ -157,7 +160,7 @@ def create_dataset(
             ds = ImageFolder(root, **kwargs)
         else:
             assert False, f"Unknown torchvision dataset {name}"
-    elif name.startswith('hfds/'):
+    elif prefix == 'hfds':
         # NOTE right now, HF datasets default arrow format is a random-access Dataset,
         # There will be a IterableDataset variant too, TBD
         ds = ImageDataset(
@@ -169,7 +172,7 @@ def create_dataset(
             trust_remote_code=trust_remote_code,
             **kwargs,
         )
-    elif name.startswith('hfids/'):
+    elif prefix == 'hfids':
         ds = IterableImageDataset(
             root,
             reader=name,
@@ -185,7 +188,7 @@ def create_dataset(
             trust_remote_code=trust_remote_code,
             **kwargs,
         )
-    elif name.startswith('tfds/'):
+    elif prefix == 'tfds':
         ds = IterableImageDataset(
             root,
             reader=name,
@@ -200,7 +203,7 @@ def create_dataset(
             input_img_mode=input_img_mode,
             **kwargs
         )
-    elif name.startswith('wds/'):
+    elif prefix == 'wds':
         ds = IterableImageDataset(
             root,
             reader=name,
