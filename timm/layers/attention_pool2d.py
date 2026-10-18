@@ -191,7 +191,7 @@ class AttentionPool2d(nn.Module):
     It was based on impl in CLIP by OpenAI
     https://github.com/openai/CLIP/blob/3b473b0e682c091a9e53623eebc1ca1657385717/clip/model.py
 
-    NOTE: This requires feature size upon construction and well prevent adaptive sizing of the network.
+    The positional embedding is initialized for feat_size and resampled for other input sizes.
 
     Setting out_features=0 disables the output projection (pre_logits mode).
     """
@@ -305,7 +305,9 @@ class AttentionPool2d(nn.Module):
             x = torch.cat([x.mean(1, keepdim=True), x], dim=1)
         else:
             x = torch.cat([self.cls_token.expand(x.shape[0], -1, -1), x], dim=1)
-        pos_embed = resample_abs_pos_embed(self.pos_embed.unsqueeze(0), (H, W), num_prefix_tokens=1)
+        pos_embed = resample_abs_pos_embed(
+            self.pos_embed.unsqueeze(0), (H, W), old_size=self.feat_size, num_prefix_tokens=1,
+        )
         x = x + pos_embed
 
         if self.qkv is None:

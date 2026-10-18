@@ -178,6 +178,37 @@ class TestAttentionPool:
             out = pool(x)
             assert out.shape == (2, 64)
 
+    @pytest.mark.parametrize('feat_size,input_size', [
+        ((3, 5), (3, 5)),
+        ((3, 5), (5, 7)),
+        ((2, 8), (4, 4)),
+    ])
+    @pytest.mark.parametrize('qkv_separate', [False, True])
+    def test_attention_pool2d_rectangular_source(self, feat_size, input_size, qkv_separate):
+        from timm.layers import AttentionPool2d
+        pool = AttentionPool2d(
+            in_features=64, feat_size=feat_size, num_heads=4, qkv_separate=qkv_separate,
+        ).to(torch_device)
+        x = torch.randn(2, 64, *input_size, device=torch_device)
+
+        # Interpolate the spatial grid explicitly, leaving the prefix position unchanged.
+        spatial_pos = pool.pos_embed[1:].T.reshape(1, 64, *feat_size)
+        spatial_pos = torch.nn.functional.interpolate(
+            spatial_pos, size=input_size, mode='bicubic', antialias=True,
+        ).flatten(2).transpose(1, 2)
+        pos_embed = torch.cat([pool.pos_embed[:1].unsqueeze(0), spatial_pos], dim=1)
+        tokens = x.flatten(2).transpose(1, 2)
+        tokens = torch.cat([tokens.mean(1, keepdim=True), tokens], dim=1) + pos_embed
+        if qkv_separate:
+            qkv = pool.q(tokens), pool.k(tokens), pool.v(tokens)
+        else:
+            qkv = pool.qkv(tokens).chunk(3, dim=-1)
+        q, k, v = [t.reshape(2, -1, 4, 16).transpose(1, 2) for t in qkv]
+        attn = ((q * pool.scale) @ k.transpose(-2, -1)).softmax(dim=-1)
+        expected = pool.proj((attn @ v).transpose(1, 2).reshape(2, -1, 64))[:, 0]
+
+        torch.testing.assert_close(pool(x), expected)
+
     def test_rot_attention_pool2d_basic(self):
         from timm.layers import RotAttentionPool2d
         x = torch.randn(2, 64, 7, 7, device=torch_device)
