@@ -420,6 +420,13 @@ def test_model_default_cfgs(model_name, batch_size, cfg_device):
             assert len(outputs.shape) == 4
             assert outputs.shape[spatial_axis[0]] == pool_size[0] and outputs.shape[spatial_axis[1]] == pool_size[1]
 
+        # test classifier deletion via __init__, output should match reset_classifier(0)
+        model = create_model(
+            model_name, pretrained=False, num_classes=0, device=cfg_device, dtype=torch.float32,
+        ).eval()
+        outputs = model.forward(input_tensor)
+        assert outputs.shape == outputs_pre.shape, f'output shape w/ num_classes=0 {outputs.shape} != pre_logits {outputs_pre.shape}'
+
         # test classifier + global pool deletion via __init__
         if 'pruned' not in model_name and not isinstance(model, EARLY_POOL_MODELS):
             # Explicit factory kwargs must also work without the device context.
