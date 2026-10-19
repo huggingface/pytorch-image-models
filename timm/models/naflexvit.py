@@ -2121,7 +2121,7 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
 
 def _radio_cfg(**kwargs) -> Dict[str, Any]:
     return _cfg(
-        hf_hub_filename='model.safetensors',
+        hf_hub_id='timm/',
         num_classes=0,
         input_size=(3, 512, 512),
         mean=OPENAI_CLIP_MEAN,
@@ -2154,19 +2154,25 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         num_classes=0),
 
-    # NVIDIA C-RADIO backbones (https://github.com/NVlabs/RADIO), loaded from original HF Hub weights
+    # NVIDIA C-RADIO backbones (https://github.com/NVlabs/RADIO), remapped from original NVIDIA HF Hub weights
     'naflexvit_base_patch16_radio_v3.c_radio': _radio_cfg(
-        hf_hub_id='nvidia/C-RADIOv3-B', paper_ids='arXiv:2412.07679'),
+        # hf_hub_id='nvidia/C-RADIOv3-B', hf_hub_filename='model.safetensors',
+        paper_ids='arXiv:2412.07679'),
     'naflexvit_large_patch16_radio_v3.c_radio': _radio_cfg(
-        hf_hub_id='nvidia/C-RADIOv3-L', paper_ids='arXiv:2412.07679'),
+        # hf_hub_id='nvidia/C-RADIOv3-L', hf_hub_filename='model.safetensors',
+        paper_ids='arXiv:2412.07679'),
     'naflexvit_huge_patch16_radio_v3.c_radio': _radio_cfg(
-        hf_hub_id='nvidia/C-RADIOv3-H', paper_ids='arXiv:2412.07679'),
+        # hf_hub_id='nvidia/C-RADIOv3-H', hf_hub_filename='model.safetensors',
+        paper_ids='arXiv:2412.07679'),
     'naflexvit_giant_patch16_radio_v3.c_radio': _radio_cfg(
-        hf_hub_id='nvidia/C-RADIOv3-g', paper_ids='arXiv:2412.07679'),
+        # hf_hub_id='nvidia/C-RADIOv3-g', hf_hub_filename='model.safetensors',
+        paper_ids='arXiv:2412.07679'),
     'naflexvit_so400m_patch16_radio_v4.c_radio': _radio_cfg(
-        hf_hub_id='nvidia/C-RADIOv4-SO400M', paper_ids='arXiv:2601.17237'),
+        # hf_hub_id='nvidia/C-RADIOv4-SO400M', hf_hub_filename='model.safetensors',
+        paper_ids='arXiv:2601.17237'),
     'naflexvit_huge_patch16_radio_v4.c_radio': _radio_cfg(
-        hf_hub_id='nvidia/C-RADIOv4-H', paper_ids='arXiv:2601.17237'),
+        # hf_hub_id='nvidia/C-RADIOv4-H', hf_hub_filename='model.safetensors',
+        paper_ids='arXiv:2601.17237'),
 })
 
 
