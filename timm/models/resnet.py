@@ -1115,6 +1115,11 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/resnext101_64x4d_c-0d0e0cc0.pth'),
 
+    # Bamboo-CLS backbone (no classifier), using the upstream benchmark preprocessing.
+    'resnet50.bamboo': _tcfg(
+        hf_hub_id='timm/', num_classes=0, crop_pct=1.0,
+        license=None, origin_url='https://github.com/ZhangYuanhan-AI/Bamboo', paper_ids='arXiv:2203.07845'),
+
     # torchvision ResNeXt weights
     'resnext50_32x4d.tv_in1k': _cfg(
         hf_hub_id='timm/',

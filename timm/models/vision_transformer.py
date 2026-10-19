@@ -2204,6 +2204,12 @@ default_cfgs = {
         url='https://storage.googleapis.com/vit_models/sam/ViT-B_16.npz', custom_load=True,
         hf_hub_id='timm/'),
 
+    # Bamboo-CLS classifier, using the upstream benchmark preprocessing.
+    'vit_base_patch16_224.bamboo': _cfg(
+        hf_hub_id='timm/', num_classes=115217, crop_pct=1.0,
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        license=None, origin_url='https://github.com/ZhangYuanhan-AI/Bamboo', paper_ids='arXiv:2203.07845'),
+
     # DINO pretrained - https://arxiv.org/abs/2104.14294 (no classifier head, for fine-tune only)
     'vit_small_patch16_224.dino': _cfg(
         url='https://dl.fbaipublicfiles.com/dino/dino_deitsmall16_pretrain/dino_deitsmall16_pretrain.pth',
