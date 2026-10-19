@@ -131,7 +131,7 @@ class MlpClassifierHead(nn.Module):
         self.fc1 = nn.Linear(in_features * self.global_pool.feat_mult(), hidden_features, bias=bias, **dd)
         self.act = act_layer()
         self.norm = norm_layer(hidden_features, **dd)
-        self.fc2 = nn.Linear(hidden_features, num_classes, bias=bias, **dd)
+        self.fc2 = nn.Linear(hidden_features, num_classes, bias=bias, **dd) if num_classes > 0 else nn.Identity()
         self.drop = nn.Dropout(drop)
 
     def reset(
