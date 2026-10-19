@@ -3275,39 +3275,45 @@ default_cfgs = {
         num_classes=0,
     ),
 
-    # NVIDIA C-RADIO backbones (https://github.com/NVlabs/RADIO), loaded from original HF Hub weights
+    # NVIDIA C-RADIO backbones (https://github.com/NVlabs/RADIO), remapped from original NVIDIA HF Hub weights
     'vit_base_patch16_radio_v3.c_radio': _cfg(
-        hf_hub_id='nvidia/C-RADIOv3-B', hf_hub_filename='model.safetensors',
+        hf_hub_id='timm/',
+        # hf_hub_id='nvidia/C-RADIOv3-B', hf_hub_filename='model.safetensors',  # original NVIDIA weights
         paper_ids='arXiv:2412.07679', origin_url='https://github.com/NVlabs/RADIO', license='nvidia-open-model-license',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, input_size=(3, 512, 512), crop_pct=1.0,
         num_classes=0,
     ),
     'vit_large_patch16_radio_v3.c_radio': _cfg(
-        hf_hub_id='nvidia/C-RADIOv3-L', hf_hub_filename='model.safetensors',
+        hf_hub_id='timm/',
+        # hf_hub_id='nvidia/C-RADIOv3-L', hf_hub_filename='model.safetensors',  # original NVIDIA weights
         paper_ids='arXiv:2412.07679', origin_url='https://github.com/NVlabs/RADIO', license='nvidia-open-model-license',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, input_size=(3, 512, 512), crop_pct=1.0,
         num_classes=0,
     ),
     'vit_huge_patch16_radio_v3.c_radio': _cfg(
-        hf_hub_id='nvidia/C-RADIOv3-H', hf_hub_filename='model.safetensors',
+        hf_hub_id='timm/',
+        # hf_hub_id='nvidia/C-RADIOv3-H', hf_hub_filename='model.safetensors',  # original NVIDIA weights
         paper_ids='arXiv:2412.07679', origin_url='https://github.com/NVlabs/RADIO', license='nvidia-open-model-license',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, input_size=(3, 512, 512), crop_pct=1.0,
         num_classes=0,
     ),
     'vit_giant_patch16_radio_v3.c_radio': _cfg(
-        hf_hub_id='nvidia/C-RADIOv3-g', hf_hub_filename='model.safetensors',
+        hf_hub_id='timm/',
+        # hf_hub_id='nvidia/C-RADIOv3-g', hf_hub_filename='model.safetensors',  # original NVIDIA weights
         paper_ids='arXiv:2412.07679', origin_url='https://github.com/NVlabs/RADIO', license='nvidia-open-model-license',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, input_size=(3, 512, 512), crop_pct=1.0,
         num_classes=0,
     ),
     'vit_so400m_patch16_radio_v4.c_radio': _cfg(
-        hf_hub_id='nvidia/C-RADIOv4-SO400M', hf_hub_filename='model.safetensors',
+        hf_hub_id='timm/',
+        # hf_hub_id='nvidia/C-RADIOv4-SO400M', hf_hub_filename='model.safetensors',  # original NVIDIA weights
         paper_ids='arXiv:2601.17237', origin_url='https://github.com/NVlabs/RADIO', license='nvidia-open-model-license',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, input_size=(3, 512, 512), crop_pct=1.0,
         num_classes=0,
     ),
     'vit_huge_patch16_radio_v4.c_radio': _cfg(
-        hf_hub_id='nvidia/C-RADIOv4-H', hf_hub_filename='model.safetensors',
+        hf_hub_id='timm/',
+        # hf_hub_id='nvidia/C-RADIOv4-H', hf_hub_filename='model.safetensors',  # original NVIDIA weights
         paper_ids='arXiv:2601.17237', origin_url='https://github.com/NVlabs/RADIO', license='nvidia-open-model-license',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, input_size=(3, 512, 512), crop_pct=1.0,
         num_classes=0,
