@@ -8,7 +8,7 @@ Originally from torchvision Inception3 model
 Licensed BSD-Clause 3 https://github.com/pytorch/vision/blob/master/LICENSE
 """
 from functools import partial
-from typing import Optional, Type
+from typing import List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -18,6 +18,7 @@ from timm.data import IMAGENET_DEFAULT_STD, IMAGENET_DEFAULT_MEAN, IMAGENET_INCE
 from timm.layers import trunc_normal_, create_classifier, Linear, ConvNormAct, get_device_dtype
 from ._builder import build_model_with_cfg
 from ._builder import resolve_pretrained_cfg
+from ._features import feature_take_indices
 from ._manipulate import flatten_modules
 from ._registry import register_model, generate_default_cfgs, register_model_deprecations
 
@@ -346,6 +347,13 @@ class InceptionV3(nn.Module):
             dict(num_chs=768, reduction=16, module='Mixed_6e'),
             dict(num_chs=2048, reduction=32, module='Mixed_7c'),
         ]
+        # feature layers in forward order (aux logits excluded), and the layer index of each feature_info tap
+        self.layer_names = [
+            'Conv2d_1a_3x3', 'Conv2d_2a_3x3', 'Conv2d_2b_3x3', 'Pool1', 'Conv2d_3b_1x1', 'Conv2d_4a_3x3', 'Pool2',
+            'Mixed_5b', 'Mixed_5c', 'Mixed_5d', 'Mixed_6a', 'Mixed_6b', 'Mixed_6c', 'Mixed_6d', 'Mixed_6e',
+            'Mixed_7a', 'Mixed_7b', 'Mixed_7c',
+        ]
+        self.feature_ends = [self.layer_names.index(info['module']) for info in self.feature_info]
 
         self.num_features = self.head_hidden_size = 2048
         self.global_pool, self.head_drop, self.fc = create_classifier(
@@ -397,6 +405,74 @@ class InceptionV3(nn.Module):
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool, **dd)
         self.global_pool.train(self.training)
         self.fc.train(self.training)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        The auxiliary classifier (aux_logits=True) is not run, only the final features are returned.
+
+        Args:
+            x: Input image tensor.
+            indices: Take last n features if int, all if None, select matching indices if sequence.
+                Indices 0-1 are the stem outputs (Conv2d_2b_3x3, Conv2d_4a_3x3), indices 2-4 the outputs of
+                the last block at each stride (Mixed_5d, Mixed_6e, Mixed_7c).
+            norm: Apply norm layer to compatible intermediates (unused, no final norm).
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            Features and list of intermediate features or just intermediate features.
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        take_ends = [self.feature_ends[i] for i in take_indices]
+
+        # forward pass
+        layer_names = self.layer_names
+        if stop_early:
+            layer_names = layer_names[:self.feature_ends[max_index] + 1]
+        for i, n in enumerate(layer_names):
+            x = getattr(self, n)(x)
+            if i in take_ends:
+                intermediates.append(x)
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layers (unused, no final norm).
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
+        """
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        for n in self.layer_names[self.feature_ends[max_index] + 1:]:
+            setattr(self, n, nn.Identity())
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_preaux(self, x):
         x = self.Conv2d_1a_3x3(x)  # N x 32 x 149 x 149
