@@ -23,7 +23,7 @@ Modifications and additions for timm hacked together by / Copyright 2021, Ross W
 '''These modules are adapted from those of timm, see
 https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
 '''
-from typing import Optional, Union, Type, Any
+from typing import Any, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -31,6 +31,7 @@ import torch.nn as nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropPath, calculate_drop_path_rates, trunc_normal_, PatchEmbed, Mlp, LayerNorm, HybridEmbed, get_device_dtype
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._features_fx import register_notrace_module
 from ._registry import register_model, generate_default_cfgs
 
@@ -347,7 +348,8 @@ class ConVit(nn.Module):
         self.norm = norm_layer(embed_dim, **dd)
 
         # Classifier head
-        self.feature_info = [dict(num_chs=embed_dim, reduction=patch_size, module='head')]
+        r = self.patch_embed.feat_ratio()
+        self.feature_info = [dict(num_chs=embed_dim, reduction=r, module=f'blocks.{i}') for i in range(depth)]
         self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
@@ -394,6 +396,93 @@ class ConVit(nn.Module):
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head.train(self.training)
 
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor.
+            indices: Take last n blocks if int, all if None, select matching indices if sequence.
+                Index i is the output of block i (patch tokens only, the class token that is inserted after the
+                local GPSA blocks is removed).
+            norm: Apply norm layer to all intermediates.
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            Features and list of intermediate features or just intermediate features.
+        """
+        assert output_fmt in ('NCHW', 'NLC'), 'Output format must be one of NCHW or NLC.'
+        reshape = output_fmt == 'NCHW'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.blocks), indices)
+
+        # forward pass
+        B, _, height, width = x.shape
+        x = self.patch_embed(x)
+        if self.use_pos_embed:
+            x = x + self.pos_embed
+        x = self.pos_drop(x)
+        cls_tokens = self.cls_token.expand(x.shape[0], -1, -1)
+
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            blocks = self.blocks
+        else:
+            blocks = self.blocks[:max_index + 1]
+        for i, blk in enumerate(blocks):
+            if i == self.local_up_to_layer:
+                x = torch.cat((cls_tokens, x), dim=1)
+            x = blk(x)
+            if i in take_indices:
+                # normalize intermediates with final norm layer if enabled, strip class token if present
+                y = self.norm(x) if norm else x
+                intermediates.append(y[:, 1:] if i >= self.local_up_to_layer else y)
+
+        # process intermediates
+        if reshape:
+            # reshape to BCHW output format
+            H, W = self.patch_embed.dynamic_feat_size((height, width))
+            intermediates = [y.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous() for y in intermediates]
+
+        if intermediates_only:
+            return intermediates
+
+        x = self.norm(x)
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layer.
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
+        """
+        take_indices, max_index = feature_take_indices(len(self.blocks), indices)
+        self.blocks = self.blocks[:max_index + 1]  # truncate blocks
+        if prune_norm:
+            self.norm = nn.Identity()
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
+
     def forward_features(self, x):
         x = self.patch_embed(x)
         if self.use_pos_embed:
@@ -420,10 +509,14 @@ class ConVit(nn.Module):
 
 
 def _create_convit(variant, pretrained=False, **kwargs):
-    if kwargs.get('features_only', None):
-        raise RuntimeError('features_only not implemented for Vision Transformer models.')
-
-    return build_model_with_cfg(ConVit, variant, pretrained, **kwargs)
+    out_indices = kwargs.pop('out_indices', 3)
+    return build_model_with_cfg(
+        ConVit,
+        variant,
+        pretrained,
+        feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
+        **kwargs,
+    )
 
 
 def _cfg(url='', **kwargs):
