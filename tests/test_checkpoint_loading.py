@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import torch
 
-from timm.models._helpers import load_state_dict, resume_checkpoint
+from timm.models._helpers import clean_state_dict, load_state_dict, resume_checkpoint
 
 
 _HAS_WEIGHTS_ONLY = 'weights_only' in inspect.signature(torch.load).parameters
@@ -15,6 +15,12 @@ _HAS_SAFE_GLOBALS = hasattr(torch.serialization, 'safe_globals')
 class _CustomPayload:
     def __init__(self, value: int = 1):
         self.value = value
+
+
+@pytest.mark.parametrize('prefix', ['', 'module.', '_orig_mod.', 'module._orig_mod.', '_orig_mod.module.'])
+def test_clean_state_dict_wrapper_prefixes(prefix):
+    state_dict = {'conv.weight': 0, 'fc.bias': 1}
+    assert clean_state_dict({prefix + k: v for k, v in state_dict.items()}) == state_dict
 
 
 def _create_tiny_naflexvit(pretrained: bool = False, **kwargs):
