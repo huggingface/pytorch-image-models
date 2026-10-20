@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import torch
 
-from timm.models._helpers import load_state_dict, resume_checkpoint
+from timm.models._helpers import load_checkpoint, load_state_dict, resume_checkpoint
 
 
 _HAS_WEIGHTS_ONLY = 'weights_only' in inspect.signature(torch.load).parameters
@@ -15,6 +15,26 @@ _HAS_SAFE_GLOBALS = hasattr(torch.serialization, 'safe_globals')
 class _CustomPayload:
     def __init__(self, value: int = 1):
         self.value = value
+
+
+@pytest.mark.parametrize('prefix', ['', 'module.', '_orig_mod.', 'module._orig_mod.', '_orig_mod.module.'])
+@pytest.mark.parametrize('resume', [False, True])
+def test_load_checkpoint_parallel_compile_prefixes(tmp_path, prefix, resume):
+    src_model = torch.nn.Linear(4, 2)
+    checkpoint_path = tmp_path / 'wrapped.pth'
+    torch.save(
+        {'state_dict': {prefix + k: v for k, v in src_model.state_dict().items()}, 'epoch': 3, 'version': 2},
+        checkpoint_path,
+    )
+
+    dst_model = torch.nn.Linear(4, 2)
+    if resume:
+        assert resume_checkpoint(dst_model, str(checkpoint_path), log_info=False) == 4
+    else:
+        load_checkpoint(dst_model, str(checkpoint_path))
+
+    for key, value in src_model.state_dict().items():
+        torch.testing.assert_close(dst_model.state_dict()[key], value, rtol=0, atol=0)
 
 
 def _create_tiny_naflexvit(pretrained: bool = False, **kwargs):

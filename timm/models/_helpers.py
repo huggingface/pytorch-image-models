@@ -122,15 +122,19 @@ def _remove_prefix(text: str, prefix: str) -> str:
 
 
 def clean_state_dict(state_dict: Dict[str, Any]) -> Dict[str, Any]:
-    # 'clean' checkpoint by removing .module prefix from state dict if it exists from parallel training
+    # Remove parallel and torchcompile wrappers in either order.
     cleaned_state_dict = {}
     to_remove = (
+        'module._orig_mod.',
+        '_orig_mod.module.',
         'module.',  # DDP wrapper
         '_orig_mod.',  # torchcompile dynamo wrapper
     )
     for k, v in state_dict.items():
         for r in to_remove:
-            k = _remove_prefix(k, r)
+            if k.startswith(r):
+                k = _remove_prefix(k, r)
+                break
         cleaned_state_dict[k] = v
     return cleaned_state_dict
 
