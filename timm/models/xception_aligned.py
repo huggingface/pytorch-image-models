@@ -173,9 +173,7 @@ class XceptionModule(nn.Module):
 
         self.drop_path = drop_path
 
-    def forward(self, x):
-        skip = x
-        x = self.stack(x)
+    def _residual(self, x: torch.Tensor, skip: torch.Tensor) -> torch.Tensor:
         if self.shortcut is not None:
             skip = self.shortcut(skip)
         if not self.no_skip:
@@ -184,18 +182,13 @@ class XceptionModule(nn.Module):
             x = x + skip
         return x
 
+    def forward(self, x):
+        return self._residual(self.stack(x), x)
+
     def forward_with_tap(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Forward that also returns the input to the last (strided) separable conv, the feature tap."""
-        skip = x
-        x_tap = self.stack[:-1](x)
-        x = self.stack[-1](x_tap)
-        if self.shortcut is not None:
-            skip = self.shortcut(skip)
-        if not self.no_skip:
-            if self.drop_path is not None:
-                x = self.drop_path(x)
-            x = x + skip
-        return x, x_tap
+        x_tap = self.stack[:-1](x)  # not called from forward, slicing is fine w/ torchscript
+        return self._residual(self.stack[-1](x_tap), x), x_tap
 
 
 class PreXceptionModule(nn.Module):
@@ -243,27 +236,22 @@ class PreXceptionModule(nn.Module):
 
         self.drop_path = drop_path
 
-    def forward(self, x):
-        x = self.norm(x)
-        skip = x
-        x = self.stack(x)
+    def _residual(self, x: torch.Tensor, skip: torch.Tensor) -> torch.Tensor:
         if not self.no_skip:
             if self.drop_path is not None:
                 x = self.drop_path(x)
             x = x + self.shortcut(skip)
         return x
 
+    def forward(self, x):
+        x = self.norm(x)
+        return self._residual(self.stack(x), x)
+
     def forward_with_tap(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Forward that also returns the input to the last (strided) separable conv, the feature tap."""
         x = self.norm(x)
-        skip = x
-        x_tap = self.stack[:-1](x)
-        x = self.stack[-1](x_tap)
-        if not self.no_skip:
-            if self.drop_path is not None:
-                x = self.drop_path(x)
-            x = x + self.shortcut(skip)
-        return x, x_tap
+        x_tap = self.stack[:-1](x)  # not called from forward, slicing is fine w/ torchscript
+        return self._residual(self.stack[-1](x_tap), x), x_tap
 
 
 class XceptionAligned(nn.Module):
