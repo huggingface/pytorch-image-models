@@ -475,8 +475,9 @@ class DLA(nn.Module):
 
         Args:
             x: Input image tensor.
-            indices: Take last n blocks if int, all if None, select matching indices if sequence.
-            norm: Apply norm layer to compatible intermediates.
+            indices: Take last n features if int, all if None, select matching indices if sequence.
+                Indices 0-5 are the outputs of level0 (stride 1) to level5 (stride 32).
+            norm: Apply norm layer to compatible intermediates (unused, no final norm).
             stop_early: Stop iterating over blocks when last desired intermediate hit.
             output_fmt: Shape of intermediate feature outputs.
             intermediates_only: Only return intermediate features.
@@ -513,7 +514,7 @@ class DLA(nn.Module):
 
         Args:
             indices: Indices of intermediate layers to keep.
-            prune_norm: Whether to prune normalization layer.
+            prune_norm: Whether to prune normalization layers (unused, no final norm).
             prune_head: Whether to prune the classifier head.
 
         Returns:

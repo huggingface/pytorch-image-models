@@ -335,6 +335,9 @@ class DenseNet(nn.Module):
         self.features.add_module('norm5', norm_layer(num_features, **dd))
 
         self.feature_info += [dict(num_chs=num_features, reduction=current_stride, module='features.norm5')]
+        # positions of the feature taps within self.features, used by forward_intermediates
+        feat_names = [n for n, _ in self.features.named_children()]
+        self.feature_ends = [feat_names.index(f['module'].split('.', 1)[1]) for f in self.feature_info]
         self.num_features = self.head_hidden_size = num_features
 
         # Linear layer
@@ -411,8 +414,10 @@ class DenseNet(nn.Module):
 
         Args:
             x: Input image tensor.
-            indices: Take last n blocks if int, all if None, select matching indices if sequence.
-            norm: Apply norm layer to compatible intermediates.
+            indices: Take last n features if int, all if None, select matching indices if sequence.
+                Index 0 is the stem output (before pooling), indices 1-3 the outputs of the first three dense blocks
+                (before their transitions), index 4 the final norm output.
+            norm: Apply norm layer to compatible intermediates (unused, the last feature is the final norm output).
             stop_early: Stop iterating over blocks when last desired intermediate hit.
             output_fmt: Shape of intermediate feature outputs.
             intermediates_only: Only return intermediate features.
@@ -422,19 +427,19 @@ class DenseNet(nn.Module):
         """
         assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
         intermediates = []
-        take_indices, max_index = feature_take_indices(len(self.feature_info), indices)
-        # feature taps: stem norm (before pooling), each dense block but the last (before its transition), final norm
-        feat_names = [f['module'].split('.', 1)[1] for f in self.feature_info]
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
 
         # forward pass
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            layers = self.features
+        else:
+            layers = self.features[:self.feature_ends[max_index] + 1]
         feat_idx = 0
-        for name, module in self.features.named_children():
-            x = module(x)
-            if name in feat_names:
+        for i, layer in enumerate(layers):
+            x = layer(x)
+            if i in self.feature_ends:
                 if feat_idx in take_indices:
                     intermediates.append(x)
-                if stop_early and feat_idx == max_index:
-                    break
                 feat_idx += 1
 
         if intermediates_only:
@@ -452,16 +457,14 @@ class DenseNet(nn.Module):
 
         Args:
             indices: Indices of intermediate layers to keep.
-            prune_norm: Whether to prune normalization layer.
+            prune_norm: Whether to prune normalization layers (unused, the final norm is the last feature).
             prune_head: Whether to prune the classifier head.
 
         Returns:
             List of indices that were kept.
         """
-        take_indices, max_index = feature_take_indices(len(self.feature_info), indices)
-        last_name = self.feature_info[max_index]['module'].split('.', 1)[1]
-        names = [name for name, _ in self.features.named_children()]
-        self.features = self.features[:names.index(last_name) + 1]
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        self.features = self.features[:self.feature_ends[max_index] + 1]
         if prune_head:
             self.reset_classifier(0, '')
         return take_indices

@@ -439,6 +439,8 @@ class NormFreeNet(nn.Module):
         )
 
         self.feature_info = [stem_feat]
+        # stem child that is the stem feature tap, used by forward_intermediates
+        self.stem_feat_idx = [n for n, _ in self.stem.named_children()].index(stem_feat['module'].split('.', 1)[1])
         drop_path_rates = calculate_drop_path_rates(drop_path_rate, cfg.depths, stagewise=True)
         prev_chs = stem_chs
         net_stride = stem_stride
@@ -494,7 +496,7 @@ class NormFreeNet(nn.Module):
         else:
             self.num_features = prev_chs
             self.final_conv = nn.Identity()
-        self.final_act = act_layer(inplace=cfg.num_features > 0)
+        self.final_act = act_layer(inplace=False)  # final_conv / last stage output is a feature tap
 
         self.head_hidden_size = self.num_features
         self.head = ClassifierHead(
@@ -551,15 +553,6 @@ class NormFreeNet(nn.Module):
         self.num_classes = num_classes
         self.head.reset(num_classes, global_pool, **dd)
 
-    def _feat_num_stages(self, feat_idx: int) -> int:
-        """Number of stages that must run to produce the feature at feat_idx."""
-        module = self.feature_info[feat_idx]['module']
-        if module.startswith('stem.'):
-            return 0
-        if module.startswith('stages.'):
-            return int(module.split('.')[1]) + 1
-        return len(self.stages)  # final_conv
-
     def forward_intermediates(
             self,
             x: torch.Tensor,
@@ -573,8 +566,10 @@ class NormFreeNet(nn.Module):
 
         Args:
             x: Input image tensor.
-            indices: Take last n blocks if int, all if None, select matching indices if sequence.
-            norm: Apply norm layer to compatible intermediates.
+            indices: Take last n features if int, all if None, select matching indices if sequence.
+                Index 0 is the stem feature, the following indices the stage outputs. The last index is taken after
+                final_conv (before the final activation) for models with one.
+            norm: Apply norm layer to compatible intermediates (unused, no final norm).
             stop_early: Stop iterating over blocks when last desired intermediate hit.
             output_fmt: Shape of intermediate feature outputs.
             intermediates_only: Only return intermediate features.
@@ -584,42 +579,34 @@ class NormFreeNet(nn.Module):
         """
         assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
         intermediates = []
-        take_indices, max_index = feature_take_indices(len(self.feature_info), indices)
-        feat_modules = [f['module'] for f in self.feature_info]
+        last_idx = len(self.stages)
+        take_indices, max_index = feature_take_indices(last_idx + 1, indices)
 
-        # forward pass, feature taps follow feature_info: a stem layer, the stages, and final_conv if present
-        feat_idx = 0
-        for name, module in self.stem.named_children():
+        # forward pass
+        for i, module in enumerate(self.stem):
             x = module(x)
-            if 'stem.' + name in feat_modules:
-                if feat_idx in take_indices:
-                    intermediates.append(x)
-                feat_idx += 1
+            if i == self.stem_feat_idx and 0 in take_indices:
+                intermediates.append(x)
 
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             stages = self.stages
         else:
-            stages = self.stages[:self._feat_num_stages(max_index)]
-        for stage_idx, stage in enumerate(stages):
+            stages = self.stages[:max_index]
+        for feat_idx, stage in enumerate(stages, start=1):
             if self.grad_checkpointing and not torch.jit.is_scripting():
                 x = checkpoint(stage, x)
             else:
                 x = stage(x)
-            if f'stages.{stage_idx}' in feat_modules:
-                if feat_idx in take_indices:
-                    intermediates.append(x)
-                feat_idx += 1
-
-        if len(stages) == len(self.stages):
-            x = self.final_conv(x)
-            if 'final_conv' in feat_modules and feat_idx in take_indices:
+            if feat_idx == last_idx:
+                x = self.final_conv(x)
+            if feat_idx in take_indices:
                 intermediates.append(x)
-            if len(intermediates) and intermediates[-1] is x:
-                x = x.clone()  # final_act can be inplace, don't modify the returned intermediate
-            x = self.final_act(x)
 
         if intermediates_only:
             return intermediates
+
+        if len(stages) == last_idx:
+            x = self.final_act(x)
 
         return x, intermediates
 
@@ -633,16 +620,17 @@ class NormFreeNet(nn.Module):
 
         Args:
             indices: Indices of intermediate layers to keep.
-            prune_norm: Whether to prune normalization layer.
+            prune_norm: Whether to prune normalization layers (unused, no final norm).
             prune_head: Whether to prune the classifier head.
 
         Returns:
             List of indices that were kept.
         """
-        take_indices, max_index = feature_take_indices(len(self.feature_info), indices)
-        if self.feature_info[max_index]['module'] != 'final_conv':
-            self.stages = self.stages[:self._feat_num_stages(max_index)]
+        take_indices, max_index = feature_take_indices(len(self.stages) + 1, indices)
+        if max_index < len(self.stages):
             self.final_conv = nn.Identity()
+            self.final_act = nn.Identity()
+        self.stages = self.stages[:max_index]
         if prune_head:
             self.reset_classifier(0, '')
         return take_indices

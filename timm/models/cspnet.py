@@ -769,6 +769,11 @@ class CspNet(nn.Module):
         )
         prev_chs = stage_feat_info[-1]['num_chs']
         self.feature_info.extend(stage_feat_info)
+        # stem children that are feature taps (the stem tap can come from the stem or stage feature info)
+        stem_names = [n for n, _ in self.stem.named_children()]
+        self.stem_feat_ends = [
+            stem_names.index(f['module'].split('.', 1)[1]) for f in self.feature_info if f['module'].startswith('stem.')
+        ]
 
         # Construct the head
         self.num_features = self.head_hidden_size = prev_chs
@@ -820,8 +825,9 @@ class CspNet(nn.Module):
 
         Args:
             x: Input image tensor.
-            indices: Take last n blocks if int, all if None, select matching indices if sequence.
-            norm: Apply norm layer to compatible intermediates.
+            indices: Take last n features if int, all if None, select matching indices if sequence.
+                Index 0 is the stem output (before any stem pooling), the following indices the stage outputs.
+            norm: Apply norm layer to compatible intermediates (unused, no final norm).
             stop_early: Stop iterating over blocks when last desired intermediate hit.
             output_fmt: Shape of intermediate feature outputs.
             intermediates_only: Only return intermediate features.
@@ -831,16 +837,14 @@ class CspNet(nn.Module):
         """
         assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
         intermediates = []
-        # stem feature taps are named stem submodules (before any stem pooling), followed by one per stage
-        stem_feat_names = [f['module'].split('.', 1)[1] for f in self.feature_info if f['module'].startswith('stem.')]
-        num_stem_feat = len(stem_feat_names)
+        num_stem_feat = len(self.stem_feat_ends)
         take_indices, max_index = feature_take_indices(num_stem_feat + len(self.stages), indices)
 
         # forward pass
         feat_idx = 0
-        for name, module in self.stem.named_children():
+        for i, module in enumerate(self.stem):
             x = module(x)
-            if name in stem_feat_names:
+            if i in self.stem_feat_ends:
                 if feat_idx in take_indices:
                     intermediates.append(x)
                 feat_idx += 1
@@ -870,13 +874,13 @@ class CspNet(nn.Module):
 
         Args:
             indices: Indices of intermediate layers to keep.
-            prune_norm: Whether to prune normalization layer.
+            prune_norm: Whether to prune normalization layers (unused, no final norm).
             prune_head: Whether to prune the classifier head.
 
         Returns:
             List of indices that were kept.
         """
-        num_stem_feat = sum(f['module'].startswith('stem.') for f in self.feature_info)
+        num_stem_feat = len(self.stem_feat_ends)
         take_indices, max_index = feature_take_indices(num_stem_feat + len(self.stages), indices)
         self.stages = self.stages[:max(0, max_index - num_stem_feat + 1)]
         if prune_head:
