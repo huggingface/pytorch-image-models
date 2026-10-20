@@ -7,5 +7,6 @@
 - [ ] Describes a concrete user benefit and, for bug fixes, a realistic reproducer (see [AGENTS.md](../AGENTS.md#contributions))
 - [ ] Searched open and closed PRs for related changes and read the discussions
 - [ ] For bug fixes, checked related code for the same root cause and included any affected sites
+- [ ] Considered whether this is the best fix for the root cause, not just one that works
 - [ ] Added or updated relevant tests where applicable, and listed the checks run
 - [ ] AI assistance (if any) is disclosed, and I have reviewed the diff myself

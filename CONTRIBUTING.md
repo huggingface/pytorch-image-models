@@ -7,7 +7,7 @@ Contributions to `timm` for code, documentation, tests are more than welcome!
 Maintainer time is limited, so please focus on changes that matter to users.
 
 * Please don't open issues or PRs for edge cases unlikely to be hit in real use. Small fixes like these add review load without helping users. Focus on bugs that affect real training, inference, or model-loading workflows, and include a realistic scenario that triggers the bug.
-* Keep PRs focused, avoid reformatting or refactoring code unrelated to the change.
+* Keep PRs focused, avoid reformatting or refactoring code unrelated to the change. Within that scope, fix things properly: prefer the cleanest correct solution over the smallest patch, and leave touched code better than you found it.
 * Existing models, pretrained weights, and public functions should produce the same outputs unless the change is fixing a real bug.
 * Search open and closed PRs first, and read related discussions. Don't resubmit a declined proposal without addressing the reason it was declined.
 * Keep one PR per root cause. Check related code for the same mistake and include any affected sites in the same PR.

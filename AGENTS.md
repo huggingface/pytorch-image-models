@@ -31,5 +31,6 @@
 - One PR per root cause. Check related code for the same mistake and include any affected sites in the same PR.
 - Tests: for bug fixes, add the smallest regression test to the existing test module for that area (e.g. `tests/test_task.py`, `tests/test_layers.py`, `tests/test_models.py`). Don't create new test files for a single fix.
 - Keep diffs minimal: no reformatting, style changes, or refactors of code unrelated to the change.
+- Minimal scope is not minimal effort. Code you touch should be left better than you found it: use the best solution a maintainer would write, not the smallest patch that passes the test. Fix the root cause in the existing structure rather than adding special cases (e.g. reorder an existing loop instead of enumerating combinations). Where it's cheap and safe, clean up the function you're changing (stale FIXMEs, needless overhead). This doesn't override backwards compatibility; if the better approach carries risk, explain the trade-off in the PR rather than shipping the weaker fix.
 - Preserve backwards compatibility: existing models, pretrained weights, and public functions should produce the same outputs unless the change is fixing a real bug.
 - Disclose AI assistance in the PR description. A human submitter is expected to have read the diff and to answer review questions.
