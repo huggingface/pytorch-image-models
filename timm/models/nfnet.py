@@ -17,7 +17,7 @@ Hacked together by / copyright Ross Wightman, 2021.
 from collections import OrderedDict
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -26,8 +26,9 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import ClassifierHead, DropPath, calculate_drop_path_rates, AvgPool2dSame, ScaledStdConv2d, ScaledStdConv2dSame, \
     get_act_layer, get_act_fn, get_attn, make_divisible, get_device_dtype
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._features_fx import register_notrace_module
-from ._manipulate import checkpoint_seq
+from ._manipulate import checkpoint, checkpoint_seq
 from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['NormFreeNet', 'NfCfg']  # model_registry will add each entrypoint fn to this
@@ -549,6 +550,102 @@ class NormFreeNet(nn.Module):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         self.head.reset(num_classes, global_pool, **dd)
+
+    def _feat_num_stages(self, feat_idx: int) -> int:
+        """Number of stages that must run to produce the feature at feat_idx."""
+        module = self.feature_info[feat_idx]['module']
+        if module.startswith('stem.'):
+            return 0
+        if module.startswith('stages.'):
+            return int(module.split('.')[1]) + 1
+        return len(self.stages)  # final_conv
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor.
+            indices: Take last n blocks if int, all if None, select matching indices if sequence.
+            norm: Apply norm layer to compatible intermediates.
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            Features and list of intermediate features or just intermediate features.
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.feature_info), indices)
+        feat_modules = [f['module'] for f in self.feature_info]
+
+        # forward pass, feature taps follow feature_info: a stem layer, the stages, and final_conv if present
+        feat_idx = 0
+        for name, module in self.stem.named_children():
+            x = module(x)
+            if 'stem.' + name in feat_modules:
+                if feat_idx in take_indices:
+                    intermediates.append(x)
+                feat_idx += 1
+
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            stages = self.stages
+        else:
+            stages = self.stages[:self._feat_num_stages(max_index)]
+        for stage_idx, stage in enumerate(stages):
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(stage, x)
+            else:
+                x = stage(x)
+            if f'stages.{stage_idx}' in feat_modules:
+                if feat_idx in take_indices:
+                    intermediates.append(x)
+                feat_idx += 1
+
+        if len(stages) == len(self.stages):
+            x = self.final_conv(x)
+            if 'final_conv' in feat_modules and feat_idx in take_indices:
+                intermediates.append(x)
+            if len(intermediates) and intermediates[-1] is x:
+                x = x.clone()  # final_act can be inplace, don't modify the returned intermediate
+            x = self.final_act(x)
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layer.
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
+        """
+        take_indices, max_index = feature_take_indices(len(self.feature_info), indices)
+        if self.feature_info[max_index]['module'] != 'final_conv':
+            self.stages = self.stages[:self._feat_num_stages(max_index)]
+            self.final_conv = nn.Identity()
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through feature extraction layers.

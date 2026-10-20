@@ -9,7 +9,7 @@ DLA original adapted from Official Pytorch impl at: https://github.com/ucbdrive/
 Res2Net additions from: https://github.com/gasvn/Res2Net/
 """
 import math
-from typing import List, Optional, Tuple, Type
+from typing import List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -17,6 +17,7 @@ import torch.nn as nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import create_classifier, get_device_dtype
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['DLA']
@@ -460,6 +461,71 @@ class DLA(nn.Module):
         self.fc.train(self.training)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
         self.flatten.train(self.training)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor.
+            indices: Take last n blocks if int, all if None, select matching indices if sequence.
+            norm: Apply norm layer to compatible intermediates.
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            Features and list of intermediate features or just intermediate features.
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(6, indices)
+
+        # forward pass
+        x = self.base_layer(x)
+        level_names = ('level0', 'level1', 'level2', 'level3', 'level4', 'level5')
+        if stop_early:
+            level_names = level_names[:max_index + 1]
+        for feat_idx, n in enumerate(level_names):
+            x = getattr(self, n)(x)
+            if feat_idx in take_indices:
+                intermediates.append(x)
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layer.
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
+        """
+        take_indices, max_index = feature_take_indices(6, indices)
+        level_names = ('level0', 'level1', 'level2', 'level3', 'level4', 'level5')
+        for n in level_names[max_index + 1:]:
+            setattr(self, n, nn.Identity())
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         x = self.base_layer(x)
