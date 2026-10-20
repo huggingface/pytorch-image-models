@@ -18,6 +18,7 @@ from torch.jit.annotations import List
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import BatchNormAct2d, get_norm_act_layer, BlurPool2d, create_classifier, get_device_dtype
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._manipulate import MATCH_PREV_GROUP, checkpoint
 from ._registry import register_model, generate_default_cfgs, register_model_deprecations
 
@@ -396,6 +397,74 @@ class DenseNet(nn.Module):
             self.num_features, self.num_classes, pool_type=global_pool, **dd)
         self.global_pool.train(self.training)
         self.classifier.train(self.training)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor.
+            indices: Take last n blocks if int, all if None, select matching indices if sequence.
+            norm: Apply norm layer to compatible intermediates.
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            Features and list of intermediate features or just intermediate features.
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.feature_info), indices)
+        # feature taps: stem norm (before pooling), each dense block but the last (before its transition), final norm
+        feat_names = [f['module'].split('.', 1)[1] for f in self.feature_info]
+
+        # forward pass
+        feat_idx = 0
+        for name, module in self.features.named_children():
+            x = module(x)
+            if name in feat_names:
+                if feat_idx in take_indices:
+                    intermediates.append(x)
+                if stop_early and feat_idx == max_index:
+                    break
+                feat_idx += 1
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layer.
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
+        """
+        take_indices, max_index = feature_take_indices(len(self.feature_info), indices)
+        last_name = self.feature_info[max_index]['module'].split('.', 1)[1]
+        names = [name for name, _ in self.features.named_children()]
+        self.features = self.features[:names.index(last_name) + 1]
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through feature extraction layers."""
