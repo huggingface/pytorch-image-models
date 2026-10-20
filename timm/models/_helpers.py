@@ -114,23 +114,28 @@ def _load_npz_checkpoint(
     return weights
 
 
-def _remove_prefix(text: str, prefix: str) -> str:
-    # FIXME replace with 3.9 stdlib fn when min at 3.9
-    if text.startswith(prefix):
-        return text[len(prefix):]
-    return text
+if hasattr(str, 'removeprefix'):
+    _remove_prefix = str.removeprefix
+else:
+    def _remove_prefix(text: str, prefix: str) -> str:
+        # FIXME remove when min python is 3.9
+        if text.startswith(prefix):
+            return text[len(prefix):]
+        return text
 
 
 def clean_state_dict(state_dict: Dict[str, Any]) -> Dict[str, Any]:
-    # 'clean' checkpoint by removing .module prefix from state dict if it exists from parallel training
+    # 'clean' checkpoint by removing DDP / torchcompile wrapper prefixes, wrapped in either order
     cleaned_state_dict = {}
     to_remove = (
+        '_orig_mod.',  # torchcompile wrapping DDP
         'module.',  # DDP wrapper
         '_orig_mod.',  # torchcompile dynamo wrapper
     )
     for k, v in state_dict.items():
-        for r in to_remove:
-            k = _remove_prefix(k, r)
+        if k.startswith(to_remove):  # fast path for already clean keys
+            for r in to_remove:
+                k = _remove_prefix(k, r)
         cleaned_state_dict[k] = v
     return cleaned_state_dict
 
