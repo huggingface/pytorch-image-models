@@ -522,6 +522,9 @@ def build_model_with_cfg(
                 # flatten_sequential only valid for some feature extractors
                 if feature_cls not in ('dict', 'list', 'hook'):
                     feature_cfg.pop('flatten_sequential', None)
+                # no_rewrite only valid for hook feature extractor
+                if 'hook' not in feature_cls:
+                    feature_cfg.pop('no_rewrite', None)
 
                 if 'hook' in feature_cls:
                     feature_cls = FeatureHookNet
