@@ -10,7 +10,7 @@ Papers:
 Hacked together by / Copyright 2020 Ross Wightman
 """
 from functools import partial
-from typing import List, Dict, Type, Optional
+from typing import List, Dict, Tuple, Type, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -19,7 +19,8 @@ from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import ClassifierHead, ConvNormAct, DropPath, PadType, create_conv2d, get_norm_act_layer, get_device_dtype
 from timm.layers.helpers import to_3tuple
 from ._builder import build_model_with_cfg
-from ._manipulate import checkpoint_seq
+from ._features import feature_take_indices
+from ._manipulate import checkpoint, checkpoint_seq
 from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['XceptionAligned']
@@ -183,6 +184,19 @@ class XceptionModule(nn.Module):
             x = x + skip
         return x
 
+    def forward_with_tap(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Forward that also returns the input to the last (strided) separable conv, the feature tap."""
+        skip = x
+        x_tap = self.stack[:-1](x)
+        x = self.stack[-1](x_tap)
+        if self.shortcut is not None:
+            skip = self.shortcut(skip)
+        if not self.no_skip:
+            if self.drop_path is not None:
+                x = self.drop_path(x)
+            x = x + skip
+        return x, x_tap
+
 
 class PreXceptionModule(nn.Module):
     def __init__(
@@ -239,6 +253,18 @@ class PreXceptionModule(nn.Module):
             x = x + self.shortcut(skip)
         return x
 
+    def forward_with_tap(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Forward that also returns the input to the last (strided) separable conv, the feature tap."""
+        x = self.norm(x)
+        skip = x
+        x_tap = self.stack[:-1](x)
+        x = self.stack[-1](x_tap)
+        if not self.no_skip:
+            if self.drop_path is not None:
+                x = self.drop_path(x)
+            x = x + self.shortcut(skip)
+        return x, x_tap
+
 
 class XceptionAligned(nn.Module):
     """Modified Aligned Xception
@@ -277,6 +303,7 @@ class XceptionAligned(nn.Module):
         curr_dilation = 1
         curr_stride = 2
         self.feature_info = []
+        self.feature_ends = []  # block index of each feature tap, all but the last are inside strided blocks
         self.blocks = nn.Sequential()
         module_fn = PreXceptionModule if preact else XceptionModule
         net_num_blocks = len(block_cfg)
@@ -288,6 +315,7 @@ class XceptionAligned(nn.Module):
             if b['stride'] > 1:
                 name = f'blocks.{i}.stack.conv2' if preact else f'blocks.{i}.stack.act3'
                 self.feature_info += [dict(num_chs=to_3tuple(b['out_chs'])[-2], reduction=curr_stride, module=name)]
+                self.feature_ends.append(i)
                 next_stride = curr_stride * b['stride']
                 if next_stride > output_stride:
                     curr_dilation *= b['stride']
@@ -300,7 +328,9 @@ class XceptionAligned(nn.Module):
 
         self.feature_info += [dict(
             num_chs=self.num_features, reduction=curr_stride, module='blocks.' + str(len(self.blocks) - 1))]
-        self.act = act_layer(inplace=True) if preact else nn.Identity()
+        self.feature_ends.append(len(self.blocks) - 1)
+        # not in-place, the final block output is a feature tap (before this act)
+        self.act = act_layer() if preact else nn.Identity()
         self.head_hidden_size = self.num_features
         self.head = ClassifierHead(
             in_features=self.num_features,
@@ -329,6 +359,93 @@ class XceptionAligned(nn.Module):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         self.head.reset(num_classes, pool_type=global_pool, **dd)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor.
+            indices: Take last n features if int, all if None, select matching indices if sequence.
+                Indices 0 to n-2 are taken inside each strided block, at the input to its last (strided)
+                separable conv, index n-1 is the final block output (before the preact models' final act).
+            norm: Apply norm layer to compatible intermediates (unused, no final norm).
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            Features and list of intermediate features or just intermediate features.
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        last_idx = len(self.feature_ends) - 1
+
+        # forward pass
+        x = self.stem(x)
+
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            blocks = self.blocks
+        else:
+            blocks = self.blocks[:self.feature_ends[max_index] + 1]
+        feat_idx = 0
+        for i, blk in enumerate(blocks):
+            if feat_idx < last_idx and i == self.feature_ends[feat_idx]:
+                # feature tap inside a strided block
+                if self.grad_checkpointing and not torch.jit.is_scripting():
+                    x, x_tap = checkpoint(blk.forward_with_tap, x)
+                else:
+                    x, x_tap = blk.forward_with_tap(x)
+                if feat_idx in take_indices:
+                    intermediates.append(x_tap)
+                feat_idx += 1
+            else:
+                if self.grad_checkpointing and not torch.jit.is_scripting():
+                    x = checkpoint(blk, x)
+                else:
+                    x = blk(x)
+                if i == self.feature_ends[-1] and last_idx in take_indices:
+                    intermediates.append(x)
+
+        if intermediates_only:
+            return intermediates
+
+        if len(blocks) == len(self.blocks):
+            x = self.act(x)
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layers (unused, no final norm).
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
+        """
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        self.blocks = self.blocks[:self.feature_ends[max_index] + 1]
+        if max_index < len(self.feature_ends) - 1:
+            self.act = nn.Identity()
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         x = self.stem(x)

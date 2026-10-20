@@ -21,10 +21,11 @@ The resize parameter of the validation transform should be 333, and make sure to
 import torch.jit
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional
+from typing import List, Optional, Tuple, Union
 
 from timm.layers import create_classifier, get_device_dtype
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._registry import register_model, generate_default_cfgs, register_model_deprecations
 
 __all__ = ['Xception']
@@ -184,6 +185,9 @@ class Xception(nn.Module):
             dict(num_chs=728, reduction=16, module='block12.rep.0'),
             dict(num_chs=2048, reduction=32, module='act4'),
         ]
+        # number of blocks run before each feature_info tap (stem, block1, block2, block11, exit flow), block taps
+        # are the ReLU at the start of the next block (as hooked by features_only)
+        self.feature_ends = [0, 1, 2, 11, 12]
 
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool, **dd)
 
@@ -221,6 +225,100 @@ class Xception(nn.Module):
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool, **dd)
         self.global_pool.train(self.training)
         self.fc.train(self.training)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor.
+            indices: Take last n features if int, all if None, select matching indices if sequence.
+                Index 0 is the stem output, indices 1-3 the ReLU activated outputs of block1, block2 and block11
+                (the ReLU that starts the following block), index 4 the final (act4) output.
+            norm: Apply norm layer to compatible intermediates (unused, no final norm).
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            Features and list of intermediate features or just intermediate features.
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        last_idx = len(self.feature_ends) - 1
+
+        # forward pass
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.act1(x)
+
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = self.act2(x)
+        if 0 in take_indices:
+            intermediates.append(x)
+
+        num_blocks = self.feature_ends[max_index] if stop_early else self.feature_ends[-1]
+        feat_idx = 1
+        for i in range(1, num_blocks + 1):
+            x = getattr(self, f'block{i}')(x)
+            if feat_idx < last_idx and i == self.feature_ends[feat_idx]:
+                if feat_idx in take_indices:
+                    intermediates.append(F.relu(x))
+                feat_idx += 1
+
+        if intermediates_only and max_index < last_idx:
+            return intermediates
+
+        if num_blocks == self.feature_ends[-1]:
+            x = self.conv3(x)
+            x = self.bn3(x)
+            x = self.act3(x)
+
+            x = self.conv4(x)
+            x = self.bn4(x)
+            x = self.act4(x)
+            if last_idx in take_indices:
+                intermediates.append(x)
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layers (unused, no final norm).
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
+        """
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        for i in range(self.feature_ends[max_index] + 1, self.feature_ends[-1] + 1):
+            setattr(self, f'block{i}', nn.Identity())
+        if max_index < len(self.feature_ends) - 1:
+            for n in ('conv3', 'bn3', 'act3', 'conv4', 'bn4', 'act4'):
+                setattr(self, n, nn.Identity())
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         x = self.conv1(x)
