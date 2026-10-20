@@ -375,13 +375,14 @@ class SENet(nn.Module):
             **dd,
         )
         self.feature_info += [dict(num_chs=512 * block.expansion, reduction=32, module='layer4')]
-        self.num_features = self.head_hidden_size = 512 * block.expansion
+        self.num_features = 512 * block.expansion
         self.global_pool, self.last_linear = create_classifier(
             self.num_features,
             self.num_classes,
             pool_type=global_pool,
             **dd,
         )
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
 
         for m in self.modules():
             _weight_init(m)
@@ -425,6 +426,7 @@ class SENet(nn.Module):
             global_pool = self.global_pool.pool_type
         self.global_pool, self.last_linear = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.last_linear.train(self.training)
 
@@ -493,10 +495,16 @@ class SENet(nn.Module):
             List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(5, indices)
+        prune_end = max_index < 4
         layer_names = ('layer1', 'layer2', 'layer3', 'layer4')
         for n in layer_names[max_index:]:
             setattr(self, n, nn.Identity())
-        if prune_head:
+        if max_index == 0:
+            self.pool0 = nn.Identity()  # stem feature is taken before the stem pooling
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

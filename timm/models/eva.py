@@ -698,7 +698,9 @@ class Eva(nn.Module):
         """
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
-        assert global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map')
+        assert global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map'), \
+            'Only avg, avgmax, max, token or map pooling (or none) is supported.'
+        assert class_token or global_pool != 'token', 'Token pooling needs the class token.'
         self.num_classes = num_classes
         self.in_chans = in_chans
         self.global_pool = global_pool
@@ -926,6 +928,13 @@ class Eva(nn.Module):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
+            assert global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map'), \
+                'Only avg, avgmax, max, token or map pooling (or none) is supported.'
+            assert global_pool != 'token' or self.cls_token is not None, 'Token pooling needs the class token.'
+            if global_pool == 'map':
+                assert self.attn_pool is not None, 'Cannot currently add attention pooling in reset_classifier().'
+            else:
+                self.attn_pool = None
             self.global_pool = global_pool
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head.train(self.training)

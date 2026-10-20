@@ -1287,7 +1287,7 @@ class FastVit(nn.Module):
                 self.add_module(layer_name, layer)
         else:
             # Classifier head
-            self.num_features = self.head_hidden_size = final_features = int(embed_dims[-1] * cls_ratio)
+            self.num_features = final_features = int(embed_dims[-1] * cls_ratio)
             self.final_conv = MobileOneBlock(
                 in_chs=embed_dims[-1],
                 out_chs=final_features,
@@ -1307,6 +1307,7 @@ class FastVit(nn.Module):
                 drop_rate=drop_rate,
                 **dd,
             )
+            self.head_hidden_size = self.head.num_features
 
         self.apply(self._init_weights)
 
@@ -1344,7 +1345,10 @@ class FastVit(nn.Module):
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool, **dd)
+        self.head.reset(num_classes, global_pool, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
+        if global_pool is not None:
+            self.global_pool = global_pool  # kept in sync w/ the head, which does the pooling
 
     def forward_intermediates(
             self,
@@ -1401,8 +1405,15 @@ class FastVit(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        # final conv (w/ norm) follows the last stage and never feeds the features (norm or not), it's removed w/
+        # the head or norm, like EfficientNet conv_head
+        prune_end = prune_norm or prune_head or max_index < len(self.stages) - 1
+        if prune_end:
+            self.final_conv = nn.Identity()
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
         self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
-        if prune_head:
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

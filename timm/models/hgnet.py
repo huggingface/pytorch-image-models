@@ -411,12 +411,14 @@ class ClassifierHead(nn.Module):
     ):
         dd = {'device': device, 'dtype': dtype}
         super().__init__()
+        self.in_features = in_features
         self.num_features = in_features
         if pool_type is not None:
             if not pool_type:
                 assert num_classes == 0, 'Classifier head must be removed if pooling is disabled'
 
         self.global_pool = SelectAdaptivePool2d(pool_type=pool_type)
+        assert self.global_pool.feat_mult() == 1, 'Pooling that changes the pooled width is not supported.'
         if hidden_size is not None:
             self.num_features = hidden_size
             last_conv = nn.Conv2d(
@@ -441,15 +443,30 @@ class ClassifierHead(nn.Module):
         self.flatten = nn.Flatten(1) if pool_type else nn.Identity()  # don't flatten if pooling disabled
         self.fc = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
-    def reset(self, num_classes: int, pool_type: Optional[str] = None, device=None, dtype=None):
+    def reset(
+            self,
+            num_classes: int,
+            pool_type: Optional[str] = None,
+            reset_other: bool = False,
+            in_features: Optional[int] = None,
+            device=None,
+            dtype=None,
+    ):
         dd = get_device_dtype(self, device=device, dtype=dtype)
         if pool_type is not None:
             if not pool_type:
                 assert num_classes == 0, 'Classifier head must be removed if pooling is disabled'
             self.global_pool = SelectAdaptivePool2d(pool_type=pool_type)
+            assert self.global_pool.feat_mult() == 1, 'Pooling that changes the pooled width is not supported.'
             self.global_pool.train(self.training)
             self.flatten = nn.Flatten(1) if pool_type else nn.Identity()  # don't flatten if pooling disabled
             self.flatten.train(self.training)
+        if reset_other:
+            self.last_conv = nn.Identity()
+            self.num_features = self.in_features
+        if in_features is not None and in_features != self.in_features:
+            assert isinstance(self.last_conv, nn.Identity), 'Input features can only change w/o the last conv.'
+            self.in_features = self.num_features = in_features
 
         self.fc = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.fc.train(self.training)
@@ -566,10 +583,18 @@ class HighPerfGpuNet(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, device=None, dtype=None):
+    def reset_classifier(
+            self,
+            num_classes: int,
+            global_pool: Optional[str] = None,
+            reset_other: bool = False,
+            device=None,
+            dtype=None,
+    ):
         dd = get_device_dtype(self, device=device, dtype=dtype)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool, **dd)
+        self.head.reset(num_classes, global_pool, reset_other=reset_other, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
 
     def forward_intermediates(
             self,
@@ -622,9 +647,13 @@ class HighPerfGpuNet(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        prune_end = max_index < len(self.stages) - 1
         self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
-        if prune_head:
-            self.reset_classifier(0, 'avg')
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
+            self.reset_classifier(0, 'avg', reset_other=True)
         return take_indices
 
     def forward_features(self, x):

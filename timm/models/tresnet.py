@@ -196,8 +196,9 @@ class TResNet(nn.Module):
         ]
 
         # head
-        self.num_features = self.head_hidden_size = (self.planes * 8) * Bottleneck.expansion
+        self.num_features = (self.planes * 8) * Bottleneck.expansion
         self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=drop_rate, **dd)
+        self.head_hidden_size = self.head.num_features
 
         # model initialization
         for m in self.modules():
@@ -268,7 +269,8 @@ class TResNet(nn.Module):
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, pool_type=global_pool, **dd)
+        self.head.reset(num_classes, pool_type=global_pool, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
 
     def forward_intermediates(
             self,
@@ -326,22 +328,21 @@ class TResNet(nn.Module):
         """
         stage_ends = [1, 2, 3, 4, 5]
         take_indices, max_index = feature_take_indices(len(stage_ends), indices)
+        num_chs = self.feature_info[max_index]['num_chs']
         max_index = stage_ends[max_index]
+        prune_end = max_index < len(self.body) - 1
         self.body = self.body[:max_index + 1]  # truncate blocks w/ stem as idx 0
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = num_chs
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 
     def forward_features(self, x):
         if self.grad_checkpointing and not torch.jit.is_scripting():
-            x = self.body.s2d(x)
-            x = self.body.conv1(x)
-            x = checkpoint_seq([
-                self.body.layer1,
-                self.body.layer2,
-                self.body.layer3,
-                self.body.layer4],
-                x, flatten=True)
+            x = self.body[:2](x)  # s2d, conv1
+            x = checkpoint_seq(self.body[2:], x, flatten=True)  # layers, by index as pruning can remove them
         else:
             x = self.body(x)
         return x

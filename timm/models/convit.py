@@ -294,7 +294,7 @@ class ConVit(nn.Module):
     ):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
-        assert global_pool in ('', 'avg', 'token')
+        assert global_pool in ('', 'avg', 'token'), 'Only avg or token pooling (or none) is supported.'
         embed_dim *= num_heads
         self.num_classes = num_classes
         self.in_chans = in_chans
@@ -324,6 +324,7 @@ class ConVit(nn.Module):
         self.num_patches = num_patches
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim, **dd))
+        self.num_prefix_tokens = 1
         self.pos_drop = nn.Dropout(p=pos_drop_rate)
 
         if self.use_pos_embed:
@@ -391,7 +392,8 @@ class ConVit(nn.Module):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
-            assert global_pool in ('', 'token', 'avg')
+            assert global_pool in ('', 'token', 'avg'), 'Only token or avg pooling (or none) is supported.'
+            assert global_pool != 'token' or self.num_prefix_tokens, 'Token pooling needs the class token.'
             self.global_pool = global_pool
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head.train(self.training)
@@ -431,15 +433,14 @@ class ConVit(nn.Module):
         if self.use_pos_embed:
             x = x + self.pos_embed
         x = self.pos_drop(x)
-        cls_tokens = self.cls_token.expand(x.shape[0], -1, -1)
 
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             blocks = self.blocks
         else:
             blocks = self.blocks[:max_index + 1]
         for i, blk in enumerate(blocks):
-            if i == self.local_up_to_layer:
-                x = torch.cat((cls_tokens, x), dim=1)
+            if i == self.local_up_to_layer and self.cls_token is not None:
+                x = torch.cat((self.cls_token.expand(B, -1, -1), x), dim=1)
             x = blk(x)
             if i in take_indices:
                 # normalize intermediates with final norm layer if enabled, strip class token if present
@@ -477,6 +478,11 @@ class ConVit(nn.Module):
         """
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
         self.blocks = self.blocks[:max_index + 1]  # truncate blocks
+        if max_index < self.local_up_to_layer:
+            # class token is inserted after the kept blocks, unused, a token pooled head goes with it
+            self.cls_token = None
+            self.num_prefix_tokens = 0
+            prune_head = prune_head or self.global_pool == 'token'
         if prune_norm:
             self.norm = nn.Identity()
         if prune_head:
@@ -488,17 +494,16 @@ class ConVit(nn.Module):
         if self.use_pos_embed:
             x = x + self.pos_embed
         x = self.pos_drop(x)
-        cls_tokens = self.cls_token.expand(x.shape[0], -1, -1)
         for u, blk in enumerate(self.blocks):
-            if u == self.local_up_to_layer:
-                x = torch.cat((cls_tokens, x), dim=1)
+            if u == self.local_up_to_layer and self.cls_token is not None:
+                x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)
             x = blk(x)
         x = self.norm(x)
         return x
 
     def forward_head(self, x, pre_logits: bool = False):
         if self.global_pool:
-            x = x[:, 1:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
+            x = x[:, self.num_prefix_tokens:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
         x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 

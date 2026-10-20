@@ -311,10 +311,12 @@ class RexNet(nn.Module):
             drop_path_rate,
             **dd,
         )
-        self.num_features = self.head_hidden_size = features[-1].out_channels
+        self.num_features = features[-1].out_channels
         self.features = nn.Sequential(*features)
+        self.stage_ends = [int(info['module'].split('.')[-1]) for info in self.feature_info]
 
         self.head = ClassifierHead(self.num_features, num_classes, global_pool, drop_rate, **dd)
+        self.head_hidden_size = self.head.num_features
 
         efficientnet_init_weights(self)
 
@@ -366,7 +368,8 @@ class RexNet(nn.Module):
             self.head = ClassifierHead(self.num_features, num_classes, pool_type, self.drop_rate, **dd)
             self.head.train(self.training)
         else:
-            self.head.reset(num_classes, global_pool, **dd)
+            self.head.reset(num_classes, global_pool, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
 
     def forward_intermediates(
             self,
@@ -391,10 +394,9 @@ class RexNet(nn.Module):
         """
         assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
         intermediates = []
-        stage_ends = [int(info['module'].split('.')[-1]) for info in self.feature_info]
-        take_indices, max_index = feature_take_indices(len(stage_ends), indices)
-        take_indices = [stage_ends[i] for i in take_indices]
-        max_index = stage_ends[max_index]
+        take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+        take_indices = [self.stage_ends[i] for i in take_indices]
+        max_index = self.stage_ends[max_index]
 
         # forward pass
         x = self.stem(x)
@@ -432,11 +434,15 @@ class RexNet(nn.Module):
         Returns:
             List of indices that were kept.
         """
-        stage_ends = [int(info['module'].split('.')[-1]) for info in self.feature_info]
-        take_indices, max_index = feature_take_indices(len(stage_ends), indices)
-        max_index = stage_ends[max_index]
+        take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+        num_chs = self.feature_info[max_index]['num_chs']
+        max_index = self.stage_ends[max_index]
+        prune_end = max_index < len(self.features) - 1  # the final conv follows the last tap
         self.features = self.features[:max_index + 1]  # truncate blocks w/ stem as idx 0
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = num_chs
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

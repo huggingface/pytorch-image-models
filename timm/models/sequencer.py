@@ -365,11 +365,10 @@ class Sequencer2d(nn.Module):
     ):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
-        assert global_pool in ('', 'avg')
         self.num_classes = num_classes
         self.in_chans = in_chans
         self.global_pool = global_pool
-        self.num_features = self.head_hidden_size = embed_dims[-1]  # for consistency with other models
+        self.num_features = embed_dims[-1]  # for consistency with other models
         self.feature_dim = -1  # channel dim index for feature outputs (rank 4, NHWC)
         self.output_fmt = 'NHWC'
         self.feature_info = []
@@ -424,6 +423,7 @@ class Sequencer2d(nn.Module):
             input_fmt=self.output_fmt,
             **dd,
         )
+        self.head_hidden_size = self.head.num_features
 
         self.init_weights(nlhb=nlhb)
 
@@ -456,7 +456,10 @@ class Sequencer2d(nn.Module):
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, pool_type=global_pool, **dd)
+        self.head.reset(num_classes, pool_type=global_pool, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
+        if global_pool is not None:
+            self.global_pool = global_pool  # kept in sync w/ the head, which does the pooling
 
     def forward_intermediates(
             self,
@@ -527,10 +530,14 @@ class Sequencer2d(nn.Module):
             List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        prune_end = max_index < len(self.stages) - 1
         self.stages = self.stages[:max_index + 1]  # truncate stages after the last needed one
-        if prune_norm or max_index < len(self.feature_info) - 1:
+        if prune_norm or prune_end:
             self.norm = nn.Identity()
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

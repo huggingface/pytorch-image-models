@@ -46,7 +46,7 @@ class ConvMixer(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.in_chans = in_chans
-        self.num_features = self.head_hidden_size = dim
+        self.num_features = dim
         self.grad_checkpointing = False
 
         self.stem = nn.Sequential(
@@ -67,9 +67,10 @@ class ConvMixer(nn.Module):
             ) for i in range(depth)]
         )
         self.feature_info = [dict(num_chs=dim, reduction=patch_size, module=f'blocks.{i}') for i in range(depth)]
-        self.pooling = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=bool(global_pool))  # no flatten w/o pool
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.head_drop = nn.Dropout(drop_rate)
-        self.head = nn.Linear(dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.head_hidden_size, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
@@ -88,9 +89,10 @@ class ConvMixer(nn.Module):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
-            self.pooling = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
-            self.pooling.train(self.training)
-        self.head = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
+            self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=bool(global_pool))
+            self.global_pool.train(self.training)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
+        self.head = nn.Linear(self.head_hidden_size, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head.train(self.training)
 
     def forward_intermediates(
@@ -170,7 +172,7 @@ class ConvMixer(nn.Module):
         return x
 
     def forward_head(self, x, pre_logits: bool = False):
-        x = self.pooling(x)
+        x = self.global_pool(x)
         x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 

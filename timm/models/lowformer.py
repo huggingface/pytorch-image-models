@@ -563,6 +563,7 @@ class LowFormer(nn.Module):
         self.num_features = width_list[-1]
         self.head_hidden_size = head_widths[-1]
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        assert self.global_pool.feat_mult() == 1, 'Pooling that changes the pooled width is not supported.'
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
         self.in_conv = ConvLayer(
             in_channels=width_list[-1],
@@ -609,14 +610,21 @@ class LowFormer(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.classifier
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, reset_other: bool = False):
         dd = get_device_dtype(self)
         was_training = self.training
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+            assert self.global_pool.feat_mult() == 1, 'Pooling that changes the pooled width is not supported.'
             self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
             self.global_pool.train(was_training)
+            self.flatten.train(was_training)
+        if reset_other:
+            # remove the pre-logits conv / mlp, leaving pooling and the classifier
+            self.in_conv = nn.Identity()
+            self.pre_classifier = nn.Identity()
+            self.head_hidden_size = self.num_features
         self.classifier = Linear(
             self.head_hidden_size, num_classes, **dd,
         ) if num_classes > 0 else nn.Identity()
@@ -683,9 +691,13 @@ class LowFormer(nn.Module):
             List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        prune_end = max_index < len(self.stages) - 1
         self.stages = self.stages[:max_index + 1]
-        if prune_head:
-            self.reset_classifier(0)
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
+            self.reset_classifier(0, reset_other=True)
         return take_indices
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:

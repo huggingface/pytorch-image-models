@@ -388,6 +388,7 @@ class RepVit(nn.Module):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
         self.grad_checkpointing = False
+        assert global_pool in ('', 'avg'), 'Only avg pooling (or none) is supported.'
         self.global_pool = global_pool
         self.embed_dim = embed_dim
         self.num_classes = num_classes
@@ -446,8 +447,9 @@ class RepVit(nn.Module):
         dd = get_device_dtype(self, device=device, dtype=dtype)
         self.num_classes = num_classes
         if global_pool is not None:
+            assert global_pool in ('', 'avg'), 'Only avg pooling (or none) is supported.'
             self.global_pool = global_pool
-        self.head = RepVitClassifier(self.embed_dim[-1], num_classes, distillation, **dd)
+        self.head = RepVitClassifier(self.num_features, num_classes, distillation, **dd)
         self.head.train(self.training)
 
     @torch.jit.ignore
@@ -508,8 +510,12 @@ class RepVit(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        prune_end = max_index < len(self.stages) - 1
         self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 
@@ -546,6 +552,7 @@ class RepVit(nn.Module):
                     fuse_children(child)
 
         fuse_children(self)
+        return self
 
 
 def _cfg(url='', **kwargs):

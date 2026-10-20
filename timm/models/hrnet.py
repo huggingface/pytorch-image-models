@@ -599,6 +599,7 @@ class HighResolutionNet(nn.Module):
                 drop_rate=drop_rate,
                 **dd,
             )
+            self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         else:
             if head == 'incre':
                 self.num_features = self.head_hidden_size = 2048
@@ -621,6 +622,7 @@ class HighResolutionNet(nn.Module):
             curr_stride *= 2
             c = c * 4 if self.head_channels else c  # head block_type expansion factor of 4
             self.feature_info += [dict(num_chs=c, reduction=curr_stride, module=f'stage{i + 1}')]
+        self.num_branches = len(self.feature_info) - 1  # final stage branches, feature taps are the stem + branches
 
         self.init_weights()
 
@@ -784,6 +786,7 @@ class HighResolutionNet(nn.Module):
             global_pool = getattr(self.global_pool, 'pool_type', 'avg')
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.classifier.train(self.training)
 
@@ -805,6 +808,8 @@ class HighResolutionNet(nn.Module):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.act1(x)
+        if isinstance(self.layer1, nn.Identity):
+            return x  # only the stem remains (prune_intermediate_layers)
         x = self.conv2(x)
         x = self.bn2(x)
         x = self.act2(x)
@@ -851,7 +856,7 @@ class HighResolutionNet(nn.Module):
         """
         assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
         intermediates = []
-        take_indices, max_index = feature_take_indices(len(self.feature_info), indices)
+        take_indices, max_index = feature_take_indices(self.num_branches + 1, indices)
 
         # forward pass
         x = self.conv1(x)
@@ -872,7 +877,10 @@ class HighResolutionNet(nn.Module):
             intermediates.extend([y for i, y in enumerate(yl, start=1) if i in take_indices])
             return intermediates if intermediates_only else (yl, intermediates)
 
-        incre_modules = self.incre_modules if not stop_early else self.incre_modules[:max_index]
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            incre_modules = self.incre_modules
+        else:
+            incre_modules = self.incre_modules[:max_index]
         aggregate = not intermediates_only and self.downsamp_modules is not None
         y = None
         for i, incre in enumerate(incre_modules):
@@ -897,6 +905,10 @@ class HighResolutionNet(nn.Module):
     ) -> List[int]:
         """Prune layers not required for specified intermediates.
 
+        NOTE: the branch outputs come out of the final fused stage together. When only some of them are taken, the
+        layers computing the others (fuse layers, incre modules) remain but go unused, distributed (DDP) training
+        then needs find_unused_parameters=True.
+
         Args:
             indices: Indices of intermediate layers to keep.
             prune_norm: Whether to prune normalization layers (unused, no final norm).
@@ -905,26 +917,37 @@ class HighResolutionNet(nn.Module):
         Returns:
             List of indices that were kept.
         """
-        take_indices, max_index = feature_take_indices(len(self.feature_info), indices)
-        if max_index == 0:
+        take_indices, max_index = feature_take_indices(self.num_branches + 1, indices)
+        prune_end = max_index == 0  # only the stem remains, otherwise the output is the list of branch outputs
+        if prune_end:
             # all branch outputs (indices 1-4) depend on the full trunk, it can only be dropped as a whole
             for n in (
                     'conv2', 'bn2', 'act2', 'layer1',
                     'transition1', 'stage2', 'transition2', 'stage3', 'transition3', 'stage4',
             ):
                 setattr(self, n, nn.Identity())
+            # features now end at the stem tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[0]['num_chs']
         if self.incre_modules is not None:
             self.incre_modules = self.incre_modules[:max_index]
-        if prune_head or max_index < len(self.feature_info) - 1:
+        if prune_head or max_index < self.num_branches:
             # the aggregation head (downsample + final_layer) only feeds the classifier and needs every branch,
-            # forward_features returns the branch outputs without it
+            # forward_features returns the branch outputs list (or the stem) without it, same as the non
+            # classification heads, which have no pooling / dropout / classifier modules
             self.downsamp_modules = None
             self.final_layer = None
-        if prune_head:
-            self.reset_classifier(0, '')
+            self.num_classes = 0
+            self.global_pool = nn.Identity()
+            self.head_drop = nn.Identity()
+            self.classifier = nn.Identity()
         return take_indices
 
     def forward_head(self, x, pre_logits: bool = False):
+        if isinstance(x, list):
+            # branch outputs (non classification head, or aggregation head pruned) can only be passed through
+            assert isinstance(self.global_pool, nn.Identity) and isinstance(self.classifier, nn.Identity), \
+                'Pooling / classifier need the aggregation (classification) head, the features are a list of branches.'
+            return x
         # Classification Head
         x = self.global_pool(x)
         x = self.head_drop(x)
@@ -1000,7 +1023,7 @@ def _create_hrnet(variant, pretrained=False, cfg_variant=None, **model_kwargs):
     features_mode = ''
     kwargs_filter = None
     if model_kwargs.pop('features_only', False):
-        if 'feature_cfg' in model_kwargs or 'feature_cls' in model_kwargs:
+        if 'feature_cls' in model_kwargs or 'feature_cls' in model_kwargs.get('feature_cfg', {}):
             # generic feature wrapper (e.g. 'getter' via forward_intermediates) around the base model
             features_mode = 'cfg'
         else:

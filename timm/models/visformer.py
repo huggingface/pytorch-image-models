@@ -382,7 +382,7 @@ class Visformer(nn.Module):
             for i in range(self.stage_num1+self.stage_num2, depth)
         ])
 
-        self.num_features = self.head_hidden_size = embed_dim if self.vit_stem else embed_dim * 2
+        self.num_features = embed_dim if self.vit_stem else embed_dim * 2
         self.feature_info += [dict(num_chs=self.num_features, reduction=reduction, module='stage3')]
         self.norm = norm_layer(self.num_features, **dd)
 
@@ -395,6 +395,7 @@ class Visformer(nn.Module):
             dtype=dtype,
         )
         self.global_pool = global_pool
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.head_drop = nn.Dropout(drop_rate)
         self.head = head
 
@@ -445,6 +446,7 @@ class Visformer(nn.Module):
             global_pool = self.global_pool.pool_type
         self.global_pool, self.head = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.head.train(self.training)
 
@@ -531,9 +533,13 @@ class Visformer(nn.Module):
             setattr(self, f'patch_embed{n}', None)
             setattr(self, f'pos_embed{n}', None)
             setattr(self, f'stage{n}', nn.Sequential())
-        if prune_norm or max_index < 2:
+        prune_end = max_index < 2
+        if prune_norm or prune_end:
             self.norm = nn.Identity()
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

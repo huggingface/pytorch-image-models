@@ -605,7 +605,7 @@ class Hiera(nn.Module):
                     dict(num_chs=dim_out, reduction=2**(cur_stage+2), module=f'blocks.{self.stage_ends[cur_stage]}')]
             self.blocks.append(block)
 
-        self.num_features = self.head_hidden_size = embed_dim
+        self.num_features = embed_dim
         self.head = ClNormMlpClassifierHead(
             embed_dim,
             num_classes,
@@ -615,6 +615,7 @@ class Hiera(nn.Module):
             input_fmt='NLC',
             **dd,
         )
+        self.head_hidden_size = self.head.num_features
 
         # Initialize everything
         if sep_pos_embed:
@@ -671,7 +672,8 @@ class Hiera(nn.Module):
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, reset_other: bool = False):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool, reset_other=reset_other, **dd)
+        self.head.reset(num_classes, global_pool, reset_other=reset_other, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
 
     def get_random_mask(self, x: torch.Tensor, mask_ratio: float) -> torch.Tensor:
         """
@@ -799,12 +801,18 @@ class Hiera(nn.Module):
         """
         if coarse:
             take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+            num_chs = self.feature_info[max_index]['num_chs']
             max_index = self.stage_ends[max_index]
         else:
             take_indices, max_index = feature_take_indices(len(self.blocks), indices)
+            num_chs = self.blocks[max_index].dim_out
+        prune_end = max_index < len(self.blocks) - 1
         self.blocks = self.blocks[:max_index + 1]  # truncate blocks
-        if prune_head:
-            self.head.reset(0, reset_other=True)
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = num_chs
+        if prune_head or prune_end:
+            self.reset_classifier(0, reset_other=True)
         return take_indices
 
     def forward_features(

@@ -52,7 +52,7 @@ class RotAttentionPool2d(nn.Module):
     ):
         dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        assert pool_type in ('', 'token')
+        assert pool_type in ('', 'token'), 'Only token pooling (or none) is supported.'
         self.embed_dim = embed_dim = embed_dim or in_features
         self.in_features = in_features
         if out_features is None:
@@ -119,13 +119,15 @@ class RotAttentionPool2d(nn.Module):
             self,
             num_classes: Optional[int] = None,
             pool_type: Optional[str] = None,
+            reset_other: bool = False,
             device=None,
             dtype=None,
     ):
         # NOTE: this module is being used as a head, so need compatible reset()
+        # reset_other is a no-op, the attention is the pooling and there are no other layers besides the classifier
         dd = get_device_dtype(self, device=device, dtype=dtype)
         if pool_type is not None:
-            assert pool_type in ('', 'token')
+            assert pool_type in ('', 'token'), 'Only token pooling (or none) is supported.'
             self.pool_type = pool_type
         if num_classes is not None:
             self.proj = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
@@ -215,7 +217,7 @@ class AttentionPool2d(nn.Module):
     ):
         dd = {'device': device, 'dtype': dtype}
         super().__init__()
-        assert pool_type in ('', 'token')
+        assert pool_type in ('', 'token'), 'Only token pooling (or none) is supported.'
         self.embed_dim = embed_dim = embed_dim or in_features
         self.in_features = in_features
         if out_features is None:
@@ -276,13 +278,15 @@ class AttentionPool2d(nn.Module):
             self,
             num_classes: Optional[int] = None,
             pool_type: Optional[str] = None,
+            reset_other: bool = False,
             device=None,
             dtype=None,
     ):
         # NOTE: this module is being used as a head, so need compatible reset()
+        # reset_other is a no-op, the attention is the pooling and there are no other layers besides the classifier
         dd = get_device_dtype(self, device=device, dtype=dtype)
         if pool_type is not None:
-            assert pool_type in ('', 'token')
+            assert pool_type in ('', 'token'), 'Only token pooling (or none) is supported.'
             self.pool_type = pool_type
         if num_classes is not None:
             self.proj = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()

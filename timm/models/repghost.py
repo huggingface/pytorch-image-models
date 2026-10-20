@@ -284,11 +284,13 @@ class RepGhostNet(nn.Module):
         self.pool_dim = prev_chs = out_chs
 
         self.blocks = nn.Sequential(*stages)
+        self.stage_ends = [-1] + [int(info['module'].split('.')[-1]) for info in self.feature_info[1:]]
 
         # building last several layers
         self.num_features = prev_chs
         self.head_hidden_size = out_chs = 1280
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        assert self.global_pool.feat_mult() == 1, 'Pooling that changes the pooled width is not supported.'
         self.conv_head = nn.Conv2d(prev_chs, out_chs, 1, 1, 0, bias=True, **dd)
         self.act2 = nn.ReLU(inplace=True)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
@@ -319,6 +321,7 @@ class RepGhostNet(nn.Module):
         if global_pool is not None:
             # NOTE: cannot meaningfully change pooling of efficient head after creation
             self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+            assert self.global_pool.feat_mult() == 1, 'Pooling that changes the pooled width is not supported.'
             self.global_pool.train(self.training)
             self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
             self.flatten.train(self.training)
@@ -352,10 +355,9 @@ class RepGhostNet(nn.Module):
         """
         assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
         intermediates = []
-        stage_ends = [-1] + [int(info['module'].split('.')[-1]) for info in self.feature_info[1:]]
-        take_indices, max_index = feature_take_indices(len(stage_ends), indices)
-        take_indices = [stage_ends[i]+1 for i in take_indices]
-        max_index = stage_ends[max_index]
+        take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+        take_indices = [self.stage_ends[i] + 1 for i in take_indices]
+        max_index = self.stage_ends[max_index]
 
         # forward pass
         feat_idx = 0
@@ -390,11 +392,23 @@ class RepGhostNet(nn.Module):
     ):
         """ Prune layers not required for specified intermediates.
         """
-        stage_ends = [-1] + [int(info['module'].split('.')[-1]) for info in self.feature_info[1:]]
-        take_indices, max_index = feature_take_indices(len(stage_ends), indices)
-        max_index = stage_ends[max_index]
+        take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+        num_chs = self.feature_info[max_index]['num_chs']
+        max_index = self.stage_ends[max_index]
+        prune_end = max_index < len(self.blocks) - 1  # the final conv block follows the last tap
         self.blocks = self.blocks[:max_index + 1]  # truncate blocks w/ stem as idx 0
-        if prune_head:
+        if max_index < 0:
+            # the stem feature is the conv output, the norm + act after it are unused
+            self.bn1 = nn.Identity()
+            self.act1 = nn.Identity()
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = num_chs
+        if prune_head or prune_end:
+            # the pre-logits conv is part of the head
+            self.conv_head = nn.Identity()
+            self.act2 = nn.Identity()
+            self.head_hidden_size = self.num_features
             self.reset_classifier(0, '')
         return take_indices
 

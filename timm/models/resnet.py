@@ -617,8 +617,9 @@ class ResNet(nn.Module):
         self.feature_info.extend(stage_feature_info)
 
         # Head (Pooling and Classifier)
-        self.num_features = self.head_hidden_size = channels[-1] * block_fns[-1].expansion
+        self.num_features = channels[-1] * block_fns[-1].expansion
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
 
         self.init_weights(zero_init_last=zero_init_last)
 
@@ -683,6 +684,7 @@ class ResNet(nn.Module):
         if global_pool is None:
             global_pool = self.global_pool.pool_type
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.fc.train(self.training)
 
@@ -726,7 +728,11 @@ class ResNet(nn.Module):
             layer_names = layer_names[:max_index]
         for n in layer_names:
             feat_idx += 1
-            x = getattr(self, n)(x)  # won't work with torchscript, but keeps code reasonable, FML
+            layer = getattr(self, n)  # won't work with torchscript, but keeps code reasonable, FML
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint_seq(layer, x)  # per block, as forward_features
+            else:
+                x = layer(x)
             if feat_idx in take_indices:
                 intermediates.append(x)
 
@@ -752,11 +758,17 @@ class ResNet(nn.Module):
             List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(5, indices)
+        prune_end = max_index < 4
         layer_names = ('layer1', 'layer2', 'layer3', 'layer4')
         layer_names = layer_names[max_index:]
         for n in layer_names:
-            setattr(self, n, nn.Identity())
-        if prune_head:
+            setattr(self, n, nn.Sequential())  # empty, not Identity, so (flattened) checkpoint_seq can iterate it
+        if max_index == 0:
+            self.maxpool = nn.Identity()  # follows the stem feature, may have params (conv pool)
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

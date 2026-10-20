@@ -776,7 +776,7 @@ class CspNet(nn.Module):
         ]
 
         # Construct the head
-        self.num_features = self.head_hidden_size = prev_chs
+        self.num_features = prev_chs
         self.head = ClassifierHead(
             in_features=prev_chs,
             num_classes=num_classes,
@@ -784,6 +784,7 @@ class CspNet(nn.Module):
             drop_rate=drop_rate,
             **dd,
         )
+        self.head_hidden_size = self.head.num_features
 
         named_apply(partial(_init_weights, zero_init_last=zero_init_last), self)
 
@@ -810,7 +811,8 @@ class CspNet(nn.Module):
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool, **dd)
+        self.head.reset(num_classes, global_pool, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
 
     def forward_intermediates(
             self,
@@ -882,8 +884,14 @@ class CspNet(nn.Module):
         """
         num_stem_feat = len(self.stem_feat_ends)
         take_indices, max_index = feature_take_indices(num_stem_feat + len(self.stages), indices)
+        prune_end = max_index < num_stem_feat + len(self.stages) - 1
         self.stages = self.stages[:max(0, max_index - num_stem_feat + 1)]
-        if prune_head:
+        if max_index < num_stem_feat:
+            self.stem = self.stem[:self.stem_feat_ends[max_index] + 1]  # stem feature may be taken before the pool
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

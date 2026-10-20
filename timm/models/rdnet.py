@@ -312,7 +312,8 @@ class RDNet(nn.Module):
                 ]
             dense_stages.append(nn.Sequential(*dense_stage_layers))
         self.dense_stages = nn.Sequential(*dense_stages)
-        self.num_features = self.head_hidden_size = num_features
+        self.stage_ends = [int(info['module'].split('.')[-1]) for info in self.feature_info]
+        self.num_features = num_features
 
         # if head_norm_first == true, norm -> global pool -> fc ordering, like most other nets
         # otherwise pool -> norm -> fc, the default RDNet ordering (pretrained NV weights)
@@ -335,6 +336,7 @@ class RDNet(nn.Module):
                 norm_layer=norm_layer,
                 **dd,
             )
+        self.head_hidden_size = self.head.num_features
 
         named_apply(partial(_init_weights, head_init_scale=head_init_scale), self)
 
@@ -354,10 +356,11 @@ class RDNet(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, reset_other: bool = False):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool, **dd)
+        self.head.reset(num_classes, global_pool, reset_other=reset_other, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
 
     def forward_intermediates(
             self,
@@ -380,10 +383,9 @@ class RDNet(nn.Module):
         """
         assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
         intermediates = []
-        stage_ends = [int(info['module'].split('.')[-1]) for info in self.feature_info]
-        take_indices, max_index = feature_take_indices(len(stage_ends), indices)
-        take_indices = [stage_ends[i] for i in take_indices]
-        max_index = stage_ends[max_index]
+        take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+        take_indices = [self.stage_ends[i] for i in take_indices]
+        max_index = self.stage_ends[max_index]
 
         # forward pass
         x = self.stem(x)
@@ -421,14 +423,18 @@ class RDNet(nn.Module):
     ):
         """ Prune layers not required for specified intermediates.
         """
-        stage_ends = [int(info['module'].split('.')[-1]) for info in self.feature_info]
-        take_indices, max_index = feature_take_indices(len(stage_ends), indices)
-        max_index = stage_ends[max_index]
+        take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+        num_chs = self.feature_info[max_index]['num_chs']
+        max_index = self.stage_ends[max_index]
+        prune_end = max_index < len(self.dense_stages) - 1
+        if prune_norm or prune_end:
+            self.norm_pre = nn.Identity()  # final norm is sized for (and only applied to) the last stage
         self.dense_stages = self.dense_stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
-        if prune_norm:
-            self.norm_pre = nn.Identity()
-        if prune_head:
-            self.reset_classifier(0, '')
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = num_chs
+        if prune_head or prune_end:
+            self.reset_classifier(0, '', reset_other=True)
         return take_indices
 
     def forward_features(self, x):

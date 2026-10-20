@@ -145,7 +145,7 @@ class Xception(nn.Module):
         self.global_pool = global_pool
         self.num_classes = num_classes
         self.in_chans = in_chans
-        self.num_features = self.head_hidden_size = 2048
+        self.num_features = 2048
 
         self.conv1 = nn.Conv2d(in_chans, 32, 3, 2, 0, bias=False, **dd)
         self.bn1 = nn.BatchNorm2d(32, **dd)
@@ -190,6 +190,7 @@ class Xception(nn.Module):
         self.feature_ends = [0, 1, 2, 11, 12]
 
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
 
         # #------- init weights --------
         for m in self.modules():
@@ -223,6 +224,7 @@ class Xception(nn.Module):
         if global_pool is None:
             global_pool = self.global_pool.pool_type
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.fc.train(self.training)
 
@@ -313,10 +315,13 @@ class Xception(nn.Module):
         take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
         for i in range(self.feature_ends[max_index] + 1, self.feature_ends[-1] + 1):
             setattr(self, f'block{i}', nn.Identity())
-        if max_index < len(self.feature_ends) - 1:
+        prune_end = max_index < len(self.feature_ends) - 1
+        if prune_end:
             for n in ('conv3', 'bn3', 'act3', 'conv4', 'bn4', 'act4'):
                 setattr(self, n, nn.Identity())
-        if prune_head:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

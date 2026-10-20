@@ -386,7 +386,7 @@ class FocalNet(nn.Module):
         self.num_classes = num_classes
         self.in_chans = in_chans
         self.embed_dim = embed_dim
-        self.num_features = self.head_hidden_size = embed_dim[-1]
+        self.num_features = embed_dim[-1]
         self.feature_info = []
 
         self.stem = Downsample(
@@ -428,7 +428,6 @@ class FocalNet(nn.Module):
 
         if head_hidden_size:
             self.norm = nn.Identity()
-            self.head_hidden_size = head_hidden_size
             self.head = NormMlpClassifierHead(
                 self.num_features,
                 num_classes,
@@ -447,6 +446,7 @@ class FocalNet(nn.Module):
                 drop_rate=drop_rate,
                 **dd,
             )
+        self.head_hidden_size = self.head.num_features
 
         named_apply(partial(_init_weights, head_init_scale=head_init_scale), self)
 
@@ -478,10 +478,17 @@ class FocalNet(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, reset_other: bool = False):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, pool_type=global_pool, **dd)
+        self.head.reset(
+            num_classes,
+            pool_type=global_pool,
+            reset_other=reset_other,
+            in_features=self.num_features,
+            **dd,
+        )
+        self.head_hidden_size = self.head.num_features
 
     def forward_intermediates(
             self,
@@ -542,11 +549,15 @@ class FocalNet(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.layers), indices)
+        prune_end = max_index < len(self.layers) - 1
+        if prune_norm or prune_end:
+            self.norm = nn.Identity()  # final norm is sized for (and only applied to) the last stage
         self.layers = self.layers[:max_index + 1]  # truncate blocks w/ stem as idx 0
-        if prune_norm:
-            self.norm = nn.Identity()
-        if prune_head:
-            self.reset_classifier(0, '')
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
+            self.reset_classifier(0, '', reset_other=True)
         return take_indices
 
     def forward_features(self, x):

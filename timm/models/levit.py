@@ -700,6 +700,7 @@ class Levit(nn.Module):
         self.use_conv = use_conv
         self.num_classes = num_classes
         self.in_chans = in_chans
+        assert global_pool in ('', 'avg'), 'Only avg pooling (or none) is supported.'
         self.global_pool = global_pool
         self.num_features = self.head_hidden_size = embed_dim[-1]
         self.embed_dim = embed_dim
@@ -792,6 +793,7 @@ class Levit(nn.Module):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
+            assert global_pool in ('', 'avg'), 'Only avg pooling (or none) is supported.'
             self.global_pool = global_pool
         self.head = NormLinear(
             self.num_features, num_classes, drop=self.drop_rate, **dd) if num_classes > 0 else nn.Identity()
@@ -859,8 +861,12 @@ class Levit(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        prune_end = max_index < len(self.stages) - 1
         self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 
@@ -901,6 +907,7 @@ class LevitDistilled(Levit):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
+            assert global_pool in ('', 'avg'), 'Only avg pooling (or none) is supported.'
             self.global_pool = global_pool
         self.head = NormLinear(
             self.num_features, num_classes, drop=self.drop_rate, **dd) if num_classes > 0 else nn.Identity()

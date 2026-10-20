@@ -233,7 +233,7 @@ class MobileNetV5(nn.Module):
 
         # Neck (aggregation) + Head + Pooling
         if use_msfa:
-            self.num_features = self.head_hidden_size = num_features # output of msfa is output of forward_features()
+            self.num_features = num_features  # output of msfa is output of forward_features()
             # Map msfa indices to feature info and calculate sum of feature channels
             self.msfa_indices = feature_take_indices(len(self.feature_info), self.msfa_indices)[0]
             self.msfa_in_chs = sum([self.feature_info[mi]['num_chs'] for mi in self.msfa_indices])
@@ -247,6 +247,7 @@ class MobileNetV5(nn.Module):
                 **dd,
             )
             self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+            self.head_hidden_size = self.num_features * self.global_pool.feat_mult()  # pooled msfa features
             self.conv_head = None
             self.norm_head = None
         else:
@@ -296,6 +297,11 @@ class MobileNetV5(nn.Module):
         # NOTE: cannot meaningfully change pooling of efficient head after creation
         if global_pool is not None:
             self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+            if self.conv_head is None:
+                self.head_hidden_size = self.num_features * self.global_pool.feat_mult()  # pooled, no head conv
+            else:
+                assert self.conv_head.in_channels == self.num_features * self.global_pool.feat_mult(), \
+                    'The head conv is sized for the pooled width, pooling can not change it.'
             self.global_pool.train(self.training)
             self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
             self.flatten.train(self.training)
@@ -379,14 +385,23 @@ class MobileNetV5(nn.Module):
         """
         if extra_blocks:
             take_indices, max_index = feature_take_indices(len(self.blocks) + 1, indices)
+            # idx 0 is the stem
+            num_chs = (
+                self.blocks[max_index - 1][-1].feature_info('bottleneck')['num_chs'] if max_index
+                else self.conv_stem.out_channels
+            )
         else:
             take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+            num_chs = self.feature_info[max_index]['num_chs']
             max_index = self.stage_ends[max_index]
+        prune_end = max_index < len(self.blocks)
         self.blocks = self.blocks[:max_index]  # truncate blocks w/ stem as idx 0
-        if max_index < len(self.blocks):
-            self.conv_head = None
-            self.norm_head = None
-        if prune_head:
+        if prune_end or (prune_head and self.msfa is not None):
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = num_chs
+        if prune_end or prune_head:
+            # msfa (fuses the final stage features) and the head conv / norm follow the last kept feature
+            self.msfa = None
             self.conv_head = None
             self.norm_head = None
             self.reset_classifier(0, '')
@@ -595,7 +610,38 @@ class MobileNetV5Encoder(nn.Module):
         if intermediates_only:
             return intermediates
 
+        if self.msfa is None:
+            return x, intermediates  # msfa pruned (prune_intermediate_layers)
         return self.msfa(msfa_intermediates), intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+            extra_blocks: bool = False,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        if extra_blocks:
+            take_indices, max_index = feature_take_indices(len(self.blocks) + 1, indices)
+            # idx 0 is the stem
+            num_chs = (
+                self.blocks[max_index - 1][-1].feature_info('bottleneck')['num_chs'] if max_index
+                else self.conv_stem.out_channels
+            )
+        else:
+            take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+            num_chs = self.feature_info[max_index]['num_chs']
+            max_index = self.stage_ends[max_index]
+        prune_end = max_index < len(self.blocks)
+        self.blocks = self.blocks[:max_index]  # truncate blocks w/ stem as idx 0
+        if prune_end or prune_head:
+            # msfa fuses the final stage features into the encoder output, it serves as the head,
+            # features now end at the last kept tap
+            self.msfa = None
+            self.num_features = self.head_hidden_size = num_chs
+        return take_indices
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         feat_idx = 0    # offset by one from blocks index due to stem feature
@@ -614,6 +660,8 @@ class MobileNetV5Encoder(nn.Module):
             if feat_idx in self.msfa_indices:
                 intermediates.append(x)
 
+        if self.msfa is None:
+            return x  # msfa pruned (prune_intermediate_layers)
         # NOTE: MSFA is not checkpointed, it takes a list of tensors which re-entrant checkpointing cannot track
         return self.msfa(intermediates)
 

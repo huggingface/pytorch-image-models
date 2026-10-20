@@ -327,7 +327,7 @@ class PNASNet5Large(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.in_chans = in_chans
-        self.num_features = self.head_hidden_size = 4320
+        self.num_features = 4320
         assert output_stride == 32
 
         self.conv_0 = ConvNormAct(
@@ -386,6 +386,7 @@ class PNASNet5Large(nn.Module):
 
         self.global_pool, self.head_drop, self.last_linear = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, drop_rate=drop_rate, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
@@ -406,6 +407,7 @@ class PNASNet5Large(nn.Module):
             global_pool = self.global_pool.pool_type
         self.global_pool, self.last_linear = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.last_linear.train(self.training)
 
@@ -484,25 +486,38 @@ class PNASNet5Large(nn.Module):
         """
         take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
         num_layers = self.feature_ends[max_index] + 1
+        prune_end = num_layers < len(self.layer_names)
         for n in self.layer_names[num_layers:]:
-            setattr(self, n, nn.Identity())
-        self.layer_names = self.layer_names[:num_layers]  # cells take two inputs, can't run through Identity
-        if prune_head:
+            setattr(self, n, None)  # cells take two inputs, can't be run through Identity (see forward_features)
+        self.layer_names = self.layer_names[:num_layers]
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 
     def forward_features(self, x):
+        # the layer after each feature tap is checked for None to support pruning (prune_intermediate_layers)
         x_conv_0 = self.conv_0(x)
+        if self.cell_stem_0 is None:
+            return x_conv_0
         x_stem_0 = self.cell_stem_0(x_conv_0)
+        if self.cell_stem_1 is None:
+            return x_stem_0
         x_stem_1 = self.cell_stem_1(x_conv_0, x_stem_0)
         x_cell_0 = self.cell_0(x_stem_0, x_stem_1)
         x_cell_1 = self.cell_1(x_stem_1, x_cell_0)
         x_cell_2 = self.cell_2(x_cell_0, x_cell_1)
         x_cell_3 = self.cell_3(x_cell_1, x_cell_2)
+        if self.cell_4 is None:
+            return x_cell_3
         x_cell_4 = self.cell_4(x_cell_2, x_cell_3)
         x_cell_5 = self.cell_5(x_cell_3, x_cell_4)
         x_cell_6 = self.cell_6(x_cell_4, x_cell_5)
         x_cell_7 = self.cell_7(x_cell_5, x_cell_6)
+        if self.cell_8 is None:
+            return x_cell_7
         x_cell_8 = self.cell_8(x_cell_6, x_cell_7)
         x_cell_9 = self.cell_9(x_cell_7, x_cell_8)
         x_cell_10 = self.cell_10(x_cell_8, x_cell_9)

@@ -29,7 +29,7 @@ from timm.layers import ClassifierHead, ConvNormAct, DropPath, EffectiveSEModule
     get_device_dtype
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
-from ._manipulate import MATCH_PREV_GROUP, checkpoint_seq
+from ._manipulate import MATCH_PREV_GROUP, checkpoint, checkpoint_seq
 from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['CspNext']
@@ -327,7 +327,7 @@ class CspNext(nn.Module):
             self.feature_info.append(dict(num_chs=chs, reduction=net_stride, module=f'stages.{i}'))
             prev_chs = chs
 
-        self.num_features = self.head_hidden_size = prev_chs
+        self.num_features = prev_chs
         self.head = ClassifierHead(
             self.num_features,
             num_classes,
@@ -335,6 +335,7 @@ class CspNext(nn.Module):
             drop_rate=drop_rate,
             **dd,
         )
+        self.head_hidden_size = self.head.num_features
 
     @torch.jit.ignore
     def group_matcher(self, coarse: bool = False):
@@ -358,7 +359,8 @@ class CspNext(nn.Module):
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool, **dd)
+        self.head.reset(num_classes, global_pool, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
 
     def forward_intermediates(
             self,
@@ -396,7 +398,10 @@ class CspNext(nn.Module):
         else:
             stages = self.stages[:max_index]
         for i, stage in enumerate(stages):
-            x = stage(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(stage, x)
+            else:
+                x = stage(x)
             if i + 1 in take_indices:
                 intermediates.append(x)
 
@@ -422,8 +427,12 @@ class CspNext(nn.Module):
             List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(len(self.stages) + 1, indices)
+        prune_end = max_index < len(self.stages)
         self.stages = self.stages[:max_index]
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

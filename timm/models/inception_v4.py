@@ -288,7 +288,7 @@ class InceptionV4(nn.Module):
         assert output_stride == 32
         self.num_classes = num_classes
         self.in_chans = in_chans
-        self.num_features = self.head_hidden_size = 1536
+        self.num_features = 1536
         conv_block = partial(
             ConvNormAct,
             padding=0,
@@ -319,6 +319,7 @@ class InceptionV4(nn.Module):
             dict(num_chs=1024, reduction=16, module='features.17'),
             dict(num_chs=1536, reduction=32, module='features.21'),
         ]
+        self.stage_ends = [int(info['module'].split('.')[-1]) for info in self.feature_info]
         self.global_pool, self.head_drop, self.last_linear = create_classifier(
             self.num_features,
             self.num_classes,
@@ -326,6 +327,7 @@ class InceptionV4(nn.Module):
             drop_rate=drop_rate,
             **dd,
         )
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
@@ -349,6 +351,7 @@ class InceptionV4(nn.Module):
             global_pool = self.global_pool.pool_type
         self.global_pool, self.last_linear = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.last_linear.train(self.training)
 
@@ -375,10 +378,9 @@ class InceptionV4(nn.Module):
         """
         assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
         intermediates = []
-        stage_ends = [int(info['module'].split('.')[-1]) for info in self.feature_info]
-        take_indices, max_index = feature_take_indices(len(stage_ends), indices)
-        take_indices = [stage_ends[i] for i in take_indices]
-        max_index = stage_ends[max_index]
+        take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+        take_indices = [self.stage_ends[i] for i in take_indices]
+        max_index = self.stage_ends[max_index]
 
         # forward pass
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
@@ -404,11 +406,14 @@ class InceptionV4(nn.Module):
     ):
         """ Prune layers not required for specified intermediates.
         """
-        stage_ends = [int(info['module'].split('.')[-1]) for info in self.feature_info]
-        take_indices, max_index = feature_take_indices(len(stage_ends), indices)
-        max_index = stage_ends[max_index]
+        take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+        prune_end = max_index < len(self.stage_ends) - 1
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        max_index = self.stage_ends[max_index]
         self.features = self.features[:max_index + 1]  # truncate blocks w/ stem as idx 0
-        if prune_head:
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

@@ -269,7 +269,7 @@ class Cait(nn.Module):
     ):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
-        assert global_pool in ('', 'token', 'avg')
+        assert global_pool in ('', 'token', 'avg'), 'Only token or avg pooling (or none) is supported.'
 
         self.num_classes = num_classes
         self.in_chans = in_chans
@@ -288,6 +288,7 @@ class Cait(nn.Module):
         r = self.patch_embed.feat_ratio() if hasattr(self.patch_embed, 'feat_ratio') else patch_size
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim, **dd))
+        self.num_prefix_tokens = 1
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, embed_dim, **dd))
         self.pos_drop = nn.Dropout(p=pos_drop_rate)
 
@@ -373,7 +374,8 @@ class Cait(nn.Module):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
-            assert global_pool in ('', 'token', 'avg')
+            assert global_pool in ('', 'token', 'avg'), 'Only token or avg pooling (or none) is supported.'
+            assert global_pool != 'token' or self.num_prefix_tokens, 'Token pooling needs the class token.'
             self.global_pool = global_pool
         self.head = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head.train(self.training)
@@ -431,10 +433,8 @@ class Cait(nn.Module):
             return intermediates
 
         # NOTE not supporting return of class tokens
-        cls_tokens = self.cls_token.expand(x.shape[0], -1, -1)
-        for i, blk in enumerate(self.blocks_token_only):
-            cls_tokens = blk(x, cls_tokens)
-        x = torch.cat((cls_tokens, x), dim=1)
+        if self.blocks_token_only is not None:
+            x = self.forward_cls(x)
         x = self.norm(x)
 
         return x, intermediates
@@ -452,7 +452,10 @@ class Cait(nn.Module):
         if prune_norm:
             self.norm = nn.Identity()
         if prune_head:
-            self.blocks_token_only = nn.ModuleList()  # prune token blocks with head
+            # prune class token and class attention blocks with head
+            self.blocks_token_only = None
+            self.cls_token = None
+            self.num_prefix_tokens = 0
             self.reset_classifier(0, '')
         return take_indices
 
@@ -464,16 +467,22 @@ class Cait(nn.Module):
             x = checkpoint_seq(self.blocks, x)
         else:
             x = self.blocks(x)
-        cls_tokens = self.cls_token.expand(x.shape[0], -1, -1)
-        for i, blk in enumerate(self.blocks_token_only):
-            cls_tokens = blk(x, cls_tokens)
-        x = torch.cat((cls_tokens, x), dim=1)
+        if self.blocks_token_only is not None:
+            x = self.forward_cls(x)
         x = self.norm(x)
         return x
 
+    def forward_cls(self, x):
+        """ Run the class token through the class attention blocks and prepend it to the patch tokens.
+        """
+        cls_tokens = self.cls_token.expand(x.shape[0], -1, -1)
+        for blk in self.blocks_token_only:
+            cls_tokens = blk(x, cls_tokens)
+        return torch.cat((cls_tokens, x), dim=1)
+
     def forward_head(self, x, pre_logits: bool = False):
         if self.global_pool:
-            x = x[:, 1:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
+            x = x[:, self.num_prefix_tokens:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
         x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 

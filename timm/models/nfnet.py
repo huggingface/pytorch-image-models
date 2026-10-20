@@ -328,7 +328,8 @@ def create_stem(
         for i, (c, s) in enumerate(zip(stem_chs, strides)):
             stem[f'conv{i + 1}'] = conv_layer(in_chs, c, kernel_size=3, stride=s, **dd)
             if i != last_idx:
-                stem[f'act{i + 2}'] = act_layer(inplace=True)
+                # Preserve the stem feature tapped at the penultimate conv.
+                stem[f'act{i + 2}'] = act_layer(inplace=i < last_idx - 1)
             in_chs = c
     elif '3x3' in stem_type:
         # 3x3 stem conv as in RegNet
@@ -498,7 +499,6 @@ class NormFreeNet(nn.Module):
             self.final_conv = nn.Identity()
         self.final_act = act_layer(inplace=False)  # final_conv / last stage output is a feature tap
 
-        self.head_hidden_size = self.num_features
         self.head = ClassifierHead(
             self.num_features,
             num_classes,
@@ -506,6 +506,7 @@ class NormFreeNet(nn.Module):
             drop_rate=self.drop_rate,
             **dd,
         )
+        self.head_hidden_size = self.head.num_features
 
         for n, m in self.named_modules():
             if 'fc' in n and isinstance(m, nn.Linear):
@@ -551,7 +552,8 @@ class NormFreeNet(nn.Module):
         """
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool, **dd)
+        self.head.reset(num_classes, global_pool, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
 
     def forward_intermediates(
             self,
@@ -627,11 +629,17 @@ class NormFreeNet(nn.Module):
             List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(len(self.stages) + 1, indices)
-        if max_index < len(self.stages):
+        prune_end = max_index < len(self.stages)
+        if prune_end:
             self.final_conv = nn.Identity()
             self.final_act = nn.Identity()
+        if max_index == 0:
+            self.stem = self.stem[:self.stem_feat_idx + 1]  # deep stems are tapped before the last conv
         self.stages = self.stages[:max_index]
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

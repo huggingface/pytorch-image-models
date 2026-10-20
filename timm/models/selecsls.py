@@ -138,7 +138,7 @@ class SelecSls(nn.Module):
         self.features = SequentialList(*[cfg['block'](*block_args, **dd) for block_args in cfg['features']])
         self.from_seq = SelectSeq()  # from List[tensor] -> Tensor in module compatible way
         self.head = nn.Sequential(*[conv_bn(*conv_args, **dd) for conv_args in cfg['head']])
-        self.num_features = self.head_hidden_size = cfg['num_features']
+        self.num_features = cfg['num_features']
         self.feature_info = cfg['feature_info']
         # feature_info tap positions, -1 for the stem, then block indices in features, then head layer indices
         # offset by the number of blocks (features and head run as one sequence of layers)
@@ -159,6 +159,7 @@ class SelecSls(nn.Module):
             drop_rate=drop_rate,
             **dd,
         )
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
 
         for n, m in self.named_modules():
             if isinstance(m, nn.Conv2d):
@@ -191,6 +192,7 @@ class SelecSls(nn.Module):
             pool_type=global_pool,
             **dd,
         )
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.fc.train(self.training)
 
@@ -278,15 +280,19 @@ class SelecSls(nn.Module):
         """
         take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
         end = self.feature_ends[max_index]
+        prune_end = end < len(self.features) + len(self.head) - 1
         self.head = self.head[:max(0, end - len(self.features) + 1)]
         self.features = self.features[:end + 1]
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 
     def forward_features(self, x):
         x = self.stem(x)
-        x = self.features(x)
+        x = self.features([x])  # list in, as blocks pass [x, skip], so pruning all blocks still selects x
         x = self.head(self.from_seq(x))
         return x
 

@@ -306,6 +306,7 @@ class LCNetV2(nn.Module):
         # Head + Pooling
         self.head_hidden_size = head_hidden_size or self.num_features
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        assert self.global_pool.feat_mult() == 1, 'Pooling that changes the pooled width is not supported.'
         if head_hidden_size:
             self.conv_head = create_conv2d(self.num_features, self.head_hidden_size, 1, bias=False, **dd)
             self.act2 = create_act_layer(act_layer, inplace=True)
@@ -352,6 +353,7 @@ class LCNetV2(nn.Module):
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+            assert self.global_pool.feat_mult() == 1, 'Pooling that changes the pooled width is not supported.'
             self.global_pool.train(self.training)
             self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
             self.flatten.train(self.training)
@@ -392,7 +394,10 @@ class LCNetV2(nn.Module):
             stages = self.stages[:max_index + 1]
 
         for feat_idx, stage in enumerate(stages):
-            x = stage(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint_seq(stage, x)
+            else:
+                x = stage(x)
             if feat_idx in take_indices:
                 intermediates.append(x)
 
@@ -410,8 +415,16 @@ class LCNetV2(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        prune_end = max_index < len(self.stages) - 1
         self.stages = self.stages[:max_index + 1]  # truncate blocks
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
+            # the pre-logits conv is part of the head
+            self.conv_head = nn.Identity()
+            self.act2 = nn.Identity()
+            self.head_hidden_size = self.num_features
             self.reset_classifier(0, '')
         return take_indices
 

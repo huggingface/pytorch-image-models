@@ -411,7 +411,7 @@ class Xcit(nn.Module):
         """
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
-        assert global_pool in ('', 'avg', 'token')
+        assert global_pool in ('', 'avg', 'token'), 'Only avg or token pooling (or none) is supported.'
         img_size = to_2tuple(img_size)
         assert (img_size[0] % patch_size == 0) and (img_size[0] % patch_size == 0), \
             '`patch_size` should divide image dimensions evenly'
@@ -435,6 +435,7 @@ class Xcit(nn.Module):
         r = patch_size
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim, **dd))
+        self.num_prefix_tokens = 1
         if use_pos_embed:
             self.pos_embed = PositionalEncodingFourier(dim=embed_dim, **dd)
         else:
@@ -514,7 +515,8 @@ class Xcit(nn.Module):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
-            assert global_pool in ('', 'avg', 'token')
+            assert global_pool in ('', 'avg', 'token'), 'Only avg or token pooling (or none) is supported.'
+            assert global_pool != 'token' or self.num_prefix_tokens, 'Token pooling needs the class token.'
             self.global_pool = global_pool
         self.head = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head.train(self.training)
@@ -576,13 +578,8 @@ class Xcit(nn.Module):
             return intermediates
 
         # NOTE not supporting return of class tokens
-        x = torch.cat((self.cls_token.expand(B, -1, -1), x), dim=1)
-        for blk in self.cls_attn_blocks:
-            if self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint(blk, x)
-            else:
-                x = blk(x)
-
+        if self.cls_attn_blocks is not None:
+            x = self.forward_cls(x)
         x = self.norm(x)
 
         return x, intermediates
@@ -600,7 +597,10 @@ class Xcit(nn.Module):
         if prune_norm:
             self.norm = nn.Identity()
         if prune_head:
-            self.cls_attn_blocks = nn.ModuleList()  # prune token blocks with head
+            # prune class token and class attention blocks with head
+            self.cls_attn_blocks = None
+            self.cls_token = None
+            self.num_prefix_tokens = 0
             self.reset_classifier(0, '')
         return take_indices
 
@@ -621,20 +621,25 @@ class Xcit(nn.Module):
             else:
                 x = blk(x, Hp, Wp)
 
-        x = torch.cat((self.cls_token.expand(B, -1, -1), x), dim=1)
+        if self.cls_attn_blocks is not None:
+            x = self.forward_cls(x)
+        x = self.norm(x)
+        return x
 
+    def forward_cls(self, x):
+        """ Prepend the class token and run the class attention blocks.
+        """
+        x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)
         for blk in self.cls_attn_blocks:
             if self.grad_checkpointing and not torch.jit.is_scripting():
                 x = checkpoint(blk, x)
             else:
                 x = blk(x)
-
-        x = self.norm(x)
         return x
 
     def forward_head(self, x, pre_logits: bool = False):
         if self.global_pool:
-            x = x[:, 1:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
+            x = x[:, self.num_prefix_tokens:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
         x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 

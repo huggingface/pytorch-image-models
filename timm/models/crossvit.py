@@ -342,7 +342,7 @@ class CrossVit(nn.Module):
     ):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
-        assert global_pool in ('token', 'avg')
+        assert global_pool in ('token', 'avg'), 'Only token or avg pooling is supported.'
 
         self.num_classes = num_classes
         self.in_chans = in_chans
@@ -456,7 +456,7 @@ class CrossVit(nn.Module):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
-            assert global_pool in ('token', 'avg')
+            assert global_pool in ('token', 'avg'), 'Only token or avg pooling is supported.'
             self.global_pool = global_pool
         self.head = nn.ModuleList([
             nn.Linear(self.embed_dim[i], num_classes, **dd) if num_classes > 0 else nn.Identity()
@@ -553,6 +553,10 @@ class CrossVit(nn.Module):
     ) -> List[int]:
         """Prune layers not required for specified intermediates.
 
+        NOTE: the branches exchange information through the cross attention fusion in each block. When features of
+        only one branch are taken, the fusion into the other branch in the last kept block remains but goes unused,
+        distributed (DDP) training then needs find_unused_parameters=True.
+
         Args:
             indices: Indices of intermediate layers to keep.
             prune_norm: Whether to prune normalization layers.
@@ -594,7 +598,9 @@ class CrossVit(nn.Module):
 
 
 def _create_crossvit(variant, pretrained=False, **kwargs):
-    out_indices = kwargs.pop('out_indices', 3)
+    # default to the final block output of each branch, the features the model's head uses
+    num_blocks = len(kwargs.get('depth', ((1, 3, 1),) * 3))
+    out_indices = kwargs.pop('out_indices', (num_blocks - 1, 2 * num_blocks - 1))
 
     def pretrained_filter_fn(state_dict):
         new_state_dict = {}

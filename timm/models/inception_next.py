@@ -128,6 +128,7 @@ class MlpClassifierHead(nn.Module):
         assert pool_type, 'Cannot disable pooling'
         self.global_pool = SelectAdaptivePool2d(pool_type=pool_type, flatten=True)
 
+        self.use_bias = bias
         self.fc1 = nn.Linear(in_features * self.global_pool.feat_mult(), hidden_features, bias=bias, **dd)
         self.act = act_layer()
         self.norm = norm_layer(hidden_features, **dd)
@@ -138,17 +139,32 @@ class MlpClassifierHead(nn.Module):
             self,
             num_classes: int,
             pool_type: Optional[str] = None,
+            reset_other: bool = False,
+            in_features: Optional[int] = None,
             device=None,
             dtype=None,
     ):
         dd = get_device_dtype(self, device=device, dtype=dtype)
+        keep_mlp = not reset_other and not isinstance(self.fc1, nn.Identity)
+        assert not keep_mlp or in_features in (None, self.in_features), 'Input features can only change w/o the mlp.'
         if pool_type is not None:
             assert pool_type, 'Cannot disable pooling'
-            self.global_pool = SelectAdaptivePool2d(pool_type=pool_type, flatten=True)
-            self.global_pool.train(self.training)
+            global_pool = SelectAdaptivePool2d(pool_type=pool_type, flatten=True)
+            assert not keep_mlp or self.fc1.in_features == self.in_features * global_pool.feat_mult(), \
+                'Pooling that changes the pooled width needs the pre-logits mlp removed (reset_other).'
+            self.global_pool = global_pool.train(self.training)
+        if in_features is not None:
+            self.in_features = in_features
+        if reset_other:
+            # remove the pre-logits mlp, leaving pooling and the classifier
+            self.fc1 = nn.Identity().train(self.training)
+            self.act = nn.Identity().train(self.training)
+            self.norm = nn.Identity().train(self.training)
+        if not keep_mlp:
+            self.num_features = self.in_features * self.global_pool.feat_mult()
 
-        bias = self.fc1.bias is not None
-        self.fc2 = nn.Linear(self.num_features, num_classes, bias=bias, **dd) if num_classes > 0 else nn.Identity()
+        self.fc2 = nn.Linear(
+            self.num_features, num_classes, bias=self.use_bias, **dd) if num_classes > 0 else nn.Identity()
         self.fc2.train(self.training)
 
     def forward(self, x, pre_logits: bool = False):
@@ -370,10 +386,13 @@ class MetaNeXt(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.head.fc2
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, reset_other: bool = False):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool, **dd)
+        self.head.reset(num_classes, global_pool, reset_other=reset_other, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
+        if global_pool is not None:
+            self.global_pool = global_pool  # kept in sync w/ the head, which does the pooling
 
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=True):
@@ -435,9 +454,13 @@ class MetaNeXt(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        prune_end = max_index < len(self.stages) - 1
         self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
-        if prune_head:
-            self.reset_classifier(0, 'avg')
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
+            self.reset_classifier(0, 'avg', reset_other=True)
         return take_indices
 
     def forward_features(self, x):

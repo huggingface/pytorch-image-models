@@ -22,7 +22,7 @@ from timm.layers import BatchNormAct2d, ConvNormAct, create_conv2d, create_class
     get_device_dtype
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
-from ._manipulate import checkpoint_seq
+from ._manipulate import checkpoint, checkpoint_seq
 from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['DPN']
@@ -199,7 +199,7 @@ class DPN(nn.Module):
 
         blocks['conv5_bn_ac'] = BnAct(in_chs, norm_layer=fc_norm_layer, **dd)
         self.features = nn.Sequential(blocks)
-        self.num_features = self.head_hidden_size = in_chs
+        self.num_features = in_chs
 
         # Using 1x1 conv for the FC layer to allow the extra pooling scheme
         self.global_pool, self.classifier = create_classifier(
@@ -209,6 +209,7 @@ class DPN(nn.Module):
             use_conv=True,
             **dd,
         )
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
 
     @torch.jit.ignore
@@ -237,6 +238,7 @@ class DPN(nn.Module):
             global_pool = self.global_pool.pool_type
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, use_conv=True, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.classifier.train(self.training)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
@@ -274,7 +276,10 @@ class DPN(nn.Module):
             layers = self.features[:self.feature_ends[max_index] + 1]
         feat_idx = 0
         for i, layer in enumerate(layers):
-            x = layer(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(layer, x)
+            else:
+                x = layer(x)
             if i == self.feature_ends[feat_idx]:
                 if feat_idx in take_indices:
                     if norm and feat_idx == last_idx:
@@ -300,11 +305,15 @@ class DPN(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        prune_end = max_index < len(self.feature_ends) - 1
         keep = list(self.features.named_children())[:self.feature_ends[max_index] + 1]
-        if max_index == len(self.feature_ends) - 1 and not prune_norm:
+        if not prune_end and not prune_norm:
             keep.append(('conv5_bn_ac', self.features[-1]))
         self.features = nn.Sequential(OrderedDict(keep))
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

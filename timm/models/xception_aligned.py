@@ -187,8 +187,20 @@ class XceptionModule(nn.Module):
 
     def forward_with_tap(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Forward that also returns the input to the last (strided) separable conv, the feature tap."""
-        x_tap = self.stack[:-1](x)  # not called from forward, slicing is fine w/ torchscript
-        return self._residual(self.stack[-1](x_tap), x), x_tap
+        x_tap = x
+        last = len(self.stack) - 1
+        for i, m in enumerate(self.stack):
+            if i < last:
+                x_tap = m(x_tap)
+            else:
+                x = self._residual(m(x_tap), x)
+        return x, x_tap
+
+    def prune_to_tap(self):
+        """Remove the layers after the feature tap, the block then outputs the tap (for prune_intermediate_layers)."""
+        self.stack[-1] = nn.Identity()
+        self.shortcut = None
+        self.no_skip = True
 
 
 class PreXceptionModule(nn.Module):
@@ -250,8 +262,20 @@ class PreXceptionModule(nn.Module):
     def forward_with_tap(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Forward that also returns the input to the last (strided) separable conv, the feature tap."""
         x = self.norm(x)
-        x_tap = self.stack[:-1](x)  # not called from forward, slicing is fine w/ torchscript
-        return self._residual(self.stack[-1](x_tap), x), x_tap
+        x_tap = x
+        last = len(self.stack) - 1
+        for i, m in enumerate(self.stack):
+            if i < last:
+                x_tap = m(x_tap)
+            else:
+                x = self._residual(m(x_tap), x)
+        return x, x_tap
+
+    def prune_to_tap(self):
+        """Remove the layers after the feature tap, the block then outputs the tap (for prune_intermediate_layers)."""
+        self.stack[-1] = nn.Identity()
+        self.shortcut = nn.Identity()
+        self.no_skip = True
 
 
 class XceptionAligned(nn.Module):
@@ -319,7 +343,6 @@ class XceptionAligned(nn.Module):
         self.feature_ends.append(len(self.blocks) - 1)
         # not in-place, the final block output is a feature tap (before this act)
         self.act = act_layer() if preact else nn.Identity()
-        self.head_hidden_size = self.num_features
         self.head = ClassifierHead(
             in_features=self.num_features,
             num_classes=num_classes,
@@ -327,6 +350,7 @@ class XceptionAligned(nn.Module):
             drop_rate=drop_rate,
             **dd,
         )
+        self.head_hidden_size = self.head.num_features
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
@@ -346,7 +370,8 @@ class XceptionAligned(nn.Module):
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, pool_type=global_pool, **dd)
+        self.head.reset(num_classes, pool_type=global_pool, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
 
     def forward_intermediates(
             self,
@@ -428,10 +453,14 @@ class XceptionAligned(nn.Module):
             List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        prune_end = max_index < len(self.feature_ends) - 1
         self.blocks = self.blocks[:self.feature_ends[max_index] + 1]
-        if max_index < len(self.feature_ends) - 1:
+        if prune_end:
+            self.blocks[-1].prune_to_tap()  # the last tap is inside the final kept block
             self.act = nn.Identity()
-        if prune_head:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

@@ -338,7 +338,7 @@ class DenseNet(nn.Module):
         # positions of the feature taps within self.features, used by forward_intermediates
         feat_names = [n for n, _ in self.features.named_children()]
         self.feature_ends = [feat_names.index(f['module'].split('.', 1)[1]) for f in self.feature_info]
-        self.num_features = self.head_hidden_size = num_features
+        self.num_features = num_features
 
         # Linear layer
         global_pool, classifier = create_classifier(
@@ -348,6 +348,7 @@ class DenseNet(nn.Module):
             **dd,
         )
         self.global_pool = global_pool
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.head_drop = nn.Dropout(drop_rate)
         self.classifier = classifier
 
@@ -398,6 +399,7 @@ class DenseNet(nn.Module):
             global_pool = self.global_pool.pool_type
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.classifier.train(self.training)
 
@@ -464,8 +466,12 @@ class DenseNet(nn.Module):
             List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        prune_end = max_index < len(self.feature_ends) - 1
         self.features = self.features[:self.feature_ends[max_index] + 1]
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

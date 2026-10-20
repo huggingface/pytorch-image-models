@@ -355,7 +355,7 @@ class Nest(nn.Module):
         depths = to_ntuple(num_levels)(depths)
         self.num_classes = num_classes
         self.in_chans = in_chans
-        self.num_features = self.head_hidden_size = embed_dims[-1]
+        self.num_features = embed_dims[-1]
         self.feature_info = []
         norm_layer = norm_layer or LayerNorm
         act_layer = act_layer or nn.GELU
@@ -425,6 +425,7 @@ class Nest(nn.Module):
         # Classifier
         global_pool, head = create_classifier(self.num_features, self.num_classes, pool_type=global_pool, **dd)
         self.global_pool = global_pool
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.head_drop = nn.Dropout(drop_rate)
         self.head = head
 
@@ -470,6 +471,7 @@ class Nest(nn.Module):
             global_pool = self.global_pool.pool_type
         self.global_pool, self.head = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.head.train(self.training)
 
@@ -533,10 +535,14 @@ class Nest(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.levels), indices)
+        prune_end = max_index < len(self.levels) - 1
+        if prune_norm or prune_end:
+            self.norm = nn.Identity()  # final norm is sized for (and only applied to) the last stage
         self.levels = self.levels[:max_index + 1]  # truncate blocks w/ stem as idx 0
-        if prune_norm:
-            self.norm = nn.Identity()
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

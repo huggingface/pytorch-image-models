@@ -182,6 +182,7 @@ class VGG(nn.Module):
             drop_rate=drop_rate,
             **dd,
         )
+        self.head_hidden_size = self.head.num_features
 
         self._initialize_weights()
 
@@ -226,6 +227,7 @@ class VGG(nn.Module):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         self.head.reset(num_classes, global_pool, **dd)
+        self.head_hidden_size = self.head.num_features
 
     def forward_intermediates(
             self,
@@ -290,10 +292,24 @@ class VGG(nn.Module):
             List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        prune_end = max_index < len(self.feature_ends) - 1
         self.features = self.features[:self.feature_ends[max_index] + 1]
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
+            # the pre-logits conv mlp is part of the head, the classifier then takes the features directly
             self.pre_logits = nn.Identity()
-            self.reset_classifier(0, '')
+            self.head_hidden_size = self.num_features
+            self.head = ClassifierHead(
+                self.head_hidden_size,
+                0,
+                pool_type='',
+                drop_rate=self.head.drop.p,
+                **get_device_dtype(self),
+            )
+            self.head.train(self.training)
+            self.num_classes = 0
         return take_indices
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:

@@ -255,7 +255,7 @@ class InceptionResnetV2(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.in_chans = in_chans
-        self.num_features = self.head_hidden_size = 1536
+        self.num_features = 1536
         assert output_stride == 32
         conv_block = partial(
             ConvNormAct,
@@ -305,6 +305,7 @@ class InceptionResnetV2(nn.Module):
             drop_rate=drop_rate,
             **dd,
         )
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
@@ -339,6 +340,7 @@ class InceptionResnetV2(nn.Module):
         if global_pool is None:
             global_pool = self.global_pool.pool_type
         self.global_pool, self.classif = create_classifier(self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.classif.train(self.training)
 
@@ -402,9 +404,13 @@ class InceptionResnetV2(nn.Module):
             List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        prune_end = max_index < len(self.feature_ends) - 1
         for n in self.layer_names[self.feature_ends[max_index] + 1:]:
             setattr(self, n, nn.Identity())
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

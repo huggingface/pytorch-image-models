@@ -156,6 +156,7 @@ class MlpHead(nn.Module):
             hidden_size = int(mlp_ratio * in_features)
         else:
             hidden_size = None
+        assert pool_type in ('', 'avg'), 'Only avg pooling (or none) is supported.'
         self.pool_type = pool_type
         self.in_features = in_features
         self.hidden_size = hidden_size or in_features
@@ -180,11 +181,13 @@ class MlpHead(nn.Module):
             num_classes: int,
             pool_type: Optional[str] = None,
             reset_other: bool = False,
+            in_features: Optional[int] = None,
             device=None,
             dtype=None,
     ):
         dd = get_device_dtype(self, device=device, dtype=dtype)
         if pool_type is not None:
+            assert pool_type in ('', 'avg'), 'Only avg pooling (or none) is supported.'
             self.pool_type = pool_type
         if reset_other:
             self.norm = nn.Identity()
@@ -192,6 +195,9 @@ class MlpHead(nn.Module):
             self.pre_logits = nn.Identity()
             self.pre_logits.train(self.training)
             self.num_features = self.in_features
+        if in_features is not None and in_features != self.in_features:
+            assert isinstance(self.norm, nn.Identity), 'Input features can only change w/ the norm removed.'
+            self.in_features = self.num_features = in_features
         self.fc = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.fc.train(self.training)
 
@@ -461,10 +467,11 @@ class MambaOut(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, reset_other: bool = False):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool, **dd)
+        self.head.reset(num_classes, global_pool, reset_other=reset_other, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
 
     def forward_intermediates(
             self,
@@ -522,9 +529,13 @@ class MambaOut(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        prune_end = max_index < len(self.stages) - 1
         self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
-        if prune_head:
-            self.reset_classifier(0, '')
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
+            self.reset_classifier(0, '', reset_other=True)
         return take_indices
 
     def forward_features(self, x):

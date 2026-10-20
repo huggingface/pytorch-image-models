@@ -129,11 +129,12 @@ class StarNet(nn.Module):
                     num_chs=prev_chs, reduction=2**(i_layer+2), module=f'stages.{i_layer}'))
         self.stages = nn.Sequential(*stages)
         # head
-        self.num_features = self.head_hidden_size = prev_chs
+        self.num_features = prev_chs
         self.norm = nn.BatchNorm2d(self.num_features, **dd)
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        self.head = Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head = Linear(self.head_hidden_size, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -177,6 +178,7 @@ class StarNet(nn.Module):
             self.global_pool.train(self.training)
             self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
             self.flatten.train(self.training)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.head = Linear(
             self.head_hidden_size, num_classes,
             **dd,
@@ -245,10 +247,14 @@ class StarNet(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        prune_end = max_index < len(self.stages) - 1
+        if prune_norm or prune_end:
+            self.norm = nn.Identity()  # final norm is sized for (and only applied to) the last stage
         self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
-        if prune_norm:
-            self.norm = nn.Identity()
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

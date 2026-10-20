@@ -251,8 +251,8 @@ class VovNet(nn.Module):
 
         self.stages = nn.Sequential(*stages)
 
-        self.head_hidden_size = self.num_features
         self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=drop_rate, **dd)
+        self.head_hidden_size = self.head.num_features
 
         for n, m in self.named_modules():
             if isinstance(m, nn.Conv2d):
@@ -279,7 +279,8 @@ class VovNet(nn.Module):
     def reset_classifier(self, num_classes, global_pool: Optional[str] = None):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool, **dd)
+        self.head.reset(num_classes, global_pool, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
 
     def forward_intermediates(
             self,
@@ -337,8 +338,14 @@ class VovNet(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(5, indices)
+        prune_end = max_index < len(self.stages)
         self.stages = self.stages[:max_index]  # truncate blocks w/ stem as idx 0
-        if prune_head:
+        if max_index == 0:
+            self.stem[-1] = nn.Identity()  # stem feature is taken before the last stem conv
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

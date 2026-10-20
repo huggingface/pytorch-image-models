@@ -390,7 +390,7 @@ class DLA(nn.Module):
             dict(num_chs=channels[5], reduction=32, module='level5'),
         ]
 
-        self.num_features = self.head_hidden_size = channels[-1]
+        self.num_features = channels[-1]
         self.global_pool, self.head_drop, self.fc = create_classifier(
             self.num_features,
             self.num_classes,
@@ -399,6 +399,7 @@ class DLA(nn.Module):
             drop_rate=drop_rate,
             **dd,
         )
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
 
         for m in self.modules():
@@ -457,6 +458,7 @@ class DLA(nn.Module):
             global_pool = self.global_pool.pool_type
         self.global_pool, self.fc = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, use_conv=True, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.fc.train(self.training)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
@@ -521,10 +523,14 @@ class DLA(nn.Module):
             List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(6, indices)
+        prune_end = max_index < 5
         level_names = ('level0', 'level1', 'level2', 'level3', 'level4', 'level5')
         for n in level_names[max_index + 1:]:
             setattr(self, n, nn.Identity())
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

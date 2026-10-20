@@ -1206,8 +1206,9 @@ class NaFlexVit(nn.Module):
             cfg = _overlay_kwargs(cfg, **kwargs)
 
         # Validate configuration
-        assert cfg.global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map')
-        assert cfg.class_token or cfg.global_pool != 'token'
+        assert cfg.global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map'), \
+            'Only avg, avgmax, max, token or map pooling (or none) is supported.'
+        assert cfg.class_token or cfg.global_pool != 'token', 'Token pooling needs the class token.'
         assert cfg.pos_embed in ('', 'none', 'learned', 'factorized')
         if cfg.num_kv_heads is not None and not isinstance(cfg.num_kv_heads, int):
             assert len(cfg.num_kv_heads) == cfg.depth, 'num_kv_heads sequence must have one entry per block'
@@ -1595,7 +1596,9 @@ class NaFlexVit(nn.Module):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
-            assert global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map')
+            assert global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map'), \
+                'Only avg, avgmax, max, token or map pooling (or none) is supported.'
+            assert global_pool != 'token' or self.has_class_token, 'Token pooling needs the class token.'
             if global_pool == 'map' and self.attn_pool is None:
                 assert False, "Cannot currently add attention pooling in reset_classifier()."
             elif global_pool != 'map' and self.attn_pool is not None:
@@ -1836,6 +1839,31 @@ class NaFlexVit(nn.Module):
         x = self.norm(x)
 
         return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layer.
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
+        """
+        take_indices, max_index = feature_take_indices(len(self.blocks), indices)
+        self.blocks = self.blocks[:max_index + 1]  # truncate blocks
+        if prune_norm:
+            self.norm = nn.Identity()
+        if prune_head:
+            self.fc_norm = nn.Identity()
+            self.reset_classifier(0, '')  # also removes attention pooling
+        return take_indices
 
     def forward_features(
             self,

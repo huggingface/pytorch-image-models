@@ -749,6 +749,8 @@ class MultiScaleVit(nn.Module):
         self.drop_rate = drop_rate
         if global_pool is None:
             global_pool = 'token' if cfg.use_cls_token else 'avg'
+        assert global_pool in ('', 'avg', 'token'), 'Only avg or token pooling (or none) is supported.'
+        assert cfg.use_cls_token or global_pool != 'token', 'Token pooling needs the class token.'
         self.global_pool = global_pool
         self.depths = tuple(cfg.depths)
         self.expand_attn = cfg.expand_attn
@@ -863,6 +865,8 @@ class MultiScaleVit(nn.Module):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
+            assert global_pool in ('', 'avg', 'token'), 'Only avg or token pooling (or none) is supported.'
+            assert global_pool != 'token' or self.cls_token is not None, 'Token pooling needs the class token.'
             self.global_pool = global_pool
         self.head = nn.Sequential(OrderedDict([
             ('drop', nn.Dropout(self.drop_rate)),
@@ -896,7 +900,6 @@ class MultiScaleVit(nn.Module):
         intermediates = []
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
 
-        # FIXME slice block/pos_block if < max
         # forward pass
         x, feat_size = self.patch_embed(x)
         B = x.shape[0]
@@ -907,7 +910,11 @@ class MultiScaleVit(nn.Module):
             x = x + self.pos_embed
 
         last_idx = len(self.stages) - 1
-        for feat_idx, stage in enumerate(self.stages):
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            stages = self.stages
+        else:
+            stages = self.stages[:max_index + 1]
+        for feat_idx, stage in enumerate(stages):
             x, feat_size = stage(x, feat_size)
             if feat_idx in take_indices:
                 if norm and feat_idx == last_idx:
@@ -938,11 +945,14 @@ class MultiScaleVit(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
-        # FIXME add stage pruning
-        # self.stages = self.stages[:max_index]  # truncate blocks w/ stem as idx 0
-        if prune_norm:
-            self.norm = nn.Identity()
-        if prune_head:
+        prune_end = max_index < len(self.stages) - 1
+        if prune_norm or prune_end:
+            self.norm = nn.Identity()  # final norm is sized for (and only applied to) the last stage
+        self.stages = self.stages[:max_index + 1]
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

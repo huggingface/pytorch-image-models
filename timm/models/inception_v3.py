@@ -355,7 +355,7 @@ class InceptionV3(nn.Module):
         ]
         self.feature_ends = [self.layer_names.index(info['module']) for info in self.feature_info]
 
-        self.num_features = self.head_hidden_size = 2048
+        self.num_features = 2048
         self.global_pool, self.head_drop, self.fc = create_classifier(
             self.num_features,
             self.num_classes,
@@ -363,6 +363,7 @@ class InceptionV3(nn.Module):
             drop_rate=drop_rate,
             **dd,
         )
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
@@ -403,8 +404,12 @@ class InceptionV3(nn.Module):
         if global_pool is None:
             global_pool = self.global_pool.pool_type
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.fc.train(self.training)
+        if self.AuxLogits is not None:
+            self.AuxLogits.fc = Linear(768, num_classes, **dd) if num_classes > 0 else nn.Identity()
+            self.AuxLogits.fc.train(self.training)
 
     def forward_intermediates(
             self,
@@ -468,9 +473,16 @@ class InceptionV3(nn.Module):
             List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        prune_end = max_index < len(self.feature_ends) - 1
         for n in self.layer_names[self.feature_ends[max_index] + 1:]:
             setattr(self, n, nn.Identity())
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
+            # the auxiliary classifier goes with the head
+            self.AuxLogits = None
+            self.aux_logits = False
             self.reset_classifier(0, '')
         return take_indices
 
