@@ -62,6 +62,8 @@ FEAT_INTER_FILTERS = [
     'davit', 'rdnet', 'convnext', 'pit', 'starnet', 'shvit', 'fasternet', 'swiftformer', 'ghostnet', 'naflexvit',
     'csatv2', 'cpubone', 'lcnetv2', 'lowformer', 'qwen3_vit', 'iformer', 'efficientvim', 'deepseek_vit',
     'efficientvit_mit', 'cspnext', 'dpn', 'mobilenetv5', 'cspnet', 'nfnet', 'dla', 'densenet',
+    'coat', 'convit', 'convmixer', 'crossvit', 'hrnet', 'inception_resnet_v2', 'inception_v3', 'nasnet',
+    'pnasnet', 'selecsls', 'senet', 'sequencer', 'vgg', 'visformer', 'xception', 'xception_aligned',
 ]
 
 # transformer / hybrid models don't support full set of spatial / feature APIs and/or have spatial output.

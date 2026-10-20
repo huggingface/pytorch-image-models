@@ -17,6 +17,7 @@ import torch.nn.functional as F
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_, _assert, LayerNorm, get_device_dtype
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['CoaT']
@@ -533,6 +534,16 @@ class CoaT(nn.Module):
         else:
             self.parallel_blocks = None
 
+        # Features are the per-scale outputs (w/o class token), taken after the parallel blocks for scales 2-4.
+        self.feature_info = [
+            dict(
+                num_chs=embed_dims[i],
+                reduction=patch_size * 2 ** i,
+                module='parallel_blocks' if i > 0 and parallel_depth > 0 else f'serial_blocks{i + 1}',
+            )
+            for i in range(4)
+        ]
+
         # Classification head(s).
         if not self.return_interm_layers:
             if self.parallel_blocks is not None:
@@ -608,6 +619,117 @@ class CoaT(nn.Module):
             self.global_pool = global_pool
         self.head = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head.train(self.training)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor.
+            indices: Take last n features if int, all if None, select matching indices if sequence.
+                Indices 0-3 are the outputs of the four scales (stride 4-32) with the class token removed. For CoaT
+                (non-lite) models, indices 1-3 are taken after the parallel blocks.
+            norm: Apply the final norm of the matching scale to intermediates (norm4 to index 3 for CoaT-Lite,
+                norm2-4 to indices 1-3 for CoaT).
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            Features and list of intermediate features or just intermediate features. As with forward_features,
+            the final features of CoaT (non-lite) models are a list of the normed scale 2-4 tokens.
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.feature_info), indices)
+        B = x.shape[0]
+
+        # Serial blocks, the parallel blocks need all scales so only a scale 1 (index 0) tap can stop before them.
+        num_stages = 4
+        if stop_early and (self.parallel_blocks is None or max_index == 0):
+            num_stages = max_index + 1
+        xs: List[torch.Tensor] = []
+        sizes: List[Tuple[int, int]] = []
+        for i in range(num_stages):
+            patch_embed = getattr(self, f'patch_embed{i + 1}')
+            if patch_embed is None:
+                break  # pruned
+            if i > 0:
+                H, W = sizes[-1]
+                x = remove_cls(x).reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
+            x = patch_embed(x)
+            size = patch_embed.grid_size
+            x = insert_cls(x, getattr(self, f'cls_token{i + 1}'))
+            for blk in getattr(self, f'serial_blocks{i + 1}'):
+                x = blk(x, size=size)
+            xs.append(x)
+            sizes.append(size)
+
+        # Parallel blocks.
+        run_parallel = self.parallel_blocks is not None and len(xs) == 4
+        if run_parallel:
+            x1, x2, x3, x4 = xs
+            (H2, W2), (H3, W3), (H4, W4) = sizes[1:]
+            for blk in self.parallel_blocks:
+                x2, x3, x4 = self.cpe2(x2, (H2, W2)), self.cpe3(x3, (H3, W3)), self.cpe4(x4, (H4, W4))
+                x1, x2, x3, x4 = blk(x1, x2, x3, x4, sizes=sizes)
+            xs = [x1, x2, x3, x4]
+
+        final_norms = [None, self.norm2, self.norm3, self.norm4]
+        for i, ((H, W), x_feat) in enumerate(zip(sizes, xs)):
+            if i in take_indices:
+                final_norm = final_norms[i]
+                if norm and final_norm is not None:
+                    x_feat = final_norm(x_feat)
+                intermediates.append(remove_cls(x_feat).reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous())
+
+        if intermediates_only:
+            return intermediates
+
+        if run_parallel:
+            return [self.norm2(xs[1]), self.norm3(xs[2]), self.norm4(xs[3])], intermediates
+        if len(xs) == 4:
+            return self.norm4(xs[3]), intermediates
+        return xs[-1], intermediates  # stopped early or pruned, final norm not applicable
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune the final norm layers.
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
+        """
+        take_indices, max_index = feature_take_indices(len(self.feature_info), indices)
+        if self.parallel_blocks is None or max_index == 0:
+            # the parallel blocks need all scales, serial scales can only be dropped if they're not used
+            for i in range(max_index + 2, 5):
+                for n in ('patch_embed', 'cls_token', 'cpe', 'crpe', 'serial_blocks'):
+                    setattr(self, f'{n}{i}', None)
+            self.parallel_blocks = None
+            prune_norm = prune_norm or max_index < len(self.feature_info) - 1
+        if prune_norm:
+            for n in ('norm2', 'norm3', 'norm4'):
+                if getattr(self, n, None) is not None:
+                    setattr(self, n, nn.Identity())
+        if prune_head:
+            self.reset_classifier(0)
+        return take_indices
 
     def forward_features(self, x0):
         B = x0.shape[0]
@@ -743,14 +865,13 @@ def checkpoint_filter_fn(state_dict, model):
 
 
 def _create_coat(variant, pretrained=False, default_cfg=None, **kwargs):
-    if kwargs.get('features_only', None):
-        raise RuntimeError('features_only not implemented for Vision Transformer models.')
-
+    out_indices = kwargs.pop('out_indices', 4)
     model = build_model_with_cfg(
         CoaT,
         variant,
         pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
+        feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
         **kwargs,
     )
     return model
