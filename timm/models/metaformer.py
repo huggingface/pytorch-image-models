@@ -559,7 +559,7 @@ class MetaFormer(nn.Module):
 
         self.num_classes = num_classes
         self.in_chans = in_chans
-        self.num_features = dims[-1]
+        self.num_features = self.head_hidden_size = dims[-1]
         self.drop_rate = drop_rate
         self.use_mlp_head = use_mlp_head
         self.num_stages = len(depths)
@@ -630,10 +630,8 @@ class MetaFormer(nn.Module):
             if self.use_mlp_head:
                 # FIXME not actually returning mlp hidden state right now as pre-logits.
                 final = MlpHead(self.num_features, num_classes, **dd)
-                self.head_hidden_size = self.num_features
             else:
                 final = nn.Linear(self.num_features, num_classes, **dd)
-                self.head_hidden_size = self.num_features
         else:
             final = nn.Identity()
 

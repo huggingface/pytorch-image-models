@@ -147,19 +147,22 @@ def adapt_model_from_string(parent_module, model_string):
             )
             set_layer(new_module, n, new_bn)
         elif isinstance(old_module, nn.Linear):
-            # FIXME extra checks to ensure this is actually the FC classifier layer and not a diff Linear layer?
-            num_features = state_dict[n + '.weight'][1]
             new_fc = Linear(
-                in_features=num_features,
+                in_features=state_dict[n + '.weight'][1],
                 out_features=old_module.out_features,
                 bias=old_module.bias is not None,
                 **dd,
             )
             set_layer(new_module, n, new_fc)
-            if hasattr(new_module, 'num_features'):
-                if getattr(new_module, 'head_hidden_size', 0) == new_module.num_features:
-                    new_module.head_hidden_size = num_features
-                new_module.num_features = num_features
+
+    # The spec records the classifier's input width even when the model was created without a classifier
+    # (num_classes=0), so read the pruned head width from it rather than from the rebuilt Linear.
+    classifier = getattr(parent_module, 'pretrained_cfg', {}).get('classifier')
+    if isinstance(classifier, str) and classifier + '.weight' in state_dict and hasattr(new_module, 'num_features'):
+        num_features = state_dict[classifier + '.weight'][1]
+        if getattr(new_module, 'head_hidden_size', 0) == new_module.num_features:
+            new_module.head_hidden_size = num_features
+        new_module.num_features = num_features
 
     new_module.eval()
     parent_module.eval()
