@@ -576,6 +576,22 @@ def test_reset_classifier_keeps_pool(model_name):
         assert not torch.allclose(pooled_avg, expected)
 
 
+@pytest.mark.base
+@pytest.mark.parametrize('model_name, kwargs', [
+    ('poolformerv2_s12', dict()),
+    ('ecaresnet50d_pruned', dict()),
+    ('samvit_base_patch16', dict(img_size=64, depth=1)),
+    ('samvit_base_patch16', dict(img_size=64, depth=1, head_hidden_size=96)),
+])
+def test_head_hidden_size_matches_headless_output(model_name, kwargs):
+    # models created with num_classes=0 are used as feature extractors, head_hidden_size must give their output width
+    model = create_model(model_name, pretrained=False, num_classes=0, **kwargs).eval()
+    x = torch.randn(2, 3, 64, 64)
+    with torch.no_grad():
+        assert model(x).shape == (2, model.head_hidden_size)
+        assert model.forward_head(model.forward_features(x), pre_logits=True).shape == (2, model.head_hidden_size)
+
+
 
 @pytest.mark.base
 def test_gcvit_batch_consistency():

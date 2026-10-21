@@ -538,6 +538,7 @@ class VisionTransformerSAM(nn.Module):
                 drop_rate=drop_rate,
                 **dd,
             )
+        self.head_hidden_size = head_hidden_size or self.num_features
 
     @torch.jit.ignore
     def no_weight_decay(self):
