@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import trunc_normal_, DropPath, calculate_drop_path_rates, to_2tuple, get_padding, SelectAdaptivePool2d, get_device_dtype
+from timm.layers import trunc_normal_, DropPath, calculate_drop_path_rates, to_2tuple, get_padding, SelectAdaptivePool2d, get_device_dtype, create_conv2d
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
@@ -222,14 +222,17 @@ class MetaNeXtStage(nn.Module):
         super().__init__()
         self.grad_checkpointing = False
         if stride > 1 or dilation[0] != dilation[1]:
+            pad = 'same' if dilation[1] > 1 else 0  # same padding needed if dilation used
             self.downsample = nn.Sequential(
                 norm_layer(in_chs, **dd),
-                nn.Conv2d(
+                create_conv2d(
                     in_chs,
                     out_chs,
                     kernel_size=2,
                     stride=stride,
                     dilation=dilation[0],
+                    padding=pad,
+                    bias=True,
                     **dd,
                 ),
             )

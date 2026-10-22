@@ -732,6 +732,19 @@ def test_model_features_space2depth_reduction(model_name):
 
 @pytest.mark.features
 @pytest.mark.timeout(120)
+@pytest.mark.parametrize('model_name', ['convnext_atto', 'inception_next_atto'])
+@pytest.mark.parametrize('output_stride', [8, 16])
+def test_model_features_output_stride(model_name, output_stride):
+    """Dilated stages must keep feature maps at input size / feature_info reduction."""
+    model = create_model(model_name, pretrained=False, features_only=True, output_stride=output_stride)
+    model.eval()
+    outputs = model(torch.randn((1, 3, 64, 96)))
+    assert max(model.feature_info.reduction()) == output_stride
+    assert [tuple(o.shape[-2:]) for o in outputs] == [(64 // r, 96 // r) for r in model.feature_info.reduction()]
+
+
+@pytest.mark.features
+@pytest.mark.timeout(120)
 @pytest.mark.parametrize('model_name', list_models(module=FEAT_INTER_FILTERS, exclude_filters=EXCLUDE_FILTERS))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward_intermediates_features(model_name, batch_size):
