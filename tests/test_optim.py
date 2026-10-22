@@ -550,6 +550,22 @@ def test_param_groups_layer_decay_reg_token_stem(model_name):
     assert reg_group['weight_decay'] == 0.
 
 
+@pytest.mark.parametrize('model_name,param_name,expected_name', [
+    ('repvit_m0_9', 'stages.1.downsample.spatial_downsample.c.weight', 'stages.1.blocks.0.token_mixer.conv.c.weight'),
+    ('hgnetv2_b0', 'stages.1.downsample.conv.weight', 'stages.1.blocks.0.layers.0.conv.weight'),
+    ('mvitv2_small_cls', 'cls_token', 'patch_embed.proj.weight'),
+    ('vit_xsmall_patch16_clip_224', 'norm_pre.weight', 'patch_embed.proj.weight'),
+    ('vit_pe_core_tiny_patch16_384', 'norm_pre.weight', 'patch_embed.proj.weight'),
+])
+def test_param_groups_layer_decay_trunk_layer(model_name, param_name, expected_name):
+    from timm.models import create_model, group_parameters
+
+    model = create_model(model_name)
+    layer_map = group_parameters(model, model.group_matcher(coarse=False), reverse=True)
+    # trunk params share their neighbour's layer, below the classifier in the last layer
+    assert layer_map[param_name] == layer_map[expected_name] < max(layer_map.values())
+
+
 def test_param_groups_weight_decay():
     model = torch.nn.Sequential(
         torch.nn.Linear(10, 5),

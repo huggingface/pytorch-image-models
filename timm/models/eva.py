@@ -907,7 +907,7 @@ class Eva(nn.Module):
     def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
         """Create layer groupings for optimization."""
         matcher = dict(
-            stem=r'^cls_token|reg_token|pos_embed|patch_embed',  # stem and embed
+            stem=r'^cls_token|reg_token|pos_embed|patch_embed|norm_pre',  # stem and embed
             blocks=[(r'^blocks\.(\d+)', None), (r'^norm', (99999,))],
         )
         return matcher

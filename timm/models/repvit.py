@@ -431,7 +431,13 @@ class RepVit(nn.Module):
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
-        matcher = dict(stem=r'^stem', blocks=[(r'^blocks\.(\d+)', None), (r'^norm', (99999,))])  # stem and embed
+        matcher = dict(
+            stem=r'^stem',  # stem and embed
+            blocks=r'^stages\.(\d+)' if coarse else [
+                (r'^stages\.(\d+)\.downsample', (0,)),
+                (r'^stages\.(\d+)\.blocks\.(\d+)', None),
+            ]
+        )
         return matcher
 
     @torch.jit.ignore
