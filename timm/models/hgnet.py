@@ -554,7 +554,10 @@ class HighPerfGpuNet(nn.Module):
     def group_matcher(self, coarse=False):
         return dict(
             stem=r'^stem',
-            blocks=r'^stages\.(\d+)' if coarse else r'^stages\.(\d+).blocks\.(\d+)',
+            blocks=r'^stages\.(\d+)' if coarse else [
+                (r'^stages\.(\d+)\.downsample', (0,)),
+                (r'^stages\.(\d+)\.blocks\.(\d+)', None),
+            ],
         )
 
     @torch.jit.ignore

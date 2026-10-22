@@ -845,7 +845,7 @@ class MultiScaleVit(nn.Module):
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
         matcher = dict(
-            stem=r'^patch_embed',  # stem and embed
+            stem=r'^cls_token|pos_embed|patch_embed',  # stem and embed
             blocks=[(r'^stages\.(\d+)', None), (r'^norm', (99999,))]
         )
         return matcher
