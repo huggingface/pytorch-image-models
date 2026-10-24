@@ -828,11 +828,11 @@ def _convert_florence2(state_dict, model, prefix='vision_tower.'):
 
 def checkpoint_filter_fn(state_dict, model):
     """ Remap MSFT checkpoints -> timm """
-    if 'head.fc.weight' in state_dict:
-        return state_dict  # non-MSFT checkpoint
-
     if 'state_dict' in state_dict:
         state_dict = state_dict['state_dict']
+
+    if 'stem.conv.weight' in state_dict:
+        return state_dict  # timm checkpoint, w/ or w/o the classifier
 
     if 'vision_tower.convs.0.proj.weight' in state_dict:
         return _convert_florence2(state_dict, model)

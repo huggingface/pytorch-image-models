@@ -726,8 +726,8 @@ class NextViT(nn.Module):
 
 def checkpoint_filter_fn(state_dict, model):
     """ Remap original checkpoints -> timm """
-    if 'head.fc.weight' in state_dict:
-        return state_dict  # non-original
+    if 'stages.0.blocks.0.mlp.fc1.weight' in state_dict:
+        return state_dict  # timm checkpoint, including headless models; originals use features.0.mlp.conv1
 
     D = model.state_dict()
     out_dict = {}

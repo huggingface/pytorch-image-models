@@ -1151,7 +1151,9 @@ def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: nn.Module) 
     """
     state_dict = state_dict.get('model', state_dict)
     state_dict = state_dict.get('state_dict', state_dict)
-    native_checkpoint = 'head.fc.weight' in state_dict
+    # original checkpoints downsample at the end of a stage (stage 0 has one), timm at the start (stage 0 has none),
+    # the classifier can't be used to tell them apart, it is absent in headless checkpoints
+    native_checkpoint = 'layers.0.downsample.reduction.weight' not in state_dict
     out_dict = {}
     import re
     for k, v in state_dict.items():

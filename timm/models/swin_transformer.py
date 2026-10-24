@@ -1179,13 +1179,13 @@ def checkpoint_filter_fn(state_dict: dict, model: nn.Module) -> Dict[str, torch.
     Returns:
         Filtered state dictionary.
     """
-    old_weights = True
-    if 'head.fc.weight' in state_dict:
-        old_weights = False
     import re
     out_dict = {}
     state_dict = state_dict.get('model', state_dict)
     state_dict = state_dict.get('state_dict', state_dict)
+    # original checkpoints downsample at the end of a stage (stage 0 has one), timm at the start (stage 0 has none),
+    # the classifier can't be used to tell them apart, it is absent in headless checkpoints
+    old_weights = 'layers.0.downsample.reduction.weight' in state_dict
     for k, v in state_dict.items():
         if any([n in k for n in ('relative_position_index', 'attn_mask')]):
             continue  # skip buffers that should not be persistent

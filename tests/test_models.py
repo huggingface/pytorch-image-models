@@ -2341,6 +2341,27 @@ _RELPOS_NON_SQUARE = [
 
 
 @pytest.mark.base
+@pytest.mark.parametrize('model_name,kwargs', [
+    ('swin_tiny_patch4_window7_224', dict(embed_dim=16, depths=(1, 1, 1, 1), num_heads=(1, 1, 1, 1))),
+    ('swinv2_tiny_window8_256', dict(embed_dim=16, depths=(1, 1, 1, 1), num_heads=(1, 1, 1, 1))),
+    ('davit_tiny', dict(embed_dims=(16, 32, 64, 128), depths=(1, 1, 1, 1), num_heads=(1, 1, 1, 1))),
+    ('nextvit_small', dict(depths=(1, 1, 5, 1))),
+])
+def test_headless_checkpoint_reload(model_name, kwargs):
+    # a checkpoint saved w/o the classifier is still a timm checkpoint, the filter must not remap it as an original
+    import importlib
+    model = create_model(model_name, num_classes=0, **kwargs).eval()
+    filter_fn = importlib.import_module(type(model).__module__).checkpoint_filter_fn
+    reloaded = create_model(model_name, num_classes=0, **kwargs).eval()
+    # Safetensors does not preserve the model's parameter registration order.
+    state_dict = dict(sorted(model.state_dict().items()))
+    reloaded.load_state_dict(filter_fn(state_dict, reloaded))
+    x = torch.randn(1, 3, *model.pretrained_cfg['input_size'][-2:])
+    with torch.no_grad():
+        torch.testing.assert_close(reloaded(x), model(x), rtol=0, atol=0)
+
+
+@pytest.mark.base
 @pytest.mark.parametrize('model_name,kwargs', _RELPOS_NON_SQUARE)
 def test_relpos_non_square_checkpoint_reload(model_name, kwargs):
     # a checkpoint saved at a non-square size (non-square windows / rel pos tables) must load unchanged through the
