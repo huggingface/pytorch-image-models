@@ -12,6 +12,16 @@
 
 ## What's New
 
+## October 24, 2026
+
+* `forward_intermediates()` and `prune_intermediate_layers()` are now supported by every model. Newly added for CSPNet, NFNet, DLA, DenseNet (#2870, thanks [ghaith-mq](https://github.com/ghaith-mq)), CoaT, ConViT, ConvMixer, CrossViT, HRNet, Inception-v3, Inception-ResNet-v2, NASNet, PNASNet, SelecSLS, SENet, Sequencer2d, VGG, Visformer, Xception and Aligned Xception, with `prune_intermediate_layers()` for NaFlexViT and MobileNetV5 encoders. CoaT, ConViT, ConvMixer, CrossViT and Visformer gain `features_only` support.
+* `prune_intermediate_layers()` fixes
+  * `prune_head=True` removes the whole head (head norm, pre-logits layers, attention pooling) so the pruned model leaves no unused params (DDP w/o `find_unused_parameters`). Pass `prune_head=False` to keep it.
+  * Pruning to an earlier feature removes the final norm and head sized for the last stage, `forward_features()` ends at the last kept feature and `num_features` / `head_hidden_size` match it. Pruning to the stem feature removes the stem pooling after it.
+  * Fixes for grad checkpointing, `stop_early`, class token / post network removal, and TorchScript of pruned / `feature_cls='getter'` models across many families.
+* `head_hidden_size` is the actual pre-logits (pooled) width in all models, including concat pooling (`catavgmax`) and after `reset_classifier()`. Pool types a model can't apply now raise at creation / reset instead of being silently ignored or failing in forward.
+* Other fixes: VOLO `num_classes=0` output is the class token embedding (matching `forward_head(pre_logits=True)`), `vit_pe_core` `reset_classifier()` w/ a non `map` pool removes the attention pool, pool type export via `save_for_hf` reads the head's current pooling, and headless (`num_classes=0`) Swin, SwinV2, DaViT and NextViT checkpoints reload correctly.
+
 ## October 13, 2026
 
 * Hyperparameter sweeps via a new `sweep.py`: grid / random search over any `train.py` argument, one effective `--config` per job, run on a pool of local GPUs and resumable. WSD sweeps train one stable trunk per hyperparameter combination and branch independent cooldowns from its milestone checkpoints, comparing annealing at several budgets for a fraction of the cost of full runs. See the [training docs](https://huggingface.co/docs/timm/training_script#hyperparameter-sweeps).

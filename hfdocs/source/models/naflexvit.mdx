@@ -5,7 +5,7 @@ and regenerate. -->
 
 **Category:** ViT · **Code:**
 [`timm/models/naflexvit.py`](https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/naflexvit.py) ·
-**Architectures:** 8 · **Pretrained weights:** 5 (3 with ImageNet-1k results)
+**Architectures:** 14 · **Pretrained weights:** 11 (3 with ImageNet-1k results)
 
 A Vision Transformer with the patch embedding and position encoding in one module, supporting pre-patchified inputs with
 variable aspect ratio and resolution (NaFlex), FlexiViT variable patch size and NaViT factorized position embeddings.
@@ -17,6 +17,11 @@ variable aspect ratio and resolution (NaFlex), FlexiViT variable patch size and 
 * [Patch n' Pack: NaViT, a Vision Transformer for any Aspect Ratio and Resolution](https://arxiv.org/abs/2307.06304)
 * [SigLIP 2: Multilingual Vision-Language Encoders with Improved Semantic Understanding, Localization, and Dense
   Features](https://arxiv.org/abs/2502.14786)
+
+Referenced by pretrained weights:
+
+* [arXiv:2412.07679](https://arxiv.org/abs/2412.07679)
+* [arXiv:2601.17237](https://arxiv.org/abs/2601.17237)
 
 ## Usage
 
@@ -35,7 +40,7 @@ Extraction](../feature_extraction) for using the models as backbones.
 |---|---|
 | [`features_only=True` feature maps](../model_api#intermediate-features) | ✓ (strides 16, 16, 16) |
 | [`forward_intermediates()`](../model_api#intermediate-features) | ✓ |
-| [`prune_intermediate_layers()`](../model_api#intermediate-features) | ✗ |
+| [`prune_intermediate_layers()`](../model_api#intermediate-features) | ✓ |
 | [Any input size, no changes needed](../model_api#input-size) | ✓ |
 | [`set_input_size()`](../model_api#input-size) | – |
 | [`dynamic_img_size=True`](../model_api#input-size) | – |
@@ -56,9 +61,15 @@ the [Model API](../model_api) page for details.
 | `naflexvit_base_patch16_map` | 93.72 | 56.23 | 384 | 0 |
 | `naflexvit_base_patch16_par_gap` | 86.63 | 55.86 | 384 | 1 |
 | `naflexvit_base_patch16_parfac_gap` | 86.46 | 55.86 | 384 | 1 |
+| `naflexvit_base_patch16_radio_v3` | 98.25 | - | 512 | 1 |
 | `naflexvit_base_patch16_siglip` | 92.93 | 56.12 | 384 | 1 |
+| `naflexvit_giant_patch16_radio_v3` | 1159.62 | - | 512 | 1 |
+| `naflexvit_huge_patch16_radio_v3` | 651.64 | - | 512 | 1 |
+| `naflexvit_huge_patch16_radio_v4` | 651.65 | - | 512 | 1 |
+| `naflexvit_large_patch16_radio_v3` | 319.93 | - | 512 | 1 |
 | `naflexvit_so150m2_patch16_reg1_gap` | 136.06 | 89.53 | 384 | 0 |
 | `naflexvit_so150m2_patch16_reg1_map` | 142.46 | 90.33 | 384 | 0 |
+| `naflexvit_so400m_patch16_radio_v4` | 431.24 | - | 512 | 1 |
 | `naflexvit_so400m_patch16_siglip` | 427.89 | 259.65 | 384 | 1 |
 
 GMACs and parameter counts are for the default input size and classifier of each architecture, from the [benchmark
@@ -71,10 +82,41 @@ Top-1 is ImageNet-1k validation accuracy from
 the listed eval size, - if the weight has no ImageNet-1k result (e.g. pretraining or image-text weights). Classes is the
 size of the pretrained classifier, none for weights without one.
 
+Weights are grouped by source: the paper or origin given in the pretrained config, else a Hub organization other than
+`timm`, else the first part of the pretrained tag (`architecture.tag`). Sources with a single weight are listed under
+other.
+
+### arXiv:2412.07679
+
+Pretrained configs reference [arXiv:2412.07679](https://arxiv.org/abs/2412.07679).
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
+| `naflexvit_base_patch16_radio_v3.c_radio` | 512 | - | - | none | nvidia-open-model-license | [timm](https://huggingface.co/timm/naflexvit_base_patch16_radio_v3.c_radio) |
+| `naflexvit_giant_patch16_radio_v3.c_radio` | 512 | - | - | none | nvidia-open-model-license | [timm](https://huggingface.co/timm/naflexvit_giant_patch16_radio_v3.c_radio) |
+| `naflexvit_huge_patch16_radio_v3.c_radio` | 512 | - | - | none | nvidia-open-model-license | [timm](https://huggingface.co/timm/naflexvit_huge_patch16_radio_v3.c_radio) |
+| `naflexvit_large_patch16_radio_v3.c_radio` | 512 | - | - | none | nvidia-open-model-license | [timm](https://huggingface.co/timm/naflexvit_large_patch16_radio_v3.c_radio) |
+
+### `v2` tags
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
+| `naflexvit_base_patch16_siglip.v2_webli` | 384 | - | - | none | apache-2.0 | [timm](https://huggingface.co/timm/naflexvit_base_patch16_siglip.v2_webli) |
+| `naflexvit_so400m_patch16_siglip.v2_webli` | 384 | - | - | none | apache-2.0 | [timm](https://huggingface.co/timm/naflexvit_so400m_patch16_siglip.v2_webli) |
+
+### arXiv:2601.17237
+
+Pretrained configs reference [arXiv:2601.17237](https://arxiv.org/abs/2601.17237).
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
+| `naflexvit_huge_patch16_radio_v4.c_radio` | 512 | - | - | none | nvidia-open-model-license | [timm](https://huggingface.co/timm/naflexvit_huge_patch16_radio_v4.c_radio) |
+| `naflexvit_so400m_patch16_radio_v4.c_radio` | 512 | - | - | none | nvidia-open-model-license | [timm](https://huggingface.co/timm/naflexvit_so400m_patch16_radio_v4.c_radio) |
+
+### Other
+
 | Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
 |---|---:|---:|---:|---:|---|---|
 | `naflexvit_base_patch16_gap.e300_s576_in1k` | 384 | 83.340 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/naflexvit_base_patch16_gap.e300_s576_in1k) |
 | `naflexvit_base_patch16_par_gap.e300_s576_in1k` | 384 | 83.508 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/naflexvit_base_patch16_par_gap.e300_s576_in1k) |
 | `naflexvit_base_patch16_parfac_gap.e300_s576_in1k` | 384 | 83.468 | 384 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/naflexvit_base_patch16_parfac_gap.e300_s576_in1k) |
-| `naflexvit_base_patch16_siglip.v2_webli` | 384 | - | - | none | apache-2.0 | [timm](https://huggingface.co/timm/naflexvit_base_patch16_siglip.v2_webli) |
-| `naflexvit_so400m_patch16_siglip.v2_webli` | 384 | - | - | none | apache-2.0 | [timm](https://huggingface.co/timm/naflexvit_so400m_patch16_siglip.v2_webli) |

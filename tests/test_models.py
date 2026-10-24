@@ -955,6 +955,7 @@ def test_eva_reset_classifier_removes_attention_pool(pool_type: str) -> None:
         model.reset_classifier(0, 'map')
 
 
+@pytest.mark.base
 @pytest.mark.parametrize('model_name', ['convnext_atto', 'ghostnet_050', 'beit_base_patch16_224', 'mambaout_femto'])
 def test_catavgmax_unsupported(model_name: str) -> None:
     """Models that can't take concat pooling reject it at creation and reset instead of failing later."""

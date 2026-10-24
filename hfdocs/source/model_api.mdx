@@ -26,7 +26,7 @@ Three attributes describe the sizes involved:
 |---|---|
 | `num_classes` | Classifier output size, `0` if the classifier was removed |
 | `num_features` | Channels (or embedding dim) of the `forward_features` output |
-| `head_hidden_size` | Size of the `pre_logits=True` output, the classifier input. Equal to `num_features` unless the head has a hidden layer (e.g. ConvNeXt w/ `head_hidden_size` set) |
+| `head_hidden_size` | Size of the `pre_logits=True` output, the classifier input. Equal to `num_features` unless the head has a hidden layer (e.g. ConvNeXt w/ `head_hidden_size` set) or concat pooling (`catavgmax` doubles it) |
 
 ```python
 import torch
@@ -74,6 +74,10 @@ encoders) have no classifier and don't implement these methods.
   index that will be used (and optionally the final norm and the head) and returns the absolute indices to take.
   Use it when the model will only be used to extract intermediates, as a backbone for a detection or segmentation
   head.
+  - **`prune_head=True`** removes the whole head (head norm, pre-logits layers, attention pooling and classifier),
+    leaving at most the pooling. Pass `prune_head=False` to keep the head when no blocks are removed.
+  - Removing blocks also removes the head and the final norm, as they are sized for the last block.
+    `forward_features()` then ends at the last kept feature, and `num_features` / `head_hidden_size` are its width.
 
 ```python
 model = timm.create_model('resnet18').eval()
@@ -155,27 +159,27 @@ and regenerate. -->
 
 | Family | Classes | `features_only` | `forward_intermediates` | `prune_intermediate_layers` | Any input size | `set_input_size` | `dynamic_img_size` | Grad checkpointing | Layer decay | `reset_classifier` |
 |---|---|---|---|---|---|---|---|---|---|---|
-| [Aligned Xception](models/xception-aligned) | `XceptionAligned` | ✓ | ✗ | ✗ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [Aligned Xception](models/xception-aligned) | `XceptionAligned` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [BEiT](models/beit) | `Beit` | ✓ | ✓ | ✓ | ✗ | ✓ | ✗ | ✓ | ✓ | ✓ |
 | [BYOANet (BoTNet, HaloNet, LambdaNet)](models/byoanet) | `ByobNet` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
 | [BYOBNet (GENet, RepVGG, MobileOne, ...)](models/byobnet) | `ByobNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [CaiT](models/cait) | `Cait` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
-| [CoaT](models/coat) | `CoaT` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ | ✓ |
-| [ConViT](models/convit) | `ConVit` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ | ✓ |
-| [ConvMixer](models/convmixer) | `ConvMixer` | ✗ | ✗ | ✗ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [CoaT](models/coat) | `CoaT` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ | ✓ |
+| [ConViT](models/convit) | `ConVit` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ | ✓ |
+| [ConvMixer](models/convmixer) | `ConvMixer` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [ConvNeXt](models/convnext) | `ConvNeXt` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [CPUBone](models/cpubone) | `CPUBone` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
-| [CrossViT](models/crossvit) | `CrossVit` | ✗ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [CrossViT](models/crossvit) | `CrossVit` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
 | [CSATv2](models/csatv2) | `CSATv2` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✗ | ✓ |
-| [CSPNet (CSPResNet, CSPDarkNet, DarkNet)](models/cspnet) | `CspNet` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [CSPNet (CSPResNet, CSPDarkNet, DarkNet)](models/cspnet) | `CspNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
 | [CSPNeXt](models/cspnext) | `CspNext` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [DaViT](models/davit) | `DaVit` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [DeepSeek ViT](models/deepseek-vit) | `DeepseekVitClassifier` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 |  | `DeepseekVitEncoder` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✗ |
 | [DeiT](models/deit) | `VisionTransformer`, `VisionTransformerDistilled` | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| [DenseNet](models/densenet) | `DenseNet` | ✓ | ✗ | ✗ | ✓ | – | – | ✓ | ✓ | ✓ |
-| [DLA](models/dla) | `DLA` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
-| [DPN](models/dpn) | `DPN` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [DenseNet](models/densenet) | `DenseNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [DLA](models/dla) | `DLA` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [DPN](models/dpn) | `DPN` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [EdgeNeXt](models/edgenext) | `EdgeNeXt` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [EfficientFormer](models/efficientformer) | `EfficientFormer` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
 | [EfficientFormer-V2](models/efficientformer-v2) | `EfficientFormerV2` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
@@ -194,11 +198,11 @@ and regenerate. -->
 | [HardCoRe-NAS](models/hardcorenas) | `MobileNetV3` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [Hiera](models/hiera) | `Hiera` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
 | [HieraDet (SAM 2)](models/hieradet-sam2) | `HieraDet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
-| [HRNet](models/hrnet) | `HighResolutionNet` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [HRNet](models/hrnet) | `HighResolutionNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
 | [Hybrid Vision Transformer](models/vision-transformer-hybrid) | `VisionTransformer` | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | [iFormer](models/iformer) | `IFormer` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
-| [Inception-ResNet-v2](models/inception-resnet-v2) | `InceptionResnetV2` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
-| [Inception-v3](models/inception-v3) | `InceptionV3` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [Inception-ResNet-v2](models/inception-resnet-v2) | `InceptionResnetV2` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [Inception-v3](models/inception-v3) | `InceptionV3` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
 | [Inception-v4](models/inception-v4) | `InceptionV4` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
 | [InceptionNeXt](models/inception-next) | `MetaNeXt` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [LeViT](models/levit) | `Levit`, `LevitDistilled` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
@@ -209,16 +213,16 @@ and regenerate. -->
 | [MLP-Mixer, ResMLP and gMLP](models/mlp-mixer) | `MlpMixer` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
 | [MobileNet-V3](models/mobilenetv3) | `MobileNetV3` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [MobileNet-V5](models/mobilenetv5) | `MobileNetV5` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
-|  | `MobileNetV5Encoder` | ✓ | ✓ | ✗ | ✓ | – | – | ✓ | ✗ | ✗ |
+|  | `MobileNetV5Encoder` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✗ | ✗ |
 | [MobileViT](models/mobilevit) | `ByobNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [MViTv2](models/mvitv2) | `MultiScaleVit` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
-| [NaFlex ViT](models/naflexvit) | `NaFlexVit` | ✓ | ✓ | ✗ | ✓ | – | – | ✓ | ✓ | ✓ |
-| [NASNet](models/nasnet) | `NASNetALarge` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [NaFlex ViT](models/naflexvit) | `NaFlexVit` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [NASNet](models/nasnet) | `NASNetALarge` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
 | [NesT](models/nest) | `Nest` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
 | [Next-ViT](models/nextvit) | `NextViT` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
-| [NFNet](models/nfnet) | `NormFreeNet` | ✓ | ✗ | ✗ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [NFNet](models/nfnet) | `NormFreeNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [PiT](models/pit) | `PoolingVisionTransformer` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ |
-| [PNASNet](models/pnasnet) | `PNASNet5Large` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [PNASNet](models/pnasnet) | `PNASNet5Large` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
 | [PP-HGNet](models/hgnet) | `HighPerfGpuNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [PP-LCNetV2](models/lcnetv2) | `LCNetV2` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [PVTv2](models/pvt-v2) | `PyramidVisionTransformerV2` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
@@ -234,9 +238,9 @@ and regenerate. -->
 | [ResNetV2 (BiT)](models/resnetv2) | `ResNetV2` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [ReXNet](models/rexnet) | `RexNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [Segment Anything ViT](models/vision-transformer-sam) | `VisionTransformerSAM` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
-| [SelecSLS](models/selecsls) | `SelecSls` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
-| [SENet (legacy)](models/senet) | `SENet` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
-| [Sequencer](models/sequencer) | `Sequencer2d` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [SelecSLS](models/selecsls) | `SelecSls` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [SENet (legacy)](models/senet) | `SENet` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [Sequencer](models/sequencer) | `Sequencer2d` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
 | [SHViT](models/shvit) | `SHViT` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [SKNet](models/sknet) | `ResNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [StarNet](models/starnet) | `StarNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
@@ -248,14 +252,14 @@ and regenerate. -->
 | [TNT](models/tnt) | `TNT` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
 | [TResNet](models/tresnet) | `TResNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [Twins](models/twins) | `Twins` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
-| [VGG](models/vgg) | `VGG` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
-| [Visformer](models/visformer) | `Visformer` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
+| [VGG](models/vgg) | `VGG` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [Visformer](models/visformer) | `Visformer` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
 | [Vision Transformer (relative position)](models/vision-transformer-relpos) | `VisionTransformerRelPos` | ✓ | ✓ | ✓ | ✗ | ✓ | ✗ | ✓ | ✓ | ✓ |
 | [Vision Transformer (ViT)](models/vision-transformer) | `VisionTransformer` | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | [ViTamin](models/vitamin) | `VisionTransformer` | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | [VOLO](models/volo) | `VOLO` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
 | [VoVNet](models/vovnet) | `VovNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
-| [Xception (legacy)](models/xception) | `Xception` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [Xception (legacy)](models/xception) | `Xception` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
 | [XCiT](models/xcit) | `Xcit` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 
 ✓ supported, ✓ (square) works for square sizes only, ✗ not supported, – not needed (the model already accepts any input
