@@ -522,3 +522,30 @@ def test_convert_splitbn_norm_act():
     torch.testing.assert_close(out, ref)
     assert keys <= set(model.state_dict().keys())
     assert model.train()(x).min() >= 0
+
+def test_fast_norm_autocast_helpers_resolve_non_cuda_accelerators(monkeypatch):
+    """Older torch builds (<= 2.3) have no device-generic autocast API, and the fallback used to
+    assert that every non-cpu device is cuda. Accelerators such as the Ascend NPU publish the
+    same information on their own namespace."""
+
+    class _FakeAcceleratorNamespace:
+        @staticmethod
+        def get_autocast_dtype():
+            return torch.bfloat16
+
+        @staticmethod
+        def is_autocast_enabled():
+            return True
+
+    def legacy_is_autocast_enabled(*args, **kwargs):
+        raise TypeError('is_autocast_enabled() takes 0 positional arguments but 1 was given')
+
+    monkeypatch.delattr(fast_norm.torch, 'get_autocast_dtype', raising=False)
+    monkeypatch.setattr(fast_norm.torch, 'is_autocast_enabled', legacy_is_autocast_enabled)
+    monkeypatch.setattr(fast_norm.torch, 'npu', _FakeAcceleratorNamespace, raising=False)
+
+    assert fast_norm.get_autocast_dtype('npu') is torch.bfloat16
+    assert fast_norm.is_autocast_enabled('npu') is True
+    # the cuda/cpu fallbacks are unchanged
+    assert fast_norm.get_autocast_dtype('cpu') is fast_norm.torch.get_autocast_cpu_dtype()
+    assert fast_norm.get_autocast_dtype('cuda') is fast_norm.torch.get_autocast_gpu_dtype()

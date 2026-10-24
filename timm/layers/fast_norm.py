@@ -37,9 +37,12 @@ def get_autocast_dtype(device: str = 'cuda'):
         # dispatch to older device specific fns, only covering cuda/cpu devices here
         if device == 'cpu':
             return torch.get_autocast_cpu_dtype()
-        else:
-            assert device == 'cuda'
-            return torch.get_autocast_gpu_dtype()
+        device_mod = getattr(torch, device, None)
+        if device_mod is not None and hasattr(device_mod, 'get_autocast_dtype'):
+            # Other accelerators publish the getter on their own namespace (e.g. torch.npu).
+            return device_mod.get_autocast_dtype()
+        assert device == 'cuda'
+        return torch.get_autocast_gpu_dtype()
 
 
 def is_autocast_enabled(device: str = 'cuda'):
@@ -49,9 +52,12 @@ def is_autocast_enabled(device: str = 'cuda'):
         # dispatch to older device specific fns, only covering cuda/cpu devices here
         if device == 'cpu':
             return torch.is_autocast_cpu_enabled()
-        else:
-            assert device == 'cuda'
-            return torch.is_autocast_enabled()  # defaults cuda (only cuda on older pytorch)
+        device_mod = getattr(torch, device, None)
+        if device_mod is not None and hasattr(device_mod, 'is_autocast_enabled'):
+            # Other accelerators publish the predicate on their own namespace (e.g. torch.npu).
+            return device_mod.is_autocast_enabled()
+        assert device == 'cuda'
+        return torch.is_autocast_enabled()  # defaults cuda (only cuda on older pytorch)
 
 
 def is_fast_norm():
