@@ -682,6 +682,23 @@ def test_distributed_metrics_exclude_padding(tmp_path, size, multi_label):
 _FIXTURE_LABELS = ([5, 1, 0], [2], [], [4], [1, 5], [3], [0, 3], [2])
 
 
+class _FixtureBuilder:
+    """Stands in for a datasets builder, picklable for loader workers w/ spawn / forkserver (Python 3.14 default)."""
+
+    def __init__(self, dataset):
+        self.dataset = dataset
+        self.info = dataset.info
+
+    def as_streaming_dataset(self, **kwargs):
+        return self.dataset.to_iterable_dataset()
+
+    def as_dataset(self, **kwargs):
+        return self.dataset
+
+    def download_and_prepare(self):
+        pass
+
+
 @pytest.fixture
 def hf_dataset(monkeypatch):
     datasets = pytest.importorskip('datasets')
@@ -712,12 +729,7 @@ def hf_dataset(monkeypatch):
         'output': [{'pollen': float(i % 3 == 0), 'wasps': float(i >= 6)} for i in range(8)],
     }, info=info)
     monkeypatch.setattr(datasets, 'load_dataset', lambda *a, **kw: dataset)
-    builder = SimpleNamespace(
-        info=dataset.info,
-        as_streaming_dataset=lambda **kw: dataset.to_iterable_dataset(),
-        as_dataset=lambda **kw: dataset,
-        download_and_prepare=lambda: None,
-    )
+    builder = _FixtureBuilder(dataset)
     monkeypatch.setattr(datasets, 'load_dataset_builder', lambda *a, **kw: builder)
     return dataset
 
@@ -824,9 +836,7 @@ def test_hf_sequence_of_dicts_path_yields_label_list(monkeypatch, reader, kind):
     }, info=datasets.DatasetInfo(features=features, splits=datasets.SplitDict({
         'train': datasets.SplitInfo(name='train', num_examples=3)})))
     monkeypatch.setattr(datasets, 'load_dataset', lambda *a, **kw: hf_dataset)
-    monkeypatch.setattr(datasets, 'load_dataset_builder', lambda *a, **kw: SimpleNamespace(
-        info=hf_dataset.info, as_streaming_dataset=lambda **kw: hf_dataset.to_iterable_dataset(),
-        as_dataset=lambda **kw: hf_dataset, download_and_prepare=lambda: None))
+    monkeypatch.setattr(datasets, 'load_dataset_builder', lambda *a, **kw: _FixtureBuilder(hf_dataset))
     name = f'{reader}/fixture'
     dataset = create_dataset(name, split='train', target_key='objects/category')
     assert dataset.reader.class_to_idx == {'coverall': 0, 'gloves': 1, 'mask': 2}
