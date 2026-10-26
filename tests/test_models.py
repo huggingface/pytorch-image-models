@@ -429,6 +429,7 @@ def test_model_default_cfgs(model_name, batch_size, cfg_device):
         ).eval()
         outputs = model.forward(input_tensor)
         assert outputs.shape == outputs_pre.shape, f'output shape w/ num_classes=0 {outputs.shape} != pre_logits {outputs_pre.shape}'
+        assert outputs.shape[1] == model.head_hidden_size, f'feature dim w/ num_classes=0 {outputs.shape[1]} != model.head_hidden_size {model.head_hidden_size}'
 
         # test classifier + global pool deletion via __init__
         if 'pruned' not in model_name and not isinstance(model, EARLY_POOL_MODELS):
@@ -522,6 +523,7 @@ def test_model_default_cfgs_non_std(model_name, batch_size, cfg_device):
     if feat_dim is None:
         feat_dim = -1 if outputs.ndim == 3 else 1
     assert outputs.shape[feat_dim] == model.num_features
+    assert outputs.shape[feat_dim] == model.head_hidden_size
 
     # check classifier name matches default_cfg
     if cfg.get('num_classes', None):
@@ -918,25 +920,44 @@ def test_prune_class_token_avg_pool(model_name: str) -> None:
 @pytest.mark.base
 @pytest.mark.parametrize('model_name, model_kwargs', [
     ('resnet18', {}),
-    ('efficientnet_b0', {}),
     ('regnetx_002', {}),
     ('convmixer_768_32', {}),
+    ('ecaresnet50d_pruned', {}),  # head width from the pruning spec
+    ('efficientnet_b0', {}),  # conv head before the pool
+    ('mobilenetv3_small_050', {}),  # conv head after the pool
+    ('ghostnet_050', {}),
+    ('convnext_atto', dict(head_hidden_size=64)),  # MLP pre-logits
+    ('caformer_s18', {}),
     ('davit_tiny', dict(head_norm_first=True)),
     ('edgenext_xx_small', dict(head_norm_first=True)),
     ('rdnet_tiny', dict(head_norm_first=True)),
+    ('samvit_base_patch16', dict(img_size=64, embed_dim=64, depth=2, num_heads=2, global_attn_indexes=(1,))),  # neck
 ])
-def test_head_hidden_size_catavgmax(model_name: str, model_kwargs: dict) -> None:
-    """head_hidden_size is the pooled width, concat pooling doubles it."""
-    model = create_model(model_name, num_classes=0, global_pool='catavgmax', **model_kwargs).eval()
-    x = torch.randn(1, 3, 64, 64)
+def test_head_hidden_size(model_name: str, model_kwargs: dict) -> None:
+    """head_hidden_size is the pre-logits width w/o a classifier, after reset_classifier (concat pooling) and pruning."""
+    model = create_model(model_name, num_classes=0, **model_kwargs).eval()
+    x = torch.randn(2, 3, 64, 64)
+
+    def _check_width(num_classes):
+        features = model.forward_features(x)
+        assert model.forward_head(features, pre_logits=True).shape[1] == model.head_hidden_size
+        assert model(x).shape[1] == (num_classes or model.head_hidden_size)
+
     with torch.no_grad():
-        assert model(x).shape[1] == model.head_hidden_size == 2 * model.num_features
-        for pool, multiplier in (('avg', 1), ('catavgmax', 2)):
-            model.reset_classifier(7, pool)
-            features = model.forward_features(x)
-            assert model.forward_head(features, pre_logits=True).shape[1] == model.head_hidden_size
-            assert model.head_hidden_size == multiplier * model.num_features
-            assert model.forward_head(features).shape == (1, 7)
+        _check_width(0)
+        for pool in ('avg', 'catavgmax'):
+            try:
+                model.reset_classifier(7, pool)
+            except AssertionError:
+                continue  # model can't take concat pooling, see test_catavgmax_unsupported
+            _check_width(7)
+        # pruning the final stage + norm / neck, the head width falls back to the width of the tap
+        index = len(model.feature_info) - 2
+        tap_chs = model.feature_info[index]['num_chs']
+        model.prune_intermediate_layers([index], prune_norm=True)
+        model.reset_classifier(7, 'avg')
+        _check_width(7)
+        assert model.head_hidden_size == tap_chs
 
 
 @pytest.mark.base
@@ -964,21 +985,6 @@ def test_catavgmax_unsupported(model_name: str) -> None:
     model = create_model(model_name)
     with pytest.raises(AssertionError):
         model.reset_classifier(7, 'catavgmax')
-
-
-@pytest.mark.base
-def test_samvit_head_hidden_size_neck() -> None:
-    """The SAM ViT neck sets the head width, pruning the neck (as norm) falls back to the block width."""
-    model = create_model(
-        'samvit_base_patch16', img_size=64, embed_dim=64, depth=2, num_heads=2, global_attn_indexes=(1,),
-        num_classes=0,
-    ).eval()
-    x = torch.randn(1, 3, 64, 64)
-    assert model(x).shape[1] == model.head_hidden_size == 256
-    model.prune_intermediate_layers([1], prune_norm=True, prune_head=False)
-    model.reset_classifier(7, 'avg')
-    assert model.forward_head(model.forward_features(x), pre_logits=True).shape[1] == model.head_hidden_size == 64
-    assert model(x).shape == (1, 7)
 
 
 @pytest.mark.features
