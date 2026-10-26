@@ -587,14 +587,13 @@ class EfficientVitMsra(nn.Module):
             self.feature_info += [dict(num_chs=ed, reduction=stride, module=f'stages.{i}')]
         self.stages = nn.Sequential(*stages)
 
-        if global_pool == 'avg':
-            self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
-        else:
-            assert num_classes == 0
-            self.global_pool = nn.Identity()
-        self.num_features = self.head_hidden_size = embed_dim[-1]
+        assert global_pool or num_classes == 0, 'A classifier needs pooled features.'
+        # flatten only when pooling, no pooling returns the NCHW features
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=bool(global_pool))
+        self.num_features = embed_dim[-1]
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.head = NormLinear(
-            self.num_features, num_classes, drop=self.drop_rate, **dd) if num_classes > 0 else torch.nn.Identity()
+            self.head_hidden_size, num_classes, drop=self.drop_rate, **dd) if num_classes > 0 else torch.nn.Identity()
 
         # TODO: skip init when on meta device when safe to do so
         self.init_weights(needs_reset=False)
@@ -650,17 +649,15 @@ class EfficientVitMsra(nn.Module):
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         dd = get_device_dtype(self)
+        pool_type = self.global_pool.pool_type if global_pool is None else global_pool
+        assert pool_type or num_classes == 0, 'A classifier needs pooled features.'
         self.num_classes = num_classes
         if global_pool is not None:
-            if global_pool == 'avg':
-                self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
-                self.global_pool.train(self.training)
-            else:
-                assert num_classes == 0
-                self.global_pool = nn.Identity()
-                self.global_pool.train(self.training)
+            self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=bool(global_pool))
+            self.global_pool.train(self.training)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.head = NormLinear(
-            self.num_features, num_classes, drop=self.drop_rate, **dd) if num_classes > 0 else torch.nn.Identity()
+            self.head_hidden_size, num_classes, drop=self.drop_rate, **dd) if num_classes > 0 else torch.nn.Identity()
         self.head.train(self.training)
 
     def forward_intermediates(
@@ -718,8 +715,12 @@ class EfficientVitMsra(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        prune_end = max_index < len(self.stages) - 1
         self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

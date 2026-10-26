@@ -111,6 +111,7 @@ class ClassifierHead(nn.Module):
             dtype=dtype,
         )
         self.global_pool = global_pool
+        self.num_features = in_features * global_pool.feat_mult()  # pooled (pre-logits) width
         self.drop = nn.Dropout(drop_rate)
         self.fc = fc
         self.flatten = nn.Flatten(1) if use_conv and pool_type else nn.Identity()
@@ -119,10 +120,21 @@ class ClassifierHead(nn.Module):
             self,
             num_classes: int,
             pool_type: Optional[str] = None,
+            reset_other: bool = False,
+            in_features: Optional[int] = None,
             device=None,
             dtype=None,
     ):
+        """
+        Args:
+            num_classes: The number of classes for the new classifier, 0 to remove it.
+            pool_type: New global pooling type, unchanged if None.
+            reset_other: No-op, there are no layers other than the pooling and classifier (for head API parity).
+            in_features: New number of input features, e.g. after pruning the layers feeding the head.
+        """
         dd = get_device_dtype(self, device=device, dtype=dtype)
+        if in_features is not None:
+            self.in_features = in_features
         if pool_type is not None and pool_type != self.global_pool.pool_type:
             self.global_pool, self.fc = create_classifier(
                 self.in_features,
@@ -145,6 +157,7 @@ class ClassifierHead(nn.Module):
                 **dd,
             )
             self.fc.train(self.training)
+        self.num_features = self.in_features * self.global_pool.feat_mult()
 
     def forward(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
@@ -191,6 +204,7 @@ class NormMlpClassifierHead(nn.Module):
         linear_layer = partial(nn.Conv2d, kernel_size=1) if self.use_conv else nn.Linear
 
         self.global_pool = SelectAdaptivePool2d(pool_type=pool_type)
+        assert self.global_pool.feat_mult() == 1, 'Pooling that changes the pooled width is not supported.'
         self.norm = norm_layer(in_features, **dd)
         self.flatten = nn.Flatten(1) if pool_type else nn.Identity()
         if hidden_size:
@@ -208,15 +222,31 @@ class NormMlpClassifierHead(nn.Module):
             self,
             num_classes: int,
             pool_type: Optional[str] = None,
+            reset_other: bool = False,
+            in_features: Optional[int] = None,
             device=None,
             dtype=None,
     ):
         dd = get_device_dtype(self, device=device, dtype=dtype)
+        if in_features is not None and in_features != self.in_features:
+            assert reset_other or isinstance(self.norm, nn.Identity), \
+                'Input features can only change w/ norm removed (reset_other).'
         if pool_type is not None:
-            self.global_pool = SelectAdaptivePool2d(pool_type=pool_type)
-            self.global_pool.train(self.training)
+            global_pool = SelectAdaptivePool2d(pool_type=pool_type)
+            assert global_pool.feat_mult() == 1, 'Pooling that changes the pooled width is not supported.'
+            self.global_pool = global_pool.train(self.training)
             self.flatten = nn.Flatten(1) if pool_type else nn.Identity()
             self.flatten.train(self.training)
+        if reset_other:
+            # remove the norm and pre-logits, leaving pooling and the classifier
+            self.norm = nn.Identity().train(self.training)
+            self.pre_logits = nn.Identity().train(self.training)
+            self.hidden_size = None
+            self.num_features = self.in_features
+        if in_features is not None and in_features != self.in_features:
+            self.in_features = in_features
+            if not self.hidden_size:
+                self.num_features = in_features
         self.use_conv = self.global_pool.is_identity()
         linear_layer = partial(nn.Conv2d, kernel_size=1) if self.use_conv else nn.Linear
         if self.hidden_size:
@@ -276,7 +306,7 @@ class ClNormMlpClassifierHead(nn.Module):
         self.in_features = in_features
         self.hidden_size = hidden_size
         self.num_features = in_features
-        assert pool_type in ('', 'avg', 'max', 'avgmax')
+        assert pool_type in ('', 'avg', 'max', 'avgmax'), 'Only avg, max or avgmax pooling (or none) is supported.'
         self.pool_type = pool_type
         assert input_fmt in ('NHWC', 'NLC')
         self.pool_dim = 1 if input_fmt == 'NLC' else (1, 2)
@@ -300,17 +330,26 @@ class ClNormMlpClassifierHead(nn.Module):
             num_classes: int,
             pool_type: Optional[str] = None,
             reset_other: bool = False,
+            in_features: Optional[int] = None,
             device=None,
             dtype=None,
     ):
         dd = get_device_dtype(self, device=device, dtype=dtype)
         if pool_type is not None:
+            assert pool_type in ('', 'avg', 'max', 'avgmax'), 'Only avg, max or avgmax pooling (or none) is supported.'
             self.pool_type = pool_type
         if reset_other:
             self.pre_logits = nn.Identity()
             self.pre_logits.train(self.training)
             self.norm = nn.Identity()
             self.norm.train(self.training)
+            self.hidden_size = None
+            self.num_features = self.in_features
+        if in_features is not None and in_features != self.in_features:
+            assert isinstance(self.norm, nn.Identity), 'Input features can only change w/ norm removed (reset_other).'
+            self.in_features = in_features
+            if not self.hidden_size:
+                self.num_features = in_features
         self.fc = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.fc.train(self.training)
 

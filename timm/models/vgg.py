@@ -8,7 +8,7 @@ Papers:
 
 Copyright 2021 Ross Wightman
 """
-from typing import Any, Dict, List, Optional, Type, Union, cast
+from typing import Any, Dict, List, Optional, Tuple, Type, Union, cast
 
 import torch
 import torch.nn as nn
@@ -17,6 +17,7 @@ import torch.nn.functional as F
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import ClassifierHead, get_device_dtype
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._features_fx import register_notrace_module
 from ._registry import register_model, generate_default_cfgs
 
@@ -137,6 +138,7 @@ class VGG(nn.Module):
         self.grad_checkpointing = False
         self.use_norm = norm_layer is not None
         self.feature_info = []
+        self.feature_ends = []  # index into self.features of each feature_info tap
 
         prev_chs = in_chans
         net_stride = 1
@@ -146,6 +148,7 @@ class VGG(nn.Module):
             last_idx = len(layers) - 1
             if v == 'M':
                 self.feature_info.append(dict(num_chs=prev_chs, reduction=net_stride, module=f'features.{last_idx}'))
+                self.feature_ends.append(last_idx)
                 layers += [pool_layer(kernel_size=2, stride=2)]
                 net_stride *= 2
             else:
@@ -158,6 +161,7 @@ class VGG(nn.Module):
                 prev_chs = v
         self.features = nn.Sequential(*layers)
         self.feature_info.append(dict(num_chs=prev_chs, reduction=net_stride, module=f'features.{len(layers) - 1}'))
+        self.feature_ends.append(len(layers) - 1)
 
         self.num_features = prev_chs
         self.head_hidden_size = 4096
@@ -178,6 +182,7 @@ class VGG(nn.Module):
             drop_rate=drop_rate,
             **dd,
         )
+        self.head_hidden_size = self.head.num_features
 
         self._initialize_weights()
 
@@ -222,6 +227,90 @@ class VGG(nn.Module):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         self.head.reset(num_classes, global_pool, **dd)
+        self.head_hidden_size = self.head.num_features
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor.
+            indices: Take last n features if int, all if None, select matching indices if sequence.
+                Indices 0-4 are the conv stage outputs (after the activation, before each max pool),
+                index 5 the final max pool output (the forward_features output).
+            norm: Apply norm layer to compatible intermediates (unused, no final norm).
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            Features and list of intermediate features or just intermediate features.
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        last_idx = len(self.feature_ends) - 1
+
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            layers = self.features
+        else:
+            layers = self.features[:self.feature_ends[max_index] + 1]
+        feat_idx = 0
+        for i, layer in enumerate(layers):
+            x = layer(x)
+            if i == self.feature_ends[feat_idx]:
+                if feat_idx in take_indices:
+                    intermediates.append(x)
+                feat_idx = min(feat_idx + 1, last_idx)
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layers (unused, no final norm).
+            prune_head: Whether to prune the classifier head (including the pre-logits ConvMlp).
+
+        Returns:
+            List of indices that were kept.
+        """
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        prune_end = max_index < len(self.feature_ends) - 1
+        self.features = self.features[:self.feature_ends[max_index] + 1]
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
+            # the pre-logits conv mlp is part of the head, the classifier then takes the features directly
+            self.pre_logits = nn.Identity()
+            self.head_hidden_size = self.num_features
+            self.head = ClassifierHead(
+                self.head_hidden_size,
+                0,
+                pool_type='',
+                drop_rate=self.head.drop.p,
+                **get_device_dtype(self),
+            )
+            self.head.train(self.training)
+            self.num_classes = 0
+        return take_indices
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through feature extraction layers.

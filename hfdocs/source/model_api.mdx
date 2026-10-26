@@ -26,7 +26,7 @@ Three attributes describe the sizes involved:
 |---|---|
 | `num_classes` | Classifier output size, `0` if the classifier was removed |
 | `num_features` | Channels (or embedding dim) of the `forward_features` output |
-| `head_hidden_size` | Size of the `pre_logits=True` output, the classifier input. Equal to `num_features` unless the head has a hidden layer (e.g. ConvNeXt w/ `head_hidden_size` set) |
+| `head_hidden_size` | Size of the `pre_logits=True` output, the classifier input. Equal to `num_features` unless the head has a hidden layer (e.g. ConvNeXt w/ `head_hidden_size` set) or concat pooling (`catavgmax` doubles it) |
 
 ```python
 import torch
@@ -52,8 +52,7 @@ validity inputs for variable resolution.
     remains enabled.
   - **`global_pool`** changes the pooling at the same time. `global_pool=''` disables it; combined with
     `num_classes=0`, `model(x)` returns unpooled features.
-  - **`global_pool=None`** keeps the current pooling in most models, but a few default to `'avg'`, pass it explicitly
-    if it matters.
+  - **`global_pool=None`** keeps the current pooling.
 
 Creating a model with `num_classes` / `global_pool` set has the same effect as resetting the classifier afterwards,
 without allocating the original classifier. Encoder-only vision towers (the DeepSeek, Gemma4, MobileNetV5 and Qwen3
@@ -66,7 +65,8 @@ encoders) have no classifier and don't implement these methods.
   - **`indices`** selects the intermediates: `None` for all, an `int` `n` for the last `n`, or a list of indices
     (negative values count from the end).
   - **`intermediates_only=True`** returns only the intermediate features.
-  - **`stop_early=True`** skips the blocks after the last selected index (with `intermediates_only=True`).
+  - **`stop_early=True`** skips the blocks after the last selected index (a few models, e.g. MobileNetV3, require
+    `intermediates_only=True`).
   - **`norm=True`** applies the final norm layer to each intermediate.
 - **`feature_info`** describes the available intermediate features, one entry per index with the number of channels
   (`num_chs`), the stride relative to the input (`reduction`) and the module name (`module`).
@@ -74,6 +74,13 @@ encoders) have no classifier and don't implement these methods.
   index that will be used (and optionally the final norm and the head) and returns the absolute indices to take.
   Use it when the model will only be used to extract intermediates, as a backbone for a detection or segmentation
   head.
+  - **`prune_head=True`** removes the whole head (head norm, pre-logits layers, attention pooling and classifier),
+    leaving at most the pooling. Pass `prune_head=False` to keep the head when the feature width doesn't change.
+  - When pruning changes the feature width (pruning a hierarchical model to an earlier stage), the head and final norm
+    sized for the last stage are removed too. `forward_features()` then ends at the last kept feature, and
+    `num_features` / `head_hidden_size` are its width.
+  - With the defaults, the pruned model has no unused parameters (DDP works without `find_unused_parameters`), except
+    CoaT (parallel blocks), CrossViT and HRNet when only some of their parallel scales / branches are taken.
 
 ```python
 model = timm.create_model('resnet18').eval()
@@ -120,7 +127,7 @@ model(torch.randn(1, 3, 384, 384))
 
 - **`set_grad_checkpointing(enable=True)`** enables activation (gradient) checkpointing, recomputing the forward
   activations of each block in the backward pass to save memory (`--grad-checkpointing` in `train.py`). Most models
-  support it, some older architectures (VGG, DPN, Inception, ...) raise an error.
+  support it, some older architectures (VGG, Inception, NASNet, ...) raise an error.
 - **`group_matcher(coarse=False)`** returns regular expressions that assign each parameter to a stem or block group.
   The optimizer factory uses it to scale learning rates per layer for layer-wise learning rate decay
   (`layer_decay`, see the [optimizers reference](reference/optimizers#parameter-groups)).
@@ -155,27 +162,27 @@ and regenerate. -->
 
 | Family | Classes | `features_only` | `forward_intermediates` | `prune_intermediate_layers` | Any input size | `set_input_size` | `dynamic_img_size` | Grad checkpointing | Layer decay | `reset_classifier` |
 |---|---|---|---|---|---|---|---|---|---|---|
-| [Aligned Xception](models/xception-aligned) | `XceptionAligned` | ✓ | ✗ | ✗ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [Aligned Xception](models/xception-aligned) | `XceptionAligned` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [BEiT](models/beit) | `Beit` | ✓ | ✓ | ✓ | ✗ | ✓ | ✗ | ✓ | ✓ | ✓ |
 | [BYOANet (BoTNet, HaloNet, LambdaNet)](models/byoanet) | `ByobNet` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
 | [BYOBNet (GENet, RepVGG, MobileOne, ...)](models/byobnet) | `ByobNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [CaiT](models/cait) | `Cait` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
-| [CoaT](models/coat) | `CoaT` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ | ✓ |
-| [ConViT](models/convit) | `ConVit` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ | ✓ |
-| [ConvMixer](models/convmixer) | `ConvMixer` | ✗ | ✗ | ✗ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [CoaT](models/coat) | `CoaT` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ | ✓ |
+| [ConViT](models/convit) | `ConVit` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ | ✓ |
+| [ConvMixer](models/convmixer) | `ConvMixer` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [ConvNeXt](models/convnext) | `ConvNeXt` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [CPUBone](models/cpubone) | `CPUBone` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
-| [CrossViT](models/crossvit) | `CrossVit` | ✗ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [CrossViT](models/crossvit) | `CrossVit` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
 | [CSATv2](models/csatv2) | `CSATv2` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✗ | ✓ |
-| [CSPNet (CSPResNet, CSPDarkNet, DarkNet)](models/cspnet) | `CspNet` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [CSPNet (CSPResNet, CSPDarkNet, DarkNet)](models/cspnet) | `CspNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
 | [CSPNeXt](models/cspnext) | `CspNext` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [DaViT](models/davit) | `DaVit` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [DeepSeek ViT](models/deepseek-vit) | `DeepseekVitClassifier` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 |  | `DeepseekVitEncoder` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✗ |
 | [DeiT](models/deit) | `VisionTransformer`, `VisionTransformerDistilled` | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| [DenseNet](models/densenet) | `DenseNet` | ✓ | ✗ | ✗ | ✓ | – | – | ✓ | ✓ | ✓ |
-| [DLA](models/dla) | `DLA` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
-| [DPN](models/dpn) | `DPN` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [DenseNet](models/densenet) | `DenseNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [DLA](models/dla) | `DLA` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [DPN](models/dpn) | `DPN` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [EdgeNeXt](models/edgenext) | `EdgeNeXt` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [EfficientFormer](models/efficientformer) | `EfficientFormer` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
 | [EfficientFormer-V2](models/efficientformer-v2) | `EfficientFormerV2` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
@@ -194,11 +201,11 @@ and regenerate. -->
 | [HardCoRe-NAS](models/hardcorenas) | `MobileNetV3` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [Hiera](models/hiera) | `Hiera` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
 | [HieraDet (SAM 2)](models/hieradet-sam2) | `HieraDet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
-| [HRNet](models/hrnet) | `HighResolutionNet` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [HRNet](models/hrnet) | `HighResolutionNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
 | [Hybrid Vision Transformer](models/vision-transformer-hybrid) | `VisionTransformer` | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | [iFormer](models/iformer) | `IFormer` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
-| [Inception-ResNet-v2](models/inception-resnet-v2) | `InceptionResnetV2` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
-| [Inception-v3](models/inception-v3) | `InceptionV3` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [Inception-ResNet-v2](models/inception-resnet-v2) | `InceptionResnetV2` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [Inception-v3](models/inception-v3) | `InceptionV3` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
 | [Inception-v4](models/inception-v4) | `InceptionV4` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
 | [InceptionNeXt](models/inception-next) | `MetaNeXt` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [LeViT](models/levit) | `Levit`, `LevitDistilled` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
@@ -209,16 +216,16 @@ and regenerate. -->
 | [MLP-Mixer, ResMLP and gMLP](models/mlp-mixer) | `MlpMixer` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
 | [MobileNet-V3](models/mobilenetv3) | `MobileNetV3` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [MobileNet-V5](models/mobilenetv5) | `MobileNetV5` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
-|  | `MobileNetV5Encoder` | ✓ | ✓ | ✗ | ✓ | – | – | ✓ | ✗ | ✗ |
+|  | `MobileNetV5Encoder` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✗ | ✗ |
 | [MobileViT](models/mobilevit) | `ByobNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [MViTv2](models/mvitv2) | `MultiScaleVit` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
-| [NaFlex ViT](models/naflexvit) | `NaFlexVit` | ✓ | ✓ | ✗ | ✓ | – | – | ✓ | ✓ | ✓ |
-| [NASNet](models/nasnet) | `NASNetALarge` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [NaFlex ViT](models/naflexvit) | `NaFlexVit` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [NASNet](models/nasnet) | `NASNetALarge` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
 | [NesT](models/nest) | `Nest` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
 | [Next-ViT](models/nextvit) | `NextViT` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
-| [NFNet](models/nfnet) | `NormFreeNet` | ✓ | ✗ | ✗ | ✓ | – | – | ✓ | ✓ | ✓ |
+| [NFNet](models/nfnet) | `NormFreeNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [PiT](models/pit) | `PoolingVisionTransformer` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ |
-| [PNASNet](models/pnasnet) | `PNASNet5Large` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [PNASNet](models/pnasnet) | `PNASNet5Large` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
 | [PP-HGNet](models/hgnet) | `HighPerfGpuNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [PP-LCNetV2](models/lcnetv2) | `LCNetV2` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [PVTv2](models/pvt-v2) | `PyramidVisionTransformerV2` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
@@ -234,9 +241,9 @@ and regenerate. -->
 | [ResNetV2 (BiT)](models/resnetv2) | `ResNetV2` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [ReXNet](models/rexnet) | `RexNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [Segment Anything ViT](models/vision-transformer-sam) | `VisionTransformerSAM` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
-| [SelecSLS](models/selecsls) | `SelecSls` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
-| [SENet (legacy)](models/senet) | `SENet` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
-| [Sequencer](models/sequencer) | `Sequencer2d` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [SelecSLS](models/selecsls) | `SelecSls` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [SENet (legacy)](models/senet) | `SENet` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [Sequencer](models/sequencer) | `Sequencer2d` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
 | [SHViT](models/shvit) | `SHViT` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [SKNet](models/sknet) | `ResNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [StarNet](models/starnet) | `StarNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
@@ -248,14 +255,14 @@ and regenerate. -->
 | [TNT](models/tnt) | `TNT` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
 | [TResNet](models/tresnet) | `TResNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 | [Twins](models/twins) | `Twins` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
-| [VGG](models/vgg) | `VGG` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
-| [Visformer](models/visformer) | `Visformer` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
+| [VGG](models/vgg) | `VGG` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [Visformer](models/visformer) | `Visformer` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
 | [Vision Transformer (relative position)](models/vision-transformer-relpos) | `VisionTransformerRelPos` | ✓ | ✓ | ✓ | ✗ | ✓ | ✗ | ✓ | ✓ | ✓ |
 | [Vision Transformer (ViT)](models/vision-transformer) | `VisionTransformer` | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | [ViTamin](models/vitamin) | `VisionTransformer` | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | [VOLO](models/volo) | `VOLO` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
 | [VoVNet](models/vovnet) | `VovNet` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
-| [Xception (legacy)](models/xception) | `Xception` | ✓ | ✗ | ✗ | ✓ | – | – | ✗ | ✓ | ✓ |
+| [Xception (legacy)](models/xception) | `Xception` | ✓ | ✓ | ✓ | ✓ | – | – | ✗ | ✓ | ✓ |
 | [XCiT](models/xcit) | `Xcit` | ✓ | ✓ | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
 
 ✓ supported, ✓ (square) works for square sizes only, ✗ not supported, – not needed (the model already accepts any input

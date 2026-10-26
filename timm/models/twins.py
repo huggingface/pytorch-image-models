@@ -352,6 +352,7 @@ class Twins(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.in_chans = in_chans
+        assert global_pool in ('', 'avg'), 'Only avg pooling (or none) is supported.'
         self.global_pool = global_pool
         self.depths = depths
         self.embed_dims = embed_dims
@@ -432,7 +433,7 @@ class Twins(nn.Module):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
-            assert global_pool in ('', 'avg')
+            assert global_pool in ('', 'avg'), 'Only avg pooling (or none) is supported.'
             self.global_pool = global_pool
         self.head = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head.train(self.training)
@@ -476,12 +477,22 @@ class Twins(nn.Module):
         intermediates = []
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
 
-        # FIXME slice block/pos_block if < max
-
         # forward pass
         B, _, height, width = x.shape
+        last_idx = len(self.blocks) - 1
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            patch_embeds = self.patch_embeds
+            pos_drops = self.pos_drops
+            stages = self.blocks
+            pos_blocks = self.pos_block
+        else:
+            patch_embeds = self.patch_embeds[:max_index + 1]
+            pos_drops = self.pos_drops[:max_index + 1]
+            stages = self.blocks[:max_index + 1]
+            pos_blocks = self.pos_block[:max_index + 1]
+        i = 0
         for i, (embed, drop, blocks, pos_blk) in enumerate(zip(
-                self.patch_embeds, self.pos_drops, self.blocks, self.pos_block)
+                patch_embeds, pos_drops, stages, pos_blocks)
         ):
             x, size = embed(x)
             x = drop(x)
@@ -490,7 +501,7 @@ class Twins(nn.Module):
                 if j == 0:
                     x = pos_blk(x, size)  # PEG here
 
-            if i < len(self.depths) - 1:
+            if i < last_idx:  # tokens are kept for the last (kept) stage, as the head expects
                 x = x.reshape(B, *size, -1).permute(0, 3, 1, 2).contiguous()
                 if i in take_indices:
                     intermediates.append(x)
@@ -503,7 +514,8 @@ class Twins(nn.Module):
         if intermediates_only:
             return intermediates
 
-        x = self.norm(x)
+        if i == last_idx:
+            x = self.norm(x)  # final norm is sized for (and only applied to) the last stage
 
         return x, intermediates
 
@@ -516,10 +528,17 @@ class Twins(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
-        # FIXME add block pruning
-        if prune_norm:
-            self.norm = nn.Identity()
-        if prune_head:
+        prune_end = max_index < len(self.blocks) - 1
+        self.patch_embeds = self.patch_embeds[:max_index + 1]
+        self.pos_drops = self.pos_drops[:max_index + 1]
+        self.blocks = self.blocks[:max_index + 1]
+        self.pos_block = self.pos_block[:max_index + 1]
+        if prune_norm or prune_end:
+            self.norm = nn.Identity()  # final norm is sized for (and only applied to) the last stage
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 
@@ -533,7 +552,7 @@ class Twins(nn.Module):
                 x = blk(x, size)
                 if j == 0:
                     x = pos_blk(x, size)  # PEG here
-            if i < len(self.depths) - 1:
+            if i < len(self.blocks) - 1:  # tokens are kept for the last (kept) stage, as the head expects
                 x = x.reshape(B, *size, -1).permute(0, 3, 1, 2).contiguous()
         x = self.norm(x)
         return x

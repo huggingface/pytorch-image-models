@@ -12,7 +12,7 @@ Papers:
 Based on ResNet implementation in https://github.com/rwightman/pytorch-image-models
 and SelecSLS Net implementation in https://github.com/mehtadushy/SelecSLS-Pytorch
 """
-from typing import List, Optional, Type
+from typing import List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -20,6 +20,7 @@ import torch.nn as nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import create_classifier, get_device_dtype
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['SelecSls']  # model_registry will add each entrypoint fn to this
@@ -137,8 +138,19 @@ class SelecSls(nn.Module):
         self.features = SequentialList(*[cfg['block'](*block_args, **dd) for block_args in cfg['features']])
         self.from_seq = SelectSeq()  # from List[tensor] -> Tensor in module compatible way
         self.head = nn.Sequential(*[conv_bn(*conv_args, **dd) for conv_args in cfg['head']])
-        self.num_features = self.head_hidden_size = cfg['num_features']
+        self.num_features = cfg['num_features']
         self.feature_info = cfg['feature_info']
+        # feature_info tap positions, -1 for the stem, then block indices in features, then head layer indices
+        # offset by the number of blocks (features and head run as one sequence of layers)
+        self.feature_ends = []
+        for f in self.feature_info:
+            name, idx = f['module'].split('.')
+            if name == 'stem':
+                self.feature_ends.append(-1)
+            elif name == 'features':
+                self.feature_ends.append(int(idx))
+            else:
+                self.feature_ends.append(len(self.features) + int(idx))
 
         self.global_pool, self.head_drop, self.fc = create_classifier(
             self.num_features,
@@ -147,6 +159,7 @@ class SelecSls(nn.Module):
             drop_rate=drop_rate,
             **dd,
         )
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
 
         for n, m in self.named_modules():
             if isinstance(m, nn.Conv2d):
@@ -179,12 +192,107 @@ class SelecSls(nn.Module):
             pool_type=global_pool,
             **dd,
         )
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.fc.train(self.training)
 
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor.
+            indices: Take last n features if int, all if None, select matching indices if sequence.
+                Index 0 is the stem output, indices 1-3 the outputs of the last block at stride 4, 8, 16,
+                indices 4 and 5 the head conv outputs at stride 32 and 64 (index 5 is the final output).
+            norm: Apply norm layer to compatible intermediates (unused, no final norm).
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            Features and list of intermediate features or just intermediate features.
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        last_idx = len(self.feature_ends) - 1
+        num_blocks = len(self.features)
+
+        # forward pass
+        x = self.stem(x)
+        if 0 in take_indices:
+            intermediates.append(x)
+
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            blocks = self.features
+            head = self.head
+        else:
+            end = self.feature_ends[max_index]
+            blocks = self.features[:end + 1]
+            head = self.head[:max(0, end - num_blocks + 1)]
+
+        # blocks pass [x, skip] lists between them, the block feature is the first element
+        feat_idx = 1
+        x_list = [x]
+        for i, block in enumerate(blocks):
+            x_list = block(x_list)
+            if i == self.feature_ends[feat_idx]:
+                if feat_idx in take_indices:
+                    intermediates.append(x_list[0])
+                feat_idx = min(feat_idx + 1, last_idx)
+        x = self.from_seq(x_list)
+
+        for i, layer in enumerate(head, start=num_blocks):
+            x = layer(x)
+            if i == self.feature_ends[feat_idx]:
+                if feat_idx in take_indices:
+                    intermediates.append(x)
+                feat_idx = min(feat_idx + 1, last_idx)
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layers (unused, no final norm).
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
+        """
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        end = self.feature_ends[max_index]
+        prune_end = end < len(self.features) + len(self.head) - 1
+        self.head = self.head[:max(0, end - len(self.features) + 1)]
+        self.features = self.features[:end + 1]
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
+            self.reset_classifier(0, '')
+        return take_indices
+
     def forward_features(self, x):
         x = self.stem(x)
-        x = self.features(x)
+        x = self.features([x])  # list in, as blocks pass [x, skip], so pruning all blocks still selects x
         x = self.head(self.from_seq(x))
         return x
 

@@ -5,7 +5,7 @@ and regenerate. -->
 
 **Category:** ViT · **Code:**
 [`timm/models/vision_transformer.py`](https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/vision_transformer.py)
-· **Architectures:** 157 · **Pretrained weights:** 302 (96 with ImageNet-1k results)
+· **Architectures:** 163 · **Pretrained weights:** 309 (96 with ImageNet-1k results)
 
 The Vision Transformer (ViT) splits an image into fixed size patches, linearly embeds them and processes the resulting
 token sequence with a standard Transformer encoder. This module holds the `VisionTransformer` class and the weights for
@@ -55,6 +55,12 @@ self-supervised pretrained image towers that share the architecture.
   Performance](https://arxiv.org/abs/2410.16261)
 * [Expanding Performance Boundaries of Open-Source Multimodal Models with Model, Data, and Test-Time
   Scaling](https://arxiv.org/abs/2412.05271)
+
+Referenced by pretrained weights:
+
+* [arXiv:2203.07845](https://arxiv.org/abs/2203.07845)
+* [arXiv:2412.07679](https://arxiv.org/abs/2412.07679)
+* [arXiv:2601.17237](https://arxiv.org/abs/2601.17237)
 
 ## Usage
 
@@ -120,7 +126,7 @@ for details.
 | `vit_base_patch14_reg1_tipsv2` | 86.31 | - | 448 | 1 |
 | `vit_base_patch14_reg4_dinov2` | 86.58 | 152.25 | 518 | 1 |
 | `vit_base_patch16_18x2_224` | 256.73 | 52.51 | 224 | 0 |
-| `vit_base_patch16_224` | 86.57 | 17.58 | 224 | 9 |
+| `vit_base_patch16_224` | 86.57 | 17.58 | 224 | 10 |
 | `vit_base_patch16_224_miil` | 94.40 | 17.59 | 224 | 2 |
 | `vit_base_patch16_384` | 86.86 | 55.54 | 384 | 3 |
 | `vit_base_patch16_clip_224` | 86.57 | 17.58 | 224 | 13 |
@@ -129,6 +135,7 @@ for details.
 | `vit_base_patch16_gap_224` | 86.57 | 17.49 | 224 | 0 |
 | `vit_base_patch16_plus_240` | 117.56 | 27.41 | 240 | 0 |
 | `vit_base_patch16_plus_clip_240` | 117.21 | 27.41 | 240 | 1 |
+| `vit_base_patch16_radio_v3` | 86.46 | - | 512 | 1 |
 | `vit_base_patch16_reg4_gap_256` | 86.62 | 23.50 | 256 | 0 |
 | `vit_base_patch16_rpn_224` | 86.54 | 17.49 | 224 | 1 |
 | `vit_base_patch16_siglip_224` | 92.88 | 17.73 | 224 | 2 |
@@ -164,6 +171,7 @@ for details.
 | `vit_giant_patch14_reg1_tipsv2` | 1135.95 | - | 448 | 1 |
 | `vit_giant_patch14_reg4_dinov2` | 1136.48 | 1790.08 | 518 | 1 |
 | `vit_giant_patch16_gap_224` | 1011.37 | 202.46 | 224 | 1 |
+| `vit_giant_patch16_radio_v3` | 1136.03 | - | 512 | 1 |
 | `vit_giantopt_patch16_siglip_256` | 1163.17 | 299.66 | 256 | 1 |
 | `vit_giantopt_patch16_siglip_384` | 1163.66 | 696.85 | 384 | 1 |
 | `vit_giantopt_patch16_siglip_gap_256` | 1134.84 | 298.42 | 256 | 1 |
@@ -181,6 +189,8 @@ for details.
 | `vit_huge_patch14_gap_224` | 630.76 | 166.73 | 224 | 2 |
 | `vit_huge_patch14_xp_224` | 631.80 | 167.30 | 224 | 0 |
 | `vit_huge_patch16_gap_448` | 631.67 | 544.70 | 448 | 1 |
+| `vit_huge_patch16_radio_v3` | 631.98 | - | 512 | 1 |
+| `vit_huge_patch16_radio_v4` | 631.99 | - | 512 | 1 |
 | `vit_intern300m_patch14_448` | 304.01 | 362.05 | 448 | 2 |
 | `vit_large_patch14_224` | 304.20 | 81.08 | 224 | 0 |
 | `vit_large_patch14_clip_224` | 304.20 | 81.08 | 224 | 15 |
@@ -193,6 +203,7 @@ for details.
 | `vit_large_patch14_xp_224` | 304.06 | 81.01 | 224 | 0 |
 | `vit_large_patch16_224` | 304.33 | 61.60 | 224 | 4 |
 | `vit_large_patch16_384` | 304.72 | 191.21 | 384 | 1 |
+| `vit_large_patch16_radio_v3` | 304.20 | - | 512 | 1 |
 | `vit_large_patch16_siglip_256` | 315.96 | 81.34 | 256 | 2 |
 | `vit_large_patch16_siglip_384` | 316.28 | 192.07 | 384 | 2 |
 | `vit_large_patch16_siglip_512` | 316.74 | 364.00 | 512 | 1 |
@@ -237,6 +248,7 @@ for details.
 | `vit_so400m_patch14_siglip_gap_384` | 412.99 | 333.46 | 384 | 1 |
 | `vit_so400m_patch14_siglip_gap_448` | 413.33 | 487.18 | 448 | 8 |
 | `vit_so400m_patch14_siglip_gap_896` | 416.87 | 2731.49 | 896 | 5 |
+| `vit_so400m_patch16_radio_v4` | 413.54 | - | 512 | 1 |
 | `vit_so400m_patch16_siglip_256` | 427.89 | 110.31 | 256 | 2 |
 | `vit_so400m_patch16_siglip_384` | 428.26 | 259.65 | 384 | 1 |
 | `vit_so400m_patch16_siglip_512` | 428.77 | 490.13 | 512 | 1 |
@@ -635,6 +647,17 @@ other.
 | `vit_medium_patch32_clip_224.tinyclip_laion400m` | 224 | - | - | 512 | mit | [timm](https://huggingface.co/timm/vit_medium_patch32_clip_224.tinyclip_laion400m) |
 | `vit_xsmall_patch16_clip_224.tinyclip_yfcc15m` | 224 | - | - | 512 | mit | [timm](https://huggingface.co/timm/vit_xsmall_patch16_clip_224.tinyclip_yfcc15m) |
 
+### arXiv:2412.07679
+
+Pretrained configs reference [arXiv:2412.07679](https://arxiv.org/abs/2412.07679).
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
+| `vit_base_patch16_radio_v3.c_radio` | 512 | - | - | none | nvidia-open-model-license | [timm](https://huggingface.co/timm/vit_base_patch16_radio_v3.c_radio) |
+| `vit_giant_patch16_radio_v3.c_radio` | 512 | - | - | none | nvidia-open-model-license | [timm](https://huggingface.co/timm/vit_giant_patch16_radio_v3.c_radio) |
+| `vit_huge_patch16_radio_v3.c_radio` | 512 | - | - | none | nvidia-open-model-license | [timm](https://huggingface.co/timm/vit_huge_patch16_radio_v3.c_radio) |
+| `vit_large_patch16_radio_v3.c_radio` | 512 | - | - | none | nvidia-open-model-license | [timm](https://huggingface.co/timm/vit_large_patch16_radio_v3.c_radio) |
+
 ### `mae` tags
 
 | Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
@@ -664,6 +687,15 @@ other.
 | `vit_base_patch16_224.sam_in1k` | 224 | 80.246 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/vit_base_patch16_224.sam_in1k) |
 | `vit_base_patch32_224.sam_in1k` | 224 | 73.704 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/vit_base_patch32_224.sam_in1k) |
 
+### arXiv:2601.17237
+
+Pretrained configs reference [arXiv:2601.17237](https://arxiv.org/abs/2601.17237).
+
+| Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
+|---|---:|---:|---:|---:|---|---|
+| `vit_huge_patch16_radio_v4.c_radio` | 512 | - | - | none | nvidia-open-model-license | [timm](https://huggingface.co/timm/vit_huge_patch16_radio_v4.c_radio) |
+| `vit_so400m_patch16_radio_v4.c_radio` | 512 | - | - | none | nvidia-open-model-license | [timm](https://huggingface.co/timm/vit_so400m_patch16_radio_v4.c_radio) |
+
 ### Other
 
 | Weight | Input size | Top-1 (%) | Eval size | Classes | License | Hub |
@@ -692,6 +724,7 @@ other.
 | `test_vit.r160_in1k` | 160 | 40.982 | 160 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/test_vit.r160_in1k) |
 | `test_vit2.r160_in1k` | 160 | 42.250 | 160 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/test_vit2.r160_in1k) |
 | `test_vit3.r160_in1k` | 160 | 56.908 | 160 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/test_vit3.r160_in1k) |
+| `vit_base_patch16_224.bamboo` | 224 | - | - | 115217 | - | [timm](https://huggingface.co/timm/vit_base_patch16_224.bamboo) |
 | `vit_base_patch16_224_miil.in21k` | 224 | - | - | 11221 | apache-2.0 | [timm](https://huggingface.co/timm/vit_base_patch16_224_miil.in21k) |
 | `vit_base_patch16_224_miil.in21k_ft_in1k` | 224 | 84.278 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/vit_base_patch16_224_miil.in21k_ft_in1k) |
 | `vit_giant_patch16_gap_224.in22k_ijepa` | 224 | - | - | none | cc-by-nc-4.0 | [original](https://dl.fbaipublicfiles.com/ijepa/IN22K-vit.g.16-600e.pth.tar) |

@@ -832,8 +832,9 @@ class VisionTransformer(nn.Module):
         """
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
-        assert global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map', 'prr')
-        assert class_token or global_pool != 'token'
+        assert global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map', 'prr'), \
+            'Only avg, avgmax, max, token, map or prr pooling (or none) is supported.'
+        assert class_token or global_pool != 'token', 'Token pooling needs the class token.'
         assert pos_embed in ('', 'none', 'learn')
         use_fc_norm = global_pool in ('avg', 'avgmax', 'max') if fc_norm is None else fc_norm
         norm_layer = get_norm_layer(norm_layer) or LayerNorm
@@ -1042,7 +1043,9 @@ class VisionTransformer(nn.Module):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
-            assert global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map', 'prr')
+            assert global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map', 'prr'), \
+                'Only avg, avgmax, max, token, map or prr pooling (or none) is supported.'
+            assert global_pool != 'token' or self.has_class_token, 'Token pooling needs the class token.'
             if global_pool in ('map', 'prr') and self.attn_pool is None:
                 assert False, "Cannot currently add attention pooling in reset_classifier()."
             elif global_pool not in ('map', 'prr') and self.attn_pool is not None:

@@ -143,6 +143,25 @@ def get_pretrained_grid_size(
     return grid if grid[0] * grid[1] == num_tokens else None
 
 
+def _get_global_pool(model: nn.Module) -> Optional[str]:
+    """Return the current pooling type, read from the module that pools.
+
+    A head that pools (e.g. ClassifierHead) holds the current pooling, a model level `global_pool` string can be
+    left at its constructor value by `reset_classifier()`.
+    """
+    head = getattr(model, 'head', None)
+    candidates = (
+        getattr(head, 'global_pool', None),
+        getattr(head, 'pool_type', None),
+        getattr(model, 'global_pool', None),
+    )
+    for pool in candidates:
+        pool = getattr(pool, 'pool_type', pool)
+        if isinstance(pool, str):
+            return pool
+    return None
+
+
 def get_model_args(model: nn.Module, overrides: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Return reconstruction arguments, including supported changes made after construction.
 
@@ -158,9 +177,8 @@ def get_model_args(model: nn.Module, overrides: Optional[Dict[str, Any]] = None)
     args.update(overrides or {})
     traits = get_model_traits(model)
     current = {k: traits[k] for k in ('in_chans', 'num_classes') if k in traits}
-    pool = getattr(model, 'global_pool', getattr(getattr(model, 'head', None), 'global_pool', None))
-    pool = getattr(pool, 'pool_type', pool)
-    if isinstance(pool, str):
+    pool = _get_global_pool(model)
+    if pool is not None:
         current['global_pool'] = pool
     if traits.get('img_size') is not None:
         current['img_size'] = traits['img_size']

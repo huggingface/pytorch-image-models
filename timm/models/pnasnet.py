@@ -9,13 +9,15 @@
 """
 from collections import OrderedDict
 from functools import partial
-from typing import Optional, Type
+from typing import List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from timm.layers import ConvNormAct, create_conv2d, create_pool2d, create_classifier, get_device_dtype
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['PNASNet5Large']
@@ -325,7 +327,7 @@ class PNASNet5Large(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.in_chans = in_chans
-        self.num_features = self.head_hidden_size = 4320
+        self.num_features = 4320
         assert output_stride == 32
 
         self.conv_0 = ConvNormAct(
@@ -377,9 +379,14 @@ class PNASNet5Large(nn.Module):
             dict(num_chs=2160, reduction=16, module='cell_8.conv_1x1.act'),
             dict(num_chs=4320, reduction=32, module='act'),
         ]
+        # stem / cells in forward order, and the layer index of the cell output used for each feature_info tap
+        self.layer_names = ['conv_0', 'cell_stem_0', 'cell_stem_1'] + [f'cell_{i}' for i in range(12)]
+        tap_layers = ('conv_0', 'cell_stem_0', 'cell_3', 'cell_7', 'cell_11')
+        self.feature_ends = [self.layer_names.index(n) for n in tap_layers]
 
         self.global_pool, self.head_drop, self.last_linear = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, drop_rate=drop_rate, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
@@ -400,21 +407,121 @@ class PNASNet5Large(nn.Module):
             global_pool = self.global_pool.pool_type
         self.global_pool, self.last_linear = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.last_linear.train(self.training)
 
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor.
+            indices: Take last n features if int, all if None, select matching indices if sequence.
+                Index 0 is the conv_0 stem output, indices 1-3 the ReLU activated outputs of cell_stem_0, cell_3
+                and cell_7 (as consumed by the next cell), index 4 the final activated cell_11 output.
+            norm: Apply norm layer to compatible intermediates (unused, no final norm).
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            Features and list of intermediate features or just intermediate features.
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        last_idx = len(self.feature_ends) - 1
+
+        # forward pass, each cell takes the outputs of the previous two layers
+        layer_names = self.layer_names
+        if stop_early:
+            layer_names = layer_names[:self.feature_ends[max_index] + 1]
+        x_prev = x
+        feat_idx = 0
+        for i, n in enumerate(layer_names):
+            layer = getattr(self, n)
+            if i < 2:
+                x_prev, x = x, layer(x)  # conv_0 and cell_stem_0 take a single input
+            else:
+                x_prev, x = x, layer(x_prev, x)
+            if i == self.feature_ends[feat_idx]:
+                if feat_idx == last_idx:
+                    x = self.act(x)
+                if feat_idx in take_indices:
+                    if 0 < feat_idx < last_idx:
+                        # match the feature_info hook on the next cell's conv_1x1.act
+                        intermediates.append(F.relu(x))
+                    else:
+                        intermediates.append(x)
+                feat_idx += 1
+
+        if intermediates_only:
+            return intermediates
+
+        if 0 < feat_idx - 1 < last_idx:
+            # stopped at a cell tap (stop_early or pruned), the features end at its activation like the tap
+            x = F.relu(x)
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layers (unused, no final norm).
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
+        """
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        num_layers = self.feature_ends[max_index] + 1
+        prune_end = num_layers < len(self.layer_names)
+        for n in self.layer_names[num_layers:]:
+            setattr(self, n, None)  # cells take two inputs, can't be run through Identity (see forward_features)
+        self.layer_names = self.layer_names[:num_layers]
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
+            self.reset_classifier(0, '')
+        return take_indices
+
     def forward_features(self, x):
+        # the layer after each feature tap is checked for None to support pruning (prune_intermediate_layers),
+        # the cell taps are activated, matching the ReLU the next cell's conv_1x1 starts with
         x_conv_0 = self.conv_0(x)
+        if self.cell_stem_0 is None:
+            return x_conv_0
         x_stem_0 = self.cell_stem_0(x_conv_0)
+        if self.cell_stem_1 is None:
+            return F.relu(x_stem_0)
         x_stem_1 = self.cell_stem_1(x_conv_0, x_stem_0)
         x_cell_0 = self.cell_0(x_stem_0, x_stem_1)
         x_cell_1 = self.cell_1(x_stem_1, x_cell_0)
         x_cell_2 = self.cell_2(x_cell_0, x_cell_1)
         x_cell_3 = self.cell_3(x_cell_1, x_cell_2)
+        if self.cell_4 is None:
+            return F.relu(x_cell_3)
         x_cell_4 = self.cell_4(x_cell_2, x_cell_3)
         x_cell_5 = self.cell_5(x_cell_3, x_cell_4)
         x_cell_6 = self.cell_6(x_cell_4, x_cell_5)
         x_cell_7 = self.cell_7(x_cell_5, x_cell_6)
+        if self.cell_8 is None:
+            return F.relu(x_cell_7)
         x_cell_8 = self.cell_8(x_cell_6, x_cell_7)
         x_cell_9 = self.cell_9(x_cell_7, x_cell_8)
         x_cell_10 = self.cell_10(x_cell_8, x_cell_9)

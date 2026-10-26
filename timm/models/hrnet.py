@@ -13,7 +13,7 @@ Original header:
   Modified by Ke Sun (sunk@mail.ustc.edu.cn)
 """
 import logging
-from typing import Dict, List, Type, Optional, Tuple
+from typing import Dict, List, Type, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -21,7 +21,7 @@ import torch.nn as nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import create_classifier, get_device_dtype
 from ._builder import build_model_with_cfg, pretrained_cfg_for_features
-from ._features import FeatureInfo
+from ._features import FeatureInfo, feature_take_indices
 from ._registry import register_model, generate_default_cfgs
 from .resnet import BasicBlock, Bottleneck  # leveraging ResNet block_types w/ additional features like SE
 
@@ -599,10 +599,15 @@ class HighResolutionNet(nn.Module):
                 drop_rate=drop_rate,
                 **dd,
             )
+            self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         else:
             if head == 'incre':
                 self.num_features = self.head_hidden_size = 2048
-                self.incre_modules, _, _ = self._make_head(pre_stage_channels, incre_only=True, **dd)
+                self.incre_modules, self.downsamp_modules, self.final_layer = self._make_head(
+                    pre_stage_channels,
+                    incre_only=True,
+                    **dd,
+                )
             else:
                 self.num_features = self.head_hidden_size = 256
                 self.incre_modules = None
@@ -617,6 +622,7 @@ class HighResolutionNet(nn.Module):
             curr_stride *= 2
             c = c * 4 if self.head_channels else c  # head block_type expansion factor of 4
             self.feature_info += [dict(num_chs=c, reduction=curr_stride, module=f'stage{i + 1}')]
+        self.num_branches = len(self.feature_info) - 1  # final stage branches, feature taps are the stem + branches
 
         self.init_weights()
 
@@ -780,6 +786,7 @@ class HighResolutionNet(nn.Module):
             global_pool = getattr(self.global_pool, 'pool_type', 'avg')
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.classifier.train(self.training)
 
@@ -801,6 +808,8 @@ class HighResolutionNet(nn.Module):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.act1(x)
+        if isinstance(self.layer1, nn.Identity):
+            return x  # only the stem remains (prune_intermediate_layers)
         x = self.conv2(x)
         x = self.bn2(x)
         x = self.act2(x)
@@ -821,7 +830,124 @@ class HighResolutionNet(nn.Module):
         y = self.final_layer(y)
         return y
 
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor.
+            indices: Take last n features if int, all if None, select matching indices if sequence.
+                Index 0 is the stem output after the first (stride 2) conv, indices 1-4 the stride 4-32 branch
+                outputs of the final stage, passed through the head's incre (channel increase) modules when present.
+            norm: Apply norm layer to compatible intermediates (unused, no final norm).
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            Features and list of intermediate features or just intermediate features.
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(self.num_branches + 1, indices)
+
+        # forward pass
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.act1(x)
+        if 0 in take_indices:
+            intermediates.append(x)
+        if max_index == 0 and (stop_early or isinstance(self.layer1, nn.Identity)):
+            # only the stem is needed (or remains after pruning)
+            return intermediates if intermediates_only else (x, intermediates)
+
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = self.act2(x)
+        yl = self.stages(x)  # all branch outputs come out of the fused final stage together
+
+        if self.incre_modules is None:
+            intermediates.extend([y for i, y in enumerate(yl, start=1) if i in take_indices])
+            return intermediates if intermediates_only else (yl, intermediates)
+
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            incre_modules = self.incre_modules
+        else:
+            incre_modules = self.incre_modules[:max_index]
+        aggregate = not intermediates_only and self.downsamp_modules is not None
+        y = None
+        for i, incre in enumerate(incre_modules):
+            x = incre(yl[i])
+            if i + 1 in take_indices:
+                intermediates.append(x)
+            if aggregate:
+                y = x if y is None else x + self.downsamp_modules[i - 1](y)
+
+        if intermediates_only:
+            return intermediates
+
+        if aggregate and len(incre_modules) == len(self.downsamp_modules) + 1:
+            return self.final_layer(y), intermediates
+        return yl, intermediates  # aggregation head not run (stopped early or pruned), as forward_features w/o it
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        NOTE: the branch outputs come out of the final fused stage together. When only some of them are taken, the
+        layers computing the others (fuse layers, incre modules) remain but go unused, distributed (DDP) training
+        then needs find_unused_parameters=True.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layers (unused, no final norm).
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
+        """
+        take_indices, max_index = feature_take_indices(self.num_branches + 1, indices)
+        prune_end = max_index == 0  # only the stem remains, otherwise the output is the list of branch outputs
+        if prune_end:
+            # all branch outputs (indices 1-4) depend on the full trunk, it can only be dropped as a whole
+            for n in (
+                    'conv2', 'bn2', 'act2', 'layer1',
+                    'transition1', 'stage2', 'transition2', 'stage3', 'transition3', 'stage4',
+            ):
+                setattr(self, n, nn.Identity())
+            # features now end at the stem tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[0]['num_chs']
+        if self.incre_modules is not None:
+            self.incre_modules = self.incre_modules[:max_index]
+        if prune_head or max_index < self.num_branches:
+            # the aggregation head (downsample + final_layer) only feeds the classifier and needs every branch,
+            # forward_features returns the branch outputs list (or the stem) without it, same as the non
+            # classification heads, which have no pooling / dropout / classifier modules
+            self.downsamp_modules = None
+            self.final_layer = None
+            self.num_classes = 0
+            self.global_pool = nn.Identity()
+            self.head_drop = nn.Identity()
+            self.classifier = nn.Identity()
+        return take_indices
+
     def forward_head(self, x, pre_logits: bool = False):
+        if isinstance(x, list):
+            # branch outputs (non classification head, or aggregation head pruned) can only be passed through
+            assert isinstance(self.global_pool, nn.Identity) and isinstance(self.classifier, nn.Identity), \
+                'Pooling / classifier need the aggregation (classification) head, the features are a list of branches.'
+            return x
         # Classification Head
         x = self.global_pool(x)
         x = self.head_drop(x)
@@ -894,17 +1020,21 @@ class HighResolutionNetFeatures(HighResolutionNet):
 
 def _create_hrnet(variant, pretrained=False, cfg_variant=None, **model_kwargs):
     model_cls = HighResolutionNet
-    features_only = False
+    features_mode = ''
     kwargs_filter = None
     if model_kwargs.pop('features_only', False):
-        model_cls = HighResolutionNetFeatures
-        kwargs_filter = ('num_classes', 'global_pool')
-        features_only = True
+        if 'feature_cls' in model_kwargs or 'feature_cls' in model_kwargs.get('feature_cfg', {}):
+            # generic feature wrapper (e.g. 'getter' via forward_intermediates) around the base model
+            features_mode = 'cfg'
+        else:
+            model_cls = HighResolutionNetFeatures
+            kwargs_filter = ('num_classes', 'global_pool')
+            features_mode = 'cls'
     cfg_variant = cfg_variant or variant
 
     pretrained_strict = model_kwargs.pop(
         'pretrained_strict',
-        not features_only and model_kwargs.get('head', 'classification') == 'classification'
+        features_mode != 'cls' and model_kwargs.get('head', 'classification') == 'classification'
     )
     model = build_model_with_cfg(
         model_cls,
@@ -913,9 +1043,10 @@ def _create_hrnet(variant, pretrained=False, cfg_variant=None, **model_kwargs):
         model_cfg=cfg_cls[cfg_variant],
         pretrained_strict=pretrained_strict,
         kwargs_filter=kwargs_filter,
+        features_only=features_mode == 'cfg',
         **model_kwargs,
     )
-    if features_only:
+    if features_mode == 'cls':
         model.pretrained_cfg = pretrained_cfg_for_features(model.default_cfg)
         model.default_cfg = model.pretrained_cfg  # backwards compat
     return model

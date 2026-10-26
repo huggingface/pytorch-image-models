@@ -18,6 +18,7 @@ import torch.nn as nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, DEFAULT_CROP_PCT
 from timm.layers import lecun_normal_, DropPath, Mlp, PatchEmbed, ClassifierHead, get_device_dtype
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._manipulate import named_apply
 from ._registry import register_model, generate_default_cfgs
 
@@ -364,11 +365,10 @@ class Sequencer2d(nn.Module):
     ):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
-        assert global_pool in ('', 'avg')
         self.num_classes = num_classes
         self.in_chans = in_chans
         self.global_pool = global_pool
-        self.num_features = self.head_hidden_size = embed_dims[-1]  # for consistency with other models
+        self.num_features = embed_dims[-1]  # for consistency with other models
         self.feature_dim = -1  # channel dim index for feature outputs (rank 4, NHWC)
         self.output_fmt = 'NHWC'
         self.feature_info = []
@@ -423,6 +423,7 @@ class Sequencer2d(nn.Module):
             input_fmt=self.output_fmt,
             **dd,
         )
+        self.head_hidden_size = self.head.num_features
 
         self.init_weights(nlhb=nlhb)
 
@@ -455,7 +456,90 @@ class Sequencer2d(nn.Module):
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, pool_type=global_pool, **dd)
+        self.head.reset(num_classes, pool_type=global_pool, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
+        if global_pool is not None:
+            self.global_pool = global_pool  # kept in sync w/ the head, which does the pooling
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor.
+            indices: Take last n features if int, all if None, select matching indices if sequence.
+                Indices 0-3 are the stage outputs.
+            norm: Apply the final norm layer to the last intermediate.
+            stop_early: Stop iterating over stages when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs, NCHW or NHWC (native format of the model).
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            Features and list of intermediate features or just intermediate features.
+        """
+        assert output_fmt in ('NCHW', 'NHWC'), 'Output format must be one of NCHW or NHWC.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        last_idx = len(self.stages) - 1
+
+        # forward pass
+        x = self.stem(x)
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            stages = self.stages
+        else:
+            stages = self.stages[:max_index + 1]
+
+        feat_idx = 0
+        for feat_idx, stage in enumerate(stages):
+            x = stage(x)
+            if feat_idx in take_indices:
+                x_inter = self.norm(x) if norm and feat_idx == last_idx else x
+                if output_fmt == 'NCHW':
+                    x_inter = x_inter.permute(0, 3, 1, 2).contiguous()
+                intermediates.append(x_inter)
+
+        if intermediates_only:
+            return intermediates
+
+        if feat_idx == last_idx:
+            x = self.norm(x)
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune the final norm layer.
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
+        """
+        take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        prune_end = max_index < len(self.stages) - 1
+        self.stages = self.stages[:max_index + 1]  # truncate stages after the last needed one
+        if prune_norm or prune_end:
+            self.norm = nn.Identity()
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         x = self.stem(x)

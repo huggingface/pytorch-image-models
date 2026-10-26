@@ -11,6 +11,7 @@ tests will be skipped on CI.
 
 """
 
+import copy
 import pytest
 import torch
 import platform
@@ -61,7 +62,9 @@ FEAT_INTER_FILTERS = [
     'mambaout', 'inception_next', 'inception_v4', 'hgnet', 'gcvit', 'focalnet', 'efficientformer_v2', 'edgenext',
     'davit', 'rdnet', 'convnext', 'pit', 'starnet', 'shvit', 'fasternet', 'swiftformer', 'ghostnet', 'naflexvit',
     'csatv2', 'cpubone', 'lcnetv2', 'lowformer', 'qwen3_vit', 'iformer', 'efficientvim', 'deepseek_vit',
-    'efficientvit_mit', 'cspnext', 'dpn', 'mobilenetv5',
+    'efficientvit_mit', 'cspnext', 'dpn', 'mobilenetv5', 'cspnet', 'nfnet', 'dla', 'densenet',
+    'coat', 'convit', 'convmixer', 'crossvit', 'hrnet', 'inception_resnet_v2', 'inception_v3', 'nasnet',
+    'pnasnet', 'selecsls', 'senet', 'sequencer', 'vgg', 'visformer', 'xception', 'xception_aligned',
 ]
 
 # transformer / hybrid models don't support full set of spatial / feature APIs and/or have spatial output.
@@ -426,6 +429,7 @@ def test_model_default_cfgs(model_name, batch_size, cfg_device):
         ).eval()
         outputs = model.forward(input_tensor)
         assert outputs.shape == outputs_pre.shape, f'output shape w/ num_classes=0 {outputs.shape} != pre_logits {outputs_pre.shape}'
+        assert outputs.shape[1] == model.head_hidden_size, f'feature dim w/ num_classes=0 {outputs.shape[1]} != model.head_hidden_size {model.head_hidden_size}'
 
         # test classifier + global pool deletion via __init__
         if 'pruned' not in model_name and not isinstance(model, EARLY_POOL_MODELS):
@@ -519,6 +523,7 @@ def test_model_default_cfgs_non_std(model_name, batch_size, cfg_device):
     if feat_dim is None:
         feat_dim = -1 if outputs.ndim == 3 else 1
     assert outputs.shape[feat_dim] == model.num_features
+    assert outputs.shape[feat_dim] == model.head_hidden_size
 
     # check classifier name matches default_cfg
     if cfg.get('num_classes', None):
@@ -825,6 +830,391 @@ def test_model_forward_intermediates(model_name, batch_size):
         )
         torch.testing.assert_close(output, output3, rtol=1e-4, atol=1e-5)
 
+
+@pytest.mark.features
+@pytest.mark.parametrize('model_name', ['convit_tiny', 'volo_d1_224', 'twins_svt_small'])
+def test_pruned_features_torchscript(model_name: str) -> None:
+    model = create_model(
+        model_name, img_size=64, features_only=True, feature_cls='getter', out_indices=(0,),
+    ).eval()
+    x = torch.randn(1, 3, 64, 64)
+    with torch.no_grad():
+        expected = model(x)
+        torch.testing.assert_close(torch.jit.script(model)(x), expected)
+
+
+@pytest.mark.features
+@pytest.mark.parametrize('model_name', [
+    'ghostnet_050', 'ghostnetv2_100', 'ghostnetv3_050', 'repghostnet_050',
+    'inception_v4', 'rexnet_100', 'rdnet_tiny', 'xception41', 'xception41p',
+])
+def test_feature_getter_stage_ends_torchscript(model_name: str) -> None:
+    from timm.models._features import FeatureGetterNet
+
+    model = create_model(model_name).eval()
+    x = torch.randn(1, 3, 96, 96)
+    indices = (0, 1, 2)
+    with torch.no_grad():
+        expected = model.forward_intermediates(x, indices=indices, intermediates_only=True)
+        getter = FeatureGetterNet(model, out_indices=indices).eval()
+        torch.testing.assert_close(getter(x), expected)
+        torch.testing.assert_close(torch.jit.script(getter)(x), expected)
+
+
+@pytest.mark.features
+@pytest.mark.parametrize('model_name', [
+    'convnext_atto', 'edgenext_xx_small', 'rdnet_tiny', 'tiny_vit_5m_224', 'coatnet_pico_rw_224', 'mambaout_femto',
+    'inception_next_atto', 'poolformerv2_s12', 'lowformer_b0', 'cpubone_b0_bfrobust', 'efficientvit_b0', 'hgnetv2_b0',
+    'pit_ti_distilled_224', 'volo_d1_224', 'fastvit_t8', 'regnetz_005', 'resnet33ts', 'ese_vovnet19b_dw',
+    'twins_svt_small', 'mvitv2_tiny', 'nest_tiny', 'starnet_s1', 'swin_tiny_patch4_window7_224',
+    'efficientnet_b0', 'vgg11',
+])
+def test_prune_intermediate_layers_params_used(model_name: str) -> None:
+    """Pruning as FeatureGetterNet does leaves no unused params (DDP), forward_intermediates / forward still run."""
+    model = create_model(model_name, drop_rate=0.5)
+    input_size = _get_input_size(model=model, target=TARGET_FFEAT_SIZE)
+    x = torch.randn((2, *input_size))
+    num_features = len(model.feature_info)
+    # prune_norm=False is FeatureGetterNet w/ norm=True
+    for indices, prune_norm in (([0], False), ([num_features - 1], False), (list(range(num_features)), True)):
+        pruned = copy.deepcopy(model).train()
+        take_indices = pruned.prune_intermediate_layers(indices, prune_norm=prune_norm)
+        features = pruned.forward_intermediates(x, indices=take_indices, norm=not prune_norm, intermediates_only=True)
+        sum(f.sum() for f in features).backward()
+        assert not [n for n, p in pruned.named_parameters() if p.grad is None]
+        # pruning an eval model must not leave (new) modules w/ dropout in train mode, outputs stay deterministic
+        pruned = copy.deepcopy(model).eval()
+        pruned.prune_intermediate_layers(indices, prune_norm=prune_norm)
+        with torch.no_grad():
+            pruned.forward_intermediates(x, indices=take_indices)
+            assert torch.equal(pruned(x), pruned(x))
+
+
+@pytest.mark.features
+def test_inception_v3_aux_logits_reset_prune() -> None:
+    """The auxiliary classifier follows reset_classifier and is pruned w/ the head."""
+    model = create_model('inception_v3', aux_logits=True).train()
+    x = torch.randn(2, 3, 299, 299)
+    model.reset_classifier(7)
+    logits, aux_logits = model(x)
+    assert logits.shape == aux_logits.shape == (2, 7)
+    model.prune_intermediate_layers([0])
+    assert model.AuxLogits is None
+    assert model(x).shape[1] == model.num_features
+
+
+@pytest.mark.features
+@pytest.mark.parametrize('model_name', ['efficientnet_b0', 'mobilenetv3_small_050'])
+def test_prune_extra_blocks_stem_width(model_name: str) -> None:
+    """Pruning to the stem (extra_blocks idx 0) sets num_features to the stem width."""
+    model = create_model(model_name)
+    model.prune_intermediate_layers([0], extra_blocks=True)
+    model.reset_classifier(7, 'avg')
+    x = torch.randn(2, 3, 64, 64)
+    assert model.forward_head(model.forward_features(x), pre_logits=True).shape[1] == model.num_features
+    assert model(x).shape == (2, 7)
+
+
+@pytest.mark.features
+@pytest.mark.parametrize('model_name', ['cait_xxs24_224', 'xcit_nano_12_p16_224', 'convit_tiny'])
+def test_prune_class_token_avg_pool(model_name: str) -> None:
+    """Average pooling covers every patch once the class token is pruned."""
+    model = create_model(model_name).eval()
+    model.prune_intermediate_layers([0])
+    model.reset_classifier(0, 'avg')
+    x = torch.randn(2, 3, 224, 224)
+    feat = model.forward_features(x)
+    assert feat.shape[1] == model.patch_embed.num_patches
+    torch.testing.assert_close(model.forward_head(feat), feat.mean(dim=1))
+    with pytest.raises(AssertionError):
+        model.reset_classifier(0, 'token')
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name, model_kwargs', [
+    ('resnet18', {}),
+    ('regnetx_002', {}),
+    ('convmixer_768_32', {}),
+    ('ecaresnet50d_pruned', {}),  # head width from the pruning spec
+    ('efficientnet_b0', {}),  # conv head before the pool
+    ('mobilenetv3_small_050', {}),  # conv head after the pool
+    ('ghostnet_050', {}),
+    ('convnext_atto', dict(head_hidden_size=64)),  # MLP pre-logits
+    ('caformer_s18', {}),
+    ('davit_tiny', dict(head_norm_first=True)),
+    ('edgenext_xx_small', dict(head_norm_first=True)),
+    ('rdnet_tiny', dict(head_norm_first=True)),
+    ('samvit_base_patch16', dict(img_size=64, embed_dim=64, depth=2, num_heads=2, global_attn_indexes=(1,))),  # neck
+])
+def test_head_hidden_size(model_name: str, model_kwargs: dict) -> None:
+    """head_hidden_size is the pre-logits width w/o a classifier, after reset_classifier (concat pooling) and pruning."""
+    model = create_model(model_name, num_classes=0, **model_kwargs).eval()
+    x = torch.randn(2, 3, 64, 64)
+
+    def _check_width(num_classes):
+        features = model.forward_features(x)
+        assert model.forward_head(features, pre_logits=True).shape[1] == model.head_hidden_size
+        assert model(x).shape[1] == (num_classes or model.head_hidden_size)
+
+    with torch.no_grad():
+        _check_width(0)
+        for pool in ('avg', 'catavgmax'):
+            try:
+                model.reset_classifier(7, pool)
+            except AssertionError:
+                continue  # model can't take concat pooling, see test_catavgmax_unsupported
+            _check_width(7)
+        # pruning the final stage + norm / neck, the head width falls back to the width of the tap
+        index = len(model.feature_info) - 2
+        tap_chs = model.feature_info[index]['num_chs']
+        model.prune_intermediate_layers([index], prune_norm=True)
+        model.reset_classifier(7, 'avg')
+        _check_width(7)
+        assert model.head_hidden_size == tap_chs
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('pool_type', ['avg', ''])
+def test_eva_reset_classifier_removes_attention_pool(pool_type: str) -> None:
+    model = create_model('vit_pe_core_tiny_patch16_384', img_size=64).eval()
+    with torch.no_grad():
+        features = model.forward_features(torch.randn(1, 3, 64, 64))
+        pooled = model.forward_head(features, pre_logits=True)
+        model.reset_classifier(0)
+        torch.testing.assert_close(model.forward_head(features), pooled)
+        model.reset_classifier(0, pool_type)
+        expected = features[:, model.num_prefix_tokens:].mean(1) if pool_type else features
+        torch.testing.assert_close(model.forward_head(features), model.fc_norm(expected))
+    with pytest.raises(AssertionError, match='Cannot currently add attention pooling'):
+        model.reset_classifier(0, 'map')
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name', ['convnext_atto', 'ghostnet_050', 'beit_base_patch16_224', 'mambaout_femto'])
+def test_catavgmax_unsupported(model_name: str) -> None:
+    """Models that can't take concat pooling reject it at creation and reset instead of failing later."""
+    with pytest.raises(AssertionError):
+        create_model(model_name, global_pool='catavgmax')
+    model = create_model(model_name)
+    with pytest.raises(AssertionError):
+        model.reset_classifier(7, 'catavgmax')
+
+
+@pytest.mark.features
+@pytest.mark.parametrize('norm', [False, True])
+@pytest.mark.parametrize('prune', [False, True])
+@pytest.mark.parametrize('neck_chans', [0, 32])
+def test_samvit_feature_getter_channels(norm: bool, prune: bool, neck_chans: int) -> None:
+    from timm.models._features import FeatureGetterNet
+
+    model = create_model(
+        'samvit_base_patch16', img_size=64, embed_dim=64, depth=2, num_heads=2, global_attn_indexes=(1,),
+        neck_chans=neck_chans,
+    ).eval()
+    x = torch.randn(1, 3, 64, 64)
+    with torch.no_grad():
+        expected = model.forward_intermediates(x, indices=[0], norm=norm, intermediates_only=True)
+        getter = FeatureGetterNet(model, out_indices=(0,), norm=norm, prune=prune)
+        actual = getter(x)
+    torch.testing.assert_close(actual, expected)
+    assert getter.feature_info.channels() == [feature.shape[1] for feature in actual]
+    assert [info['num_chs'] for info in model.feature_info] == [64, 64]
+
+
+@pytest.mark.features
+@pytest.mark.parametrize('model_name', ['cspdarknet53', 'nasnetalarge'])
+def test_features_only_feature_cls_class(model_name: str) -> None:
+    """A class-valued feature_cls drops unsupported feature_cfg args (flatten_sequential, no_rewrite) like 'getter'."""
+    from timm.models._features import FeatureGetterNet
+    model = create_model(model_name, features_only=True, feature_cls=FeatureGetterNet)
+    assert isinstance(model, FeatureGetterNet)
+
+
+@pytest.mark.features
+def test_resnet_pruned_grad_checkpointing() -> None:
+    model = create_model('test_resnet').train()
+    take_indices = model.prune_intermediate_layers((0, 1, 2, 3))
+    model.set_grad_checkpointing()
+    x = torch.randn(2, 3, 64, 64)
+    final, intermediates = model.forward_intermediates(x, indices=take_indices)
+    assert len(intermediates) == 4
+    (final.sum() + model.forward_features(x).sum()).backward()
+
+
+@pytest.mark.features
+@pytest.mark.parametrize('model_name', [
+    'coat_lite_tiny', 'coat_tiny', 'hrnet_w18_small', 'nasnetalarge', 'pnasnet5large', 'legacy_xception',
+])
+def test_forward_after_prune_intermediate_layers(model_name: str) -> None:
+    """Models w/ hardcoded forward_features keep forward_features / forward usable after pruning."""
+    model = create_model(model_name, **({'img_size': 128} if model_name.startswith('coat') else {})).eval()
+    x = torch.randn(1, 3, 128, 128)
+    for index in range(len(model.feature_info)):
+        pruned = copy.deepcopy(model)
+        pruned.prune_intermediate_layers([index])
+        with torch.no_grad():
+            final, intermediates = pruned.forward_intermediates(x, indices=[index])
+            torch.testing.assert_close(pruned.forward_features(x), final, rtol=0, atol=0)
+            if not isinstance(final, list):
+                if final.shape == intermediates[0].shape:
+                    torch.testing.assert_close(final, intermediates[0], rtol=0, atol=0)  # features end at the tap
+                pruned(x)  # CoaT's multi-scale output needs the aggregate layer, removed w/ the head
+        features = pruned.train().forward_features(x)
+        sum(f.sum() for f in (features if isinstance(features, list) else [features])).backward()
+
+
+@pytest.mark.features
+@pytest.mark.parametrize('model_name,stop_early_final', [
+    ('ghostnet_050', True), ('repghostnet_050', True), ('rexnet_100', True), ('dpn48b', True),
+    ('mobilenetv3_small_050', False),
+])
+def test_prune_intermediate_layers_last_feature(model_name: str, stop_early_final: bool) -> None:
+    """Layers after the last tap (final conv / norm) are only pruned w/ the head or norm, pruned heads pool the taps."""
+    model = create_model(model_name).eval()
+    x = torch.randn(1, 3, 96, 96)
+    last = len(model.feature_info) - 1
+    with torch.no_grad():
+        expected = model(x)
+        tap = model.forward_intermediates(x, indices=[last], intermediates_only=True)[0]
+        if stop_early_final:
+            final, _ = model.forward_intermediates(x, indices=[last], stop_early=True)
+            torch.testing.assert_close(final, model.forward_features(x), rtol=0, atol=0)
+
+        pruned = copy.deepcopy(model)
+        pruned.prune_intermediate_layers([last], prune_head=False)
+        torch.testing.assert_close(pruned(x), expected, rtol=0, atol=0)
+
+        pruned = copy.deepcopy(model)
+        pruned.prune_intermediate_layers([last], prune_norm=True)
+        selected = pruned.forward_intermediates(x, indices=[last], norm=True, intermediates_only=True)
+        torch.testing.assert_close(selected[0], tap, rtol=0, atol=0)
+
+        pruned = copy.deepcopy(model)
+        pruned.prune_intermediate_layers([last - 1])
+        pruned.reset_classifier(0, 'avg')
+        torch.testing.assert_close(pruned(x), pruned.forward_features(x).mean((2, 3)))
+
+
+# NOTE: no marker, slow (prunes every model at every feature index), excluded from CI for now
+@pytest.mark.timeout(timeout360)
+@pytest.mark.parametrize('model_name', list_models(
+    module=FEAT_INTER_FILTERS,
+    exclude_filters=EXCLUDE_FILTERS + ['*huge*', '*giant*', '*gigantic*', '*_1b_*', '*_3b_*', 'xcit_large_24_p8*'],
+))
+def test_prune_intermediate_layers_contract(model_name: str) -> None:
+    """Pruned / stop_early taps match the unpruned model's, pruned models keep their output w/ the head and train."""
+    model = create_model(model_name).eval()
+    input_size = _get_input_size(model=model, target=TARGET_FFEAT_SIZE)
+    if max(input_size) > MAX_FFEAT_SIZE:
+        pytest.skip("Fixed input size model > limit.")
+    x = torch.randn((2, *input_size))
+    last = len(model.feature_info) - 1
+    # CoaT (parallel blocks), CrossViT and HRNet leave the branches that don't reach the taps unused
+    partial_branches = model_name.startswith(('coat_', 'crossvit', 'hrnet'))
+
+    with torch.no_grad():
+        expected = model(x)
+        taps = model.forward_intermediates(x, intermediates_only=True)
+        pruned = copy.deepcopy(model)
+        pruned.prune_intermediate_layers([last], prune_head=False)
+        torch.testing.assert_close(pruned(x), expected, msg='prune_head=False at the last index changed the output')
+
+    for i in range(last + 1):
+        with torch.no_grad():
+            selected = model.forward_intermediates(x, indices=[i], stop_early=True, intermediates_only=True)
+            torch.testing.assert_close(selected[0], taps[i], msg=f'stop_early tap {i}')
+
+            pruned = copy.deepcopy(model)
+            take_indices = pruned.prune_intermediate_layers([i])
+            selected = pruned.forward_intermediates(x, indices=take_indices, intermediates_only=True)
+            torch.testing.assert_close(selected[0], taps[i], msg=f'pruned tap {i}')
+
+            # w/o the norm (as features_only), the features end at the tap
+            pruned = copy.deepcopy(model)
+            take_indices = pruned.prune_intermediate_layers([i], prune_norm=True)
+            features = pruned.forward_features(x)
+            if i < last and torch.is_tensor(features) and features.ndim == 4:
+                if features.shape != taps[i].shape:
+                    features = features.permute(0, 3, 1, 2)  # NHWC
+                torch.testing.assert_close(features, taps[i], msg=f'pruned features {i}')
+
+        pruned.train()
+        selected = pruned.forward_intermediates(x, indices=take_indices, intermediates_only=True)
+        features = pruned.forward_features(x)
+        features = features if isinstance(features, (list, tuple)) else [features]
+        sum(f.sum() for f in selected + features).backward()
+        if not partial_branches:
+            unused = [n for n, p in pruned.named_parameters() if p.requires_grad and p.grad is None]
+            assert not unused, f'pruned to {i}, unused params: {unused}'
+
+
+@pytest.mark.features
+@pytest.mark.parametrize('model_name', ['resnetv2_18', 'legacy_seresnet18', 'cspresnet50'])
+def test_prune_to_stem_feature(model_name: str) -> None:
+    """Pruning to the stem tap removes the stem pooling that follows it, forward_features is the stem feature."""
+    model = create_model(model_name).eval()
+    x = torch.randn(1, 3, 64, 64)
+    with torch.no_grad():
+        expected = model.forward_intermediates(x, indices=[0], intermediates_only=True)[0]
+        model.prune_intermediate_layers([0])
+        torch.testing.assert_close(model.forward_features(x), expected, rtol=0, atol=0)
+
+
+@pytest.mark.features
+@pytest.mark.parametrize('model_name,model_kwargs', [
+    ('twins_svt_small', dict(embed_dims=(16, 32, 64, 128), num_heads=(1, 1, 1, 1), depths=(1, 1, 1, 1))),
+    ('swin_tiny_patch4_window7_224', dict(embed_dim=16, depths=(1, 1, 1, 1), num_heads=(1, 1, 1, 1))),
+    ('swinv2_tiny_window8_256', dict(embed_dim=16, depths=(1, 1, 1, 1), num_heads=(1, 1, 1, 1))),
+    ('volo_d1_224', dict()),
+])
+def test_forward_intermediates_stop_early_final_norm(model_name: str, model_kwargs: dict) -> None:
+    """Stopping early skips the final norm (and post network), they only follow the last stage."""
+    model = create_model(model_name, **model_kwargs).eval()
+    x = torch.randn(1, 3, *model.pretrained_cfg['input_size'][-2:])
+    with torch.no_grad():
+        _, intermediates = model.forward_intermediates(x)
+        for norm in (False, True):
+            _, selected = model.forward_intermediates(x, indices=[0], norm=norm, stop_early=True)
+            torch.testing.assert_close(selected[0], intermediates[0], rtol=0, atol=0)
+
+
+@pytest.mark.features
+@pytest.mark.parametrize('model_name,model_kwargs', [
+    ('resnetv2_18', dict()),
+    ('resnetv2_18', dict(stem_type='fixed')),
+    ('resnetv2_50', dict(stem_type='deep', preact=False)),
+])
+def test_resnetv2_stem_feature_odd_size(model_name: str, model_kwargs: dict) -> None:
+    """The stem feature is taken from its module, odd input sizes round the stride 2 conv output up."""
+    model = create_model(model_name, **model_kwargs).eval()
+    stem_feat = {}
+    model.get_submodule(model.feature_info[0]['module']).register_forward_hook(
+        lambda m, i, o: stem_feat.setdefault('out', o))
+    x = torch.randn(1, 3, 65, 67)
+    with torch.no_grad():
+        output, intermediates = model.forward_intermediates(x)
+    assert intermediates[0].shape[-2:] == (33, 34)
+    torch.testing.assert_close(intermediates[0], stem_feat['out'], rtol=0, atol=0)
+    torch.testing.assert_close(output, model.forward_features(x))
+
+
+@pytest.mark.features
+@pytest.mark.parametrize('stem_type', ['deep', 'deep_quad'])
+def test_nfnet_stem_feature_consistency(stem_type: str) -> None:
+    from timm.models._features import FeatureListNet
+
+    model = create_model('test_nfnet', stem_type=stem_type).eval()
+    x = torch.randn(1, 3, 64, 64)
+    stem_only = FeatureListNet(model, out_indices=(0,), flatten_sequential=True)
+    features = FeatureListNet(model, out_indices=(0, 1, 2, 3, 4), flatten_sequential=True)
+    with torch.no_grad():
+        expected = stem_only(x)[0]
+        # Continuing past the stem tap must not modify its captured output.
+        torch.testing.assert_close(features(x)[0], expected, rtol=0, atol=0)
+        _, intermediates = model.forward_intermediates(x)
+        torch.testing.assert_close(intermediates[0], expected, rtol=0, atol=0)
+        selected = model.forward_intermediates(x, indices=[0], stop_early=True, intermediates_only=True)
+        torch.testing.assert_close(selected[0], expected, rtol=0, atol=0)
 
 
 @pytest.mark.features
@@ -1628,6 +2018,8 @@ def test_efficientvim_branch_features(model_name):
     ('efficientvim_m1', dict(embed_dim=(16, 24, 32), depths=(1, 1, 1), state_dim=(4, 4, 4))),
     ('efficientvim_m1_dist', dict(embed_dim=(16, 24, 32), depths=(1, 1, 1), state_dim=(4, 4, 4))),
     ('iformer_t', dict(dims=(16, 24, 32, 48), depths=(1, 1, 3, 3), attn_groups=(0, 0, 1, 1))),
+    ('repvit_m0_9', {}),
+    ('shvit_s1', {}),
 ])
 def test_mobile_model_fusion_features(model_name, kwargs):
     from copy import deepcopy
@@ -2056,6 +2448,27 @@ _RELPOS_NON_SQUARE = [
     ('test_vit_relpos', dict(rel_pos_type='bias')),
     ('swin_tiny_patch4_window7_224', dict(embed_dim=16, depths=(1, 1, 1, 1), num_heads=(1, 1, 1, 1))),
 ]
+
+
+@pytest.mark.base
+@pytest.mark.parametrize('model_name,kwargs', [
+    ('swin_tiny_patch4_window7_224', dict(embed_dim=16, depths=(1, 1, 1, 1), num_heads=(1, 1, 1, 1))),
+    ('swinv2_tiny_window8_256', dict(embed_dim=16, depths=(1, 1, 1, 1), num_heads=(1, 1, 1, 1))),
+    ('davit_tiny', dict(embed_dims=(16, 32, 64, 128), depths=(1, 1, 1, 1), num_heads=(1, 1, 1, 1))),
+    ('nextvit_small', dict(depths=(1, 1, 5, 1))),
+])
+def test_headless_checkpoint_reload(model_name, kwargs):
+    # a checkpoint saved w/o the classifier is still a timm checkpoint, the filter must not remap it as an original
+    import importlib
+    model = create_model(model_name, num_classes=0, **kwargs).eval()
+    filter_fn = importlib.import_module(type(model).__module__).checkpoint_filter_fn
+    reloaded = create_model(model_name, num_classes=0, **kwargs).eval()
+    # Safetensors does not preserve the model's parameter registration order.
+    state_dict = dict(sorted(model.state_dict().items()))
+    reloaded.load_state_dict(filter_fn(state_dict, reloaded))
+    x = torch.randn(1, 3, *model.pretrained_cfg['input_size'][-2:])
+    with torch.no_grad():
+        torch.testing.assert_close(reloaded(x), model(x), rtol=0, atol=0)
 
 
 @pytest.mark.base

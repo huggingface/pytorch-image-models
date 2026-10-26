@@ -475,6 +475,11 @@ class FeatureGetterNet(nn.ModuleDict):
                 prune_norm=not norm,
             )
         self.feature_info = _get_feature_info(model, out_indices)
+        if norm:
+            # Normalization can include a projection (e.g. SAM's neck). Keep the model's raw metadata unchanged.
+            self.feature_info = self.feature_info.from_other(out_indices)
+            for info in self.feature_info.info:
+                info['num_chs'] = info.get('num_chs_norm', info['num_chs'])
         self.model = model
         self.out_indices = out_indices
         self.out_map = out_map

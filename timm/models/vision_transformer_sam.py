@@ -412,7 +412,7 @@ class VisionTransformerSAM(nn.Module):
         self.num_classes = num_classes
         self.in_chans = in_chans
         self.global_pool = global_pool
-        self.num_features = self.head_hidden_size = self.embed_dim = embed_dim  # for consistency with other models
+        self.num_features = self.embed_dim = embed_dim  # for consistency with other models
         self.grad_checkpointing = False
 
         self.patch_embed = embed_layer(
@@ -489,7 +489,8 @@ class VisionTransformerSAM(nn.Module):
             )
             for i in range(depth)])
         self.feature_info = [
-            dict(module=f'blocks.{i}', num_chs=embed_dim, reduction=r) for i in range(depth)]
+            dict(module=f'blocks.{i}', num_chs=embed_dim, num_chs_norm=neck_chans or embed_dim, reduction=r)
+            for i in range(depth)]
 
         if neck_chans:
             self.neck = nn.Sequential(
@@ -538,6 +539,7 @@ class VisionTransformerSAM(nn.Module):
                 drop_rate=drop_rate,
                 **dd,
             )
+        self.head_hidden_size = self.head.num_features
 
     @torch.jit.ignore
     def no_weight_decay(self):
@@ -558,10 +560,13 @@ class VisionTransformerSAM(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.head
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, reset_other: bool = False):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool, **dd)
+        self.head.reset(num_classes, global_pool, reset_other=reset_other, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
+        if global_pool is not None:
+            self.global_pool = global_pool  # kept in sync w/ the head, which does the pooling
 
     def forward_intermediates(
             self,
@@ -632,11 +637,17 @@ class VisionTransformerSAM(nn.Module):
         """
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
         self.blocks = self.blocks[:max_index + 1]  # truncate blocks
+        prune_end = False
         if prune_norm:
             # neck is being treated as equivalent to final norm here
             self.neck = nn.Identity()
-        if prune_head:
-            self.reset_classifier(0, '')
+            for info in self.feature_info:
+                info['num_chs_norm'] = self.embed_dim
+            # a conv neck changes the width, features now end at the last block, the head is sized for the neck
+            prune_end = self.num_features != self.embed_dim
+            self.num_features = self.embed_dim
+        if prune_head or prune_end:
+            self.reset_classifier(0, '', reset_other=True)
         return take_indices
 
     def forward_features(self, x):

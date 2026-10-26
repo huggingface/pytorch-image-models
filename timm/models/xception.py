@@ -21,10 +21,11 @@ The resize parameter of the validation transform should be 333, and make sure to
 import torch.jit
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional
+from typing import List, Optional, Tuple, Union
 
 from timm.layers import create_classifier, get_device_dtype
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._registry import register_model, generate_default_cfgs, register_model_deprecations
 
 __all__ = ['Xception']
@@ -144,7 +145,7 @@ class Xception(nn.Module):
         self.global_pool = global_pool
         self.num_classes = num_classes
         self.in_chans = in_chans
-        self.num_features = self.head_hidden_size = 2048
+        self.num_features = 2048
 
         self.conv1 = nn.Conv2d(in_chans, 32, 3, 2, 0, bias=False, **dd)
         self.bn1 = nn.BatchNorm2d(32, **dd)
@@ -184,8 +185,12 @@ class Xception(nn.Module):
             dict(num_chs=728, reduction=16, module='block12.rep.0'),
             dict(num_chs=2048, reduction=32, module='act4'),
         ]
+        # number of blocks run before each feature_info tap (stem, block1, block2, block11, exit flow), block taps
+        # are the ReLU at the start of the next block (as hooked by features_only)
+        self.feature_ends = [0, 1, 2, 11, 12]
 
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
 
         # #------- init weights --------
         for m in self.modules():
@@ -219,8 +224,113 @@ class Xception(nn.Module):
         if global_pool is None:
             global_pool = self.global_pool.pool_type
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.fc.train(self.training)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor.
+            indices: Take last n features if int, all if None, select matching indices if sequence.
+                Index 0 is the stem output, indices 1-3 the ReLU activated outputs of block1, block2 and block11
+                (the ReLU that starts the following block), index 4 the final (act4) output.
+            norm: Apply norm layer to compatible intermediates (unused, no final norm).
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            Features and list of intermediate features or just intermediate features.
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        last_idx = len(self.feature_ends) - 1
+
+        # forward pass
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.act1(x)
+
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = self.act2(x)
+        if 0 in take_indices:
+            intermediates.append(x)
+
+        num_blocks = self.feature_ends[max_index] if stop_early else self.feature_ends[-1]
+        feat_idx = 1
+        for i in range(1, num_blocks + 1):
+            x = getattr(self, f'block{i}')(x)
+            if feat_idx < last_idx and i == self.feature_ends[feat_idx]:
+                if feat_idx in take_indices:
+                    intermediates.append(F.relu(x))
+                feat_idx += 1
+
+        if intermediates_only and max_index < last_idx:
+            return intermediates
+
+        if num_blocks == self.feature_ends[-1]:
+            x = self.conv3(x)
+            x = self.bn3(x)
+            x = self.act3(x)
+
+            x = self.conv4(x)
+            x = self.bn4(x)
+            x = self.act4(x)
+            if last_idx in take_indices:
+                intermediates.append(x)
+        elif num_blocks > 0:
+            # stopped early at a block tap, the features end at its activation like the tap
+            x = F.relu(x)
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layers (unused, no final norm).
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
+        """
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        num_blocks = self.feature_ends[max_index]
+        prune_end = max_index < len(self.feature_ends) - 1
+        # block taps are the ReLU the next block starts with (as hooked by features_only), it's kept in that block's
+        # place so the features end at the tap, the stem tap (act2) is already activated
+        tap_act = getattr(self, f'block{num_blocks + 1}').rep[0] if prune_end and max_index > 0 else nn.Identity()
+        for i in range(num_blocks + 1, self.feature_ends[-1] + 1):
+            setattr(self, f'block{i}', tap_act if i == num_blocks + 1 else nn.Identity())
+        if prune_end:
+            for n in ('conv3', 'bn3', 'act3', 'conv4', 'bn4', 'act4'):
+                setattr(self, n, nn.Identity())
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         x = self.conv1(x)

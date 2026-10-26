@@ -1533,11 +1533,10 @@ class MaxxVit(nn.Module):
         final_norm_layer = partial(get_norm_layer(cfg.transformer_cfg.norm_layer), eps=cfg.transformer_cfg.norm_eps)
         if cfg.head_hidden_size:
             self.norm = nn.Identity()
-            self.head_hidden_size = cfg.head_hidden_size
             self.head = NormMlpClassifierHead(
                 self.num_features,
                 num_classes,
-                hidden_size=self.head_hidden_size,
+                hidden_size=cfg.head_hidden_size,
                 pool_type=global_pool,
                 drop_rate=drop_rate,
                 norm_layer=final_norm_layer,
@@ -1545,7 +1544,6 @@ class MaxxVit(nn.Module):
             )
         else:
             # standard classifier head w/ norm, pooling, fc classifier
-            self.head_hidden_size = self.num_features
             self.norm = final_norm_layer(self.num_features, **dd)
             self.head = ClassifierHead(
                 self.num_features,
@@ -1554,6 +1552,7 @@ class MaxxVit(nn.Module):
                 drop_rate=drop_rate,
                 **dd,
             )
+        self.head_hidden_size = self.head.num_features
 
         # Weight init (default PyTorch init works well for AdamW if scheme not set)
         assert cfg.weight_init in ('', 'normal', 'trunc_normal', 'xavier_normal', 'vit_eff')
@@ -1628,10 +1627,13 @@ class MaxxVit(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, reset_other: bool = False) -> None:
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool, **dd)
+        self.head.reset(num_classes, global_pool, reset_other=reset_other, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
+        if global_pool is not None:
+            self.global_pool = global_pool  # kept in sync w/ the head, which does the pooling
 
     def forward_intermediates(
             self,
@@ -1695,11 +1697,15 @@ class MaxxVit(nn.Module):
     ) -> Tuple[int, ...]:
         """Prune layers not required for specified intermediates."""
         take_indices, max_index = feature_take_indices(len(self.stages) + 1, indices)
+        prune_end = max_index < len(self.stages)
+        if prune_norm or prune_end:
+            self.norm = nn.Identity()  # final norm is sized for (and only applied to) the last stage
         self.stages = self.stages[:max_index]  # truncate blocks w/ stem as idx 0
-        if prune_norm:
-            self.norm = nn.Identity()
-        if prune_head:
-            self.head = self.reset_classifier(0, '')
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
+            self.reset_classifier(0, '', reset_other=True)
         return take_indices
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:

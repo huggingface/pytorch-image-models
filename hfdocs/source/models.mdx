@@ -3,7 +3,7 @@ and regenerate. -->
 
 # Model Families
 
-`timm` has 1359 architectures in 98 model families, with 1812 pretrained weights. Each family page lists the papers,
+`timm` has 1371 architectures in 98 model families, with 1826 pretrained weights. Each family page lists the papers,
 architectures and pretrained weights of a model module, and which parts of the [Model API](model_api) its models
 support. See the [Quickstart](quickstart) for loading and using the models, the [models reference](reference/models) for
 `create_model` and the pretrained configs, and the [results](results) for the ImageNet validation results of all
@@ -70,7 +70,7 @@ weights.
   groups connected hierarchically, giving several receptive field sizes within one block. Includes Res2NeXt.
 * [ResNeSt](models/resnest) (8 architectures, 8 weights): ResNeSt uses split-attention blocks, channel attention across
   groups of feature map splits, in a ResNet style network.
-* [ResNet](models/resnet) (81 architectures, 149 weights): Residual networks (ResNet) and the variants built on the same
+* [ResNet](models/resnet) (81 architectures, 150 weights): Residual networks (ResNet) and the variants built on the same
   `ResNet` class: ResNeXt grouped convolutions, Squeeze-and-Excitation (SE) and ECA channel attention, deep / tiered
   stems and average pool downsampling (the "c", "d", "s" and "t" variants), anti-aliased downsampling, Wide ResNet and
   ResNet-RS configurations.
@@ -126,7 +126,7 @@ weights.
   Segment Anything 2 (SAM 2), with windowed attention and windowed position embeddings.
 * [MViTv2](models/mvitv2) (8 architectures, 7 weights): Multiscale Vision Transformers v2, a hierarchical transformer
   with pooling attention, decomposed relative position embeddings and residual pooling connections.
-* [NaFlex ViT](models/naflexvit) (8 architectures, 5 weights): A Vision Transformer with the patch embedding and
+* [NaFlex ViT](models/naflexvit) (14 architectures, 11 weights): A Vision Transformer with the patch embedding and
   position encoding in one module, supporting pre-patchified inputs with variable aspect ratio and resolution (NaFlex),
   FlexiViT variable patch size and NaViT factorized position embeddings.
 * [NesT](models/nest) (6 architectures, 3 weights): Nested Transformers (NesT) apply self-attention locally within
@@ -157,7 +157,7 @@ weights.
 * [Vision Transformer (relative position)](models/vision-transformer-relpos) (14 architectures, 9 weights): Vision
   Transformers using relative position biases instead of absolute position embeddings. The module docstring marks these
   models as experimental.
-* [Vision Transformer (ViT)](models/vision-transformer) (157 architectures, 302 weights): The Vision Transformer (ViT)
+* [Vision Transformer (ViT)](models/vision-transformer) (163 architectures, 309 weights): The Vision Transformer (ViT)
   splits an image into fixed size patches, linearly embeds them and processes the resulting token sequence with a
   standard Transformer encoder. This module holds the `VisionTransformer` class and the weights for the original ViT,
   the "How to train your ViT?" (AugReg) and FlexiViT models, and many image-text (CLIP, SigLIP) and self-supervised

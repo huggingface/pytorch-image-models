@@ -581,7 +581,7 @@ class NextViT(nn.Module):
             in_chs = out_chs = self.stage_out_chs[stage_idx][-1]
             stages += [stage]
             idx += depths[stage_idx]
-        self.num_features = self.head_hidden_size = out_chs
+        self.num_features = out_chs
         self.stages = nn.Sequential(*stages)
         self.norm = norm_layer(out_chs, **dd)
         self.head = ClassifierHead(
@@ -591,6 +591,7 @@ class NextViT(nn.Module):
             drop_rate=drop_rate,
             **dd,
         )
+        self.head_hidden_size = self.head.num_features
 
         self.stage_out_idx = [sum(depths[:idx + 1]) - 1 for idx in range(len(depths))]
         self._initialize_weights()
@@ -629,7 +630,8 @@ class NextViT(nn.Module):
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, pool_type=global_pool, **dd)
+        self.head.reset(num_classes, pool_type=global_pool, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
 
     def forward_intermediates(
             self,
@@ -693,10 +695,14 @@ class NextViT(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        prune_end = max_index < len(self.stages) - 1
+        if prune_norm or prune_end:
+            self.norm = nn.Identity()  # final norm is sized for (and only applied to) the last stage
         self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
-        if prune_norm:
-            self.norm = nn.Identity()
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 
@@ -720,8 +726,8 @@ class NextViT(nn.Module):
 
 def checkpoint_filter_fn(state_dict, model):
     """ Remap original checkpoints -> timm """
-    if 'head.fc.weight' in state_dict:
-        return state_dict  # non-original
+    if 'stages.0.blocks.0.mlp.fc1.weight' in state_dict:
+        return state_dict  # timm checkpoint, including headless models; originals use features.0.mlp.conv1
 
     D = model.state_dict()
     out_dict = {}

@@ -804,7 +804,7 @@ class SwinTransformerV2Cr(nn.Module):
         self.in_chans: int = in_chans
         self.patch_size: int = patch_size
         self.img_size: Tuple[int, int] = img_size
-        self.num_features = self.head_hidden_size = int(embed_dim * 2 ** (len(depths) - 1))
+        self.num_features = int(embed_dim * 2 ** (len(depths) - 1))
         self.feature_info = []
 
         self.patch_embed = PatchEmbed(
@@ -864,6 +864,7 @@ class SwinTransformerV2Cr(nn.Module):
             drop_rate=drop_rate,
             **dd,
         )
+        self.head_hidden_size = self.head.num_features
 
         self.weight_init_mode = 'reset' if weight_init == 'skip' else weight_init
         # TODO: skip init when on meta device when safe to do so
@@ -970,11 +971,12 @@ class SwinTransformerV2Cr(nn.Module):
 
         Args:
             num_classes (int): Number of classes to be predicted
-            global_pool (str): Unused
+            global_pool (str): Global pooling type, unchanged if None
         """
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool, **dd)
+        self.head.reset(num_classes, global_pool, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
 
     def forward_intermediates(
             self,
@@ -1027,9 +1029,13 @@ class SwinTransformerV2Cr(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        prune_end = max_index < len(self.stages) - 1
         self.stages = self.stages[:max_index + 1]  # truncate blocks
         self._ref_window_sizes = self._ref_window_sizes[:max_index + 1]
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

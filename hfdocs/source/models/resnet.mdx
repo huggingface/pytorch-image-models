@@ -5,7 +5,7 @@ and regenerate. -->
 
 **Category:** CNN · **Code:**
 [`timm/models/resnet.py`](https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/resnet.py) ·
-**Architectures:** 81 · **Pretrained weights:** 149 (144 with ImageNet-1k results)
+**Architectures:** 81 · **Pretrained weights:** 150 (144 with ImageNet-1k results)
 
 Residual networks (ResNet) and the variants built on the same `ResNet` class: ResNeXt grouped convolutions,
 Squeeze-and-Excitation (SE) and ECA channel attention, deep / tiered stems and average pool downsampling (the "c", "d",
@@ -26,6 +26,10 @@ Squeeze-and-Excitation (SE) and ECA channel attention, deep / tiered stems and a
 * [Billion-scale semi-supervised learning for image classification](https://arxiv.org/abs/1905.00546)
 * [Exploring the Limits of Weakly Supervised Pretraining](https://arxiv.org/abs/1805.00932)
 * [Knapsack Pruning with Inner Distillation](https://arxiv.org/abs/2002.08258)
+
+Referenced by pretrained weights:
+
+* [arXiv:2203.07845](https://arxiv.org/abs/2203.07845)
 
 ## Usage
 
@@ -80,7 +84,7 @@ architectures of the same class are expected to behave the same. See the [Model 
 | `resnet26t` | 16.01 | 3.35 | 256 | 1 |
 | `resnet34` | 21.80 | 3.67 | 224 | 7 |
 | `resnet34d` | 21.82 | 3.91 | 224 | 1 |
-| `resnet50` | 25.56 | 4.11 | 224 | 18 |
+| `resnet50` | 25.56 | 4.11 | 224 | 19 |
 | `resnet50_gn` | 25.56 | 4.14 | 224 | 1 |
 | `resnet50c` | 25.58 | 4.35 | 224 | 1 |
 | `resnet50d` | 25.58 | 4.35 | 224 | 6 |
@@ -367,4 +371,5 @@ Origin: [github.com/facebookresearch/WSL-Images](https://github.com/facebookrese
 |---|---:|---:|---:|---:|---|---|
 | `ecaresnet50t.ra2_in1k` | 256 (test 320) | 82.370 | 320 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/ecaresnet50t.ra2_in1k) |
 | `resnet50.am_in1k` | 224 | 79.004 | 224 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/resnet50.am_in1k) |
+| `resnet50.bamboo` | 224 | - | - | none | - | [timm](https://huggingface.co/timm/resnet50.bamboo) |
 | `test_resnet.r160_in1k` | 160 | 41.602 | 160 | 1000 | apache-2.0 | [timm](https://huggingface.co/timm/test_resnet.r160_in1k) |

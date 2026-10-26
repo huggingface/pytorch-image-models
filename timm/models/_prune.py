@@ -98,6 +98,9 @@ def adapt_model_from_string(parent_module, model_string):
         input_convs = (input_convs,)
 
     new_module = deepcopy(parent_module)
+    # the classifier takes the pooled features, wider than the final features w/ concat pooling (catavgmax)
+    global_pool = getattr(new_module, 'global_pool', None)
+    feat_mult = global_pool.feat_mult() if hasattr(global_pool, 'feat_mult') else 1
     for n, m in parent_module.named_modules():
         old_module = extract_layer(parent_module, n)
         if isinstance(old_module, nn.Conv2d) or isinstance(old_module, Conv2dSame):
@@ -150,15 +153,15 @@ def adapt_model_from_string(parent_module, model_string):
             # FIXME extra checks to ensure this is actually the FC classifier layer and not a diff Linear layer?
             num_features = state_dict[n + '.weight'][1]
             new_fc = Linear(
-                in_features=num_features,
+                in_features=num_features * feat_mult,
                 out_features=old_module.out_features,
                 bias=old_module.bias is not None,
                 **dd,
             )
             set_layer(new_module, n, new_fc)
             if hasattr(new_module, 'num_features'):
-                if getattr(new_module, 'head_hidden_size', 0) == new_module.num_features:
-                    new_module.head_hidden_size = num_features
+                if getattr(new_module, 'head_hidden_size', 0) == new_module.num_features * feat_mult:
+                    new_module.head_hidden_size = num_features * feat_mult
                 new_module.num_features = num_features
 
     new_module.eval()
@@ -166,6 +169,16 @@ def adapt_model_from_string(parent_module, model_string):
 
     # The rebuilt layers have new widths, but feature_info still carries the unpruned channel counts.
     _adapt_feature_info(new_module)
+
+    # Without a Linear classifier (num_classes=0) the feature width isn't adapted above, the final feature is it.
+    old_infos = getattr(parent_module, 'feature_info', None)
+    old_infos = getattr(old_infos, 'info', old_infos)
+    if old_infos and getattr(new_module, 'num_features', None) == old_infos[-1].get('num_chs'):
+        new_infos = getattr(new_module.feature_info, 'info', new_module.feature_info)
+        num_features = new_infos[-1]['num_chs']
+        if getattr(new_module, 'head_hidden_size', 0) == new_module.num_features * feat_mult:
+            new_module.head_hidden_size = num_features * feat_mult
+        new_module.num_features = num_features
 
     return new_module
 

@@ -24,6 +24,7 @@ import torch.nn as nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import ClassifierHead, ConvNormAct, DropPath, calculate_drop_path_rates, get_attn, create_act_layer, make_divisible, get_device_dtype
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._manipulate import named_apply, MATCH_PREV_GROUP
 from ._registry import register_model, generate_default_cfgs
 
@@ -768,9 +769,14 @@ class CspNet(nn.Module):
         )
         prev_chs = stage_feat_info[-1]['num_chs']
         self.feature_info.extend(stage_feat_info)
+        # stem children that are feature taps (the stem tap can come from the stem or stage feature info)
+        stem_names = [n for n, _ in self.stem.named_children()]
+        self.stem_feat_ends = [
+            stem_names.index(f['module'].split('.', 1)[1]) for f in self.feature_info if f['module'].startswith('stem.')
+        ]
 
         # Construct the head
-        self.num_features = self.head_hidden_size = prev_chs
+        self.num_features = prev_chs
         self.head = ClassifierHead(
             in_features=prev_chs,
             num_classes=num_classes,
@@ -778,6 +784,7 @@ class CspNet(nn.Module):
             drop_rate=drop_rate,
             **dd,
         )
+        self.head_hidden_size = self.head.num_features
 
         named_apply(partial(_init_weights, zero_init_last=zero_init_last), self)
 
@@ -804,7 +811,89 @@ class CspNet(nn.Module):
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool, **dd)
+        self.head.reset(num_classes, global_pool, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor.
+            indices: Take last n features if int, all if None, select matching indices if sequence.
+                Index 0 is the stem output (before any stem pooling), the following indices the stage outputs.
+            norm: Apply norm layer to compatible intermediates (unused, no final norm).
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            Features and list of intermediate features or just intermediate features.
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        num_stem_feat = len(self.stem_feat_ends)
+        take_indices, max_index = feature_take_indices(num_stem_feat + len(self.stages), indices)
+
+        # forward pass
+        feat_idx = 0
+        for i, module in enumerate(self.stem):
+            x = module(x)
+            if i in self.stem_feat_ends:
+                if feat_idx in take_indices:
+                    intermediates.append(x)
+                feat_idx += 1
+
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            stages = self.stages
+        else:
+            stages = self.stages[:max(0, max_index - num_stem_feat + 1)]
+        for stage in stages:
+            x = stage(x)
+            if feat_idx in take_indices:
+                intermediates.append(x)
+            feat_idx += 1
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layers (unused, no final norm).
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
+        """
+        num_stem_feat = len(self.stem_feat_ends)
+        take_indices, max_index = feature_take_indices(num_stem_feat + len(self.stages), indices)
+        prune_end = max_index < num_stem_feat + len(self.stages) - 1
+        self.stages = self.stages[:max(0, max_index - num_stem_feat + 1)]
+        if max_index < num_stem_feat:
+            self.stem = self.stem[:self.stem_feat_ends[max_index] + 1]  # stem feature may be taken before the pool
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         x = self.stem(x)

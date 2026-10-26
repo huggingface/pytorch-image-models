@@ -29,7 +29,7 @@ except ImportError:
 
 from timm import __version__
 from ._helpers import _torch_load, load_state_dict
-from ._input import get_model_args, get_model_input_config
+from ._input import _get_global_pool, get_model_args, get_model_input_config
 from ._pretrained import filter_pretrained_cfg
 
 try:
@@ -412,7 +412,7 @@ def save_config_for_hf(
 
     # NOTE these attr saved for informational purposes, do not impact model build
     hf_config['num_features'] = model_config.pop('num_features', model.num_features)
-    global_pool_type = model_config.pop('global_pool', getattr(model, 'global_pool', None))
+    global_pool_type = model_config.pop('global_pool', _get_global_pool(model))
     if isinstance(global_pool_type, str) and global_pool_type:
         hf_config['global_pool'] = global_pool_type
 

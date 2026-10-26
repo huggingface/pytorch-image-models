@@ -35,7 +35,7 @@ class VisionTransformerDistilled(VisionTransformer):
     def __init__(self, *args, **kwargs):
         weight_init = kwargs.pop('weight_init', '')
         super().__init__(*args, **kwargs, weight_init='skip')
-        assert self.global_pool in ('token',)
+        assert self.global_pool in ('token',), 'The distilled head reads the class and distillation tokens.'
         dd = {'device': kwargs.get('device', None), 'dtype': kwargs.get('dtype', None)}
 
         self.num_prefix_tokens = 2
@@ -69,6 +69,7 @@ class VisionTransformerDistilled(VisionTransformer):
         return self.head, self.head_dist
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        assert global_pool in (None, '', 'token'), 'The distilled head reads the class and distillation tokens.'
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()

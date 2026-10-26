@@ -800,12 +800,11 @@ class SwinTransformerV2(nn.Module):
 
         self.num_classes = num_classes
         self.in_chans = in_chans
-        assert global_pool in ('', 'avg')
         self.global_pool = global_pool
         self.output_fmt = 'NHWC'
         self.num_layers = len(depths)
         self.embed_dim = embed_dim
-        self.num_features = self.head_hidden_size = int(embed_dim * 2 ** (self.num_layers - 1))
+        self.num_features = int(embed_dim * 2 ** (self.num_layers - 1))
         self.feature_info = []
 
         if not isinstance(embed_dim, (tuple, list)):
@@ -870,6 +869,7 @@ class SwinTransformerV2(nn.Module):
             input_fmt=self.output_fmt,
             **dd,
         )
+        self.head_hidden_size = self.head.num_features
 
         # TODO: skip init when on meta device when safe to do so
         self.init_weights(needs_reset=False)
@@ -1018,7 +1018,10 @@ class SwinTransformerV2(nn.Module):
         """
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool, **dd)
+        self.head.reset(num_classes, global_pool, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
+        if global_pool is not None:
+            self.global_pool = global_pool  # kept in sync w/ the head, which does the pooling
 
     def forward_intermediates(
             self,
@@ -1053,6 +1056,7 @@ class SwinTransformerV2(nn.Module):
             stages = self.layers
         else:
             stages = self.layers[:max_index + 1]
+        i = 0
         for i, stage in enumerate(stages):
             x = stage(x)
             if i in take_indices:
@@ -1066,7 +1070,8 @@ class SwinTransformerV2(nn.Module):
         if intermediates_only:
             return intermediates
 
-        x = self.norm(x)
+        if i == num_stages - 1:
+            x = self.norm(x)  # final norm is sized for (and only applied to) the last stage
 
         return x, intermediates
 
@@ -1079,11 +1084,15 @@ class SwinTransformerV2(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.layers), indices)
+        prune_end = max_index < len(self.layers) - 1
+        if prune_norm or prune_end:
+            self.norm = nn.Identity()  # final norm is sized for (and only applied to) the last stage
         self.layers = self.layers[:max_index + 1]  # truncate blocks
         self._ref_window_sizes = self._ref_window_sizes[:max_index + 1]
-        if prune_norm:
-            self.norm = nn.Identity()
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 
@@ -1142,7 +1151,9 @@ def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: nn.Module) 
     """
     state_dict = state_dict.get('model', state_dict)
     state_dict = state_dict.get('state_dict', state_dict)
-    native_checkpoint = 'head.fc.weight' in state_dict
+    # original checkpoints downsample at the end of a stage (stage 0 has one), timm at the start (stage 0 has none),
+    # the classifier can't be used to tell them apart, it is absent in headless checkpoints
+    native_checkpoint = 'layers.0.downsample.reduction.weight' not in state_dict
     out_dict = {}
     import re
     for k, v in state_dict.items():

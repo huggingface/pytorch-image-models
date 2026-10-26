@@ -582,6 +582,7 @@ class Beit(nn.Module):
         super().__init__()
         self.num_classes = num_classes
         self.in_chans = in_chans
+        assert global_pool in ('', 'avg', 'token'), 'Only avg or token pooling (or none) is supported.'
         self.global_pool = global_pool
         self.num_features = self.head_hidden_size = self.embed_dim = embed_dim  # for consistency with other models
         self.num_prefix_tokens = 1
@@ -777,6 +778,7 @@ class Beit(nn.Module):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
+            assert global_pool in ('', 'avg', 'token'), 'Only avg or token pooling (or none) is supported.'
             self.global_pool = global_pool
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head.train(self.training)

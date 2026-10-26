@@ -31,6 +31,7 @@ import torch.nn as nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropPath, calculate_drop_path_rates, to_2tuple, trunc_normal_, _assert, get_device_dtype
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
 from ._registry import register_model, generate_default_cfgs
 from .vision_transformer import Block
@@ -341,7 +342,7 @@ class CrossVit(nn.Module):
     ):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
-        assert global_pool in ('token', 'avg')
+        assert global_pool in ('token', 'avg'), 'Only token or avg pooling is supported.'
 
         self.num_classes = num_classes
         self.in_chans = in_chans
@@ -397,6 +398,14 @@ class CrossVit(nn.Module):
             dpr_ptr += curr_depth
             self.blocks.append(blk)
 
+        # Features are tapped from each branch (patch tokens) at the output of every multi-scale block. Ordered
+        # branch-major so that reductions are non-decreasing: index b * num_feature_blocks + i is branch b of block i.
+        self.num_feature_blocks = len(depth)
+        self.feature_info = [
+            dict(num_chs=embed_dim[b], reduction=round(patch_size[b] / img_scale[b]), module=f'blocks.{i}')
+            for b in range(self.num_branches) for i in range(self.num_feature_blocks)
+        ]
+
         self.norm = nn.ModuleList([norm_layer(embed_dim[i], **dd) for i in range(self.num_branches)])
         self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.ModuleList([
@@ -447,7 +456,7 @@ class CrossVit(nn.Module):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
-            assert global_pool in ('token', 'avg')
+            assert global_pool in ('token', 'avg'), 'Only token or avg pooling is supported.'
             self.global_pool = global_pool
         self.head = nn.ModuleList([
             nn.Linear(self.embed_dim[i], num_classes, **dd) if num_classes > 0 else nn.Identity()
@@ -455,7 +464,7 @@ class CrossVit(nn.Module):
         ])
         self.head.train(self.training)
 
-    def forward_features(self, x) -> List[torch.Tensor]:
+    def _embed(self, x: torch.Tensor) -> List[torch.Tensor]:
         B = x.shape[0]
         xs = []
         for i, patch_embed in enumerate(self.patch_embed):
@@ -470,7 +479,104 @@ class CrossVit(nn.Module):
             x_ = x_ + pos_embed
             x_ = self.pos_drop(x_)
             xs.append(x_)
+        return xs
 
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[List[torch.Tensor], List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor.
+            indices: Take last n features if int, all if None, select matching indices if sequence.
+                Features are the patch tokens (class token removed) of each branch at the output of each
+                multi-scale block, ordered by branch then block: with D blocks, indices 0 to D-1 are the
+                small-patch branch 0 outputs and indices D to 2D-1 the large-patch branch 1 outputs.
+            norm: Apply the final norm layer of the matching branch to all intermediates.
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            List of per-branch final features and list of intermediate features, or just intermediate features.
+        """
+        assert output_fmt in ('NCHW', 'NLC'), 'Output format must be one of NCHW or NLC.'
+        reshape = output_fmt == 'NCHW'
+        num_blocks = self.num_feature_blocks
+        take_indices, _ = feature_take_indices(self.num_branches * num_blocks, indices)
+        max_block = max([idx % num_blocks for idx in take_indices])
+
+        # forward pass
+        B = x.shape[0]
+        xs = self._embed(x)
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            blocks = self.blocks
+        else:
+            blocks = self.blocks[:max_block + 1]
+        branch_intermediates: List[List[torch.Tensor]] = [[] for _ in range(self.num_branches)]
+        for i, blk in enumerate(blocks):
+            xs = blk(xs)
+            for b, norm_layer in enumerate(self.norm):
+                if b * num_blocks + i in take_indices:
+                    # normalize intermediates with final norm layer of the branch if enabled, strip class token
+                    y = norm_layer(xs[b]) if norm else xs[b]
+                    branch_intermediates[b].append(y[:, 1:])
+
+        # process intermediates, flatten branch-major to match feature index order
+        intermediates = []
+        for patch_embed, branch_feats in zip(self.patch_embed, branch_intermediates):
+            if reshape:
+                # reshape to BCHW output format
+                H = patch_embed.img_size[0] // patch_embed.patch_size[0]
+                W = patch_embed.img_size[1] // patch_embed.patch_size[1]
+                branch_feats = [y.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous() for y in branch_feats]
+            intermediates.extend(branch_feats)
+
+        if intermediates_only:
+            return intermediates
+
+        xs = [norm_layer(xs[i]) for i, norm_layer in enumerate(self.norm)]
+
+        return xs, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        NOTE: the branches exchange information through the cross attention fusion in each block. When features of
+        only one branch are taken, the fusion into the other branch in the last kept block remains but goes unused,
+        distributed (DDP) training then needs find_unused_parameters=True.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layers.
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
+        """
+        num_blocks = self.num_feature_blocks
+        take_indices, _ = feature_take_indices(self.num_branches * num_blocks, indices)
+        max_block = max([idx % num_blocks for idx in take_indices])
+        self.blocks = self.blocks[:max_block + 1]  # truncate blocks
+        if prune_norm:
+            self.norm = nn.ModuleList([nn.Identity() for _ in range(self.num_branches)])
+        if prune_head:
+            self.reset_classifier(0)
+        return take_indices
+
+    def forward_features(self, x) -> List[torch.Tensor]:
+        xs = self._embed(x)
         for i, blk in enumerate(self.blocks):
             xs = blk(xs)
 
@@ -492,8 +598,9 @@ class CrossVit(nn.Module):
 
 
 def _create_crossvit(variant, pretrained=False, **kwargs):
-    if kwargs.get('features_only', None):
-        raise RuntimeError('features_only not implemented for Vision Transformer models.')
+    # default to the final block output of each branch, the features the model's head uses
+    num_blocks = len(kwargs.get('depth', ((1, 3, 1),) * 3))
+    out_indices = kwargs.pop('out_indices', (num_blocks - 1, 2 * num_blocks - 1))
 
     def pretrained_filter_fn(state_dict):
         new_state_dict = {}
@@ -510,6 +617,7 @@ def _create_crossvit(variant, pretrained=False, **kwargs):
         variant,
         pretrained,
         pretrained_filter_fn=pretrained_filter_fn,
+        feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
         **kwargs,
     )
 

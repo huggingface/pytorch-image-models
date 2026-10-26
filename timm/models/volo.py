@@ -770,6 +770,7 @@ class VOLO(nn.Module):
 
         self.num_classes = num_classes
         self.in_chans = in_chans
+        assert global_pool in ('', 'avg', 'token'), 'Only avg or token pooling (or none) is supported.'
         self.global_pool = global_pool
         self.mix_token = use_mix_token
         self.pooling_scale = pooling_scale
@@ -863,10 +864,9 @@ class VOLO(nn.Module):
             trunc_normal_(self.cls_token, std=.02)
 
         # set output type
-        if use_aux_head:
-            self.aux_head = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
-        else:
-            self.aux_head = None
+        # aux (token labeling) classifier, only present w/ a classifier (num_classes > 0)
+        self.use_aux_head = use_aux_head
+        self.aux_head = nn.Linear(self.num_features, num_classes, **dd) if use_aux_head and num_classes > 0 else None
         self.norm = norm_layer(self.num_features, **dd)
 
         # Classifier head
@@ -947,14 +947,17 @@ class VOLO(nn.Module):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
+            assert global_pool in ('', 'avg', 'token'), 'Only avg or token pooling (or none) is supported.'
+            assert global_pool != 'token' or self.cls_token is not None, 'Token pooling needs the class token.'
             self.global_pool = global_pool
         self.head = nn.Linear(
             self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head.train(self.training)
-        if self.aux_head is not None:
-            self.aux_head = nn.Linear(
-                self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        if self.use_aux_head and num_classes > 0:
+            self.aux_head = nn.Linear(self.num_features, num_classes, **dd)
             self.aux_head.train(self.training)
+        else:
+            self.aux_head = None
 
     def forward_tokens(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through token processing stages.
@@ -966,7 +969,7 @@ class VOLO(nn.Module):
             Token tensor of shape (B, N, C).
         """
         for idx, block in enumerate(self.network):
-            if idx == 2:
+            if idx == 2 and self.pos_embed is not None:
                 # add positional encoding after outlooker blocks
                 x = x + self.pos_embed
                 x = self.pos_drop(x)
@@ -1095,8 +1098,10 @@ class VOLO(nn.Module):
             network = self.network
         else:
             network = self.network[:max_index + 1]
+        last_idx = len(self.network) - 1
+        idx = 0
         for idx, block in enumerate(network):
-            if idx == 2:
+            if idx == 2 and self.pos_embed is not None:
                 # add positional encoding after outlooker blocks
                 x = x + self.pos_embed
                 x = self.pos_drop(x)
@@ -1114,13 +1119,14 @@ class VOLO(nn.Module):
         if intermediates_only:
             return intermediates
 
-        # NOTE not supporting return of class tokens
-        # step3: post network, apply class attention or not
-        B, H, W, C = x.shape
-        x = x.reshape(B, -1, C)
-        if self.post_network is not None:
-            x = self.forward_cls(x)
-        x = self.norm(x)
+        if idx == last_idx:
+            # NOTE not supporting return of class tokens
+            # step3: post network, apply class attention or not (follows the last block, as does the final norm)
+            B, H, W, C = x.shape
+            x = x.reshape(B, -1, C)
+            if self.post_network is not None:
+                x = self.forward_cls(x)
+            x = self.norm(x)
 
         return x, intermediates
 
@@ -1143,12 +1149,24 @@ class VOLO(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+        num_chs = self.feature_info[max_index]['num_chs']
         max_index = self.stage_ends[max_index]
+        prune_end = max_index < len(self.network) - 1
         self.network = self.network[:max_index + 1]  # truncate blocks
+        if max_index < 2:
+            # pos_embed is added and the final norm (embed_dims[-1]) applies after the outlooker blocks (network idx 2)
+            self.pos_embed = None
+            prune_norm = True
         if prune_norm:
             self.norm = nn.Identity()
-        if prune_head:
-            self.post_network = nn.ModuleList()  # prune token blocks with head
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = num_chs
+        if prune_head or prune_end:
+            # prune class token, class attention blocks, and aux (token labeling) classifier with head
+            self.post_network = None
+            self.cls_token = None
+            self.use_aux_head = False  # relies on the class token layout
             self.reset_classifier(0, '')
         return take_indices
 
@@ -1193,8 +1211,8 @@ class VOLO(nn.Module):
         if pre_logits:
             return out
         out = self.head(out)
-        if self.aux_head is not None:
-            # generate classes in all feature tokens, see token labeling
+        if self.aux_head is not None and self.global_pool:
+            # classes from all feature tokens, the max is added to the pooled class predictions, see token labeling
             aux = self.aux_head(x[:, 1:])
             out = out + 0.5 * aux.max(1)[0]
         return out

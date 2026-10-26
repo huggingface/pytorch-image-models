@@ -7,13 +7,14 @@ Papers:
 * `Ensemble Adversarial Training: Attacks and Defenses` - https://arxiv.org/abs/1705.07204
 """
 from functools import partial
-from typing import Type, Optional
+from typing import List, Optional, Tuple, Type, Union
 import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import create_classifier, ConvNormAct, get_device_dtype
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._manipulate import flatten_modules
 from ._registry import register_model, generate_default_cfgs, register_model_deprecations
 
@@ -254,7 +255,7 @@ class InceptionResnetV2(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.in_chans = in_chans
-        self.num_features = self.head_hidden_size = 1536
+        self.num_features = 1536
         assert output_stride == 32
         conv_block = partial(
             ConvNormAct,
@@ -290,6 +291,12 @@ class InceptionResnetV2(nn.Module):
         self.block8 = Block8(no_relu=True, conv_block=conv_block, **dd)
         self.conv2d_7b = conv_block(2080, self.num_features, kernel_size=1, stride=1, **dd)
         self.feature_info += [dict(num_chs=self.num_features, reduction=32, module='conv2d_7b')]
+        # feature layers in forward order, and the layer index of each feature_info tap
+        self.layer_names = [
+            'conv2d_1a', 'conv2d_2a', 'conv2d_2b', 'maxpool_3a', 'conv2d_3b', 'conv2d_4a', 'maxpool_5a',
+            'mixed_5b', 'repeat', 'mixed_6a', 'repeat_1', 'mixed_7a', 'repeat_2', 'block8', 'conv2d_7b',
+        ]
+        self.feature_ends = [self.layer_names.index(info['module']) for info in self.feature_info]
 
         self.global_pool, self.head_drop, self.classif = create_classifier(
             self.num_features,
@@ -298,6 +305,7 @@ class InceptionResnetV2(nn.Module):
             drop_rate=drop_rate,
             **dd,
         )
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
@@ -332,8 +340,79 @@ class InceptionResnetV2(nn.Module):
         if global_pool is None:
             global_pool = self.global_pool.pool_type
         self.global_pool, self.classif = create_classifier(self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.classif.train(self.training)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor.
+            indices: Take last n features if int, all if None, select matching indices if sequence.
+                Indices 0-1 are the stem outputs (conv2d_2b, conv2d_4a), indices 2-3 the outputs of the
+                stride 8 and 16 block repeats (repeat, repeat_1), index 4 the final conv output (conv2d_7b).
+            norm: Apply norm layer to compatible intermediates (unused, no final norm).
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            Features and list of intermediate features or just intermediate features.
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        take_ends = [self.feature_ends[i] for i in take_indices]
+
+        # forward pass
+        layer_names = self.layer_names
+        if stop_early:
+            layer_names = layer_names[:self.feature_ends[max_index] + 1]
+        for i, n in enumerate(layer_names):
+            x = getattr(self, n)(x)
+            if i in take_ends:
+                intermediates.append(x)
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layers (unused, no final norm).
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
+        """
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        prune_end = max_index < len(self.feature_ends) - 1
+        for n in self.layer_names[self.feature_ends[max_index] + 1:]:
+            setattr(self, n, nn.Identity())
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         x = self.conv2d_1a(x)

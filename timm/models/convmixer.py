@@ -3,7 +3,7 @@
 Papers:
 * `Patches Are All You Need?` - https://arxiv.org/abs/2201.09792
 """
-from typing import Optional, Type
+from typing import List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -12,7 +12,8 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import SelectAdaptivePool2d, get_device_dtype
 from ._registry import register_model, generate_default_cfgs
 from ._builder import build_model_with_cfg
-from ._manipulate import checkpoint_seq
+from ._features import feature_take_indices
+from ._manipulate import checkpoint, checkpoint_seq
 
 __all__ = ['ConvMixer']
 
@@ -45,7 +46,7 @@ class ConvMixer(nn.Module):
         dd = {'device': device, 'dtype': dtype}
         self.num_classes = num_classes
         self.in_chans = in_chans
-        self.num_features = self.head_hidden_size = dim
+        self.num_features = dim
         self.grad_checkpointing = False
 
         self.stem = nn.Sequential(
@@ -65,9 +66,11 @@ class ConvMixer(nn.Module):
                     nn.BatchNorm2d(dim, **dd)
             ) for i in range(depth)]
         )
-        self.pooling = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
+        self.feature_info = [dict(num_chs=dim, reduction=patch_size, module=f'blocks.{i}') for i in range(depth)]
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=bool(global_pool))  # no flatten w/o pool
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.head_drop = nn.Dropout(drop_rate)
-        self.head = nn.Linear(dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.head_hidden_size, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
@@ -86,10 +89,79 @@ class ConvMixer(nn.Module):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
-            self.pooling = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
-            self.pooling.train(self.training)
-        self.head = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
+            self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=bool(global_pool))
+            self.global_pool.train(self.training)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
+        self.head = nn.Linear(self.head_hidden_size, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head.train(self.training)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor.
+            indices: Take last n blocks if int, all if None, select matching indices if sequence.
+                Index i is the output of block i.
+            norm: Apply norm layer to compatible intermediates (unused, no final norm).
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            Features and list of intermediate features or just intermediate features.
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.blocks), indices)
+
+        # forward pass
+        x = self.stem(x)
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            blocks = self.blocks
+        else:
+            blocks = self.blocks[:max_index + 1]
+        for i, blk in enumerate(blocks):
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(blk, x)
+            else:
+                x = blk(x)
+            if i in take_indices:
+                intermediates.append(x)
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layers (unused, no final norm).
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
+        """
+        take_indices, max_index = feature_take_indices(len(self.blocks), indices)
+        self.blocks = self.blocks[:max_index + 1]  # truncate blocks
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         x = self.stem(x)
@@ -100,7 +172,7 @@ class ConvMixer(nn.Module):
         return x
 
     def forward_head(self, x, pre_logits: bool = False):
-        x = self.pooling(x)
+        x = self.global_pool(x)
         x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
@@ -111,10 +183,14 @@ class ConvMixer(nn.Module):
 
 
 def _create_convmixer(variant, pretrained=False, **kwargs):
-    if kwargs.get('features_only', None):
-        raise RuntimeError('features_only not implemented for ConvMixer models.')
-
-    return build_model_with_cfg(ConvMixer, variant, pretrained, **kwargs)
+    out_indices = kwargs.pop('out_indices', 3)
+    return build_model_with_cfg(
+        ConvMixer,
+        variant,
+        pretrained,
+        feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
+        **kwargs,
+    )
 
 
 def _cfg(url='', **kwargs):

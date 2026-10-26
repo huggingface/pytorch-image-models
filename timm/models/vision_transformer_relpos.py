@@ -304,8 +304,8 @@ class VisionTransformerRelPos(nn.Module):
         """
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
-        assert global_pool in ('', 'avg', 'token')
-        assert class_token or global_pool != 'token'
+        assert global_pool in ('', 'avg', 'token'), 'Only avg or token pooling (or none) is supported.'
+        assert class_token or global_pool != 'token', 'Token pooling needs the class token.'
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
         act_layer = act_layer or nn.GELU
 
@@ -447,7 +447,8 @@ class VisionTransformerRelPos(nn.Module):
         dd = get_device_dtype(self, device=device, dtype=dtype)
         self.num_classes = num_classes
         if global_pool is not None:
-            assert global_pool in ('', 'avg', 'token')
+            assert global_pool in ('', 'avg', 'token'), 'Only avg or token pooling (or none) is supported.'
+            assert global_pool != 'token' or self.cls_token is not None, 'Token pooling needs the class token.'
             self.global_pool = global_pool
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head.train(self.training)

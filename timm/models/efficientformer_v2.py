@@ -675,7 +675,7 @@ class EfficientFormerV2(nn.Module):
     ):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
-        assert global_pool in ('avg', '')
+        assert global_pool in ('avg', ''), 'Only avg pooling (or none) is supported.'
         self.num_classes = num_classes
         self.in_chans = in_chans
         self.global_pool = global_pool
@@ -772,6 +772,7 @@ class EfficientFormerV2(nn.Module):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
+            assert global_pool in ('', 'avg'), 'Only avg pooling (or none) is supported.'
             self.global_pool = global_pool
         self.head = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head.train(self.training)
@@ -842,10 +843,14 @@ class EfficientFormerV2(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        prune_end = max_index < len(self.stages) - 1
+        if prune_norm or prune_end:
+            self.norm = nn.Identity()  # final norm is sized for (and only applied to) the last stage
         self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
-        if prune_norm:
-            self.norm = nn.Identity()
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

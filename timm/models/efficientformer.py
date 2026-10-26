@@ -422,6 +422,7 @@ class EfficientFormer(nn.Module):
         # bias resolution is fixed at 7x7 (224x224 input).
         self.num_classes = num_classes
         self.in_chans = in_chans
+        assert global_pool in ('', 'avg'), 'Only avg pooling (or none) is supported.'
         self.global_pool = global_pool
 
         self.stem = Stem4(in_chans, embed_dims[0], norm_layer=norm_layer, **dd)
@@ -497,9 +498,14 @@ class EfficientFormer(nn.Module):
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         dd = get_device_dtype(self)
-        self.num_classes = num_classes
         if global_pool is not None:
-            self.global_pool = global_pool
+            assert global_pool in ('', 'avg'), 'Only avg pooling (or none) is supported.'
+        global_pool = self.global_pool if global_pool is None else global_pool
+        # the head pools the final stage tokens, w/ that stage pruned (prune_intermediate_layers) the output is NCHW
+        assert len(self.stages) == self.num_stages or not (num_classes or global_pool), \
+            'Pooling / classifier not supported once the final stage is pruned.'
+        self.num_classes = num_classes
+        self.global_pool = global_pool
         self.head = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head.train(self.training)
         self.head_dist = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
@@ -572,10 +578,14 @@ class EfficientFormer(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        prune_end = max_index < len(self.stages) - 1
+        if prune_norm or prune_end:
+            self.norm = nn.Identity()  # final norm is sized for (and only applied to) the last stage
         self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
-        if prune_norm:
-            self.norm = nn.Identity()
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 

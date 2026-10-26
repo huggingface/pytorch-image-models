@@ -9,7 +9,7 @@ DLA original adapted from Official Pytorch impl at: https://github.com/ucbdrive/
 Res2Net additions from: https://github.com/gasvn/Res2Net/
 """
 import math
-from typing import List, Optional, Tuple, Type
+from typing import List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -17,6 +17,7 @@ import torch.nn as nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import create_classifier, get_device_dtype
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['DLA']
@@ -389,7 +390,7 @@ class DLA(nn.Module):
             dict(num_chs=channels[5], reduction=32, module='level5'),
         ]
 
-        self.num_features = self.head_hidden_size = channels[-1]
+        self.num_features = channels[-1]
         self.global_pool, self.head_drop, self.fc = create_classifier(
             self.num_features,
             self.num_classes,
@@ -398,6 +399,7 @@ class DLA(nn.Module):
             drop_rate=drop_rate,
             **dd,
         )
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
 
         for m in self.modules():
@@ -456,10 +458,81 @@ class DLA(nn.Module):
             global_pool = self.global_pool.pool_type
         self.global_pool, self.fc = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, use_conv=True, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.fc.train(self.training)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
         self.flatten.train(self.training)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor.
+            indices: Take last n features if int, all if None, select matching indices if sequence.
+                Indices 0-5 are the outputs of level0 (stride 1) to level5 (stride 32).
+            norm: Apply norm layer to compatible intermediates (unused, no final norm).
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            Features and list of intermediate features or just intermediate features.
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(6, indices)
+
+        # forward pass
+        x = self.base_layer(x)
+        level_names = ('level0', 'level1', 'level2', 'level3', 'level4', 'level5')
+        if stop_early:
+            level_names = level_names[:max_index + 1]
+        for feat_idx, n in enumerate(level_names):
+            x = getattr(self, n)(x)
+            if feat_idx in take_indices:
+                intermediates.append(x)
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layers (unused, no final norm).
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
+        """
+        take_indices, max_index = feature_take_indices(6, indices)
+        prune_end = max_index < 5
+        level_names = ('level0', 'level1', 'level2', 'level3', 'level4', 'level5')
+        for n in level_names[max_index + 1:]:
+            setattr(self, n, nn.Identity())
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         x = self.base_layer(x)

@@ -588,7 +588,6 @@ class CSATv2(nn.Module):
         self.grad_checkpointing = False
 
         self.num_features = dims[-1]
-        self.head_hidden_size = self.num_features
 
         # Build feature_info dynamically
         self.feature_info = [dict(num_chs=dims[0], reduction=8, module='stem_dct')]
@@ -626,6 +625,7 @@ class CSATv2(nn.Module):
         self.stages = nn.Sequential(*stages)
 
         self.head = NormMlpClassifierHead(dims[-1], num_classes, pool_type=global_pool, drop_rate=drop_rate, **dd)
+        self.head_hidden_size = self.head.num_features
 
         # TODO: skip init when on meta device when safe to do so
         self.init_weights(needs_reset=False)
@@ -645,12 +645,19 @@ class CSATv2(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, reset_other: bool = False) -> None:
         dd = get_device_dtype(self)
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
-        self.head.reset(num_classes, pool_type=global_pool, **dd)
+        self.head.reset(
+            num_classes,
+            pool_type=global_pool,
+            reset_other=reset_other,
+            in_features=self.num_features,
+            **dd,
+        )
+        self.head_hidden_size = self.head.num_features
 
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable: bool = True) -> None:
@@ -732,13 +739,17 @@ class CSATv2(nn.Module):
         """
         # 5 feature levels: stem_dct (0) + stages 0-3 (1-4)
         take_indices, max_index = feature_take_indices(len(self.stages) + 1, indices)
+        prune_end = max_index < len(self.stages)
         # max_index is 0-4, stages are 1-4, so we keep max_index stages
         self.stages = self.stages[:max_index] if max_index > 0 else nn.Sequential()
 
         if prune_norm:
             self.head.norm = nn.Identity()
-        if prune_head:
-            self.reset_classifier(0, '')
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
+            self.reset_classifier(0, '', reset_other=True)
 
         return take_indices
 

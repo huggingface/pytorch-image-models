@@ -351,6 +351,22 @@ def test_export_tracks_reset_pool_and_omits_in_memory_weight_source(tmp_path):
     torch.testing.assert_close(restored.fc.weight, model.fc.weight, rtol=0, atol=0)
 
 
+@pytest.mark.parametrize('model_name,num_classes,pool', [
+    ('test_byobnet', 3, 'max'),  # ClassifierHead pools, the model level global_pool str is not reset
+    ('test_byobnet', 0, ''),
+    ('test_mambaout', 0, ''),  # head pool_type only
+])
+def test_export_tracks_reset_pool_in_head(tmp_path, model_name, num_classes, pool):
+    model = timm.create_model(model_name, num_classes=7).eval()
+    model.reset_classifier(num_classes, global_pool=pool)
+    assert get_model_args(model)['global_pool'] == pool
+    save_for_hf(model, tmp_path)
+    restored = timm.create_model('local-dir:' + str(tmp_path), pretrained=True).eval()
+    x = torch.randn(1, 3, 64, 64)
+    with torch.no_grad():
+        torch.testing.assert_close(restored(x), model(x), rtol=0, atol=0)
+
+
 @pytest.mark.parametrize('vit', [False, True])
 def test_export_does_not_inherit_training_regularization(tmp_path, vit):
     rates = dict(drop_rate=0.2, drop_path_rate=0.1)

@@ -513,31 +513,28 @@ def build_model_with_cfg(
 
     # Wrap the model in a feature extraction module if enabled
     if features:
-        use_getter = False
-        if 'feature_cls' in feature_cfg:
-            feature_cls = feature_cfg.pop('feature_cls')
-            if isinstance(feature_cls, str):
-                feature_cls = feature_cls.lower()
-
-                # flatten_sequential only valid for some feature extractors
-                if feature_cls not in ('dict', 'list', 'hook'):
-                    feature_cfg.pop('flatten_sequential', None)
-
-                if 'hook' in feature_cls:
-                    feature_cls = FeatureHookNet
-                elif feature_cls == 'list':
-                    feature_cls = FeatureListNet
-                elif feature_cls == 'dict':
-                    feature_cls = FeatureDictNet
-                elif feature_cls == 'fx':
-                    feature_cls = FeatureGraphNet
-                elif feature_cls == 'getter':
-                    use_getter = True
-                    feature_cls = FeatureGetterNet
-                else:
-                    assert False, f'Unknown feature class {feature_cls}'
-        else:
-            feature_cls = FeatureListNet
+        feature_cls = feature_cfg.pop('feature_cls', FeatureListNet)
+        if isinstance(feature_cls, str):
+            feature_cls = feature_cls.lower()
+            if 'hook' in feature_cls:
+                feature_cls = FeatureHookNet
+            elif feature_cls == 'list':
+                feature_cls = FeatureListNet
+            elif feature_cls == 'dict':
+                feature_cls = FeatureDictNet
+            elif feature_cls == 'fx':
+                feature_cls = FeatureGraphNet
+            elif feature_cls == 'getter':
+                feature_cls = FeatureGetterNet
+            else:
+                assert False, f'Unknown feature class {feature_cls}'
+        is_cls = isinstance(feature_cls, type)
+        use_getter = is_cls and issubclass(feature_cls, FeatureGetterNet)
+        # flatten_sequential only valid for some feature extractors, no_rewrite only for the hook extractor
+        if not (is_cls and issubclass(feature_cls, (FeatureDictNet, FeatureHookNet))):
+            feature_cfg.pop('flatten_sequential', None)
+        if not (is_cls and issubclass(feature_cls, FeatureHookNet)):
+            feature_cfg.pop('no_rewrite', None)
 
         output_fmt = getattr(model, 'output_fmt', None)
         if output_fmt is not None and not use_getter:  # don't set default for intermediate feat getter

@@ -1245,6 +1245,12 @@ class Stem(nn.Sequential):
                 intermediate = x
         return x, intermediate
 
+    def prune_to_tap(self):
+        """Remove the layers after the intermediate feature so the stem outputs it (for prune_intermediate_layers)."""
+        if self.last_feat_idx is not None:
+            for n in list(self._modules)[self.last_feat_idx + 1:]:
+                setattr(self, n, nn.Identity())
+
 
 def create_byob_stem(
         in_chs: int,
@@ -1558,7 +1564,6 @@ class ByobNet(nn.Module):
             dict(num_chs=self.num_features, reduction=reduction, module='final_conv', stage=len(self.stages))]
         self.stage_ends = [f['stage'] for f in self.feature_info]
 
-        self.head_hidden_size = self.num_features
         assert cfg.head_type in ('', 'classifier', 'mlp', 'attn_abs', 'attn_rot')
         if cfg.head_type == 'mlp':
             if global_pool is None:
@@ -1573,11 +1578,11 @@ class ByobNet(nn.Module):
                 drop_rate=self.drop_rate,
                 **dd,
             )
-            self.head_hidden_size = self.head.hidden_size
+            self.head_hidden_size = self.head.num_features
         elif cfg.head_type == 'attn_abs':
             if global_pool is None:
                 global_pool = 'token'
-            assert global_pool in ('', 'token')
+            assert global_pool in ('', 'token'), 'Only token pooling (or none) is supported.'
             self.head = AttentionPool2d(
                 self.num_features,
                 embed_dim=cfg.head_hidden_size,
@@ -1592,7 +1597,7 @@ class ByobNet(nn.Module):
         elif cfg.head_type == 'attn_rot':
             if global_pool is None:
                 global_pool = 'token'
-            assert global_pool in ('', 'token')
+            assert global_pool in ('', 'token'), 'Only token pooling (or none) is supported.'
             self.head = RotAttentionPool2d(
                 self.num_features,
                 embed_dim=cfg.head_hidden_size,
@@ -1615,6 +1620,7 @@ class ByobNet(nn.Module):
                 drop_rate=self.drop_rate,
                 **dd,
             )
+            self.head_hidden_size = self.head.num_features
         self.global_pool = global_pool
 
         # init weights
@@ -1659,16 +1665,23 @@ class ByobNet(nn.Module):
             return self.head.proj
         return self.head.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, reset_other: bool = False) -> None:
         """Reset classifier.
 
         Args:
             num_classes: Number of classes for new classifier.
             global_pool: Global pooling type.
+            reset_other: Reset the non-classifier head layers (norm, pre-logits).
         """
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool, **dd)
+        if isinstance(self.head, (AttentionPool2d, RotAttentionPool2d)):
+            self.head.reset(num_classes, global_pool, **dd)  # attention pooling input width is fixed
+        else:
+            self.head.reset(num_classes, global_pool, reset_other=reset_other, in_features=self.num_features, **dd)
+            self.head_hidden_size = self.head.num_features
+        if global_pool is not None:
+            self.global_pool = global_pool  # kept in sync w/ the head, which does the pooling
 
     def forward_intermediates(
             self,
@@ -1749,12 +1762,26 @@ class ByobNet(nn.Module):
             List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+        num_chs = self.feature_info[max_index]['num_chs']
         max_index = self.stage_ends[max_index]
+        prune_end = max_index < self.stage_ends[-1]
         self.stages = self.stages[:max_index]  # truncate blocks w/ stem as idx 0
-        if max_index < self.stage_ends[-1]:
+        if prune_end:
             self.final_conv = nn.Identity()
-        if prune_head:
-            self.reset_classifier(0, '')
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = num_chs
+        if max_index == 0 and isinstance(self.stem, Stem):
+            self.stem.prune_to_tap()  # stem feature may be taken before the final stem conv / pool
+        if prune_head or prune_end:
+            if isinstance(self.head, (AttentionPool2d, RotAttentionPool2d)):
+                # attention pooling is the head, replace w/ a parameter free one that passes features through
+                self.head = ClassifierHead(self.num_features, 0, pool_type='', **get_device_dtype(self))
+                self.head.train(self.training)
+                self.num_classes = 0
+                self.global_pool = ''
+                self.head_hidden_size = self.num_features
+            else:
+                self.reset_classifier(0, '', reset_other=True)
         return take_indices
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:

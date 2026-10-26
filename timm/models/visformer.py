@@ -8,7 +8,7 @@ From original at https://github.com/danczs/Visformer
 Modifications and additions for timm hacked together by / Copyright 2021, Ross Wightman
 """
 
-from typing import Optional, Union, Type, Any
+from typing import Any, List, Optional, Tuple, Type, Union
 import torch
 import torch.nn as nn
 
@@ -16,6 +16,7 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import to_2tuple, trunc_normal_, DropPath, calculate_drop_path_rates, PatchEmbed, LayerNorm2d, create_classifier, use_fused_attn, get_device_dtype
 
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
 from ._registry import register_model, generate_default_cfgs
 
@@ -241,6 +242,7 @@ class Visformer(nn.Module):
                 **dd,
             )
             img_size = [x // patch_size for x in img_size]
+            reduction = patch_size
         else:
             if self.init_channels is None:
                 self.stem = None
@@ -254,6 +256,7 @@ class Visformer(nn.Module):
                     **dd,
                 )
                 img_size = [x // (patch_size // 2) for x in img_size]
+                reduction = patch_size // 2
             else:
                 self.stem = nn.Sequential(
                     nn.Conv2d(in_chans, self.init_channels, 7, stride=2, padding=3, bias=False, **dd),
@@ -271,6 +274,7 @@ class Visformer(nn.Module):
                     **dd,
                 )
                 img_size = [x // (patch_size // 4) for x in img_size]
+                reduction = 2 * (patch_size // 4)
 
         if self.use_pos_embed:
             if self.vit_stem:
@@ -298,6 +302,8 @@ class Visformer(nn.Module):
             )
             for i in range(self.stage_num1)
         ])
+        self.feature_info = [
+            dict(num_chs=embed_dim if self.vit_stem else embed_dim // 2, reduction=reduction, module='stage1')]
 
         # stage2
         if not self.vit_stem:
@@ -311,12 +317,14 @@ class Visformer(nn.Module):
                 **dd,
             )
             img_size = [x // (patch_size // 8) for x in img_size]
+            reduction *= patch_size // 8
             if self.use_pos_embed:
                 self.pos_embed2 = nn.Parameter(torch.zeros(1, embed_dim, *img_size, **dd))
             else:
                 self.pos_embed2 = None
         else:
             self.patch_embed2 = None
+            self.pos_embed2 = None
         self.stage2 = nn.Sequential(*[
             Block(
                 dim=embed_dim,
@@ -334,6 +342,7 @@ class Visformer(nn.Module):
             )
             for i in range(self.stage_num1, self.stage_num1+self.stage_num2)
         ])
+        self.feature_info += [dict(num_chs=embed_dim, reduction=reduction, module='stage2')]
 
         # stage 3
         if not self.vit_stem:
@@ -347,12 +356,14 @@ class Visformer(nn.Module):
                 **dd,
             )
             img_size = [x // (patch_size // 8) for x in img_size]
+            reduction *= patch_size // 8
             if self.use_pos_embed:
                 self.pos_embed3 = nn.Parameter(torch.zeros(1, embed_dim*2, *img_size, **dd))
             else:
                 self.pos_embed3 = None
         else:
             self.patch_embed3 = None
+            self.pos_embed3 = None
         self.stage3 = nn.Sequential(*[
             Block(
                 dim=embed_dim * 2,
@@ -371,7 +382,8 @@ class Visformer(nn.Module):
             for i in range(self.stage_num1+self.stage_num2, depth)
         ])
 
-        self.num_features = self.head_hidden_size = embed_dim if self.vit_stem else embed_dim * 2
+        self.num_features = embed_dim if self.vit_stem else embed_dim * 2
+        self.feature_info += [dict(num_chs=self.num_features, reduction=reduction, module='stage3')]
         self.norm = norm_layer(self.num_features, **dd)
 
         # head
@@ -383,6 +395,7 @@ class Visformer(nn.Module):
             dtype=dtype,
         )
         self.global_pool = global_pool
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.head_drop = nn.Dropout(drop_rate)
         self.head = head
 
@@ -433,8 +446,102 @@ class Visformer(nn.Module):
             global_pool = self.global_pool.pool_type
         self.global_pool, self.head = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.head.train(self.training)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor.
+            indices: Take last n features if int, all if None, select matching indices if sequence.
+                Indices 0-2 are the outputs of stages 1-3.
+            norm: Apply the final norm layer to the last intermediate.
+            stop_early: Stop iterating over stages when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            Features and list of intermediate features or just intermediate features.
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        stages = [
+            (self.patch_embed1, self.pos_embed1, self.stage1),
+            (self.patch_embed2, self.pos_embed2, self.stage2),
+            (self.patch_embed3, self.pos_embed3, self.stage3),
+        ]
+        last_idx = len(stages) - 1
+        take_indices, max_index = feature_take_indices(len(stages), indices)
+        if stop_early:
+            stages = stages[:max_index + 1]
+
+        # forward pass
+        if self.stem is not None:
+            x = self.stem(x)
+        for feat_idx, (patch_embed, pos_embed, stage) in enumerate(stages):
+            if patch_embed is not None:
+                x = patch_embed(x)
+            if pos_embed is not None:
+                x = self.pos_drop(x + pos_embed)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint_seq(stage, x)
+            else:
+                x = stage(x)
+            if feat_idx in take_indices:
+                if norm and feat_idx == last_idx:
+                    intermediates.append(self.norm(x))
+                else:
+                    intermediates.append(x)
+
+        if intermediates_only:
+            return intermediates
+
+        if len(stages) == last_idx + 1:
+            x = self.norm(x)
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune the final normalization layer.
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
+        """
+        take_indices, max_index = feature_take_indices(3, indices)
+        # stages (and their patch / pos embeds) are named 1-3, remove those after the last needed stage
+        for n in range(max_index + 2, 4):
+            setattr(self, f'patch_embed{n}', None)
+            setattr(self, f'pos_embed{n}', None)
+            setattr(self, f'stage{n}', nn.Sequential())
+        prune_end = max_index < 2
+        if prune_norm or prune_end:
+            self.norm = nn.Identity()
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         if self.stem is not None:
@@ -484,9 +591,14 @@ class Visformer(nn.Module):
 
 
 def _create_visformer(variant, pretrained=False, default_cfg=None, **kwargs):
-    if kwargs.get('features_only', None):
-        raise RuntimeError('features_only not implemented for Vision Transformer models.')
-    model = build_model_with_cfg(Visformer, variant, pretrained, **kwargs)
+    out_indices = kwargs.pop('out_indices', (0, 1, 2))
+    model = build_model_with_cfg(
+        Visformer,
+        variant,
+        pretrained,
+        feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
+        **kwargs,
+    )
     return model
 
 

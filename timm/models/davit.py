@@ -611,7 +611,7 @@ class DaVit(nn.Module):
         norm_layer_cl = partial(get_norm_layer(norm_layer_cl), eps=norm_eps)
         self.num_classes = num_classes
         self.in_chans = in_chans
-        self.num_features = self.head_hidden_size = embed_dims[-1]
+        self.num_features = embed_dims[-1]
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
         self.feature_info = []
@@ -671,6 +671,7 @@ class DaVit(nn.Module):
                 norm_layer=norm_layer,
                 **dd,
             )
+        self.head_hidden_size = self.head.num_features
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -700,10 +701,11 @@ class DaVit(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, reset_other: bool = False):
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool, **dd)
+        self.head.reset(num_classes, global_pool, reset_other=reset_other, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
 
     def forward_intermediates(
             self,
@@ -767,11 +769,15 @@ class DaVit(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        prune_end = max_index < len(self.stages) - 1
+        if prune_norm or prune_end:
+            self.norm_pre = nn.Identity()  # final norm is sized for (and only applied to) the last stage
         self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
-        if prune_norm:
-            self.norm_pre = nn.Identity()
-        if prune_head:
-            self.reset_classifier(0, '')
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
+            self.reset_classifier(0, '', reset_other=True)
         return take_indices
 
     def forward_features(self, x):
@@ -822,11 +828,11 @@ def _convert_florence2(state_dict, model, prefix='vision_tower.'):
 
 def checkpoint_filter_fn(state_dict, model):
     """ Remap MSFT checkpoints -> timm """
-    if 'head.fc.weight' in state_dict:
-        return state_dict  # non-MSFT checkpoint
-
     if 'state_dict' in state_dict:
         state_dict = state_dict['state_dict']
+
+    if 'stem.conv.weight' in state_dict:
+        return state_dict  # timm checkpoint, w/ or w/o the classifier
 
     if 'vision_tower.convs.0.proj.weight' in state_dict:
         return _convert_florence2(state_dict, model)

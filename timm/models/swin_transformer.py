@@ -851,7 +851,6 @@ class SwinTransformer(nn.Module):
         if dynamic_img_size:
             strict_img_size = False
         self.dynamic_img_size = not strict_img_size
-        assert global_pool in ('', 'avg')
         self.num_classes = num_classes
         self.in_chans = in_chans
         self.global_pool = global_pool
@@ -859,7 +858,7 @@ class SwinTransformer(nn.Module):
 
         self.num_layers = len(depths)
         self.embed_dim = embed_dim
-        self.num_features = self.head_hidden_size = int(embed_dim * 2 ** (self.num_layers - 1))
+        self.num_features = int(embed_dim * 2 ** (self.num_layers - 1))
         self.feature_info = []
 
         if not isinstance(embed_dim, (tuple, list)):
@@ -929,6 +928,7 @@ class SwinTransformer(nn.Module):
             input_fmt=self.output_fmt,
             **dd,
         )
+        self.head_hidden_size = self.head.num_features
 
         self.weight_init_mode = 'reset' if weight_init == 'skip' else weight_init
         # TODO: skip init when on meta device when safe to do so
@@ -1049,7 +1049,10 @@ class SwinTransformer(nn.Module):
         """
         dd = get_device_dtype(self)
         self.num_classes = num_classes
-        self.head.reset(num_classes, pool_type=global_pool, **dd)
+        self.head.reset(num_classes, pool_type=global_pool, in_features=self.num_features, **dd)
+        self.head_hidden_size = self.head.num_features
+        if global_pool is not None:
+            self.global_pool = global_pool  # kept in sync w/ the head, which does the pooling
 
     def forward_intermediates(
             self,
@@ -1085,6 +1088,7 @@ class SwinTransformer(nn.Module):
             stages = self.layers
         else:
             stages = self.layers[:max_index + 1]
+        i = 0
         for i, stage in enumerate(stages):
             x = stage(x)
             if i in take_indices:
@@ -1098,7 +1102,8 @@ class SwinTransformer(nn.Module):
         if intermediates_only:
             return intermediates
 
-        x = self.norm(x)
+        if i == num_stages - 1:
+            x = self.norm(x)  # final norm is sized for (and only applied to) the last stage
 
         return x, intermediates
 
@@ -1119,11 +1124,15 @@ class SwinTransformer(nn.Module):
             List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(len(self.layers), indices)
+        prune_end = max_index < len(self.layers) - 1
+        if prune_norm or prune_end:
+            self.norm = nn.Identity()  # final norm is sized for (and only applied to) the last stage
         self.layers = self.layers[:max_index + 1]  # truncate blocks
         self._ref_window_sizes = self._ref_window_sizes[:max_index + 1]
-        if prune_norm:
-            self.norm = nn.Identity()
-        if prune_head:
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
             self.reset_classifier(0, '')
         return take_indices
 
@@ -1170,13 +1179,13 @@ def checkpoint_filter_fn(state_dict: dict, model: nn.Module) -> Dict[str, torch.
     Returns:
         Filtered state dictionary.
     """
-    old_weights = True
-    if 'head.fc.weight' in state_dict:
-        old_weights = False
     import re
     out_dict = {}
     state_dict = state_dict.get('model', state_dict)
     state_dict = state_dict.get('state_dict', state_dict)
+    # original checkpoints downsample at the end of a stage (stage 0 has one), timm at the start (stage 0 has none),
+    # the classifier can't be used to tell them apart, it is absent in headless checkpoints
+    old_weights = 'layers.0.downsample.reduction.weight' in state_dict
     for k, v in state_dict.items():
         if any([n in k for n in ('relative_position_index', 'attn_mask')]):
             continue  # skip buffers that should not be persistent

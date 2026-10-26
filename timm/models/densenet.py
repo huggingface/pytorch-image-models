@@ -18,6 +18,7 @@ from torch.jit.annotations import List
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import BatchNormAct2d, get_norm_act_layer, BlurPool2d, create_classifier, get_device_dtype
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._manipulate import MATCH_PREV_GROUP, checkpoint
 from ._registry import register_model, generate_default_cfgs, register_model_deprecations
 
@@ -334,7 +335,10 @@ class DenseNet(nn.Module):
         self.features.add_module('norm5', norm_layer(num_features, **dd))
 
         self.feature_info += [dict(num_chs=num_features, reduction=current_stride, module='features.norm5')]
-        self.num_features = self.head_hidden_size = num_features
+        # positions of the feature taps within self.features, used by forward_intermediates
+        feat_names = [n for n, _ in self.features.named_children()]
+        self.feature_ends = [feat_names.index(f['module'].split('.', 1)[1]) for f in self.feature_info]
+        self.num_features = num_features
 
         # Linear layer
         global_pool, classifier = create_classifier(
@@ -344,6 +348,7 @@ class DenseNet(nn.Module):
             **dd,
         )
         self.global_pool = global_pool
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.head_drop = nn.Dropout(drop_rate)
         self.classifier = classifier
 
@@ -394,8 +399,81 @@ class DenseNet(nn.Module):
             global_pool = self.global_pool.pool_type
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, **dd)
+        self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.global_pool.train(self.training)
         self.classifier.train(self.training)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor.
+            indices: Take last n features if int, all if None, select matching indices if sequence.
+                Index 0 is the stem output (before pooling), indices 1-3 the outputs of the first three dense blocks
+                (before their transitions), index 4 the final norm output.
+            norm: Apply norm layer to compatible intermediates (unused, the last feature is the final norm output).
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
+
+        Returns:
+            Features and list of intermediate features or just intermediate features.
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+
+        # forward pass
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            layers = self.features
+        else:
+            layers = self.features[:self.feature_ends[max_index] + 1]
+        feat_idx = 0
+        for i, layer in enumerate(layers):
+            x = layer(x)
+            if i in self.feature_ends:
+                if feat_idx in take_indices:
+                    intermediates.append(x)
+                feat_idx += 1
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layers (unused, the final norm is the last feature).
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
+        """
+        take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
+        prune_end = max_index < len(self.feature_ends) - 1
+        self.features = self.features[:self.feature_ends[max_index] + 1]
+        if prune_end:
+            # features now end at the last kept tap, the head is sized for the final features so it goes too
+            self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        if prune_head or prune_end:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through feature extraction layers."""
