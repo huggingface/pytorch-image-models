@@ -495,23 +495,23 @@ _MMDET_RSB_URL = 'https://download.openmmlab.com/mmdetection/v3.0/rtmdet/cspnext
 default_cfgs = generate_default_cfgs({
     # ImageNet-1k pretrained CSPNeXt from OpenMMLab (RTMDet), converted to timm format
     'cspnext_tiny.rsb_a1_in1k': _cfg(
-        hf_hub_id='timm/',
+        hf_hub_id='munehiro-k/cspnext_tiny.rsb_a1_in1k',
         notes=(f'Converted from {_MMDET_RSB_URL}cspnext-tiny_imagenet_600e-3a2dd350.pth', _NAME_NOTE),
     ),
     'cspnext_s.rsb_a1_in1k': _cfg(
-        hf_hub_id='timm/',
+        hf_hub_id='munehiro-k/cspnext_s.rsb_a1_in1k',
         notes=(f'Converted from {_MMDET_RSB_URL}cspnext-s_imagenet_600e-ea671761.pth', _NAME_NOTE),
     ),
     'cspnext_m.rsb_a1_in1k': _cfg(
-        hf_hub_id='timm/',
+        hf_hub_id='munehiro-k/cspnext_m.rsb_a1_in1k',
         notes=(f'Converted from {_MMDET_RSB_URL}cspnext-m_8xb256-rsb-a1-600e_in1k-ecb3bbd9.pth', _NAME_NOTE),
     ),
     'cspnext_l.rsb_a1_in1k': _cfg(
-        hf_hub_id='timm/',
+        hf_hub_id='munehiro-k/cspnext_l.rsb_a1_in1k',
         notes=(f'Converted from {_MMDET_RSB_URL}cspnext-l_8xb256-rsb-a1-600e_in1k-6a760974.pth', _NAME_NOTE),
     ),
     'cspnext_x.rsb_a1_in1k': _cfg(
-        hf_hub_id='timm/',
+        hf_hub_id='munehiro-k/cspnext_x.rsb_a1_in1k',
         notes=(f'Converted from {_MMDET_RSB_URL}cspnext-x_8xb256-rsb-a1-600e_in1k-b3f78edd.pth', _NAME_NOTE),
     ),
 })
