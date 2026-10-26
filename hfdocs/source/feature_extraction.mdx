@@ -222,7 +222,7 @@ torch.Size([2, 2048, 40, 40])
 
 ## Flexible intermediate feature map extraction
 
-In addition to using `features_only` with the model factory, many models support a `forward_intermediates()` method which provides a flexible mechanism for extracting both the intermediate feature maps and the last hidden state (which can be chained to the head). Additionally this method supports some model specific features such as returning class or distill prefix tokens for some models.
+In addition to using `features_only` with the model factory, all models support a `forward_intermediates()` method which provides a flexible mechanism for extracting both the intermediate feature maps and the last hidden state (which can be chained to the head). Additionally this method supports some model specific features such as returning class or distill prefix tokens for some models.
 
 Accompanying the `forward_intermediates` function is a `prune_intermediate_layers` function that allows one to prune layers from the model, including both the head, final norm, and/or trailing blocks/stages that are not needed. 
 

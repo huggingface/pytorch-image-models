@@ -290,6 +290,9 @@ class Xception(nn.Module):
             x = self.act4(x)
             if last_idx in take_indices:
                 intermediates.append(x)
+        elif num_blocks > 0:
+            # stopped early at a block tap, the features end at its activation like the tap
+            x = F.relu(x)
 
         if intermediates_only:
             return intermediates
@@ -313,9 +316,13 @@ class Xception(nn.Module):
             List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
-        for i in range(self.feature_ends[max_index] + 1, self.feature_ends[-1] + 1):
-            setattr(self, f'block{i}', nn.Identity())
+        num_blocks = self.feature_ends[max_index]
         prune_end = max_index < len(self.feature_ends) - 1
+        # block taps are the ReLU the next block starts with (as hooked by features_only), it's kept in that block's
+        # place so the features end at the tap, the stem tap (act2) is already activated
+        tap_act = getattr(self, f'block{num_blocks + 1}').rep[0] if prune_end and max_index > 0 else nn.Identity()
+        for i in range(num_blocks + 1, self.feature_ends[-1] + 1):
+            setattr(self, f'block{i}', tap_act if i == num_blocks + 1 else nn.Identity())
         if prune_end:
             for n in ('conv3', 'bn3', 'act3', 'conv4', 'bn4', 'act4'):
                 setattr(self, n, nn.Identity())

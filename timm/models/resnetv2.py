@@ -593,7 +593,7 @@ class ResNetV2(nn.Module):
         # the stem feature is the stride 2 conv (preact) or norm output, before the stem pooling
         stem_feat = ('conv3' if is_stem_deep(stem_type) else 'conv') if preact else (
             'norm3' if is_stem_deep(stem_type) else 'norm')
-        self._stem_feat_idx = [n for n, _ in self.stem.named_children()].index(stem_feat)
+        self.stem_feat_idx = [n for n, _ in self.stem.named_children()].index(stem_feat)
         self.feature_info.append(dict(num_chs=stem_chs, reduction=2, module=f'stem.{stem_feat}'))
 
         prev_chs = stem_chs
@@ -725,7 +725,7 @@ class ResNetV2(nn.Module):
         x_down = x
         for i, stem in enumerate(self.stem):
             x = stem(x)
-            if i == self._stem_feat_idx:
+            if i == self.stem_feat_idx:
                 x_down = x
         if feat_idx in take_indices:
             intermediates.append(x_down)
@@ -766,7 +766,7 @@ class ResNetV2(nn.Module):
             self.norm = nn.Identity()  # final norm is sized for (and only applied to) the last stage
         self.stages = self.stages[:max_index]  # truncate blocks w/ stem as idx 0
         if max_index == 0:
-            self.stem = self.stem[:self._stem_feat_idx + 1]  # stem feature is taken before the stem pooling
+            self.stem = self.stem[:self.stem_feat_idx + 1]  # stem feature is taken before the stem pooling
         if prune_end:
             # features now end at the last kept tap, the head is sized for the final features so it goes too
             self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']

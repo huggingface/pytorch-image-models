@@ -400,7 +400,8 @@ class RexNet(nn.Module):
 
         # forward pass
         x = self.stem(x)
-        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+        # the final conv follows the last tap and is part of the final features, run it if the last tap is reached
+        if torch.jit.is_scripting() or not stop_early or max_index == self.stage_ends[-1]:  # can't slice in torchscript
             stages = self.features
         else:
             stages = self.features[:max_index + 1]
@@ -437,13 +438,14 @@ class RexNet(nn.Module):
         take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
         num_chs = self.feature_info[max_index]['num_chs']
         max_index = self.stage_ends[max_index]
-        prune_end = max_index < len(self.features) - 1  # the final conv follows the last tap
+        # the final conv follows the last tap and never feeds a tap, removed if blocks are truncated,
+        # or w/ the head or norm
+        if not (prune_norm or prune_head or max_index < self.stage_ends[-1]):
+            return take_indices
         self.features = self.features[:max_index + 1]  # truncate blocks w/ stem as idx 0
-        if prune_end:
-            # features now end at the last kept tap, the head is sized for the final features so it goes too
-            self.num_features = self.head_hidden_size = num_chs
-        if prune_head or prune_end:
-            self.reset_classifier(0, '')
+        # features now end at the last kept tap, the head is sized for the final features so it goes too
+        self.num_features = self.head_hidden_size = num_chs
+        self.reset_classifier(0, '')
         return take_indices
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:

@@ -312,9 +312,10 @@ class MobileNetV3(nn.Module):
             # features now end at the last kept tap, the head is sized for the final features so it goes too
             self.num_features = num_chs
         if prune_end or prune_head:
-            # the pre-logits conv is part of the head and follows the last stage
+            # the pre-logits conv (+ norm, act) is part of the head and follows the last stage
             self.conv_head = nn.Identity()
             self.norm_head = nn.Identity()
+            self.act2 = nn.Identity()
             self.reset_classifier(0, '')
         return take_indices
 

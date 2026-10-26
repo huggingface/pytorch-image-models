@@ -1023,8 +1023,9 @@ def test_resnet_pruned_grad_checkpointing() -> None:
 
 
 @pytest.mark.features
-@pytest.mark.parametrize(
-    'model_name', ['coat_lite_tiny', 'coat_tiny', 'hrnet_w18_small', 'nasnetalarge', 'pnasnet5large'])
+@pytest.mark.parametrize('model_name', [
+    'coat_lite_tiny', 'coat_tiny', 'hrnet_w18_small', 'nasnetalarge', 'pnasnet5large', 'legacy_xception',
+])
 def test_forward_after_prune_intermediate_layers(model_name: str) -> None:
     """Models w/ hardcoded forward_features keep forward_features / forward usable after pruning."""
     model = create_model(model_name, **({'img_size': 128} if model_name.startswith('coat') else {})).eval()
@@ -1036,7 +1037,96 @@ def test_forward_after_prune_intermediate_layers(model_name: str) -> None:
             final, intermediates = pruned.forward_intermediates(x, indices=[index])
             torch.testing.assert_close(pruned.forward_features(x), final, rtol=0, atol=0)
             if not isinstance(final, list):
+                if final.shape == intermediates[0].shape:
+                    torch.testing.assert_close(final, intermediates[0], rtol=0, atol=0)  # features end at the tap
                 pruned(x)  # CoaT's multi-scale output needs the aggregate layer, removed w/ the head
+        features = pruned.train().forward_features(x)
+        sum(f.sum() for f in (features if isinstance(features, list) else [features])).backward()
+
+
+@pytest.mark.features
+@pytest.mark.parametrize('model_name,stop_early_final', [
+    ('ghostnet_050', True), ('repghostnet_050', True), ('rexnet_100', True), ('dpn48b', True),
+    ('mobilenetv3_small_050', False),
+])
+def test_prune_intermediate_layers_last_feature(model_name: str, stop_early_final: bool) -> None:
+    """Layers after the last tap (final conv / norm) are only pruned w/ the head or norm, pruned heads pool the taps."""
+    model = create_model(model_name).eval()
+    x = torch.randn(1, 3, 96, 96)
+    last = len(model.feature_info) - 1
+    with torch.no_grad():
+        expected = model(x)
+        tap = model.forward_intermediates(x, indices=[last], intermediates_only=True)[0]
+        if stop_early_final:
+            final, _ = model.forward_intermediates(x, indices=[last], stop_early=True)
+            torch.testing.assert_close(final, model.forward_features(x), rtol=0, atol=0)
+
+        pruned = copy.deepcopy(model)
+        pruned.prune_intermediate_layers([last], prune_head=False)
+        torch.testing.assert_close(pruned(x), expected, rtol=0, atol=0)
+
+        pruned = copy.deepcopy(model)
+        pruned.prune_intermediate_layers([last], prune_norm=True)
+        selected = pruned.forward_intermediates(x, indices=[last], norm=True, intermediates_only=True)
+        torch.testing.assert_close(selected[0], tap, rtol=0, atol=0)
+
+        pruned = copy.deepcopy(model)
+        pruned.prune_intermediate_layers([last - 1])
+        pruned.reset_classifier(0, 'avg')
+        torch.testing.assert_close(pruned(x), pruned.forward_features(x).mean((2, 3)))
+
+
+# NOTE: no marker, slow (prunes every model at every feature index), excluded from CI for now
+@pytest.mark.timeout(timeout360)
+@pytest.mark.parametrize('model_name', list_models(
+    module=FEAT_INTER_FILTERS,
+    exclude_filters=EXCLUDE_FILTERS + ['*huge*', '*giant*', '*gigantic*', '*_1b_*', '*_3b_*', 'xcit_large_24_p8*'],
+))
+def test_prune_intermediate_layers_contract(model_name: str) -> None:
+    """Pruned / stop_early taps match the unpruned model's, pruned models keep their output w/ the head and train."""
+    model = create_model(model_name).eval()
+    input_size = _get_input_size(model=model, target=TARGET_FFEAT_SIZE)
+    if max(input_size) > MAX_FFEAT_SIZE:
+        pytest.skip("Fixed input size model > limit.")
+    x = torch.randn((2, *input_size))
+    last = len(model.feature_info) - 1
+    # CoaT (parallel blocks), CrossViT and HRNet leave the branches that don't reach the taps unused
+    partial_branches = model_name.startswith(('coat_', 'crossvit', 'hrnet'))
+
+    with torch.no_grad():
+        expected = model(x)
+        taps = model.forward_intermediates(x, intermediates_only=True)
+        pruned = copy.deepcopy(model)
+        pruned.prune_intermediate_layers([last], prune_head=False)
+        torch.testing.assert_close(pruned(x), expected, msg='prune_head=False at the last index changed the output')
+
+    for i in range(last + 1):
+        with torch.no_grad():
+            selected = model.forward_intermediates(x, indices=[i], stop_early=True, intermediates_only=True)
+            torch.testing.assert_close(selected[0], taps[i], msg=f'stop_early tap {i}')
+
+            pruned = copy.deepcopy(model)
+            take_indices = pruned.prune_intermediate_layers([i])
+            selected = pruned.forward_intermediates(x, indices=take_indices, intermediates_only=True)
+            torch.testing.assert_close(selected[0], taps[i], msg=f'pruned tap {i}')
+
+            # w/o the norm (as features_only), the features end at the tap
+            pruned = copy.deepcopy(model)
+            take_indices = pruned.prune_intermediate_layers([i], prune_norm=True)
+            features = pruned.forward_features(x)
+            if i < last and torch.is_tensor(features) and features.ndim == 4:
+                if features.shape != taps[i].shape:
+                    features = features.permute(0, 3, 1, 2)  # NHWC
+                torch.testing.assert_close(features, taps[i], msg=f'pruned features {i}')
+
+        pruned.train()
+        selected = pruned.forward_intermediates(x, indices=take_indices, intermediates_only=True)
+        features = pruned.forward_features(x)
+        features = features if isinstance(features, (list, tuple)) else [features]
+        sum(f.sum() for f in selected + features).backward()
+        if not partial_branches:
+            unused = [n for n, p in pruned.named_parameters() if p.requires_grad and p.grad is None]
+            assert not unused, f'pruned to {i}, unused params: {unused}'
 
 
 @pytest.mark.features

@@ -164,7 +164,11 @@ class MlpClassifierHead(nn.Module):
             self.num_features = self.in_features * self.global_pool.feat_mult()
 
         self.fc2 = nn.Linear(
-            self.num_features, num_classes, bias=self.use_bias, **dd) if num_classes > 0 else nn.Identity()
+            self.num_features,
+            num_classes,
+            bias=self.use_bias,
+            **dd,
+        ) if num_classes > 0 else nn.Identity()
         self.fc2.train(self.training)
 
     def forward(self, x, pre_logits: bool = False):

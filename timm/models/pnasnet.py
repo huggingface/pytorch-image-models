@@ -466,6 +466,9 @@ class PNASNet5Large(nn.Module):
         if intermediates_only:
             return intermediates
 
+        if 0 < feat_idx - 1 < last_idx:
+            # stopped at a cell tap (stop_early or pruned), the features end at its activation like the tap
+            x = F.relu(x)
         return x, intermediates
 
     def prune_intermediate_layers(
@@ -498,26 +501,27 @@ class PNASNet5Large(nn.Module):
         return take_indices
 
     def forward_features(self, x):
-        # the layer after each feature tap is checked for None to support pruning (prune_intermediate_layers)
+        # the layer after each feature tap is checked for None to support pruning (prune_intermediate_layers),
+        # the cell taps are activated, matching the ReLU the next cell's conv_1x1 starts with
         x_conv_0 = self.conv_0(x)
         if self.cell_stem_0 is None:
             return x_conv_0
         x_stem_0 = self.cell_stem_0(x_conv_0)
         if self.cell_stem_1 is None:
-            return x_stem_0
+            return F.relu(x_stem_0)
         x_stem_1 = self.cell_stem_1(x_conv_0, x_stem_0)
         x_cell_0 = self.cell_0(x_stem_0, x_stem_1)
         x_cell_1 = self.cell_1(x_stem_1, x_cell_0)
         x_cell_2 = self.cell_2(x_cell_0, x_cell_1)
         x_cell_3 = self.cell_3(x_cell_1, x_cell_2)
         if self.cell_4 is None:
-            return x_cell_3
+            return F.relu(x_cell_3)
         x_cell_4 = self.cell_4(x_cell_2, x_cell_3)
         x_cell_5 = self.cell_5(x_cell_3, x_cell_4)
         x_cell_6 = self.cell_6(x_cell_4, x_cell_5)
         x_cell_7 = self.cell_7(x_cell_5, x_cell_6)
         if self.cell_8 is None:
-            return x_cell_7
+            return F.relu(x_cell_7)
         x_cell_8 = self.cell_8(x_cell_6, x_cell_7)
         x_cell_9 = self.cell_9(x_cell_7, x_cell_8)
         x_cell_10 = self.cell_10(x_cell_8, x_cell_9)

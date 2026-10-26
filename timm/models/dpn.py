@@ -268,7 +268,8 @@ class DPN(nn.Module):
         intermediates = []
         take_indices, max_index = feature_take_indices(len(self.feature_ends), indices)
         last_idx = len(self.feature_ends) - 1
-        norm_idx = len(self.features) - 1  # final norm + act is the last module in features
+        norm_idx = self.feature_ends[-1] + 1  # final norm + act follows the last block
+        has_norm = len(self.features) > norm_idx  # removed by prune_norm or pruning blocks
 
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             layers = self.features
@@ -282,7 +283,7 @@ class DPN(nn.Module):
                 x = layer(x)
             if i == self.feature_ends[feat_idx]:
                 if feat_idx in take_indices:
-                    if norm and feat_idx == last_idx:
+                    if norm and has_norm and feat_idx == last_idx:
                         intermediates.append(self.features[norm_idx](x))
                     else:
                         intermediates.append(x)
@@ -291,7 +292,7 @@ class DPN(nn.Module):
         if intermediates_only:
             return intermediates
 
-        if max_index == last_idx and len(layers) <= norm_idx:
+        if max_index == last_idx and has_norm and len(layers) <= norm_idx:
             x = self.features[norm_idx](x)  # stopped early at last stage, apply the final norm + act
 
         return x, intermediates

@@ -795,7 +795,8 @@ class GhostNet(nn.Module):
             intermediates.append(x)
         x = self.bn1(x)
         x = self.act1(x)
-        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+        # the blocks after the last tap (incl. the final conv) are part of the final features, run them if it's reached
+        if torch.jit.is_scripting() or not stop_early or max_index == self.stage_ends[-1]:  # can't slice in torchscript
             stages = self.blocks
         else:
             stages = self.blocks[:max_index + 1]
@@ -822,15 +823,19 @@ class GhostNet(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
-        # the blocks after the last feature tap (incl. the final conv) are always removed, so the width always changes
-        # features now end at the last kept tap, the head is sized for the final features so it goes too
-        self.num_features = self.head_hidden_size = self.feature_info[max_index]['num_chs']
+        num_chs = self.feature_info[max_index]['num_chs']
         max_index = self.stage_ends[max_index]
+        # the blocks after the last tap (incl. the final conv) never feed a tap, removed if blocks are truncated,
+        # or w/ the head or norm
+        if not (prune_norm or prune_head or max_index < self.stage_ends[-1]):
+            return take_indices
         self.blocks = self.blocks[:max_index + 1]  # truncate blocks w/ stem as idx 0
         if max_index < 0:
             # the stem feature is the conv output, the norm + act after it are unused
             self.bn1 = nn.Identity()
             self.act1 = nn.Identity()
+        # features now end at the last kept tap, the head is sized for the final features so it goes too
+        self.num_features = self.head_hidden_size = num_chs
         # the pre-logits conv is part of the head
         self.conv_head = nn.Identity()
         self.act2 = nn.Identity()
