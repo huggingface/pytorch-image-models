@@ -42,6 +42,7 @@ from timm.layers import (
     disable_compiler,
     calculate_drop_path_rates,
 )
+from ._input import update_model_args
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_function, register_notrace_module
@@ -1604,6 +1605,8 @@ class NaFlexVit(nn.Module):
             elif global_pool != 'map' and self.attn_pool is not None:
                 self.attn_pool = None  # remove attention pooling
             self.global_pool = global_pool
+            # norm placement defaults from global_pool at construction, keep the current one for reconstruction
+            update_model_args(self, fc_norm=not isinstance(self.fc_norm, nn.Identity))
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head.train(self.training)
 

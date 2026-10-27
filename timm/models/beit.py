@@ -68,7 +68,7 @@ from timm.layers import (
     to_2tuple,
 )
 
-from ._input import update_model_input_size
+from ._input import update_model_args, update_model_input_size
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint
@@ -548,6 +548,7 @@ class Beit(nn.Module):
             use_rel_pos_bias: bool = False,
             use_shared_rel_pos_bias: bool = False,
             head_init_scale: float = 0.001,
+            use_fc_norm: Optional[bool] = None,
             device=None,
             dtype=None,
     ):
@@ -577,6 +578,7 @@ class Beit(nn.Module):
             use_rel_pos_bias: If True, use relative position bias in attention.
             use_shared_rel_pos_bias: If True, share relative position bias across layers.
             head_init_scale: Scale factor for head initialization.
+            use_fc_norm: Normalize after pooling instead of before, if None, enabled when global_pool == 'avg'.
         """
         dd = {'device': device, 'dtype': dtype}
         super().__init__()
@@ -633,7 +635,7 @@ class Beit(nn.Module):
         self.feature_info = [
             dict(module=f'blocks.{i}', num_chs=embed_dim, reduction=r) for i in range(depth)]
 
-        use_fc_norm = self.global_pool == 'avg'
+        use_fc_norm = self.global_pool == 'avg' if use_fc_norm is None else use_fc_norm
         self.norm = nn.Identity() if use_fc_norm else norm_layer(embed_dim, **dd)
         self.fc_norm = norm_layer(embed_dim, **dd) if use_fc_norm else nn.Identity()
         self.head_drop = nn.Dropout(drop_rate)
@@ -780,6 +782,8 @@ class Beit(nn.Module):
         if global_pool is not None:
             assert global_pool in ('', 'avg', 'token'), 'Only avg or token pooling (or none) is supported.'
             self.global_pool = global_pool
+            # norm placement defaults from global_pool at construction, keep the current one for reconstruction
+            update_model_args(self, use_fc_norm=not isinstance(self.fc_norm, nn.Identity))
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head.train(self.training)
 

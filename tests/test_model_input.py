@@ -367,6 +367,26 @@ def test_export_tracks_reset_pool_in_head(tmp_path, model_name, num_classes, poo
         torch.testing.assert_close(restored(x), model(x), rtol=0, atol=0)
 
 
+@pytest.mark.parametrize('model_name,kwargs,pool', [
+    # the construction pool places the final norm before or after pooling, a reset pool leaves it in place
+    ('vit_tiny_patch16_224', dict(embed_dim=32, depth=1, num_heads=2), 'avg'),
+    ('vit_tiny_patch16_224', dict(embed_dim=32, depth=1, num_heads=2, global_pool='avg'), 'token'),
+    ('eva02_tiny_patch14_224', dict(embed_dim=32, depth=1, num_heads=2), 'max'),
+    ('beit_base_patch16_224', dict(embed_dim=32, depth=1, num_heads=2), 'token'),
+    ('naflexvit_base_patch16_siglip', dict(embed_dim=32, depth=1, num_heads=2), 'avg'),
+    # reset_classifier drops the distillation head by default
+    ('repvit_m0_9', dict(), None),
+])
+def test_export_tracks_reset_classifier_structure(tmp_path, model_name, kwargs, pool):
+    model = timm.create_model(model_name, num_classes=7, **kwargs).eval()
+    model.reset_classifier(3, global_pool=pool)
+    save_for_hf(model, tmp_path)
+    restored = timm.create_model('local-dir:' + str(tmp_path), pretrained=True).eval()
+    x = torch.randn(1, *get_model_input_config(model)['input_size'])
+    with torch.no_grad():
+        torch.testing.assert_close(restored(x), model(x), rtol=0, atol=0)
+
+
 @pytest.mark.parametrize('vit', [False, True])
 def test_export_does_not_inherit_training_regularization(tmp_path, vit):
     rates = dict(drop_rate=0.2, drop_path_rate=0.1)

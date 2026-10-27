@@ -21,6 +21,7 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import SqueezeExcite, trunc_normal_, to_ntuple, to_2tuple, get_device_dtype
+from ._input import update_model_args
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint, checkpoint_seq
@@ -457,6 +458,7 @@ class RepVit(nn.Module):
             self.global_pool = global_pool
         self.head = RepVitClassifier(self.num_features, num_classes, distillation, **dd)
         self.head.train(self.training)
+        update_model_args(self, distillation=distillation)
 
     @torch.jit.ignore
     def set_distilled_training(self, enable=True):

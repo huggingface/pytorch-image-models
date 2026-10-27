@@ -93,6 +93,11 @@ def update_model_input_size(
     model._model_args = args
 
 
+def update_model_args(model: nn.Module, **model_args: Any) -> None:
+    """Record reconstruction arguments for a supported change made after construction."""
+    model._model_args = dict(getattr(model, '_model_args', {}), **model_args)
+
+
 def get_model_traits(model: nn.Module) -> Dict[str, Any]:
     """Return a copy of the model's traits, augmented with current channel and class counts.
 
