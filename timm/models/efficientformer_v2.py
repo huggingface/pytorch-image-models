@@ -776,8 +776,9 @@ class EfficientFormerV2(nn.Module):
             self.global_pool = global_pool
         self.head = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head.train(self.training)
-        self.head_dist = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
-        self.head_dist.train(self.training)
+        if self.head_dist is not None:
+            self.head_dist = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
+            self.head_dist.train(self.training)
 
     @torch.jit.ignore
     def set_distilled_training(self, enable=True):
@@ -866,6 +867,8 @@ class EfficientFormerV2(nn.Module):
         x = self.head_drop(x)
         if pre_logits:
             return x
+        if self.head_dist is None:
+            return self.head(x)
         x, x_dist = self.head(x), self.head_dist(x)
         if self.distilled_training and self.training and not torch.jit.is_scripting():
             # only return separate classification predictions when training in distilled mode

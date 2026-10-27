@@ -28,6 +28,7 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropPath, calculate_drop_path_rates, get_device_dtype, trunc_normal_, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
+from ._input import update_model_args
 from ._manipulate import checkpoint_seq
 from ._registry import generate_default_cfgs, register_model
 
@@ -615,6 +616,7 @@ class IFormer(nn.Module):
             self.global_pool = global_pool
         self.head = RepVitClassifier(self.head_hidden_size, num_classes, distillation, **dd)
         self.head.train(self.training)
+        update_model_args(self, distillation=distillation)
 
     @torch.jit.ignore
     def set_distilled_training(self, enable: bool = True):

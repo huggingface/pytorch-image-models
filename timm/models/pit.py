@@ -190,7 +190,8 @@ class PoolingVisionTransformer(nn.Module):
     ):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
-        assert global_pool in ('token',), 'Only token pooling is supported.'
+        assert global_pool in ('', 'token'), 'Only token pooling (or none) is supported.'
+        assert global_pool == 'token' or not distilled, 'The distilled head needs token pooling.'
 
         self.base_dims = base_dims
         self.heads = heads
@@ -278,6 +279,7 @@ class PoolingVisionTransformer(nn.Module):
         self.num_classes = num_classes
         if global_pool is not None:
             assert global_pool in ('', 'token'), 'Only token pooling (or none) is supported.'
+            assert global_pool == 'token' or self.head_dist is None, 'The distilled head needs token pooling.'
             self.global_pool = global_pool
         self.head = nn.Linear(self.num_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head.train(self.training)

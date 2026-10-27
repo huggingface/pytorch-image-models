@@ -150,6 +150,7 @@ class NaFlexVitCfg:
     attn_type: str = 'standard'  # Attention type: 'standard', 'eva', 'rope'
     attn_gated: bool = False  # Apply sigmoid output gate in attention (anti attention-sink, GenLIP-style)
     swiglu_mlp: bool = False  # Use SwiGLU MLP variant
+    swiglu_align_to: int = 0  # Round SwiGLU hidden width up to this multiple, 0 disables alignment
     qkv_fused: bool = True  # Whether to use fused QKV projections
     attn_only_layer_scale: bool = False  # Apply LayerScale to the attention branch only
 
@@ -330,6 +331,7 @@ def get_block_fn(cfg: NaFlexVitCfg, block_idx: int = 0) -> Callable:
             EvaBlock,
             attn_type=attn_type,
             swiglu_mlp=cfg.swiglu_mlp,
+            swiglu_align_to=cfg.swiglu_align_to,
             scale_mlp=cfg.scale_mlp_norm,
             scale_attn_inner=cfg.scale_attn_inner_norm,
             qkv_fused=cfg.qkv_fused,
@@ -1368,7 +1370,11 @@ class NaFlexVit(nn.Module):
             for i in range(cfg.depth)
         ]
 
-        self.norm = norm_layer(cfg.embed_dim, **dd) if cfg.final_norm and not cfg.fc_norm else nn.Identity()
+        # Resolve the default before placing the final norm before or after pooling.
+        fc_norm = cfg.fc_norm
+        if fc_norm is None:
+            fc_norm = cfg.global_pool == 'avg'
+        self.norm = norm_layer(cfg.embed_dim, **dd) if cfg.final_norm and not fc_norm else nn.Identity()
 
         # Classifier Head
         if cfg.global_pool == 'map':
@@ -1383,10 +1389,6 @@ class NaFlexVit(nn.Module):
         else:
             self.attn_pool = None
 
-        # Handle fc_norm default value
-        fc_norm = cfg.fc_norm
-        if fc_norm is None:
-            fc_norm = cfg.global_pool == 'avg'
         self.fc_norm = norm_layer(cfg.embed_dim, **dd) if cfg.final_norm and fc_norm else nn.Identity()
         self.head_drop = nn.Dropout(cfg.drop_rate)
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
@@ -2251,9 +2253,9 @@ def _create_naflexvit_from_classic(
 
     # Handle global pooling and fc_norm defaults that differ between ViT and FlexVit
     gp = kwargs.pop('global_pool', 'token')  # Original ViTs default to cls token pooling
-    fc_norm = kwargs.pop('fc_norm', None)    # Original ViTs used fc_norm when not set and avg pooling used
-    if fc_norm is None and gp == 'avg':
-        fc_norm = True
+    fc_norm = kwargs.pop('fc_norm', None)
+    if fc_norm is None:
+        fc_norm = gp in ('avg', 'avgmax', 'max')
 
     # Set FlexVit-specific defaults that differ from VisionTransformer
     flex_kwargs = {
@@ -2310,10 +2312,20 @@ def _create_naflexvit_from_eva(
     # Handle norm/pool resolution logic to mirror EVA
     gp = kwargs.pop('global_pool', 'avg')
     use_pre_transformer_norm = kwargs.pop('use_pre_transformer_norm', False)
-    use_post_transformer_norm = kwargs.pop('use_post_transformer_norm', True)
+    use_post_transformer_norm = kwargs.pop('use_post_transformer_norm', None)
     use_fc_norm = kwargs.pop('use_fc_norm', None)
+    # NaFlex overrides, including the placement recorded by reset_classifier, take precedence.
+    use_fc_norm = kwargs.pop('fc_norm', use_fc_norm)
     if use_fc_norm is None:
         use_fc_norm = gp == 'avg'  # default on if avg pool used
+    if use_post_transformer_norm is None:
+        use_post_transformer_norm = not use_fc_norm
+    final_norm = kwargs.pop('final_norm', use_post_transformer_norm or use_fc_norm)
+    if final_norm and use_post_transformer_norm and use_fc_norm:
+        raise ValueError(
+            'NaFlexVit does not support both use_post_transformer_norm=True and use_fc_norm=True; '
+            'use use_naflex=False for this EVA configuration.'
+        )
 
     # Set NaFlexVit-specific parameters
     naflex_kwargs = {
@@ -2322,7 +2334,7 @@ def _create_naflexvit_from_eva(
         'reg_tokens':  kwargs.pop('num_reg_tokens', kwargs.get('reg_tokens', 0)),
         'global_pool': gp,
         'pre_norm': use_pre_transformer_norm,
-        'final_norm': use_post_transformer_norm,
+        'final_norm': final_norm,
         'fc_norm': use_fc_norm,
         'pos_embed': 'learned' if kwargs.pop('use_abs_pos_emb', True) else 'none',
         'rope_type': rope_type,
