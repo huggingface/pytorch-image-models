@@ -107,7 +107,7 @@ from timm.layers import (
     LayerType,
     LayerScale,
 )
-from ._input import get_pretrained_grid_size, update_model_input_size
+from ._input import get_pretrained_grid_size, update_model_args, update_model_input_size
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._helpers import _load_npz_checkpoint
@@ -1053,6 +1053,8 @@ class VisionTransformer(nn.Module):
             elif global_pool in ('map', 'prr') and self.global_pool != global_pool:
                 assert False, "Cannot currently change attention pooling type in reset_classifier()."
             self.global_pool = global_pool
+            # norm placement defaults from global_pool at construction, keep the current one for reconstruction
+            update_model_args(self, fc_norm=not isinstance(self.fc_norm, nn.Identity))
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head.train(self.training)
 

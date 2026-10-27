@@ -126,7 +126,7 @@ from timm.layers import (
     AttentionRope,
     AttentionPoolLatent,
 )
-from ._input import get_pretrained_grid_size, update_model_input_size
+from ._input import get_pretrained_grid_size, update_model_args, update_model_input_size
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint
@@ -936,6 +936,8 @@ class Eva(nn.Module):
             else:
                 self.attn_pool = None
             self.global_pool = global_pool
+            # norm placement defaults from global_pool at construction, keep the current one for reconstruction
+            update_model_args(self, use_fc_norm=not isinstance(self.fc_norm, nn.Identity))
         self.head = nn.Linear(self.embed_dim, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.head.train(self.training)
 

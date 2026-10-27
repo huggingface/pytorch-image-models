@@ -367,6 +367,67 @@ def test_export_tracks_reset_pool_in_head(tmp_path, model_name, num_classes, poo
         torch.testing.assert_close(restored(x), model(x), rtol=0, atol=0)
 
 
+@pytest.mark.parametrize('model_name,kwargs,pool,reload_naflex', [
+    # the construction pool places the final norm before or after pooling, a reset pool leaves it in place
+    ('vit_tiny_patch16_224', dict(embed_dim=32, depth=1, num_heads=2), 'avg', None),
+    ('vit_tiny_patch16_224', dict(embed_dim=32, depth=1, num_heads=2, global_pool='avg'), 'token', None),
+    ('eva02_tiny_patch14_224', dict(embed_dim=32, depth=1, num_heads=2), 'max', None),
+    ('beit_base_patch16_224', dict(embed_dim=32, depth=1, num_heads=2), 'token', None),
+    ('naflexvit_base_patch16_siglip', dict(embed_dim=32, depth=1, num_heads=2), 'avg', None),
+    ('naflexvit_base_patch16_siglip', dict(embed_dim=32, depth=1, num_heads=2, global_pool='avg'), 'avg', None),
+    ('naflexvit_base_patch16_siglip', dict(embed_dim=32, depth=1, num_heads=2, global_pool='avg'), 'max', None),
+    # reset_classifier drops the distillation head by default
+    ('repvit_m0_9', dict(), None, None),
+    ('iformer_t', dict(distillation=True), None, None),
+    # an absent distillation head must stay absent
+    ('efficientformerv2_s0', dict(distillation=False), None, None),
+    # reset_classifier removes the pooling
+    ('pit_ti_224', dict(), '', None),
+    # NaFlex conversion must resolve the source model's norm defaults and preserve explicit overrides
+    ('vit_tiny_patch16_224', dict(embed_dim=32, depth=1, num_heads=2, global_pool='max'), None, True),
+    ('vit_tiny_patch16_224', dict(embed_dim=32, depth=1, num_heads=2, global_pool='avgmax'), None, True),
+    (
+        'vit_tiny_patch16_224',
+        dict(embed_dim=32, depth=1, num_heads=2, global_pool='max', fc_norm=False), None, True,
+    ),
+    (
+        'eva02_tiny_patch14_224',
+        dict(embed_dim=32, depth=1, num_heads=2, use_post_transformer_norm=False), None, True,
+    ),
+    (
+        'eva02_tiny_patch14_224',
+        dict(embed_dim=32, depth=1, num_heads=2, use_naflex=True, use_post_transformer_norm=False), 'max', None,
+    ),
+    (
+        'eva02_tiny_patch14_224',
+        dict(
+            embed_dim=32, depth=1, num_heads=2, use_naflex=True,
+            use_post_transformer_norm=True, global_pool='token',
+        ), 'avg', None,
+    ),
+    # aligned SwiGLU keeps separate gate/projection weights and rounds up the hidden width
+    ('vit_small_plus_patch16_dinov3', dict(embed_dim=32, depth=1, num_heads=2), None, True),
+    ('vit_7b_patch16_dinov3', dict(embed_dim=48, depth=1, num_heads=3), None, True),
+    ('vit_giant_patch16_lingbot', dict(embed_dim=32, depth=1, num_heads=2), None, True),
+    (
+        'eva02_tiny_patch14_224',
+        dict(embed_dim=32, depth=1, num_heads=2, use_naflex=True, swiglu_align_to=64), 'max', None,
+    ),
+])
+def test_export_tracks_reset_classifier_structure(tmp_path, model_name, kwargs, pool, reload_naflex):
+    model = timm.create_model(model_name, num_classes=7, **kwargs).eval()
+    x = torch.randn(1, *get_model_input_config(model)['input_size'])
+    with torch.no_grad():
+        model(x)  # must run as constructed, not only after the reset (e.g. efficientformerv2 w/o distillation)
+    model.reset_classifier(3, global_pool=pool)
+    save_for_hf(model, tmp_path)
+    restored = timm.create_model('local-dir:' + str(tmp_path), pretrained=True, use_naflex=reload_naflex).eval()
+    # NaFlex uses a linear patch projection instead of convolution, so conversion can change FP32 rounding.
+    tolerances = dict(rtol=1e-5, atol=1e-5) if reload_naflex else dict(rtol=0, atol=0)
+    with torch.no_grad():
+        torch.testing.assert_close(restored(x), model(x), **tolerances)
+
+
 @pytest.mark.parametrize('vit', [False, True])
 def test_export_does_not_inherit_training_regularization(tmp_path, vit):
     rates = dict(drop_rate=0.2, drop_path_rate=0.1)
