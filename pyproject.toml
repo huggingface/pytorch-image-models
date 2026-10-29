@@ -44,7 +44,7 @@ repository = "https://github.com/huggingface/pytorch-image-models"
 
 [tool.pdm.dev-dependencies]
 test = [
-        'pytest',
+        'pytest<9.2',  # see requirements-dev.txt
         'pytest-timeout',
         'pytest-xdist',
         'pytest-forked',
