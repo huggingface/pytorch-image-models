@@ -16,7 +16,7 @@ jobs:
       with:
         fetch-depth: 0
     - name: Secret Scanning
-      uses: trufflesecurity/trufflehog@4dd8831c5f12599465d4d45c3c447b4018a34c85 # v3.97.9
+      uses: trufflesecurity/trufflehog@c85580b712841eda4c53bc28fc6ace6100e8c16c # v3.99.4
       with:
         # Pin the scanner image, the action otherwise runs ghcr.io/trufflesecurity/trufflehog:latest
         # and detector / verifier changes can start failing CI without any repo change.
