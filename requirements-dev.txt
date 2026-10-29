@@ -1,4 +1,4 @@
-pytest
+pytest<9.2  # pytest-forked 1.7.5 cannot serialize pytest>=9.2 reports (pytest-dev/pytest-forked#112)
 pytest-timeout
 pytest-xdist
 pytest-forked
