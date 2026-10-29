@@ -16,6 +16,7 @@ import argparse
 import os
 import glob
 import hashlib
+from typing import List
 from timm.models import load_state_dict
 from timm.models._helpers import _torch_load
 try:
@@ -59,6 +60,36 @@ def checkpoint_metric(checkpoint_path):
     return metric
 
 
+def file_sha256(path: str) -> str:
+    sha256 = hashlib.sha256()
+    with open(path, 'rb') as f:
+        for chunk in iter(lambda: f.read(1 << 20), b''):
+            sha256.update(chunk)
+    return sha256.hexdigest()
+
+
+def unique_checkpoints(checkpoints: List[str]) -> List[str]:
+    """Drop checkpoint files with the same contents as another matched file.
+
+    A train.py output folder holds last, model_best and milestone-N files next to the numbered checkpoints, each a
+    hardlink or copy of one of them. Averaging those would count the same weights more than once.
+
+    Args:
+        checkpoints: Checkpoint paths matched by the input filter.
+
+    Returns:
+        Sorted paths of the regular files, keeping the first path of each set of identical files.
+    """
+    unique = {}
+    for c in sorted(checkpoints):
+        if not os.path.isfile(c):
+            continue
+        first = unique.setdefault(file_sha256(c), c)
+        if first != c:
+            print(f"Skipping '{c}', same file contents as '{first}'")
+    return list(unique.values())
+
+
 def main():
     args = parser.parse_args()
     # by default use the EMA weights (if present)
@@ -89,7 +120,7 @@ def main():
     if not args.input.endswith(os.path.sep) and not args.filter.startswith(os.path.sep):
         pattern += os.path.sep
     pattern += args.filter
-    checkpoints = glob.glob(pattern, recursive=True)
+    checkpoints = unique_checkpoints(glob.glob(pattern, recursive=True))
 
     if args.sort:
         checkpoint_metrics = []
@@ -144,8 +175,7 @@ def main():
     else:
         torch.save(final_state_dict, output)
 
-    with open(output, 'rb') as f:
-        sha_hash = hashlib.sha256(f.read()).hexdigest()
+    sha_hash = file_sha256(output)
     print(f"=> Saved state_dict to '{output}, SHA256: {sha_hash}'")
 
 

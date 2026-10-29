@@ -145,3 +145,29 @@ def test_load_state_dict_from_checkpoint_without_history(tmp_path: Path):
     torch.save({'epoch': 3, 'state_dict': {}}, tmp_path / 'last.pth.tar')
     assert not saver.load_state_dict_from_checkpoint(str(tmp_path / 'last.pth.tar'))
     assert saver.checkpoint_files == [] and saver.best_metric is None
+
+
+@needs_checkpoint_load
+@pytest.mark.parametrize('can_hardlink', [True, False])
+def test_avg_checkpoints_counts_each_saved_checkpoint_once(tmp_path: Path, monkeypatch, can_hardlink):
+    import avg_checkpoints
+
+    saver = _create_saver(tmp_path, max_history=4)
+    saver.can_hardlink = can_hardlink  # False exercises the copy fallback for last / model_best / milestone files
+    for epoch, metric in enumerate((0.1, 0.4, 0.3, 0.35)):
+        with torch.no_grad():
+            for p in saver.model.parameters():
+                p.fill_(epoch)
+        saver.save_checkpoint(epoch, metric=metric)
+    saver.save_milestone(4)
+
+    output = tmp_path / 'averaged.pth'
+    monkeypatch.setattr(
+        'sys.argv',
+        ['avg_checkpoints.py', '--input', str(tmp_path), '-n', '3', '--output', str(output)],
+    )
+    avg_checkpoints.main()
+
+    # top-3 are epochs 1, 3 and 2, the last, model_best and milestone files duplicate epochs 3 and 1
+    state_dict = torch.load(output, map_location='cpu', weights_only=True)
+    torch.testing.assert_close(state_dict['weight'], torch.full((1, 2), 2.))
