@@ -129,6 +129,35 @@ def test_naflex_no_aug_train_fits_seq_len_without_erasing():
     assert loader.random_erasing is None
 
 
+@pytest.mark.parametrize('is_training', [False, True])
+@pytest.mark.parametrize('patchify_channels_last', [False, True])
+def test_create_naflex_loader_grayscale(tmp_path, is_training, patchify_channels_last):
+    class_dir = tmp_path / 'class'
+    class_dir.mkdir()
+    Image.new('L', (32, 32), 128).save(class_dir / 'image.png')
+    dataset = create_dataset('', root=str(tmp_path), input_img_mode='L')
+    loader = create_naflex_loader(
+        dataset,
+        patch_size=16,
+        train_seq_lens=(4,),
+        max_seq_len=4,
+        batch_size=1,
+        is_training=is_training,
+        no_aug=True,
+        mean=(0.5,),
+        std=(0.5,),
+        num_workers=0,
+        pin_memory=False,
+        device=torch.device('cpu'),
+        patchify_channels_last=patchify_channels_last,
+        channels=1,
+    )
+    batch, targets = next(iter(loader))
+    assert batch['patches'].shape == (1, 4, 16 * 16)
+    torch.testing.assert_close(batch['patches'], torch.full_like(batch['patches'], (128 / 255 - 0.5) / 0.5))
+    assert targets.tolist() == [0]
+
+
 def test_create_loader_disables_persistent_workers_without_workers():
     dataset = torch.utils.data.TensorDataset(torch.zeros((4, 3, 8, 8)), torch.arange(4))
 
