@@ -1060,6 +1060,7 @@ def main():
         naflex_mode = True
         loader_train = create_naflex_loader(
             dataset=dataset_train,
+            channels=data_config['input_size'][0],
             train_seq_lens=args.naflex_train_seq_lens,
             mixup_fn=naflex_mixup_fn,
             rank=args.rank,
@@ -1151,6 +1152,7 @@ def main():
             # Use largest sequence length for validation
             loader_eval = create_naflex_loader(
                 dataset=dataset_eval,
+                channels=data_config['input_size'][0],
                 patch_size=model_patch_size,  # Use model's native patch size (already determined above)
                 max_seq_len=args.naflex_max_seq_len,
                 patchify_channels_last=not args.naflex_patchify_channels_first,

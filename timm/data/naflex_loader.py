@@ -284,6 +284,7 @@ def create_naflex_loader(
         persistent_workers: bool = True,
         worker_seeding: str = 'all',
         patchify_channels_last: bool = True,
+        channels: int = 3,
     ) -> Union[torch.utils.data.DataLoader, NaFlexPrefetchLoader]:
     """Create a data loader with dynamic sequence length sampling for training.
 
@@ -336,6 +337,7 @@ def create_naflex_loader(
             channel index varies fastest (NaFlex default). ``False``: C-P-P
             (channels first — Gemma4 / HF native layout). Forwarded to the
             upstream ``Patchify`` and to the prefetcher's normalization layout.
+        channels: Number of image channels for prefetch normalization.
 
     Returns:
         DataLoader or NaFlexPrefetchLoader instance.
@@ -414,6 +416,7 @@ def create_naflex_loader(
                 loader,
                 mean=mean,
                 std=std,
+                channels=channels,
                 img_dtype=img_dtype,
                 device=device,
                 re_prob=re_prob if not no_aug else 0.,
@@ -468,6 +471,7 @@ def create_naflex_loader(
                 loader,
                 mean=mean,
                 std=std,
+                channels=channels,
                 img_dtype=img_dtype,
                 device=device,
                 patchify_channels_last=patchify_channels_last,

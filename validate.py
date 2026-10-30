@@ -343,6 +343,7 @@ def validate(args):
         from timm.data  import create_naflex_loader
         loader = create_naflex_loader(
             dataset,
+            channels=data_config['input_size'][0],
             batch_size=args.batch_size,
             use_prefetcher=args.prefetcher,
             interpolation=data_config['interpolation'],
