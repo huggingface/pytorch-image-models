@@ -267,6 +267,7 @@ def create_naflex_loader(
         interpolation: str = 'bilinear',
         mean: Tuple[float, ...] = IMAGENET_DEFAULT_MEAN,
         std: Tuple[float, ...] = IMAGENET_DEFAULT_STD,
+        channels: int = 3,
         crop_pct: Optional[float] = None,
         crop_mode: Optional[str] = None,
         crop_border_pixels: Optional[int] = None,
@@ -284,7 +285,6 @@ def create_naflex_loader(
         persistent_workers: bool = True,
         worker_seeding: str = 'all',
         patchify_channels_last: bool = True,
-        channels: int = 3,
     ) -> Union[torch.utils.data.DataLoader, NaFlexPrefetchLoader]:
     """Create a data loader with dynamic sequence length sampling for training.
 
@@ -318,6 +318,7 @@ def create_naflex_loader(
         interpolation: Interpolation method.
         mean: Normalization mean values.
         std: Normalization standard deviation values.
+        channels: Number of image channels, used for per-channel normalization in the prefetcher.
         crop_pct: Crop percentage for validation.
         crop_mode: Crop mode.
         crop_border_pixels: Crop border pixels.
@@ -337,7 +338,6 @@ def create_naflex_loader(
             channel index varies fastest (NaFlex default). ``False``: C-P-P
             (channels first — Gemma4 / HF native layout). Forwarded to the
             upstream ``Patchify`` and to the prefetcher's normalization layout.
-        channels: Number of image channels for prefetch normalization.
 
     Returns:
         DataLoader or NaFlexPrefetchLoader instance.
