@@ -3,9 +3,15 @@
 Papers (MobileViT V1 and V2 respectively):
 * `MobileViT: Light-weight, General-purpose, and Mobile-friendly Vision Transformer` - https://arxiv.org/abs/2110.02178
 * `Separable Self-attention for Mobile Vision Transformers` - https://arxiv.org/abs/2206.02680
+* `MobileViTv3: Mobile-Friendly Vision Transformer with Simple and Effective Fusion of Local, Global and Input Features`
+    - https://arxiv.org/abs/2209.15159
 
 MobileVitBlock and checkpoints adapted from https://github.com/apple/ml-cvnets (original copyright below)
 License: https://github.com/apple/ml-cvnets/blob/main/LICENSE (Apple open source)
+
+MobileViTv3 fusion design is integrated into the existing timm MobileViT blocks.
+Reference implementation and official checkpoints: https://github.com/micronDLA/MobileViTv3
+Upstream repository license: https://github.com/micronDLA/MobileViTv3/blob/main/LICENSE
 
 Rest of code, ByobNet, and Transformer block hacked together by / Copyright 2022, Ross Wightman
 """
@@ -37,21 +43,22 @@ def _inverted_residual_block(d, c, s, br=4.0):
         block_kwargs=dict(bottle_in=True, linear_out=True))
 
 
-def _mobilevit_block(d, c, s, transformer_dim, transformer_depth, patch_size=4, br=4.0):
+def _mobilevit_block(d, c, s, transformer_dim, transformer_depth, patch_size=2, br=4.0, use_v3_fusion=False):
     # inverted residual + mobilevit blocks as per MobileViT network
     return (
         _inverted_residual_block(d=d, c=c, s=s, br=br),
         ByoBlockCfg(
-            type='mobilevit', d=1, c=c, s=1,
+            type='mobilevit', d=1, c=c, s=1, gs=1 if use_v3_fusion else None,
             block_kwargs=dict(
                 transformer_dim=transformer_dim,
                 transformer_depth=transformer_depth,
+                use_v3_fusion=use_v3_fusion,
                 patch_size=patch_size)
         )
     )
 
 
-def _mobilevitv2_block(d, c, s, transformer_depth, patch_size=2, br=2.0, transformer_br=0.5):
+def _mobilevitv2_block(d, c, s, transformer_depth, patch_size=2, br=2.0, transformer_br=0.5, use_v3_fusion=False):
     # inverted residual + mobilevit blocks as per MobileViT network
     return (
         _inverted_residual_block(d=d, c=c, s=s, br=br),
@@ -59,12 +66,39 @@ def _mobilevitv2_block(d, c, s, transformer_depth, patch_size=2, br=2.0, transfo
             type='mobilevit2', d=1, c=c, s=1, br=transformer_br, gs=1,
             block_kwargs=dict(
                 transformer_depth=transformer_depth,
+                use_v3_fusion=use_v3_fusion,
                 patch_size=patch_size)
         )
     )
 
 
-def _mobilevitv2_cfg(multiplier=1.0):
+def _mobilevit_cfg(chs, trans_dims, num_features, br=4.0, use_v3_fusion=False):
+    return ByoModelCfg(
+        blocks=(
+            _inverted_residual_block(d=1, c=chs[0], s=1, br=br),
+            _inverted_residual_block(d=3, c=chs[1], s=2, br=br),
+            _mobilevit_block(
+                d=1, c=chs[2], s=2, transformer_dim=trans_dims[0], transformer_depth=2,
+                br=br, use_v3_fusion=use_v3_fusion,
+            ),
+            _mobilevit_block(
+                d=1, c=chs[3], s=2, transformer_dim=trans_dims[1], transformer_depth=4,
+                br=br, use_v3_fusion=use_v3_fusion,
+            ),
+            _mobilevit_block(
+                d=1, c=chs[4], s=2, transformer_dim=trans_dims[2], transformer_depth=3,
+                br=br, use_v3_fusion=use_v3_fusion,
+            ),
+        ),
+        stem_chs=16,
+        stem_type='3x3',
+        stem_pool='',
+        downsample='',
+        act_layer='silu',
+        num_features=num_features,
+    )
+
+def _mobilevitv2_cfg(multiplier=1.0, use_v3_fusion=False):
     chs = (64, 128, 256, 384, 512)
     if multiplier != 1.0:
         chs = tuple([int(c * multiplier) for c in chs])
@@ -72,9 +106,9 @@ def _mobilevitv2_cfg(multiplier=1.0):
         blocks=(
             _inverted_residual_block(d=1, c=chs[0], s=1, br=2.0),
             _inverted_residual_block(d=2, c=chs[1], s=2, br=2.0),
-            _mobilevitv2_block(d=1, c=chs[2], s=2, transformer_depth=2),
-            _mobilevitv2_block(d=1, c=chs[3], s=2, transformer_depth=4),
-            _mobilevitv2_block(d=1, c=chs[4], s=2, transformer_depth=3),
+            _mobilevitv2_block(d=1, c=chs[2], s=2, transformer_depth=2, use_v3_fusion=use_v3_fusion),
+            _mobilevitv2_block(d=1, c=chs[3], s=2, transformer_depth=4, use_v3_fusion=use_v3_fusion),
+            _mobilevitv2_block(d=1, c=chs[4], s=2, transformer_depth=3, use_v3_fusion=use_v3_fusion),
         ),
         stem_chs=int(32 * multiplier),
         stem_type='3x3',
@@ -86,53 +120,9 @@ def _mobilevitv2_cfg(multiplier=1.0):
 
 
 model_cfgs = dict(
-    mobilevit_xxs=ByoModelCfg(
-        blocks=(
-            _inverted_residual_block(d=1, c=16, s=1, br=2.0),
-            _inverted_residual_block(d=3, c=24, s=2, br=2.0),
-            _mobilevit_block(d=1, c=48, s=2, transformer_dim=64, transformer_depth=2, patch_size=2, br=2.0),
-            _mobilevit_block(d=1, c=64, s=2, transformer_dim=80, transformer_depth=4, patch_size=2, br=2.0),
-            _mobilevit_block(d=1, c=80, s=2, transformer_dim=96, transformer_depth=3, patch_size=2, br=2.0),
-        ),
-        stem_chs=16,
-        stem_type='3x3',
-        stem_pool='',
-        downsample='',
-        act_layer='silu',
-        num_features=320,
-    ),
-
-    mobilevit_xs=ByoModelCfg(
-        blocks=(
-            _inverted_residual_block(d=1, c=32, s=1),
-            _inverted_residual_block(d=3, c=48, s=2),
-            _mobilevit_block(d=1, c=64, s=2, transformer_dim=96, transformer_depth=2, patch_size=2),
-            _mobilevit_block(d=1, c=80, s=2, transformer_dim=120, transformer_depth=4, patch_size=2),
-            _mobilevit_block(d=1, c=96, s=2, transformer_dim=144, transformer_depth=3, patch_size=2),
-        ),
-        stem_chs=16,
-        stem_type='3x3',
-        stem_pool='',
-        downsample='',
-        act_layer='silu',
-        num_features=384,
-    ),
-
-    mobilevit_s=ByoModelCfg(
-        blocks=(
-            _inverted_residual_block(d=1, c=32, s=1),
-            _inverted_residual_block(d=3, c=64, s=2),
-            _mobilevit_block(d=1, c=96, s=2, transformer_dim=144, transformer_depth=2, patch_size=2),
-            _mobilevit_block(d=1, c=128, s=2, transformer_dim=192, transformer_depth=4, patch_size=2),
-            _mobilevit_block(d=1, c=160, s=2, transformer_dim=240, transformer_depth=3, patch_size=2),
-        ),
-        stem_chs=16,
-        stem_type='3x3',
-        stem_pool='',
-        downsample='',
-        act_layer='silu',
-        num_features=640,
-    ),
+    mobilevit_xxs=_mobilevit_cfg((16, 24, 48, 64, 80), (64, 80, 96), 320, br=2.0),
+    mobilevit_xs=_mobilevit_cfg((32, 48, 64, 80, 96), (96, 120, 144), 384),
+    mobilevit_s=_mobilevit_cfg((32, 64, 96, 128, 160), (144, 192, 240), 640),
 
     semobilevit_s=ByoModelCfg(
         blocks=(
@@ -158,6 +148,17 @@ model_cfgs = dict(
     mobilevitv2_150=_mobilevitv2_cfg(1.5),
     mobilevitv2_175=_mobilevitv2_cfg(1.75),
     mobilevitv2_200=_mobilevitv2_cfg(2.0),
+
+    mobilevitv3_xxs=_mobilevit_cfg(
+        (16, 24, 64, 80, 128), (64, 80, 96), 512, br=2.0, use_v3_fusion=True),
+    mobilevitv3_xs=_mobilevit_cfg(
+        (32, 48, 96, 160, 160), (96, 120, 144), 640, use_v3_fusion=True),
+    mobilevitv3_s=_mobilevit_cfg(
+        (32, 64, 128, 256, 320), (144, 192, 240), 960, use_v3_fusion=True),
+
+    mobilevitv3_050=_mobilevitv2_cfg(.50, use_v3_fusion=True),
+    mobilevitv3_075=_mobilevitv2_cfg(.75, use_v3_fusion=True),
+    mobilevitv3_100=_mobilevitv2_cfg(1.0, use_v3_fusion=True),
 )
 
 
@@ -186,6 +187,7 @@ class MobileVitBlock(nn.Module):
             drop_path_rate: float = 0.,
             layers: LayerFn = None,
             transformer_norm_layer: Type[nn.Module] = nn.LayerNorm,
+            use_v3_fusion: bool = False,
             device=None,
             dtype=None,
             **kwargs,  # eat unused args
@@ -196,6 +198,7 @@ class MobileVitBlock(nn.Module):
         groups = num_groups(group_size, in_chs)
         out_chs = out_chs or in_chs
         transformer_dim = transformer_dim or make_divisible(bottle_ratio * in_chs)
+        self.use_v3_fusion = use_v3_fusion
 
         self.conv_kxk = layers.conv_norm_act(
             in_chs,
@@ -227,8 +230,14 @@ class MobileVitBlock(nn.Module):
 
         self.conv_proj = layers.conv_norm_act(transformer_dim, out_chs, kernel_size=1, stride=1, **dd)
 
+        # no_fusion disables the fusion conv; V3 still keeps its input residual.
         if no_fusion:
             self.conv_fusion = None
+        elif use_v3_fusion:
+            # MobileViTv3: fuse local (transformer_dim) + global (out_chs) with 1x1, plus input residual
+            self.conv_fusion = layers.conv_norm_act(
+                transformer_dim + out_chs, out_chs, kernel_size=1, stride=1, **dd,
+            )
         else:
             self.conv_fusion = layers.conv_norm_act(in_chs + out_chs, out_chs, kernel_size=kernel_size, stride=1, **dd)
 
@@ -241,6 +250,7 @@ class MobileVitBlock(nn.Module):
         # Local representation
         x = self.conv_kxk(x)
         x = self.conv_1x1(x)
+        shortcut_local = x if self.use_v3_fusion else None
 
         # Unfold (feature map -> patches)
         patch_h, patch_w = self.patch_size
@@ -273,7 +283,12 @@ class MobileVitBlock(nn.Module):
             x = F.interpolate(x, size=(H, W), mode="bilinear", align_corners=False)
 
         x = self.conv_proj(x)
-        if self.conv_fusion is not None:
+        if self.use_v3_fusion:
+            if self.conv_fusion is not None:
+                # MobileViTv3: concat local + global, 1x1 fuse, then input residual
+                x = self.conv_fusion(torch.cat((shortcut_local, x), dim=1))
+            x = x + shortcut
+        elif self.conv_fusion is not None:
             x = self.conv_fusion(torch.cat((shortcut, x), dim=1))
         return x
 
@@ -487,6 +502,7 @@ class MobileVitV2Block(nn.Module):
             drop_path_rate: float = 0.,
             layers: LayerFn = None,
             transformer_norm_layer: Type[nn.Module] = GroupNorm1,
+            use_v3_fusion: bool = False,
             device=None,
             dtype=None,
             **kwargs,  # eat unused args
@@ -497,6 +513,7 @@ class MobileVitV2Block(nn.Module):
         groups = num_groups(group_size, in_chs)
         out_chs = out_chs or in_chs
         transformer_dim = transformer_dim or make_divisible(bottle_ratio * in_chs)
+        self.use_v3_fusion = use_v3_fusion
 
         self.conv_kxk = layers.conv_norm_act(
             in_chs,
@@ -524,7 +541,15 @@ class MobileVitV2Block(nn.Module):
         ])
         self.norm = transformer_norm_layer(transformer_dim, **dd)
 
-        self.conv_proj = layers.conv_norm_act(transformer_dim, out_chs, kernel_size=1, stride=1, apply_act=False, **dd)
+        if use_v3_fusion:
+            # MobileViTv3 (v2 lineage): conv_proj fuses local + global, plus input residual
+            self.conv_proj = layers.conv_norm_act(
+                2 * transformer_dim, out_chs, kernel_size=1, stride=1, apply_act=False, **dd,
+            )
+        else:
+            self.conv_proj = layers.conv_norm_act(
+                transformer_dim, out_chs, kernel_size=1, stride=1, apply_act=False, **dd,
+            )
 
         self.patch_size = to_2tuple(patch_size)
         self.patch_area = self.patch_size[0] * self.patch_size[1]
@@ -539,9 +564,12 @@ class MobileVitV2Block(nn.Module):
         if new_h != H or new_w != W:
             x = F.interpolate(x, size=(new_h, new_w), mode="bilinear", align_corners=True)
 
+        shortcut = x
+
         # Local representation
         x = self.conv_kxk(x)
         x = self.conv_1x1(x)
+        shortcut_local = x
 
         # Unfold (feature map -> patches), [B, C, H, W] -> [B, C, P, N]
         C = x.shape[1]
@@ -564,7 +592,11 @@ class MobileVitV2Block(nn.Module):
             x = x.reshape(B, C, patch_h, patch_w, num_patch_h, num_patch_w).permute(0, 1, 4, 2, 5, 3)
             x = x.reshape(B, C, num_patch_h * patch_h, num_patch_w * patch_w)
 
-        x = self.conv_proj(x)
+        if self.use_v3_fusion:
+            # MobileViTv3: concat global + local, 1x1 proj, then input residual
+            x = self.conv_proj(torch.cat((x, shortcut_local), dim=1)) + shortcut
+        else:
+            x = self.conv_proj(x)
         return x
 
 
@@ -646,6 +678,45 @@ default_cfgs = generate_default_cfgs({
     'mobilevitv2_200.cvnets_in22k_ft_in1k_384': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0),
+
+    'mobilevitv3_xxs.cvnets_in1k': _cfg(
+        # hf_hub_id='timm/',
+        crop_pct=0.888, interpolation='bilinear',
+    ),
+    'mobilevitv3_xs.cvnets_in1k': _cfg(
+        # hf_hub_id='timm/',
+        crop_pct=0.888, interpolation='bilinear',
+    ),
+    'mobilevitv3_s.cvnets_in1k': _cfg(
+        # hf_hub_id='timm/',
+        crop_pct=0.888, interpolation='bilinear',
+    ),
+    'mobilevitv3_050.cvnets_in1k': _cfg(
+        # hf_hub_id='timm/',
+        crop_pct=0.888,
+    ),
+    'mobilevitv3_075.cvnets_in1k': _cfg(
+        # hf_hub_id='timm/',
+        crop_pct=0.888,
+    ),
+    'mobilevitv3_100.cvnets_in1k': _cfg(
+        # hf_hub_id='timm/',
+        crop_pct=0.888,
+    ),
+
+    # Fine-tuned on ImageNet-1k at 384x384 after 256x256 training.
+    'mobilevitv3_050.cvnets_in1k_ft_in1k_384': _cfg(
+        # hf_hub_id='timm/',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0,
+    ),
+    'mobilevitv3_075.cvnets_in1k_ft_in1k_384': _cfg(
+        # hf_hub_id='timm/',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0,
+    ),
+    'mobilevitv3_100.cvnets_in1k_ft_in1k_384': _cfg(
+        # hf_hub_id='timm/',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0,
+    ),
 })
 
 
@@ -697,6 +768,36 @@ def mobilevitv2_175(pretrained=False, **kwargs) -> ByobNet:
 @register_model
 def mobilevitv2_200(pretrained=False, **kwargs) -> ByobNet:
     return _create_mobilevit('mobilevitv2_200', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def mobilevitv3_xxs(pretrained=False, **kwargs) -> ByobNet:
+    return _create_mobilevit('mobilevitv3_xxs', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def mobilevitv3_xs(pretrained=False, **kwargs) -> ByobNet:
+    return _create_mobilevit('mobilevitv3_xs', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def mobilevitv3_s(pretrained=False, **kwargs) -> ByobNet:
+    return _create_mobilevit('mobilevitv3_s', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def mobilevitv3_050(pretrained=False, **kwargs) -> ByobNet:
+    return _create_mobilevit('mobilevitv3_050', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def mobilevitv3_075(pretrained=False, **kwargs) -> ByobNet:
+    return _create_mobilevit('mobilevitv3_075', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def mobilevitv3_100(pretrained=False, **kwargs) -> ByobNet:
+    return _create_mobilevit('mobilevitv3_100', pretrained=pretrained, **kwargs)
 
 
 register_model_deprecations(__name__, {
