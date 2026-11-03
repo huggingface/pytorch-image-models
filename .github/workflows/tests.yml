@@ -16,8 +16,8 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        python: ['3.10', '3.13']
-        torch: [{base: '1.13.0', vision: '0.14.0'}, {base: '2.9.1', vision: '0.24.1'}]
+        python: ['3.10', '3.14']
+        torch: [{base: '1.13.0', vision: '0.14.0'}, {base: '2.15.0', vision: '0.29.2'}]
         testmarker:
           - '-k "not test_models"'
           - '-m base'
@@ -30,7 +30,7 @@ jobs:
           - '-m fxforward'
           - '-m fxbackward'
         exclude:
-          - python: '3.13'
+          - python: '3.14'
             torch: {base: '1.13.0', vision: '0.14.0'}
           # Keep FX coverage on modern torch; the 1.13 tracer cannot handle dynamic RoPE tensor creation.
           - torch: {base: '1.13.0', vision: '0.14.0'}

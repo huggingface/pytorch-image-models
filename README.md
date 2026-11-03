@@ -12,6 +12,17 @@
 
 ## What's New
 
+## November 3, 2026
+
+* `reset_classifier()` and checkpoint reconstruction: fixes across ViT, EVA, BEiT, NaFlexViT, RepViT and iFormer
+  preserve normalization placement and distillation settings when exporting / reloading models after changing the
+  classifier or pooling. Also fix unpooled PiT export and EfficientFormerV2 with distillation disabled.
+* NaFlex: fix ViT / EVA norm placement during conversion, support SwiGLU alignment for DINOv3 / Lingbot checkpoints,
+  and preserve grayscale / non-RGB input channels in data loaders.
+* Fix layer-wise LR decay grouping for RepViT, HGNet, MViTv2 and pre-norm ViTs, and InceptionNeXt feature sizes with
+  `output_stride=8/16`.
+* Release 1.0.31 prep.
+
 ## October 24, 2026
 
 * `forward_intermediates()` and `prune_intermediate_layers()` are now supported by every model. Newly added for CSPNet, NFNet, DLA, DenseNet (#2870, thanks [ghaith-mq](https://github.com/ghaith-mq)), CoaT, ConViT, ConvMixer, CrossViT, HRNet, Inception-v3, Inception-ResNet-v2, NASNet, PNASNet, SelecSLS, SENet, Sequencer2d, VGG, Visformer, Xception and Aligned Xception, with `prune_intermediate_layers()` for NaFlexViT and MobileNetV5 encoders. CoaT, ConViT, ConvMixer, CrossViT and Visformer gain `features_only` support.
