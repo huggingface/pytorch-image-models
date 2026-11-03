@@ -21,7 +21,7 @@
   and preserve grayscale / non-RGB input channels in data loaders.
 * Fix layer-wise LR decay grouping for RepViT, HGNet, MViTv2 and pre-norm ViTs, and InceptionNeXt feature sizes with
   `output_stride=8/16`.
-* Release 1.0.31 prep.
+* Release 1.0.31.
 
 ## October 24, 2026
 
