@@ -2,8 +2,6 @@
 
 ## November 3, 2026
 
-* Release 1.0.31. Minimum Python version is now 3.10. Update upper CI coverage to Python 3.14 / PyTorch 2.15,
-  retaining Python 3.10 / PyTorch 1.13 coverage.
 * `reset_classifier()` and checkpoint reconstruction: fixes across ViT, EVA, BEiT, NaFlexViT, RepViT and iFormer
   preserve normalization placement and distillation settings when exporting / reloading models after changing the
   classifier or pooling. Also fix unpooled PiT export and EfficientFormerV2 with distillation disabled.
@@ -11,7 +9,7 @@
   and preserve grayscale / non-RGB input channels in data loaders.
 * Fix layer-wise LR decay grouping for RepViT, HGNet, MViTv2 and pre-norm ViTs, and InceptionNeXt feature sizes with
   `output_stride=8/16`.
-* Enable machine-translated documentation.
+* Release 1.0.31.
 
 ## October 24, 2026
 
