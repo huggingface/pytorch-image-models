@@ -107,7 +107,7 @@ There are a LOT of gaps in current documentation relative to the functionality i
 
 # Installation
 
-Create a Python virtual environment using Python 3.10. Inside the environment, install torch` and `torchvision` using the instructions matching your system as listed on the [PyTorch website](https://pytorch.org/).
+Create a Python virtual environment using Python 3.10 or newer. Inside the environment, install `torch` and `torchvision` using the instructions matching your system as listed on the [PyTorch website](https://pytorch.org/).
 
 Then install the remaining dependencies:
 
