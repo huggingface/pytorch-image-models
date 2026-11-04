@@ -3,7 +3,7 @@ and regenerate. -->
 
 # Model Families
 
-`timm` has 1371 architectures in 98 model families, with 1826 pretrained weights. Each family page lists the papers,
+`timm` has 1386 architectures in 101 model families, with 1830 pretrained weights. Each family page lists the papers,
 architectures and pretrained weights of a model module, and which parts of the [Model API](model_api) its models
 support. See the [Quickstart](quickstart) for loading and using the models, the [models reference](reference/models) for
 `create_model` and the pretrained configs, and the [results](results) for the ImageNet validation results of all
@@ -228,6 +228,8 @@ weights.
 * [EfficientViT (MSRA)](models/efficientvit-msra) (6 architectures, 6 weights): EfficientViT from Microsoft Research, a
   memory efficient vision transformer with cascaded group attention, which feeds each attention head a different split
   of the features.
+* [EMO](models/emo) (8 architectures, 0 weights): EMO is an efficient mobile backbone built from inverted residual
+  mobile blocks with lightweight attention, including the EMOv2 variants.
 * [FasterNet](models/fasternet) (6 architectures, 6 weights): FasterNet is built around partial convolution (PConv),
   which convolves only a part of the input channels to reduce redundant computation and memory access.
 * [FastViT](models/fastvit) (12 architectures, 21 weights): FastViT is a hybrid convolutional / transformer network that
@@ -252,6 +254,8 @@ weights.
 * [PP-LCNetV2](models/lcnetv2) (3 architectures, 4 weights): PP-LCNetV2 from PaddleClas is a CPU oriented network built
   on PP-LCNet. The depthwise convolutions of the later stages are re-parameterizable multi-scale branches, and SE and
   shortcuts are used sparingly to avoid latency penalties on CPU.
+* [RapidNet](models/rapidnet) (4 architectures, 4 weights): RapidNet is a mobile backbone using multi-level dilated
+  convolutions for efficient feature extraction.
 * [RepGhost](models/repghost) (8 architectures, 8 weights): RepGhostNet replaces the feature concatenation of the Ghost
   module with re-parameterized feature reuse, folded into a single convolution path at inference.
 * [RepViT](models/repvit) (8 architectures, 13 weights): RepViT is a mobile CNN that brings design choices of
@@ -264,6 +268,8 @@ weights.
   built around the star operation, the element-wise multiplication of two branches.
 * [SwiftFormer](models/swiftformer) (4 architectures, 4 weights): SwiftFormer replaces the quadratic matrix
   multiplications of self-attention with efficient additive attention, for real-time mobile vision applications.
+* [TinyNeXt](models/tinynext) (3 architectures, 0 weights): TinyNeXt is a tiny hybrid vision transformer for TinyML,
+  combining convolutional stages with lightweight attention.
 
 ## MLP and other token mixers
 
