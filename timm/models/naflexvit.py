@@ -1292,6 +1292,12 @@ class NaFlexVit(nn.Module):
             **dd,
         )
         self.supports_patch_interpolation = self.embeds.supports_patch_interpolation
+        if isinstance(self.embeds.proj, nn.Linear):
+            # flattened patch layout of the linear patch embed, used to adapt pretrained weights to other in_chans
+            self._traits['first_conv_linear_patch'] = dict(
+                patch_size=tuple(self.embeds.patch_size),
+                channels_last=getattr(cfg, 'patchify_channels_last', True),
+            )
         self.norm_pre = norm_layer(cfg.embed_dim, **dd) if cfg.pre_norm else nn.Identity()
 
         # ROPE position embeddings at model level
