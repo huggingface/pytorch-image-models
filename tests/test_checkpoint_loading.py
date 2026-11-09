@@ -321,6 +321,26 @@ def test_naflexvit_linear_patch_embed_adapts_in_chans(tmp_path, patchify_channel
     )
 
 
+def test_naflexvit_disabled_attn_pool_loads_strict(tmp_path):
+    src_model = _create_tiny_naflexvit()  # siglip config, 'map' attention pooling
+    assert src_model.attn_pool is not None
+    checkpoint_path = tmp_path / 'naflex_map.pth'
+    torch.save(src_model.state_dict(), checkpoint_path)
+
+    dst_model = _create_tiny_naflexvit(
+        pretrained=True,
+        pretrained_cfg_overlay={'file': str(checkpoint_path)},
+        global_pool='',
+    )
+    assert dst_model.attn_pool is None
+    dst_state = dst_model.state_dict()
+    for key, value in src_model.state_dict().items():
+        if key.startswith('attn_pool.'):
+            assert key not in dst_state
+        else:
+            assert torch.equal(dst_state[key], value), key
+
+
 def test_naflexvit_factory_remaps_classic_vit_checkpoint(tmp_path):
     import timm
     from timm.models.naflexvit import NaFlexVit

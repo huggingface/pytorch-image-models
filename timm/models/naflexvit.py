@@ -2219,6 +2219,9 @@ def checkpoint_filter_fn(state_dict: Dict[str, Any], model: NaFlexVit) -> Dict[s
             out_dict['embeds.cls_token'] = v
         elif k == 'reg_token':
             out_dict['embeds.reg_token'] = v
+        elif k.startswith('attn_pool.') and getattr(model, 'attn_pool', None) is None:
+            # attention pooling disabled in the model (e.g. global_pool=''), drop pretrained pooling params
+            continue
         # Convert patch_embed.X to embeds.patch_embed.X
         elif k.startswith('patch_embed.'):
             suffix = k[12:]
