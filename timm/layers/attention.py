@@ -5,17 +5,26 @@ from torch import nn as nn
 from torch.nn import functional as F
 
 from ._fx import register_notrace_function
+from .attention_backends import dispatch_attention
 from .config import use_fused_attn
 from .pos_embed_sincos import apply_rot_embed_cat
 
 
-__all__ = ['Attention', 'AttentionRope', 'maybe_add_mask', 'resolve_self_attn_mask']
+__all__ = ['Attention', 'AttentionRope', 'maybe_add_mask', 'resolve_self_attn_mask', 'rope_num_prefix_tokens']
 
 
 @torch.fx.wrap
 @register_notrace_function
 def maybe_add_mask(scores: torch.Tensor, attn_mask: Optional[torch.Tensor] = None):
     return scores if attn_mask is None else scores + attn_mask
+
+
+@torch.fx.wrap
+@register_notrace_function
+def rope_num_prefix_tokens(rope: torch.Tensor, num_tokens: int, num_prefix_tokens: int) -> int:
+    """ Number of leading tokens to exclude from rope. A rope covering all tokens (e.g. packed varlen sequences
+    w/ identity rows at prefix token positions) applies to every token. """
+    return 0 if rope.shape[-2] == num_tokens else num_prefix_tokens
 
 
 @torch.fx.wrap
@@ -120,13 +129,14 @@ class Attention(nn.Module):
         q, k, v = qkv.unbind(0)
         q, k = self.q_norm(q), self.k_norm(k)
 
-        if self.fused_attn:
-            x = F.scaled_dot_product_attention(
-                q, k, v,
-                attn_mask=attn_mask,
-                dropout_p=self.attn_drop.p if self.training else 0.,
-                is_causal=is_causal,
-            )
+        if self.fused_attn or not (attn_mask is None or isinstance(attn_mask, torch.Tensor)):
+            dropout_p = self.attn_drop.p if self.training else 0.
+            if torch.jit.is_scripting():
+                x = F.scaled_dot_product_attention(
+                    q, k, v, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal)
+            else:
+                # dispatch handles sdpa (dense / no mask), varlen (packed), and flex (block mask) backends
+                x = dispatch_attention(q, k, v, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal)
         else:
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)
@@ -273,7 +283,7 @@ class AttentionRope(nn.Module):
         q, k = self.q_norm(q), self.k_norm(k)
 
         if rope is not None:
-            npt = self.num_prefix_tokens
+            npt = rope_num_prefix_tokens(rope, N, self.num_prefix_tokens)
             half = getattr(self, 'rotate_half', False)
             q = torch.cat([q[:, :, :npt, :], apply_rot_embed_cat(q[:, :, npt:, :], rope, half=half)], dim=2).type_as(v)
             k = torch.cat([k[:, :, :npt, :], apply_rot_embed_cat(k[:, :, npt:, :], rope, half=half)], dim=2).type_as(v)
@@ -285,13 +295,14 @@ class AttentionRope(nn.Module):
             k = k.repeat_interleave(self.num_kv_groups, dim=1)
             v = v.repeat_interleave(self.num_kv_groups, dim=1)
 
-        if self.fused_attn:
-            x = F.scaled_dot_product_attention(
-                q, k, v,
-                attn_mask=attn_mask,
-                dropout_p=self.attn_drop.p if self.training else 0.,
-                is_causal=is_causal,
-            )
+        if self.fused_attn or not (attn_mask is None or isinstance(attn_mask, torch.Tensor)):
+            dropout_p = self.attn_drop.p if self.training else 0.
+            if torch.jit.is_scripting():
+                x = F.scaled_dot_product_attention(
+                    q, k, v, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal)
+            else:
+                # dispatch handles sdpa (dense / no mask), varlen (packed), and flex (block mask) backends
+                x = dispatch_attention(q, k, v, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal)
         else:
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)
