@@ -1735,8 +1735,8 @@ def train_one_epoch(
                     f'Train: {epoch} [{update_idx:>4d}/{updates_per_epoch} '
                     f'({100. * (update_idx + 1) / updates_per_epoch:>3.0f}%)]  '
                     f'Loss: {loss_now:#.3g} ({loss_avg:#.3g})  '
-                    f'Time: {update_time_m.val:.3f}s, {update_sample_count / update_time_m.val:>7.2f}/s  '
-                    f'({update_time_m.avg:.3f}s, {update_sample_count / update_time_m.avg:>7.2f}/s)  '
+                    f'Time: {update_time_m.val:.3f}s, {update_sample_count / update_time_m.val if update_time_m.val else 0.:>7.2f}/s  '
+                    f'({update_time_m.avg:.3f}s, {update_sample_count / update_time_m.avg if update_time_m.avg else 0.:>7.2f}/s)  '
                     f'LR: {lr:.3e}  '
                     f'Data: {data_time_m.val:.3f} ({data_time_m.avg:.3f})'
                 )
