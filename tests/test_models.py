@@ -2605,6 +2605,39 @@ def test_eval_attention_bias_cache_after_dtype_change(module_name, class_name, k
 
 
 @pytest.mark.base
+@pytest.mark.parametrize('module_name, class_name, kwargs', [
+    ('efficientformer', 'Attention', dict(dim=16, key_dim=4, num_heads=2, attn_ratio=2, resolution=2)),
+    ('efficientformer_v2', 'Attention2d', dict(dim=16, key_dim=4, num_heads=2, attn_ratio=2, resolution=2)),
+    ('efficientformer_v2', 'Attention2dDownsample', dict(dim=16, key_dim=4, num_heads=2, attn_ratio=2, resolution=2)),
+    ('efficientvit_msra', 'CascadedGroupAttention', dict(dim=16, key_dim=4, num_heads=2, attn_ratio=2, resolution=2,
+                                                       kernels=(3, 3))),
+    ('levit', 'Attention', dict(dim=16, key_dim=4, num_heads=2, attn_ratio=2, resolution=2)),
+    ('levit', 'AttentionDownsample', dict(in_dim=16, out_dim=16, key_dim=4, num_heads=2, attn_ratio=2, resolution=2)),
+    ('tiny_vit', 'Attention', dict(dim=16, key_dim=4, num_heads=2, attn_ratio=2, resolution=(2, 2))),
+])
+def test_eval_attention_bias_gradients(module_name, class_name, kwargs):
+    module = importlib.import_module(f'timm.models.{module_name}')
+    attention = getattr(module, class_name)(**kwargs)
+    attention.eval()
+    device = torch.device('cpu')
+    spatial = module_name in ('efficientformer_v2', 'efficientvit_msra')
+    x = torch.randn((2, 16, 2, 2) if spatial else (2, 4, 16))
+    # Independent attribution passes need fresh graphs, including after a no-grad inference pass.
+    for _ in range(2):
+        attention.zero_grad(set_to_none=True)
+        attention(x).square().mean().backward()
+        assert attention.attention_biases.grad is not None
+        assert torch.isfinite(attention.attention_biases.grad).all()
+    with torch.no_grad():
+        attention(x)
+        cached = attention.get_attention_biases(device)
+        assert attention.get_attention_biases(device) is cached
+    attention.zero_grad(set_to_none=True)
+    attention(x).square().mean().backward()
+    assert attention.attention_biases.grad is not None
+
+
+@pytest.mark.base
 def test_eval_attention_forward_after_dtype_change():
     from copy import deepcopy
     from timm.models.efficientformer import Attention
