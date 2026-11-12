@@ -394,7 +394,7 @@ def validate(args):
             with amp_autocast():
                 model(input)
 
-        end = time.time()
+        end = time.perf_counter()
         for batch_idx, (input, target) in enumerate(loader):
             if args.no_prefetcher:
                 target = target.to(device=device)
@@ -422,8 +422,8 @@ def validate(args):
                 all_targets.append(target.cpu())
 
             # measure elapsed time
-            batch_time.update(time.time() - end)
-            end = time.time()
+            batch_time.update(time.perf_counter() - end)
+            end = time.perf_counter()
 
             if batch_idx % args.log_freq == 0:
                 metric_text = '  '.join(f'{name}: {value:.4f}' for name, value in evaluator.summary().items())

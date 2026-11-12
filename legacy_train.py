@@ -1115,7 +1115,7 @@ def train_one_epoch(
     last_batch_idx = len(loader) - 1
     last_batch_idx_to_accum = len(loader) - last_accum_steps
 
-    data_start_time = update_start_time = time.time()
+    data_start_time = update_start_time = time.perf_counter()
     optimizer.zero_grad()
     update_sample_count = 0
     for batch_idx, (input, target) in enumerate(loader):
@@ -1123,7 +1123,7 @@ def train_one_epoch(
         need_update = last_batch or (batch_idx + 1) % accum_steps == 0
         update_idx = batch_idx // accum_steps
         batch_accum_steps = last_accum_steps if batch_idx >= last_batch_idx_to_accum else accum_steps
-
+        data_time_m.update(batch_accum_steps * (time.perf_counter() - data_start_time))
         if not args.prefetcher:
             input, target = input.to(device=device, dtype=model_dtype), target.to(device=device)
             if mixup_fn is not None:
@@ -1132,7 +1132,7 @@ def train_one_epoch(
             input = input.contiguous(memory_format=torch.channels_last)
 
         # multiply by accum steps to get equivalent for full update
-        data_time_m.update(batch_accum_steps * (time.time() - data_start_time))
+        data_time_m.update(batch_accum_steps * (time.perf_counter() - data_start_time))
 
         def _forward():
             with amp_autocast():
@@ -1217,7 +1217,7 @@ def train_one_epoch(
         update_sample_count += global_batch_size
 
         if not need_update:
-            data_start_time = time.time()
+            data_start_time = time.perf_counter()
             continue
 
         num_updates += 1
@@ -1230,9 +1230,9 @@ def train_one_epoch(
                 torch.cuda.synchronize()
             elif device.type == 'npu':
                 torch.npu.synchronize()
-        time_now = time.time()
+        time_now = time.perf_counter()
 
-        update_time_m.update(time.time() - update_start_time)
+        update_time_m.update(time_now - update_start_time)
         update_start_time = time_now
 
         if update_idx % args.log_interval == 0 or last_batch:
@@ -1250,8 +1250,8 @@ def train_one_epoch(
                     f'Train: {epoch} [{update_idx:>4d}/{updates_per_epoch} '
                     f'({100. * (update_idx + 1) / updates_per_epoch:>3.0f}%)]  '
                     f'Loss: {loss_now:#.3g} ({loss_avg:#.3g})  '
-                    f'Time: {update_time_m.val:.3f}s, {update_sample_count / update_time_m.val:>7.2f}/s  '
-                    f'({update_time_m.avg:.3f}s, {update_sample_count / update_time_m.avg:>7.2f}/s)  '
+                    f'Time: {update_time_m.val:.3f}s, {update_sample_count / update_time_m.val if update_time_m.val else 0.:>7.2f}/s  '
+                    f'({update_time_m.avg:.3f}s, {update_sample_count / update_time_m.avg if update_time_m.avg else 0.:>7.2f}/s)  '
                     f'LR: {lr:.3e}  '
                     f'Data: {data_time_m.val:.3f} ({data_time_m.avg:.3f})'
                 )
@@ -1272,7 +1272,7 @@ def train_one_epoch(
             lr_scheduler.step_update(num_updates=num_updates, metric=losses_m.avg)
 
         update_sample_count = 0
-        data_start_time = time.time()
+        data_start_time = time.perf_counter()
         # end for
 
     if hasattr(optimizer, 'sync_lookahead'):
@@ -1303,7 +1303,7 @@ def validate(
 
     model.eval()
 
-    end = time.time()
+    end = time.perf_counter()
     last_idx = len(loader) - 1
     with torch.inference_mode():
         for batch_idx, (input, target) in enumerate(loader):
@@ -1345,8 +1345,8 @@ def validate(
             top1_m.update(acc1.item(), batch_size)
             top5_m.update(acc5.item(), batch_size)
 
-            batch_time_m.update(time.time() - end)
-            end = time.time()
+            batch_time_m.update(time.perf_counter() - end)
+            end = time.perf_counter()
             if utils.is_primary(args) and (last_batch or batch_idx % args.log_interval == 0):
                 log_name = 'Test' + log_suffix
                 _logger.info(
