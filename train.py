@@ -1589,7 +1589,7 @@ def train_one_epoch(
     last_batch_idx = len(loader) - 1
     last_batch_idx_to_accum = len(loader) - last_accum_steps
 
-    data_start_time = update_start_time = time.time()
+    data_start_time = update_start_time = time.perf_counter()
     optimizer.zero_grad()
     update_sample_count = 0
     for batch_idx, (input, target) in enumerate(loader):
@@ -1606,7 +1606,7 @@ def train_one_epoch(
             input = input.contiguous(memory_format=torch.channels_last)
 
         # multiply by accum steps to get equivalent for full update
-        data_time_m.update(batch_accum_steps * (time.time() - data_start_time))
+        data_time_m.update(batch_accum_steps * (time.perf_counter() - data_start_time))
 
         def _forward():
             with amp_autocast():
@@ -1703,7 +1703,7 @@ def train_one_epoch(
         update_sample_count += global_batch_size
 
         if not need_update:
-            data_start_time = time.time()
+            data_start_time = time.perf_counter()
             continue
 
         num_updates += 1
@@ -1715,9 +1715,9 @@ def train_one_epoch(
                 torch.cuda.synchronize(device)
             elif device.type == 'npu':
                 torch.npu.synchronize(device)
-        time_now = time.time()
+        time_now = time.perf_counter()
 
-        update_time_m.update(time.time() - update_start_time)
+        update_time_m.update(time_now - update_start_time)
         update_start_time = time_now
 
         if update_idx % args.log_interval == 0 or last_batch:
@@ -1757,7 +1757,7 @@ def train_one_epoch(
             lr_scheduler.step_update(num_updates=num_updates, metric=losses_m.avg)
 
         update_sample_count = 0
-        data_start_time = time.time()
+        data_start_time = time.perf_counter()
         # end for
 
     if hasattr(optimizer, 'sync_lookahead'):
@@ -1786,7 +1786,7 @@ def validate(
 
     model.eval()
 
-    end = time.time()
+    end = time.perf_counter()
     last_idx = len(loader) - 1
     with torch.inference_mode():
         for batch_idx, (input, target) in enumerate(loader):
@@ -1823,8 +1823,8 @@ def validate(
             elif device.type == "npu":
                 torch.npu.synchronize(device)
 
-            batch_time_m.update(time.time() - end)
-            end = time.time()
+            batch_time_m.update(time.perf_counter() - end)
+            end = time.perf_counter()
             if utils.is_primary(args) and (last_batch or batch_idx % args.log_interval == 0):
                 log_name = 'Test' + log_suffix
                 metric_text = '  '.join(f'{name}: {value:.4f}' for name, value in evaluator.summary().items())
