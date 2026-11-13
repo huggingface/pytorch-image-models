@@ -20,9 +20,16 @@ def avg_pool2d_same(
         ceil_mode: bool = False,
         count_include_pad: bool = True,
 ):
-    # FIXME how to deal with count_include_pad vs not for external padding?
+    input_size = x.shape[-2:]
     x = pad_same(x, kernel_size, stride)
-    return F.avg_pool2d(x, kernel_size, stride, (0, 0), ceil_mode, count_include_pad)
+    x = F.avg_pool2d(x, kernel_size, stride, (0, 0), ceil_mode, count_include_pad)
+    if not count_include_pad:
+        # Native pooling cannot distinguish external padding from input pixels.
+        valid = x.new_ones((1, input_size[0], input_size[1]))
+        valid = pad_same(valid, kernel_size, stride)
+        valid = F.avg_pool2d(valid, kernel_size, stride, (0, 0), ceil_mode, False)
+        x = x / valid
+    return x
 
 
 @register_notrace_module
@@ -42,8 +49,7 @@ class AvgPool2dSame(nn.AvgPool2d):
         super().__init__(kernel_size, stride, (0, 0), ceil_mode, count_include_pad)
 
     def forward(self, x):
-        x = pad_same(x, self.kernel_size, self.stride)
-        return F.avg_pool2d(
+        return avg_pool2d_same(
             x, self.kernel_size, self.stride, self.padding, self.ceil_mode, self.count_include_pad)
 
 
