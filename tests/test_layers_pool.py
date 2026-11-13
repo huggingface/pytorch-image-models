@@ -13,6 +13,63 @@ torch_device = os.environ.get('TORCH_DEVICE', 'cpu')
 
 
 @pytest.mark.parametrize('api', ['functional', 'module', 'factory'])
+@pytest.mark.parametrize('ceil_mode', [False, True])
+@pytest.mark.parametrize('input_size,kernel_size,stride', [
+    ((5, 7), (2, 2), (1, 1)),
+    ((6, 8), (3, 3), (2, 2)),
+    ((5, 7), (3, 3), (2, 2)),
+    ((6, 7), (2, 3), (2, 2)),
+    ((6, 8), (2, 2), (2, 2)),
+])
+def test_avg_pool2d_same_excludes_padding(api, ceil_mode, input_size, kernel_size, stride):
+    """Exclude external SAME padding from the average and its gradient."""
+    from timm.layers.pool2d_same import AvgPool2dSame, avg_pool2d_same, create_pool2d
+
+    height, width = input_size
+    x = torch.arange(2 * height * width, device=torch_device, dtype=torch.float32).reshape(1, 2, height, width)
+    x.requires_grad_()
+    out_h, out_w = ((size + step - 1) // step for size, step in zip(input_size, stride))
+    top = max((out_h - 1) * stride[0] + kernel_size[0] - height, 0) // 2
+    left = max((out_w - 1) * stride[1] + kernel_size[1] - width, 0) // 2
+    expected = torch.stack([
+        torch.stack([
+            x[..., max(i * stride[0] - top, 0):min(i * stride[0] - top + kernel_size[0], height),
+              max(j * stride[1] - left, 0):min(j * stride[1] - left + kernel_size[1], width)].mean((-2, -1))
+            for j in range(out_w)
+        ], dim=-1)
+        for i in range(out_h)
+    ], dim=-2)
+    kwargs = dict(ceil_mode=ceil_mode, count_include_pad=False)
+    if api == 'functional':
+        actual = avg_pool2d_same(x, kernel_size, stride, **kwargs)
+    elif api == 'module':
+        actual = AvgPool2dSame(kernel_size, stride, **kwargs)(x)
+    else:
+        actual = create_pool2d('avg', kernel_size, stride, padding='same', **kwargs)(x)
+
+    torch.testing.assert_close(actual, expected)
+    torch.testing.assert_close(
+        torch.autograd.grad(actual.square().sum(), x)[0],
+        torch.autograd.grad(expected.square().sum(), x)[0],
+    )
+
+
+@pytest.mark.parametrize('output_stride', [8, 16])
+def test_resnetd_dilated_average_downsample(output_stride):
+    """Dilated ResNet-D shortcuts preserve a constant feature field at the borders."""
+    from timm import create_model
+    from timm.layers import AvgPool2dSame
+
+    model = create_model('resnet18d', features_only=True, output_stride=output_stride)
+    pools = [module for module in model.modules() if isinstance(module, AvgPool2dSame)]
+    assert pools
+    x = torch.ones(1, 64, 7, 7, device=torch_device)
+    for pool in pools:
+        assert not pool.count_include_pad
+        torch.testing.assert_close(pool(x), x)
+
+
+@pytest.mark.parametrize('api', ['functional', 'module', 'factory'])
 @pytest.mark.parametrize('input_size,kernel_size,stride,dilation,padding', [
     ((5, 7), (3, 3), (2, 2), (1, 1), (1, 1, 1, 1)),
     ((5, 7), (3, 3), (2, 2), (2, 2), (2, 2, 2, 2)),
