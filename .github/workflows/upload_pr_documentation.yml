@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    uses: huggingface/doc-builder/.github/workflows/upload_pr_documentation.yml@d2a7889cfaa63d1743f36d8a038f3139b3c90656  # main
+    uses: huggingface/doc-builder/.github/workflows/upload_pr_documentation.yml@6f0962e04218e46b8117ac5990789cccebb647d8  # main
     with:
       package_name: timm
     secrets:
