@@ -24,8 +24,9 @@ def avg_pool2d_same(
     x = pad_same(x, kernel_size, stride)
     x = F.avg_pool2d(x, kernel_size, stride, (0, 0), ceil_mode, count_include_pad)
     if not count_include_pad:
-        # Native pooling cannot distinguish external padding from input pixels.
-        valid = x.new_ones((1, input_size[0], input_size[1]))
+        # Native pooling cannot distinguish external padding from input pixels, so correct the divisor with a
+        # pooled mask of valid pixels. The mask is 4D (NCHW) as ONNX AveragePool does not accept unbatched input.
+        valid = x.new_ones((1, 1, input_size[0], input_size[1]))
         valid = pad_same(valid, kernel_size, stride)
         valid = F.avg_pool2d(valid, kernel_size, stride, (0, 0), ceil_mode, False)
         x = x / valid
