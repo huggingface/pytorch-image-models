@@ -161,6 +161,10 @@ def solarize_add(img, add, thresh=128, **__):
 def posterize(img, bits_to_keep, **__):
     if bits_to_keep >= 8:
         return img
+    if bits_to_keep < 1:
+        # Keeping 0 bits zeroes every channel. The level mappings produce 0 at their extreme (as TF), but
+        # ImageOps.posterize() only accepts 1-8 bits since Pillow 13 (older versions returned the black image).
+        return img.point(lambda _: 0)
     return ImageOps.posterize(img, bits_to_keep)
 
 
