@@ -12,6 +12,7 @@ from timm.data.naflex_loader import NaFlexPrefetchLoader
 from timm.data.auto_augment import (
     _HPARAMS_DEFAULT,
     AugMixAugment,
+    AugmentOp,
     AutoAugment,
     RandAugment,
     augment_and_mix_transform,
@@ -294,6 +295,19 @@ def test_auto_augment_factory_accepts_default_none_hparams(factory, config_str, 
     # the setdefault() calls must not leak magnitude_std into the shared module-level default,
     # which would otherwise pin the value for every later call that relies on the defaults.
     assert _HPARAMS_DEFAULT == before
+
+
+@pytest.mark.parametrize('op_name, magnitude', [
+    ('Posterize', 2),            # 'keep 0 of 4 MSB' below level 2.5, e.g. ('Posterize', 0.8, 2) in AutoAugment 'v0'
+    ('PosterizeIncreasing', 10),  # 'keep 0 MSB' at the highest level, e.g. 'rand-m9-mstd0.5-inc1' after noise
+])
+def test_posterize_zero_bits(op_name, magnitude):
+    # The posterize level mappings reach 0 bits to keep. Pillow 13's ImageOps.posterize() rejects that with a
+    # ValueError, which crashed dataloader workers for common recipes. 0 bits is an all-black image as before.
+    img = Image.fromarray(np.random.RandomState(0).randint(0, 256, (8, 8, 3), dtype=np.uint8))
+    out = AugmentOp(op_name, prob=1.0, magnitude=magnitude)(img)
+    assert out.mode == 'RGB' and out.size == img.size
+    assert not np.asarray(out).any()
 
 
 @pytest.mark.parametrize('config_str, expected_increasing', [
