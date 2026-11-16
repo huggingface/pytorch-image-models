@@ -2635,6 +2635,8 @@ def test_eval_attention_bias_gradients(module_name, class_name, kwargs):
     attention.zero_grad(set_to_none=True)
     attention(x).square().mean().backward()
     assert attention.attention_biases.grad is not None
+    # A grad-enabled forward drops the cache, the biases may be updated before the next no-grad forward.
+    assert not attention.attention_bias_cache
 
 
 @pytest.mark.base
