@@ -204,6 +204,8 @@ class Attention2d(torch.nn.Module):
 
     def get_attention_biases(self, device: torch.device) -> torch.Tensor:
         if torch.jit.is_tracing() or self.training or torch.is_grad_enabled():
+            # The biases may be updated outside of no-grad eval, drop any cached copy so it cannot go stale.
+            self.attention_bias_cache.clear()
             return self.attention_biases[:, self.attention_bias_idxs]
         else:
             device_key = str(device)
@@ -353,6 +355,8 @@ class Attention2dDownsample(torch.nn.Module):
 
     def get_attention_biases(self, device: torch.device) -> torch.Tensor:
         if torch.jit.is_tracing() or self.training or torch.is_grad_enabled():
+            # The biases may be updated outside of no-grad eval, drop any cached copy so it cannot go stale.
+            self.attention_bias_cache.clear()
             return self.attention_biases[:, self.attention_bias_idxs]
         else:
             device_key = str(device)
