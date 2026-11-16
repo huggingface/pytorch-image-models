@@ -286,7 +286,7 @@ def main():
 
     top_k = min(args.topk, args.num_classes)
     batch_time = AverageMeter()
-    end = time.time()
+    end = time.perf_counter()
     all_indices = []
     all_labels = []
     all_outputs = []
@@ -312,8 +312,9 @@ def main():
             all_outputs.append(output.float().cpu().numpy())
 
             # measure elapsed time
-            batch_time.update(time.time() - end)
-            end = time.time()
+            time_now = time.perf_counter()
+            batch_time.update(time_now - end)
+            end = time_now
 
             if batch_idx % args.log_freq == 0:
                 _logger.info('Predict: [{0}/{1}] Time {batch_time.val:.3f} ({batch_time.avg:.3f})'.format(
