@@ -1,6 +1,6 @@
 """Token-based distillation training task for models with distillation heads."""
 import logging
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -44,6 +44,8 @@ class TokenDistillationTask(TrainingTask):
         distill_loss_weight: Weight for distillation loss
         task_loss_weight: Weight for task loss
         temperature: Softmax temperature for soft distillation (ignored for hard)
+        student_mean: Normalization mean of the student input (data loader), defaults to the student pretrained_cfg
+        student_std: Normalization std of the student input (data loader), defaults to the student pretrained_cfg
         device: Device for task tensors/buffers
         dtype: Dtype for task tensors/buffers
         verbose: Enable info logging
@@ -83,6 +85,8 @@ class TokenDistillationTask(TrainingTask):
             distill_loss_weight: Optional[float] = None,
             task_loss_weight: Optional[float] = None,
             temperature: float = 1.0,
+            student_mean: Optional[Tuple[float, ...]] = None,
+            student_std: Optional[Tuple[float, ...]] = None,
             device: Optional[torch.device] = None,
             dtype: Optional[torch.dtype] = None,
             verbose: bool = True,
@@ -118,12 +122,12 @@ class TokenDistillationTask(TrainingTask):
 
         # Register student normalization values as non-persistent buffers
         student_mean = torch.tensor(
-            student_unwrapped.pretrained_cfg['mean'],
+            student_mean if student_mean is not None else student_unwrapped.pretrained_cfg['mean'],
             device=self.device,
             dtype=self.dtype,
         ).view(1, -1, 1, 1)
         student_std = torch.tensor(
-            student_unwrapped.pretrained_cfg['std'],
+            student_std if student_std is not None else student_unwrapped.pretrained_cfg['std'],
             device=self.device,
             dtype=self.dtype,
         ).view(1, -1, 1, 1)
