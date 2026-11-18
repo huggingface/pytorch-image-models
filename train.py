@@ -1063,6 +1063,7 @@ def main():
             channels=data_config['input_size'][0],
             train_seq_lens=args.naflex_train_seq_lens,
             mixup_fn=naflex_mixup_fn,
+            seed=args.seed,
             rank=args.rank,
             world_size=args.world_size,
             patchify_channels_last=not args.naflex_patchify_channels_first,
