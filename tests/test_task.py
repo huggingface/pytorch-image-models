@@ -193,6 +193,15 @@ def test_token_distillation_named_teacher_checkpoint(tmp_path):
     torch.testing.assert_close(task.teacher.std_kd.flatten(), torch.tensor(overlay['std']))
 
 
+def test_distillation_student_input_mean_std():
+    # student input normalized w/ a mean / std that differs from its pretrained_cfg (train.py --mean / --std)
+    task = LogitDistillationTask(
+        TinyFeatureModel(), TinyFeatureModel(), student_mean=(0.2,) * 3, student_std=(0.1,) * 3, verbose=False)
+    raw = torch.rand(2, 3, 4, 4)
+    teacher_input = task.teacher.normalize_input((raw - 0.2) / 0.1, task.student_mean, task.student_std)
+    torch.testing.assert_close(teacher_input, (raw - 0.5) / 0.25)
+
+
 def test_task_checkpoint_omits_empty_task_state_and_keeps_legacy_paths(tmp_path):
     task = ClassificationTask(TinyClassifier(), nn.CrossEntropyLoss(), verbose=False)
     optimizer = torch.optim.SGD(task.get_trainable_module().parameters(), lr=0.1)

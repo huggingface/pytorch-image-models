@@ -228,6 +228,8 @@ class LogitDistillationTask(TrainingTask):
         distill_loss_weight: Weight for distillation loss
         task_loss_weight: Weight for task loss
         temperature: Softmax temperature for distillation (typical values: 1-4)
+        student_mean: Normalization mean of the student input (data loader), defaults to the student pretrained_cfg
+        student_std: Normalization std of the student input (data loader), defaults to the student pretrained_cfg
         device: Device for task tensors/buffers
         dtype: Dtype for task tensors/buffers
         verbose: Enable info logging
@@ -267,6 +269,8 @@ class LogitDistillationTask(TrainingTask):
             distill_loss_weight: Optional[float] = None,
             task_loss_weight: Optional[float] = None,
             temperature: float = 1.0,
+            student_mean: Optional[Tuple[float, ...]] = None,
+            student_std: Optional[Tuple[float, ...]] = None,
             device: Optional[torch.device] = None,
             dtype: Optional[torch.dtype] = None,
             verbose: bool = True,
@@ -295,12 +299,12 @@ class LogitDistillationTask(TrainingTask):
         # Register student normalization values as non-persistent buffers
         student_unwrapped = unwrap_model(student_model)
         student_mean = torch.tensor(
-            student_unwrapped.pretrained_cfg['mean'],
+            student_mean if student_mean is not None else student_unwrapped.pretrained_cfg['mean'],
             device=self.device,
             dtype=self.dtype,
         ).view(1, -1, 1, 1)
         student_std = torch.tensor(
-            student_unwrapped.pretrained_cfg['std'],
+            student_std if student_std is not None else student_unwrapped.pretrained_cfg['std'],
             device=self.device,
             dtype=self.dtype,
         ).view(1, -1, 1, 1)
@@ -517,6 +521,8 @@ class FeatureDistillationTask(TrainingTask):
         task_loss_weight: Weight for task loss
         student_feature_dim: Student pre-logits dimension (auto-detected if None)
         teacher_feature_dim: Teacher pre-logits dimension (auto-detected if None)
+        student_mean: Normalization mean of the student input (data loader), defaults to the student pretrained_cfg
+        student_std: Normalization std of the student input (data loader), defaults to the student pretrained_cfg
         device: Device for task tensors/buffers
         dtype: Dtype for task tensors/buffers
         verbose: Enable info logging
@@ -546,6 +552,8 @@ class FeatureDistillationTask(TrainingTask):
             task_loss_weight: Optional[float] = None,
             student_feature_dim: Optional[int] = None,
             teacher_feature_dim: Optional[int] = None,
+            student_mean: Optional[Tuple[float, ...]] = None,
+            student_std: Optional[Tuple[float, ...]] = None,
             device: Optional[torch.device] = None,
             dtype: Optional[torch.dtype] = None,
             verbose: bool = True,
@@ -617,12 +625,12 @@ class FeatureDistillationTask(TrainingTask):
         # Register student normalization values
         student_unwrapped = unwrap_model(student_model)
         student_mean = torch.tensor(
-            student_unwrapped.pretrained_cfg['mean'],
+            student_mean if student_mean is not None else student_unwrapped.pretrained_cfg['mean'],
             device=self.device,
             dtype=self.dtype,
         ).view(1, -1, 1, 1)
         student_std = torch.tensor(
-            student_unwrapped.pretrained_cfg['std'],
+            student_std if student_std is not None else student_unwrapped.pretrained_cfg['std'],
             device=self.device,
             dtype=self.dtype,
         ).view(1, -1, 1, 1)
