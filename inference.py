@@ -237,6 +237,7 @@ def main():
         name=args.dataset,
         split=args.split,
         class_map=args.class_map,
+        input_img_mode='L' if data_config['input_size'][0] == 1 else 'RGB',
     )
 
     if test_time_pool:

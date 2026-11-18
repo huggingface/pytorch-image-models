@@ -1,11 +1,15 @@
+import json
+import subprocess
 import sys
 import types
+from pathlib import Path
 
 import numpy as np
 import pytest
 import torch
 from PIL import Image
 
+from timm import create_model
 from timm.data import create_dataset, create_loader, create_naflex_loader, create_reader, create_transform
 from timm.data.loader import MultiEpochsDataLoader
 from timm.data.naflex_loader import NaFlexPrefetchLoader
@@ -20,6 +24,35 @@ from timm.data.auto_augment import (
     rand_augment_transform,
 )
 from timm.data.mixup import rand_bbox_minmax
+
+
+@pytest.mark.parametrize('channels', [1, 3])
+def test_inference_imagefolder_channels(tmp_path, channels):
+    pytest.importorskip('pandas')
+    data_dir = tmp_path / 'images'
+    class_dir = data_dir / 'class_a'
+    class_dir.mkdir(parents=True)
+    Image.new('L' if channels == 1 else 'RGB', (32, 32)).save(class_dir / 'sample.png')
+
+    model = create_model('test_vit', num_classes=2, in_chans=channels, img_size=32)
+    with torch.no_grad():
+        model.head.weight.zero_()
+        model.head.bias.copy_(torch.tensor([1., -1.]))
+    checkpoint = tmp_path / 'model.pth'
+    torch.save(model.state_dict(), checkpoint)
+
+    results_file = tmp_path / 'results.json'
+    run = subprocess.run([
+        sys.executable, str(Path(__file__).resolve().parents[1] / 'inference.py'),
+        '--data-dir', str(data_dir), '--model', 'test_vit', '--checkpoint', str(checkpoint),
+        '--num-classes', '2', '--input-size', str(channels), '32', '32',
+        '--device', 'cpu', '--workers', '0', '--batch-size', '2',
+        '--include-index', '--label-type', 'none', '--output-type', 'logit',
+        '--results-file', str(results_file), '--results-format', 'json',
+    ], capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    results = json.loads(results_file.read_text())
+    assert results == {'sample.png': {'index': 0, 'logit': 1.}}
 
 
 def test_hfds_sliced_imagefolder_split(tmp_path, monkeypatch):
