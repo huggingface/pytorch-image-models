@@ -5,7 +5,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 import logging
 from collections import OrderedDict
 from copy import deepcopy
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
@@ -244,9 +244,17 @@ class ModelEmaV3(nn.Module):
             self.module.to(device=device)
         if self.dtype is not None:
             self.module.to(dtype=dtype)
-        # private RNG for stochastic rounding, leaves global RNG untouched and keeps ranks in sync
-        self._sr_generator = torch.Generator(device=next(self.module.parameters()).device)
-        self._sr_generator.manual_seed(stochastic_rounding_seed)
+        # private RNGs for stochastic rounding, leaves global RNG untouched and keeps ranks in sync. Created lazily
+        # per device so the EMA can be built on meta / cpu and moved (to, to_empty) before the first update.
+        self._sr_generators: Dict[torch.device, torch.Generator] = {}
+
+    def _sr_generator(self, device: torch.device) -> torch.Generator:
+        generator = self._sr_generators.get(device)
+        if generator is None:
+            generator = torch.Generator(device=device)
+            generator.manual_seed(self.stochastic_rounding_seed)
+            self._sr_generators[device] = generator
+        return generator
 
     def get_decay(self, step: Optional[int] = None) -> float:
         """
@@ -278,7 +286,7 @@ class ModelEmaV3(nn.Module):
     def _lerp_(self, ema_v: torch.Tensor, model_v: torch.Tensor, weight: float) -> None:
         # single tensor update, tensors on same device, model_v cast to ema dtype as needed
         if self.stochastic_rounding and ema_v.dtype == torch.bfloat16:
-            _lerp_stochastic_round_bf16_([ema_v], [model_v], weight, generator=self._sr_generator)
+            _lerp_stochastic_round_bf16_([ema_v], [model_v], weight, generator=self._sr_generator(ema_v.device))
         else:
             ema_v.lerp_(model_v.to(dtype=ema_v.dtype), weight=weight)
 
@@ -295,7 +303,9 @@ class ModelEmaV3(nn.Module):
                     lerp_ema_values.append(ema_v)
                     lerp_model_values.append(model_v)
             if sr_ema_values:
-                _lerp_stochastic_round_bf16_(sr_ema_values, sr_model_values, weight, generator=self._sr_generator)
+                _lerp_stochastic_round_bf16_(
+                    sr_ema_values, sr_model_values, weight, generator=self._sr_generator(sr_ema_values[0].device),
+                )
             ema_values, model_values = lerp_ema_values, lerp_model_values
         if not ema_values:
             return

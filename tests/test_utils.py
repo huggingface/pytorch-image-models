@@ -391,3 +391,24 @@ def test_model_ema_v3_stochastic_rounding_advances(foreach):
         assert not torch.equal(ema.module[0].weight, ema.module[1].weight)
         results.append(ema.module[0].weight.detach().clone())
     assert not torch.equal(results[0], results[1])
+
+
+@pytest.mark.parametrize('device', [
+    'cpu', pytest.param('cuda', marks=pytest.mark.skipif(not torch.cuda.is_available(), reason='CUDA required')),
+])
+@pytest.mark.parametrize('foreach', [True, False])
+def test_model_ema_v3_device_move(device, foreach):
+    """A bfloat16 EMA built on meta / cpu and moved before the first update (e.g. FSDP2 meta init) can update."""
+    from timm.utils.model_ema import ModelEmaV3
+    torch.manual_seed(0)
+    with torch.device('meta'):
+        meta_ema = ModelEmaV3(torch.nn.Linear(16, 16, dtype=torch.bfloat16), decay=0.9998, foreach=foreach)
+    meta_ema.to_empty(device=device)
+    model = torch.nn.Linear(16, 16).to(torch.bfloat16)
+    cpu_ema = ModelEmaV3(model, decay=0.9998, foreach=foreach).to(device)
+    model.to(device)
+    meta_ema.set(model)
+    for ema in (meta_ema, cpu_ema):
+        ema.update(model, step=10)
+        assert ema.module.weight.device.type == device
+    torch.testing.assert_close(meta_ema.module.weight, cpu_ema.module.weight, rtol=0, atol=0)
