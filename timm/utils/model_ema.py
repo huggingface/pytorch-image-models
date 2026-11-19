@@ -5,7 +5,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 import logging
 from collections import OrderedDict
 from copy import deepcopy
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -234,14 +234,14 @@ class ModelEmaV3(nn.Module):
         self.warmup_gamma = warmup_gamma
         self.warmup_power = warmup_power
         self.foreach = foreach
-        self.device = device  # perform ema on different device from model if set
+        self.device = torch.device(device) if device is not None else None  # keep ema on this device if set
         self.dtype = dtype  # keep ema in a different (e.g. higher precision) dtype from model if set
         self.stochastic_rounding = stochastic_rounding  # stochastic rounding for bfloat16 ema tensors
         self.stochastic_rounding_seed = stochastic_rounding_seed
         self.exclude_buffers = exclude_buffers
-        if self.device is not None and device != next(model.parameters()).device:
-            self.foreach = False  # cannot use foreach methods with different devices
-            self.module.to(device=device)
+        if self.device is not None:
+            self.module.to(device=self.device)
+        self._warned_device_mismatch = False
         if self.dtype is not None:
             self.module.to(dtype=dtype)
         # private RNGs for stochastic rounding, leaves global RNG untouched and keeps ranks in sync. Created lazily
@@ -291,7 +291,7 @@ class ModelEmaV3(nn.Module):
             ema_v.lerp_(model_v.to(dtype=ema_v.dtype), weight=weight)
 
     def _foreach_lerp_(self, ema_values: List[torch.Tensor], model_values: List[torch.Tensor], weight: float) -> None:
-        # multi tensor update, tensors on same device, handles mixed ema / model dtypes
+        # multi tensor update, all tensors on one device, handles mixed ema / model dtypes
         if self.stochastic_rounding:
             sr_ema_values, sr_model_values = [], []
             lerp_ema_values, lerp_model_values = [], []
@@ -318,42 +318,53 @@ class ModelEmaV3(nn.Module):
             torch._foreach_add_(ema_values, model_values, alpha=weight)
 
     def apply_update_(self, model, decay: float):
-        # interpolate parameters and buffers
-        if self.foreach:
-            ema_lerp_values = []
-            model_lerp_values = []
-            for ema_v, model_v in zip(self.module.state_dict().values(), model.state_dict().values()):
-                if ema_v.is_floating_point():
-                    ema_lerp_values.append(ema_v)
-                    model_lerp_values.append(model_v)
-                else:
-                    ema_v.copy_(model_v)
-
-            self._foreach_lerp_(ema_lerp_values, model_lerp_values, weight=1. - decay)
-        else:
-            for ema_v, model_v in zip(self.module.state_dict().values(), model.state_dict().values()):
-                if ema_v.is_floating_point():
-                    self._lerp_(ema_v, model_v.to(device=self.device), weight=1. - decay)
-                else:
-                    ema_v.copy_(model_v.to(device=self.device))
+        # interpolate floating point parameters and buffers, copy the rest
+        ema_values, model_values = [], []
+        for ema_v, model_v in zip(self.module.state_dict().values(), model.state_dict().values()):
+            if ema_v.is_floating_point():
+                ema_values.append(ema_v)
+                model_values.append(model_v)
+            else:
+                ema_v.copy_(model_v)
+        self._lerp_all_(ema_values, model_values, weight=1. - decay)
 
     def apply_update_no_buffers_(self, model, decay: float):
         # interpolate parameters, copy buffers
-        ema_params = list(self.module.parameters())
-        model_params = list(model.parameters())
-        if self.foreach:
-            self._foreach_lerp_(ema_params, model_params, weight=1. - decay)
-        else:
-            for ema_p, model_p in zip(ema_params, model_params):
-                self._lerp_(ema_p, model_p.to(device=self.device), weight=1. - decay)
-
+        self._lerp_all_(list(self.module.parameters()), list(model.parameters()), weight=1. - decay)
         for ema_b, model_b in zip(self.module.buffers(), model.buffers()):
-            ema_b.copy_(model_b.to(device=self.device))
+            ema_b.copy_(model_b)
+
+    def _lerp_all_(self, ema_values: List[torch.Tensor], model_values: List[torch.Tensor], weight: float) -> None:
+        # Device placement is resolved per update from the tensors themselves (not fixed at init), so the EMA and
+        # model may be moved after construction or span several devices. Same-device tensors are grouped by device
+        # for foreach / stochastic rounding; cross-device tensors are copied and updated one at a time to avoid
+        # holding a second full copy of the model on the EMA device.
+        groups: Dict[torch.device, Tuple[List[torch.Tensor], List[torch.Tensor]]] = {}
+        mismatch = False
+        for ema_v, model_v in zip(ema_values, model_values):
+            if model_v.device != ema_v.device:
+                mismatch = True
+                self._lerp_(ema_v, model_v.to(device=ema_v.device), weight)
+            elif self.foreach:
+                ema_group, model_group = groups.setdefault(ema_v.device, ([], []))
+                ema_group.append(ema_v)
+                model_group.append(model_v)
+            else:
+                self._lerp_(ema_v, model_v, weight)
+        if mismatch and self.device is None and not self._warned_device_mismatch:
+            _logger.warning(
+                'Model EMA and model are on different devices, model weights are copied each update. '
+                'Move the EMA with the model, or pass device= to keep it on a different device intentionally.'
+            )
+            self._warned_device_mismatch = True
+
+        for ema_group, model_group in groups.values():
+            self._foreach_lerp_(ema_group, model_group, weight)
 
     @torch.no_grad()
     def set(self, model):
         for ema_v, model_v in zip(self.module.state_dict().values(), model.state_dict().values()):
-            ema_v.copy_(model_v.to(device=self.device))
+            ema_v.copy_(model_v)
 
     def forward(self, *args, **kwargs):
         return self.module(*args, **kwargs)
