@@ -90,6 +90,8 @@ parser.add_argument('--num-classes', type=int, default=None,
                     help='Number classes in dataset')
 parser.add_argument('--class-map', default='', type=str, metavar='FILENAME',
                     help='path to class to idx mapping file (default: "")')
+parser.add_argument('--input-img-mode', default=None, type=str,
+                    help='Dataset image conversion mode for input images.')
 parser.add_argument('--log-freq', default=10, type=int,
                     metavar='N', help='batch logging frequency (default: 10)')
 parser.add_argument('--checkpoint', default='', type=str, metavar='PATH',
@@ -232,12 +234,16 @@ def main():
         model = torch.nn.DataParallel(model, device_ids=list(range(args.num_gpu)))
 
     root_dir = args.data or args.data_dir
+    if args.input_img_mode is None:
+        input_img_mode = 'L' if data_config['input_size'][0] == 1 else 'RGB'
+    else:
+        input_img_mode = args.input_img_mode
     dataset = create_dataset(
         root=root_dir,
         name=args.dataset,
         split=args.split,
         class_map=args.class_map,
-        input_img_mode='L' if data_config['input_size'][0] == 1 else 'RGB',
+        input_img_mode=input_img_mode,
     )
 
     if test_time_pool:
