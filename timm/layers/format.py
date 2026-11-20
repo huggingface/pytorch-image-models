@@ -9,6 +9,7 @@ class Format(str, Enum):
     NHWC = 'NHWC'
     NCL = 'NCL'
     NLC = 'NLC'
+    NCDHW = 'NCDHW'
 
 
 FormatT = Union[str, Format]
@@ -18,7 +19,7 @@ def get_spatial_dim(fmt: FormatT):
     """Return spatial dimension indices for a given tensor format.
 
     Args:
-        fmt: Tensor format (NCHW, NHWC, NCL, or NLC).
+        fmt: Tensor format (NCHW, NHWC, NCL, NLC, or NCDHW).
 
     Returns:
         Tuple of spatial dimension indices.
@@ -30,6 +31,8 @@ def get_spatial_dim(fmt: FormatT):
         dim = (2,)
     elif fmt is Format.NHWC:
         dim = (1, 2)
+    elif fmt is Format.NCDHW:
+        dim = (2, 3, 4)
     else:
         dim = (2, 3)
     return dim
@@ -39,7 +42,7 @@ def get_channel_dim(fmt: FormatT):
     """Return channel dimension index for a given tensor format.
 
     Args:
-        fmt: Tensor format (NCHW, NHWC, NCL, or NLC).
+        fmt: Tensor format (NCHW, NHWC, NCL, NLC, or NCDHW).
 
     Returns:
         Channel dimension index.
