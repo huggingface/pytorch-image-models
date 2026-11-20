@@ -1529,6 +1529,95 @@ def test_naflexvit_direct_grid_sample_fullgraph(ar_preserving):
     assert actual[1] == expected[1]
 
 
+
+def _naflex_attn_backend_inputs(batch_size=3, grid=(6, 5), patch_dim=16 * 16 * 3, num_pad=(0, 7, 13), seed=0):
+    g = torch.Generator().manual_seed(seed)
+    h, w = grid
+    n = h * w
+    coord = torch.stack(torch.meshgrid(torch.arange(h), torch.arange(w), indexing='ij'), -1).reshape(1, n, 2)
+    valid = torch.ones(batch_size, n, dtype=torch.bool)
+    for i, p in enumerate(num_pad):
+        if p:
+            valid[i, n - p:] = False
+    return {
+        'patches': torch.randn(batch_size, n, patch_dim, generator=g),
+        'patch_coord': coord.expand(batch_size, -1, -1).clone(),
+        'patch_valid': valid,
+    }
+
+
+_NAFLEX_ATTN_BACKEND_CFGS = {
+    'cls': dict(class_token=True),
+    'reg_gap': dict(class_token=False, reg_tokens=2),
+    'rope_axial': dict(class_token=True, rope_type='axial', pos_embed='none'),
+    'rope_mixed': dict(class_token=True, rope_type='mixed', pos_embed='none'),
+}
+
+
+@pytest.mark.base
+@pytest.mark.skipif(not torch.cuda.is_available(), reason='varlen / flex attention backends require CUDA')
+@pytest.mark.parametrize('cfg_name', list(_NAFLEX_ATTN_BACKEND_CFGS.keys()))
+@pytest.mark.parametrize('backend', ['varlen', 'flex'])
+def test_naflexvit_attn_backends_match_sdpa(cfg_name, backend):
+    from timm.layers.attention_backends import has_flex, has_varlen
+    from timm.models.naflexvit import NaFlexVit, NaFlexVitCfg
+    if backend == 'varlen' and not has_varlen:
+        pytest.skip('torch varlen attention not available')
+    if backend == 'flex' and not has_flex:
+        pytest.skip('torch flex attention not available')
+    base = dict(patch_size=16, embed_dim=64, depth=2, num_heads=4, global_pool='', **_NAFLEX_ATTN_BACKEND_CFGS[cfg_name])
+    torch.manual_seed(0)
+    ref_model = NaFlexVit(cfg=NaFlexVitCfg(**base), num_classes=0).cuda().eval()
+    model = NaFlexVit(cfg=NaFlexVitCfg(**base, attn_backend=backend), num_classes=0).cuda().eval()
+    model.load_state_dict(ref_model.state_dict())
+    inputs = {k: v.cuda() for k, v in _naflex_attn_backend_inputs().items()}
+    valid = torch.cat([inputs['patch_valid'].new_ones(3, model.num_prefix_tokens), inputs['patch_valid']], dim=1)
+
+    # varlen kernels are half precision only, compare against a full precision reference w/ bf16 tolerance
+    half = backend == 'varlen'
+    atol = 5e-2 if half else 1e-4
+    with torch.no_grad():
+        expected = ref_model.forward_features(**inputs)['patches']
+        expected_int = ref_model.forward_intermediates(inputs, indices=2, output_fmt='NLC', output_dict=True)
+        with torch.autocast('cuda', dtype=torch.bfloat16, enabled=half):
+            actual = model.forward_features(**inputs)['patches'].float()
+            actual_int = model.forward_intermediates(inputs, indices=2, output_fmt='NLC', output_dict=True)
+    torch.testing.assert_close(actual[valid], expected[valid], atol=atol, rtol=0)
+    for a, e in zip(actual_int['image_intermediates'], expected_int['image_intermediates']):
+        pv = inputs['patch_valid']
+        torch.testing.assert_close(a.float()[pv], e[pv], atol=atol, rtol=0)
+    torch.testing.assert_close(actual_int['image_features'].float()[valid], expected_int['image_features'][valid], atol=atol, rtol=0)
+
+
+@pytest.mark.base
+def test_naflexvit_varlen_falls_back_to_dense_mask():
+    from timm.layers.attention_backends import has_varlen
+    from timm.models.naflexvit import NaFlexVit, NaFlexVitCfg
+    if not has_varlen:
+        pytest.skip('torch varlen attention not available')
+    base = dict(patch_size=16, embed_dim=64, depth=2, num_heads=4, global_pool='', class_token=True)
+    torch.manual_seed(0)
+    ref_model = NaFlexVit(cfg=NaFlexVitCfg(**base), num_classes=0).eval()
+    model = NaFlexVit(cfg=NaFlexVitCfg(**base, attn_backend='varlen'), num_classes=0).eval()
+    model.load_state_dict(ref_model.state_dict())
+    inputs = _naflex_attn_backend_inputs()
+    with torch.no_grad():  # fp32 on CPU, varlen kernels unavailable -> dense mask
+        expected = ref_model.forward_features(**inputs)['patches']
+        actual = model.forward_features(**inputs)['patches']
+    torch.testing.assert_close(actual, expected)
+
+
+@pytest.mark.base
+def test_naflexvit_varlen_rejects_dropout():
+    from timm.layers.attention_backends import has_varlen
+    from timm.models.naflexvit import NaFlexVit, NaFlexVitCfg
+    if not has_varlen:
+        pytest.skip('torch varlen attention not available')
+    with pytest.raises(ValueError):
+        NaFlexVit(cfg=NaFlexVitCfg(embed_dim=64, depth=2, num_heads=4, attn_backend='varlen', drop_path_rate=0.1))
+    with pytest.raises(ValueError, match='attn_drop_rate'):
+        NaFlexVit(cfg=NaFlexVitCfg(embed_dim=64, depth=2, num_heads=4, attn_backend='varlen', attn_drop_rate=0.1))
+
 @pytest.mark.base
 @pytest.mark.skipif(
     not hasattr(torch, 'export') or not hasattr(torch.export, 'export'),

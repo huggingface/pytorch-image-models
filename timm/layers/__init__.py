@@ -15,7 +15,10 @@ from .adaptive_avgmax_pool import (
     AdaptiveAvgMaxPool2d,
     SelectAdaptivePool2d,
 )
-from .attention import Attention, AttentionRope, maybe_add_mask, resolve_self_attn_mask
+from .attention import Attention, AttentionRope, maybe_add_mask, resolve_self_attn_mask, rope_num_prefix_tokens
+from .attention_backends import (
+    VarlenMeta, build_varlen_meta, pack_tokens, unpack_tokens, build_flex_padding_mask, dispatch_attention
+)
 from .attention2d import MultiQueryAttention2d, Attention2d, MultiQueryAttentionV2
 from .attention_pool import AttentionPoolLatent, AttentionPoolPrr
 from .attention_pool2d import AttentionPool2d, RotAttentionPool2d

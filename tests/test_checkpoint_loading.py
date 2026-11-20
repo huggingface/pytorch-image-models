@@ -292,6 +292,55 @@ def test_naflexvit_native_checkpoint_uses_factory_loader(tmp_path):
         assert torch.equal(dst_model.state_dict()[key], value), key
 
 
+@pytest.mark.parametrize('patchify_channels_last', [True, False])
+def test_naflexvit_linear_patch_embed_adapts_in_chans(tmp_path, patchify_channels_last):
+    src_model = _create_tiny_naflexvit(patchify_channels_last=patchify_channels_last)
+    checkpoint_path = tmp_path / 'naflex_rgb.pth'
+    torch.save(src_model.state_dict(), checkpoint_path)
+
+    dst_model = _create_tiny_naflexvit(
+        pretrained=True,
+        pretrained_cfg_overlay={'file': str(checkpoint_path)},
+        in_chans=1,
+        patchify_channels_last=patchify_channels_last,
+    )
+    w = src_model.embeds.proj.weight
+    if patchify_channels_last:
+        expected = w.reshape(w.shape[0], 2, 2, 3).sum(-1).reshape(w.shape[0], -1)
+    else:
+        expected = w.reshape(w.shape[0], 3, 2, 2).sum(1).reshape(w.shape[0], -1)
+    torch.testing.assert_close(dst_model.embeds.proj.weight, expected)
+
+    # grayscale input == RGB input w/ replicated channels
+    gray = torch.randn(1, 1, 4, 4)
+    torch.testing.assert_close(
+        dst_model.eval()(gray),
+        src_model.eval()(gray.expand(-1, 3, -1, -1)),
+        rtol=1e-4,
+        atol=1e-5,
+    )
+
+
+def test_naflexvit_disabled_attn_pool_loads_strict(tmp_path):
+    src_model = _create_tiny_naflexvit()  # siglip config, 'map' attention pooling
+    assert src_model.attn_pool is not None
+    checkpoint_path = tmp_path / 'naflex_map.pth'
+    torch.save(src_model.state_dict(), checkpoint_path)
+
+    dst_model = _create_tiny_naflexvit(
+        pretrained=True,
+        pretrained_cfg_overlay={'file': str(checkpoint_path)},
+        global_pool='',
+    )
+    assert dst_model.attn_pool is None
+    dst_state = dst_model.state_dict()
+    for key, value in src_model.state_dict().items():
+        if key.startswith('attn_pool.'):
+            assert key not in dst_state
+        else:
+            assert torch.equal(dst_state[key], value), key
+
+
 def test_naflexvit_factory_remaps_classic_vit_checkpoint(tmp_path):
     import timm
     from timm.models.naflexvit import NaFlexVit
