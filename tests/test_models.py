@@ -65,6 +65,7 @@ FEAT_INTER_FILTERS = [
     'efficientvit_mit', 'cspnext', 'dpn', 'mobilenetv5', 'cspnet', 'nfnet', 'dla', 'densenet',
     'coat', 'convit', 'convmixer', 'crossvit', 'hrnet', 'inception_resnet_v2', 'inception_v3', 'nasnet',
     'pnasnet', 'selecsls', 'senet', 'sequencer', 'vgg', 'visformer', 'xception', 'xception_aligned',
+    'emo', 'rapidnet', 'tinynext',
 ]
 
 # transformer / hybrid models don't support full set of spatial / feature APIs and/or have spatial output.
@@ -867,7 +868,7 @@ def test_feature_getter_stage_ends_torchscript(model_name: str) -> None:
     'inception_next_atto', 'poolformerv2_s12', 'lowformer_b0', 'cpubone_b0_bfrobust', 'efficientvit_b0', 'hgnetv2_b0',
     'pit_ti_distilled_224', 'volo_d1_224', 'fastvit_t8', 'regnetz_005', 'resnet33ts', 'ese_vovnet19b_dw',
     'twins_svt_small', 'mvitv2_tiny', 'nest_tiny', 'starnet_s1', 'swin_tiny_patch4_window7_224',
-    'efficientnet_b0', 'vgg11',
+    'efficientnet_b0', 'vgg11', 'emo_1m', 'rapidnet_t', 'tinynext_t',
 ])
 def test_prune_intermediate_layers_params_used(model_name: str) -> None:
     """Pruning as FeatureGetterNet does leaves no unused params (DDP), forward_intermediates / forward still run."""
@@ -944,6 +945,9 @@ def test_prune_class_token_avg_pool(model_name: str) -> None:
     ('davit_tiny', dict(head_norm_first=True)),
     ('edgenext_xx_small', dict(head_norm_first=True)),
     ('rdnet_tiny', dict(head_norm_first=True)),
+    ('emo_1m', {}),
+    ('rapidnet_t', {}),
+    ('tinynext_t', {}),
     ('samvit_base_patch16', dict(img_size=64, embed_dim=64, depth=2, num_heads=2, global_attn_indexes=(1,))),  # neck
 ])
 def test_head_hidden_size(model_name: str, model_kwargs: dict) -> None:
@@ -990,7 +994,7 @@ def test_eva_reset_classifier_removes_attention_pool(pool_type: str) -> None:
 
 
 @pytest.mark.base
-@pytest.mark.parametrize('model_name', ['convnext_atto', 'ghostnet_050', 'beit_base_patch16_224', 'mambaout_femto'])
+@pytest.mark.parametrize('model_name', ['convnext_atto', 'ghostnet_050', 'beit_base_patch16_224', 'mambaout_femto', 'rapidnet_t'])
 def test_catavgmax_unsupported(model_name: str) -> None:
     """Models that can't take concat pooling reject it at creation and reset instead of failing later."""
     with pytest.raises(AssertionError):
@@ -1043,7 +1047,7 @@ def test_resnet_pruned_grad_checkpointing() -> None:
 
 @pytest.mark.features
 @pytest.mark.parametrize('model_name', [
-    'coat_lite_tiny', 'coat_tiny', 'hrnet_w18_small', 'nasnetalarge', 'pnasnet5large', 'legacy_xception',
+    'coat_lite_tiny', 'coat_tiny', 'hrnet_w18_small', 'nasnetalarge', 'pnasnet5large', 'legacy_xception', 'rapidnet_t',
 ])
 def test_forward_after_prune_intermediate_layers(model_name: str) -> None:
     """Models w/ hardcoded forward_features keep forward_features / forward usable after pruning."""
@@ -1066,7 +1070,7 @@ def test_forward_after_prune_intermediate_layers(model_name: str) -> None:
 @pytest.mark.features
 @pytest.mark.parametrize('model_name,stop_early_final', [
     ('ghostnet_050', True), ('repghostnet_050', True), ('rexnet_100', True), ('dpn48b', True),
-    ('mobilenetv3_small_050', False),
+    ('mobilenetv3_small_050', False), ('emo_1m', True), ('tinynext_t', True), ('rapidnet_t', True),
 ])
 def test_prune_intermediate_layers_last_feature(model_name: str, stop_early_final: bool) -> None:
     """Layers after the last tap (final conv / norm) are only pruned w/ the head or norm, pruned heads pool the taps."""
