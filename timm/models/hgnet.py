@@ -225,11 +225,12 @@ class StemV2(nn.Module):
 
     def forward(self, x):
         x = self.stem1(x)
+        # 'SAME' max pool as in PaddleClas, the padding must never win (LAB can make stem1 output negative)
+        x1 = self.pool(F.pad(x, (0, 1, 0, 1), value=float('-inf')))
         x = F.pad(x, (0, 1, 0, 1))
         x2 = self.stem2a(x)
         x2 = F.pad(x2, (0, 1, 0, 1))
         x2 = self.stem2b(x2)
-        x1 = self.pool(x)
         x = torch.cat([x1, x2], dim=1)
         x = self.stem3(x)
         x = self.stem4(x)
