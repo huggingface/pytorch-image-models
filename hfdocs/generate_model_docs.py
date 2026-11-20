@@ -658,6 +658,17 @@ FAMILIES: Dict[str, Dict[str, Any]] = {
             'ResNet-RS configurations.'
         ),
     ),
+    'resnet3d': dict(
+        title='ResNet3D',
+        category='CNN',
+        example='resnet18_3d',
+        description=(
+            '3D ResNet backbones for volumetric inputs ([B, C, D, H, W]) such as CT, MRI, and OCT volumes. '
+            'The same ResNet stage layout as the 2D models, with an anisotropic-aware stem and stage strides '
+            'that preserve the depth resolution of anisotropic medical volumes (in-plane resolution is '
+            'downsampled, depth is not) unless `aniso=False` is passed for isotropic volumes.'
+        ),
+    ),
     'resnetv2': dict(
         title='ResNetV2 (BiT)',
         category='CNN',

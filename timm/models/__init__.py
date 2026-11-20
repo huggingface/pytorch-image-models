@@ -68,6 +68,7 @@ from .repvit import *
 from .res2net import *
 from .resnest import *
 from .resnet import *
+from .resnet3d import *
 from .resnetv2 import *
 from .rexnet import *
 from .selecsls import *

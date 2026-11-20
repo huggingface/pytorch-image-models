@@ -26,9 +26,9 @@ class PretrainedCfg:
     custom_load: bool = False
 
     # input / data config
-    input_size: Tuple[int, int, int] = (3, 224, 224)
-    test_input_size: Optional[Tuple[int, int, int]] = None
-    min_input_size: Optional[Tuple[int, int, int]] = None
+    input_size: Tuple[int, ...] = (3, 224, 224)
+    test_input_size: Optional[Tuple[int, ...]] = None
+    min_input_size: Optional[Tuple[int, ...]] = None
     fixed_input_size: bool = False
     interpolation: str = 'bicubic'
     crop_pct: float = 0.875
