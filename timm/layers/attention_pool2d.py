@@ -145,26 +145,31 @@ class RotAttentionPool2d(nn.Module):
     def forward(self, x, pre_logits: bool = False):
         B, _, H, W = x.shape
         N = H * W
+        single_query = self.pool_type == 'token' and not (self.training and self.drop.p > 0.)
+        num_queries = 1 if single_query else N + 1
         x = x.flatten(2).transpose(1, 2)
         if self.cls_token is None:
             x = torch.cat([x.mean(1, keepdim=True), x], dim=1)
         else:
             x = torch.cat([self.cls_token.expand(x.shape[0], -1, -1), x], dim=1)
         if self.qkv is None:
-            q = self.q(x).reshape(B, N + 1, self.num_heads, self.head_dim).transpose(1, 2)
+            q = self.q(x[:, :num_queries]).reshape(B, num_queries, self.num_heads, self.head_dim).transpose(1, 2)
             k = self.k(x).reshape(B, N + 1, self.num_heads, self.head_dim).transpose(1, 2)
             v = self.v(x).reshape(B, N + 1, self.num_heads, self.head_dim).transpose(1, 2)
         else:
             x = self.qkv(x).reshape(B, N + 1, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
             q, k, v = x.unbind(0)
+            q = q[:, :, :num_queries]
 
         rope = self.pos_embed.get_embed((H, W))
         if isinstance(rope, tuple):
             # RotaryEmbedding returns (sin, cos) tuple - concatenate for apply_rot_embed_cat
             rope = torch.cat(rope, dim=-1)
-        q = torch.cat([
-            q[:, :, :1, :], apply_rot_embed_cat(q[:, :, 1:, :], rope, half=self.rotate_half),
-        ], dim=2).type_as(v)
+        if not single_query:
+            q = torch.cat([
+                q[:, :, :1, :], apply_rot_embed_cat(q[:, :, 1:, :], rope, half=self.rotate_half),
+            ], dim=2)
+        q = q.type_as(v)
         k = torch.cat([
             k[:, :, :1, :], apply_rot_embed_cat(k[:, :, 1:, :], rope, half=self.rotate_half),
         ], dim=2).type_as(v)
@@ -176,7 +181,7 @@ class RotAttentionPool2d(nn.Module):
             attn = q @ k.transpose(-2, -1)
             attn = attn.softmax(dim=-1)
             x = attn @ v
-        x = x.transpose(1, 2).reshape(B, N + 1, -1)
+        x = x.transpose(1, 2).reshape(B, num_queries, -1)
         x = self.drop(x)
         if pre_logits:
             x = self._pool(x, H, W)
@@ -304,6 +309,8 @@ class AttentionPool2d(nn.Module):
     def forward(self, x, pre_logits: bool = False):
         B, _, H, W = x.shape
         N = H * W
+        single_query = self.pool_type == 'token' and not (self.training and self.drop.p > 0.)
+        num_queries = 1 if single_query else N + 1
         x = x.flatten(2).transpose(1, 2)
         if self.cls_token is None:
             x = torch.cat([x.mean(1, keepdim=True), x], dim=1)
@@ -315,12 +322,13 @@ class AttentionPool2d(nn.Module):
         x = x + pos_embed
 
         if self.qkv is None:
-            q = self.q(x).reshape(B, N + 1, self.num_heads, self.head_dim).transpose(1, 2)
+            q = self.q(x[:, :num_queries]).reshape(B, num_queries, self.num_heads, self.head_dim).transpose(1, 2)
             k = self.k(x).reshape(B, N + 1, self.num_heads, self.head_dim).transpose(1, 2)
             v = self.v(x).reshape(B, N + 1, self.num_heads, self.head_dim).transpose(1, 2)
         else:
             x = self.qkv(x).reshape(B, -1, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
             q, k, v = x.unbind(0)
+            q = q[:, :, :num_queries]
 
         if self.fused_attn:
             x = nn.functional.scaled_dot_product_attention(q, k, v)
@@ -329,7 +337,7 @@ class AttentionPool2d(nn.Module):
             attn = q @ k.transpose(-2, -1)
             attn = attn.softmax(dim=-1)
             x = attn @ v
-        x = x.transpose(1, 2).reshape(B, N + 1, -1)
+        x = x.transpose(1, 2).reshape(B, num_queries, -1)
         x = self.drop(x)
         if pre_logits:
             x = self._pool(x, H, W)
