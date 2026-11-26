@@ -1,3 +1,4 @@
+import logging
 import re
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
@@ -13,6 +14,8 @@ from ._pretrained import PretrainedCfg
 from ._registry import is_model, model_entrypoint, split_model_name_tag
 
 
+_logger = logging.getLogger(__name__)
+
 __all__ = ['parse_model_name', 'safe_model_name', 'resolve_model_input_args', 'create_model']
 
 # Model sources that may be specified as a URI-like scheme prefix on model names.
@@ -23,6 +26,30 @@ _MODEL_SOURCE_ALIASES = {'hf_hub': 'hf-hub'}
 _SOURCE_PREFIX_PATTERN = re.compile(r'[a-zA-Z][a-zA-Z0-9+.\-_]+')
 # Characters that never appear in a timm registry model name, both platforms' separators + drive/scheme colon.
 _PATH_CHARS = ('/', '\\', ':')
+# Factory and builder control parameters that model config artifacts (config.json: model_args)
+# must not supply, as they control checkpoint/weight loading, cache paths, or builder behavior.
+_RESERVED_MODEL_ARG_KEYS = frozenset({
+    # create_model parameters
+    'model_name',
+    'pretrained',
+    'pretrained_cfg',
+    'pretrained_cfg_overlay',
+    'checkpoint_path',
+    'cache_dir',
+    'scriptable',
+    'exportable',
+    'no_jit',
+    # build_model_with_cfg parameters
+    'model_cls',
+    'variant',
+    'model_cfg',
+    'feature_cfg',
+    'pretrained_strict',
+    'pretrained_filter_fn',
+    'kwargs_filter',
+    'pretrained_model_args',
+    'pruned',
+})
 
 
 def parse_model_name(model_name: str) -> Tuple[Optional[str], str]:
@@ -105,9 +132,18 @@ def _resolve_model_source(
         else:
             assert False, f'Unknown model_source {model_source}'
         if model_args:
-            kwargs['pretrained_model_args'] = dict(model_args)
-            for k, v in model_args.items():
-                kwargs.setdefault(k, v)
+            if not isinstance(model_args, dict):
+                raise ValueError(f"Model config 'model_args' must be a dict, got {type(model_args).__name__}.")
+            rejected = _RESERVED_MODEL_ARG_KEYS.intersection(model_args)
+            if rejected:
+                _logger.warning(
+                    f"Ignoring reserved factory parameters in model config 'model_args': {sorted(rejected)}"
+                )
+                model_args = {k: v for k, v in model_args.items() if k not in _RESERVED_MODEL_ARG_KEYS}
+            if model_args:
+                kwargs['pretrained_model_args'] = dict(model_args)
+                for k, v in model_args.items():
+                    kwargs.setdefault(k, v)
     else:
         model_name, pretrained_tag = split_model_name_tag(model_id)
         if pretrained_tag and not pretrained_cfg:
@@ -235,10 +271,13 @@ def create_model(
             **kwargs,
         )
 
-    # Keep factory options for native checkpoint reconstruction, excluding runtime placement.
+    # Keep factory options for native checkpoint reconstruction, excluding runtime placement and loader controls.
     model._model_args = dict(
         getattr(model, '_model_args', {}),
-        **{k: v for k, v in kwargs.items() if k not in ('device', 'dtype', 'pretrained_model_args')},
+        **{
+            k: v for k, v in kwargs.items()
+            if k not in ('device', 'dtype') and k not in _RESERVED_MODEL_ARG_KEYS
+        },
     )
 
     if checkpoint_path:
