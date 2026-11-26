@@ -451,3 +451,48 @@ def test_export_does_not_inherit_training_regularization(tmp_path, vit):
         assert isinstance(restored.patch_drop, torch.nn.Identity)
     else:
         assert restored.drop_rate == 0
+
+
+def test_local_config_strips_reserved_model_args(tmp_path, caplog):
+    secret = tmp_path / 'secret.pth'
+    secret_sd = timm.create_model('test_resnet', num_classes=7).state_dict()
+    secret_sd['fc.weight'] = torch.full_like(secret_sd['fc.weight'], 123.0)
+    torch.save(secret_sd, secret)
+
+    (tmp_path / 'config.json').write_text(json.dumps({
+        'architecture': 'test_resnet',
+        'num_classes': 7,
+        'pretrained_cfg': {
+            'input_size': [3, 32, 32],
+            'num_classes': 7,
+            'url': 'https://attacker.example/evil.pth',
+            'hf_hub_id': 'attacker/evil',
+            'hf_hub_filename': 'evil.bin',
+        },
+        'model_args': {
+            'num_classes': 7,
+            'pretrained': True,
+            'cache_dir': str(tmp_path / 'cache'),
+            'pretrained_cfg_overlay': {'url': 'http://127.0.0.1/x.pth', 'source': ''},
+            'checkpoint_path': str(secret),
+            'pretrained_strict': False,
+            'pruned': True,
+        },
+    }))
+    with caplog.at_level('WARNING'):
+        resolved = resolve_model_input_args('local-dir:' + str(tmp_path))
+    assert 'Ignoring reserved factory parameters' in caplog.text
+    for key in ('pretrained', 'cache_dir', 'pretrained_cfg_overlay', 'checkpoint_path', 'pretrained_strict', 'pruned'):
+        assert key not in resolved
+        assert key not in resolved['pretrained_model_args']
+    for key in ('url', 'hf_hub_id', 'hf_hub_filename'):
+        assert key not in resolved['pretrained_cfg']
+
+    model = timm.create_model(**resolved, pretrained=False)
+    assert model.num_classes == 7
+    assert not torch.allclose(model.fc.weight, torch.full_like(model.fc.weight, 123.0))
+
+    # Reserved loader controls passed to create_model must not be recorded in _model_args for export.
+    exported = timm.create_model('test_resnet', pretrained=False, pretrained_strict=False, kwargs_filter=('unused',))
+    assert 'pretrained_strict' not in get_model_args(exported)
+    assert 'kwargs_filter' not in get_model_args(exported)

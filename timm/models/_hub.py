@@ -174,6 +174,11 @@ def _parse_model_cfg(
             pretrained_cfg["label_names"] = pretrained_cfg.pop("labels")
 
     pretrained_cfg = cfg["pretrained_cfg"]
+    # Strip foreign weight-source fields from the artifact before binding the actual source.
+    for key in ('url', 'file', 'state_dict', 'hf_hub_id'):
+        pretrained_cfg.pop(key, None)
+    if extra_fields.get('source') != 'hf-hub':
+        pretrained_cfg.pop('hf_hub_filename', None)
     pretrained_cfg.update(extra_fields)
 
     # top‑level overrides
@@ -184,7 +189,11 @@ def _parse_model_cfg(
     if "label_descriptions" in cfg:
         pretrained_cfg["label_descriptions"] = cfg.pop("label_descriptions")
 
-    model_args = cfg.get("model_args", {})
+    model_args = cfg.get("model_args")
+    if model_args is None:
+        model_args = {}
+    elif not isinstance(model_args, dict):
+        raise ValueError(f"Model config 'model_args' must be a dict, got {type(model_args).__name__}.")
     # Stored reconstruction arguments describe the saved weights, before the factory
     # applies any new target overrides. Repair older exports that retained source metadata.
     if model_args.get('dynamic_img_size') or model_args.get('strict_img_size') is False or model_args.get('use_naflex'):
