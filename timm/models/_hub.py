@@ -29,7 +29,7 @@ except ImportError:
 
 from timm import __version__
 from ._helpers import _torch_load, load_state_dict
-from ._input import _get_global_pool, get_model_args, get_model_input_config
+from ._input import _get_global_pool, _validate_input_size, get_model_args, get_model_input_config
 from ._pretrained import filter_pretrained_cfg
 
 try:
@@ -198,26 +198,21 @@ def _parse_model_cfg(
     # applies any new target overrides. Repair older exports that retained source metadata.
     if model_args.get('dynamic_img_size') or model_args.get('strict_img_size') is False or model_args.get('use_naflex'):
         pretrained_cfg['fixed_input_size'] = False
+    for key in ('input_size', 'test_input_size', 'min_input_size'):
+        if pretrained_cfg.get(key) is not None:
+            pretrained_cfg[key] = _validate_input_size(pretrained_cfg[key], name=key)
     if model_args.get('in_chans') is not None:
-        input_size = pretrained_cfg.get('input_size', (3, 224, 224))
-        pretrained_cfg['input_size'] = (model_args['in_chans'], *input_size[1:])
+        in_chans = model_args['in_chans']
+        input_size = pretrained_cfg.get('input_size') or (3, 224, 224)
+        pretrained_cfg['input_size'] = _validate_input_size((in_chans, *input_size[1:]), name='input_size')
         for key in ('test_input_size', 'min_input_size'):
             if pretrained_cfg.get(key):
-                pretrained_cfg[key] = (model_args['in_chans'], *pretrained_cfg[key][1:])
+                pretrained_cfg[key] = _validate_input_size((in_chans, *pretrained_cfg[key][1:]), name=key)
     if model_args.get('img_size') is not None and pretrained_cfg.get('fixed_input_size', False):
         size = model_args['img_size']
-        size = (size, size) if isinstance(size, int) else tuple(size)
-        pretrained_cfg['input_size'] = (pretrained_cfg['input_size'][0], *size)
-    for key in ('input_size', 'test_input_size', 'min_input_size'):
-        val = pretrained_cfg.get(key)
-        if val is not None:
-            if (
-                    not isinstance(val, (tuple, list))
-                    or len(val) != 3
-                    or not all(isinstance(x, int) and not isinstance(x, bool) and x > 0 for x in val)
-            ):
-                raise ValueError(f"Model config '{key}' must be 3 positive ints, got {val!r}.")
-            pretrained_cfg[key] = tuple(val)
+        size = tuple(size) if isinstance(size, (tuple, list)) else (size, size)
+        input_size = pretrained_cfg.get('input_size') or (3, 224, 224)
+        pretrained_cfg['input_size'] = _validate_input_size((input_size[0], *size), name='input_size')
     model_name = cfg["architecture"]
     return pretrained_cfg, model_name, model_args
 

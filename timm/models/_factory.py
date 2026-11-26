@@ -8,7 +8,7 @@ from torch import nn
 from timm.layers import set_layer_config
 from ._builder import resolve_pretrained_cfg
 from ._helpers import load_checkpoint
-from ._input import _requested_input, _spatial_size
+from ._input import _RESERVED_MODEL_ARG_KEYS, _requested_input, _spatial_size, update_model_args
 from ._hub import load_model_config_from_hf, load_model_config_from_path
 from ._pretrained import PretrainedCfg
 from ._registry import is_model, model_entrypoint, split_model_name_tag
@@ -26,30 +26,6 @@ _MODEL_SOURCE_ALIASES = {'hf_hub': 'hf-hub'}
 _SOURCE_PREFIX_PATTERN = re.compile(r'[a-zA-Z][a-zA-Z0-9+.\-_]+')
 # Characters that never appear in a timm registry model name, both platforms' separators + drive/scheme colon.
 _PATH_CHARS = ('/', '\\', ':')
-# Factory and builder control parameters that model config artifacts (config.json: model_args)
-# must not supply, as they control checkpoint/weight loading, cache paths, or builder behavior.
-_RESERVED_MODEL_ARG_KEYS = frozenset({
-    # create_model parameters
-    'model_name',
-    'pretrained',
-    'pretrained_cfg',
-    'pretrained_cfg_overlay',
-    'checkpoint_path',
-    'cache_dir',
-    'scriptable',
-    'exportable',
-    'no_jit',
-    # build_model_with_cfg parameters
-    'model_cls',
-    'variant',
-    'model_cfg',
-    'feature_cfg',
-    'pretrained_strict',
-    'pretrained_filter_fn',
-    'kwargs_filter',
-    'pretrained_model_args',
-    'pruned',
-})
 
 
 def parse_model_name(model_name: str) -> Tuple[Optional[str], str]:
@@ -272,13 +248,7 @@ def create_model(
         )
 
     # Keep factory options for native checkpoint reconstruction, excluding runtime placement and loader controls.
-    model._model_args = dict(
-        getattr(model, '_model_args', {}),
-        **{
-            k: v for k, v in kwargs.items()
-            if k not in ('device', 'dtype') and k not in _RESERVED_MODEL_ARG_KEYS
-        },
-    )
+    update_model_args(model, **kwargs)
 
     if checkpoint_path:
         load_checkpoint(model, checkpoint_path)

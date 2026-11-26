@@ -1,8 +1,53 @@
 """Current model traits and construction arguments, separate from source checkpoint metadata."""
 
+import numbers
 from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
 from torch import Tensor, nn
+
+
+# Factory and builder control parameters that model config artifacts (config.json: model_args)
+# must not supply or emit, as they control checkpoint/weight loading, cache paths, or builder behavior.
+_RESERVED_MODEL_ARG_KEYS = frozenset({
+    # create_model parameters
+    'model_name',
+    'pretrained',
+    'pretrained_cfg',
+    'pretrained_cfg_overlay',
+    'checkpoint_path',
+    'cache_dir',
+    'scriptable',
+    'exportable',
+    'no_jit',
+    # build_model_with_cfg parameters
+    'model_cls',
+    'variant',
+    'model_cfg',
+    'feature_cfg',
+    'pretrained_strict',
+    'pretrained_filter_fn',
+    'kwargs_filter',
+    'pretrained_model_args',
+    'pruned',
+})
+_NON_MODEL_ARG_KEYS = _RESERVED_MODEL_ARG_KEYS | {'device', 'dtype'}
+
+
+def _filter_model_args(args: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: v for k, v in args.items() if k not in _NON_MODEL_ARG_KEYS}
+
+
+def _validate_input_size(
+        value: Any,
+        name: str = 'input_size',
+) -> Tuple[int, int, int]:
+    if (
+            not isinstance(value, (tuple, list))
+            or len(value) != 3
+            or not all(isinstance(x, numbers.Integral) and not isinstance(x, bool) and int(x) > 0 for x in value)
+    ):
+        raise ValueError(f'{name} must be a 3-element tuple/list of positive ints, got {value!r}.')
+    return int(value[0]), int(value[1]), int(value[2])
 
 
 def _spatial_size(size: Union[int, Sequence[int]]) -> Tuple[int, int]:
@@ -85,7 +130,7 @@ def update_model_input_size(
     size = _spatial_size(img_size) if img_size is not None else None
     model._traits = dict(getattr(model, '_traits', {}), img_size=size)
     args = dict(getattr(model, '_model_args', {}))
-    args.update({k: v for k, v in model_args.items() if v is not None})
+    args.update(_filter_model_args({k: v for k, v in model_args.items() if v is not None}))
     if size is not None:
         args['img_size'] = size
     else:
@@ -95,7 +140,7 @@ def update_model_input_size(
 
 def update_model_args(model: nn.Module, **model_args: Any) -> None:
     """Record reconstruction arguments for a supported change made after construction."""
-    model._model_args = dict(getattr(model, '_model_args', {}), **model_args)
+    model._model_args = dict(getattr(model, '_model_args', {}), **_filter_model_args(model_args))
 
 
 def get_model_traits(model: nn.Module) -> Dict[str, Any]:
@@ -170,7 +215,7 @@ def _get_global_pool(model: nn.Module) -> Optional[str]:
 def get_model_args(model: nn.Module, overrides: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Return reconstruction arguments, including supported changes made after construction.
 
-    Runtime arguments are excluded by the factory. Drop rates are omitted unless
+    Runtime and loader arguments are excluded. Drop rates are omitted unless
     explicitly supplied in overrides. Non-serializable architecture arguments
     require an explicit serializable replacement when exporting.
     """
@@ -180,6 +225,7 @@ def get_model_args(model: nn.Module, overrides: Optional[Dict[str, Any]] = None)
         if k not in ('drop_rate', 'drop_path_rate', 'drop_block_rate') and not k.endswith('_drop_rate')
     }
     args.update(overrides or {})
+    args = _filter_model_args(args)
     traits = get_model_traits(model)
     current = {k: traits[k] for k in ('in_chans', 'num_classes') if k in traits}
     pool = _get_global_pool(model)

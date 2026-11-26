@@ -1,4 +1,5 @@
 import copy
+import inspect
 import json
 from contextlib import nullcontext
 
@@ -8,9 +9,16 @@ import torch
 import timm
 from timm.data import resolve_data_config, resolve_input_data_config
 from timm.layers import DropBlock2d, DropPath
-from timm.models import get_model_args, get_model_input_config, get_model_traits, resolve_model_input_args
+from timm.models import (
+    build_model_with_cfg,
+    get_model_args,
+    get_model_input_config,
+    get_model_traits,
+    resolve_model_input_args,
+)
 from timm.models._builder import load_pretrained
 from timm.models._hub import save_for_hf
+from timm.models._input import _RESERVED_MODEL_ARG_KEYS, update_model_args
 
 
 _HAS_DEVICE_CONTEXT = hasattr(torch.device, '__enter__')
@@ -492,10 +500,33 @@ def test_local_config_strips_reserved_model_args(tmp_path, caplog):
     assert model.num_classes == 7
     assert not torch.allclose(model.fc.weight, torch.full_like(model.fc.weight, 123.0))
 
-    # Reserved loader controls passed to create_model must not be recorded in _model_args for export.
+    # Reserved loader controls must not be recorded in _model_args or emitted by get_model_args / save_for_hf.
     exported = timm.create_model('test_resnet', pretrained=False, pretrained_strict=False, kwargs_filter=('unused',))
-    assert 'pretrained_strict' not in get_model_args(exported)
-    assert 'kwargs_filter' not in get_model_args(exported)
+    update_model_args(exported, pretrained=True, cache_dir=str(tmp_path / 'cache'))
+    assert 'pretrained_strict' not in exported._model_args
+    assert 'pretrained' not in exported._model_args
+    assert 'cache_dir' not in exported._model_args
+    export_dir = tmp_path / 'exported'
+    save_for_hf(
+        exported,
+        export_dir,
+        model_args={'checkpoint_path': str(secret), 'device': 'cpu'},
+        model_config={'model_args': {'cache_dir': '/x', 'pretrained': True}},
+    )
+    exported_cfg = json.loads((export_dir / 'config.json').read_text())
+    exported_model_args = exported_cfg.get('model_args', {})
+    for key in ('pretrained', 'pretrained_strict', 'kwargs_filter', 'cache_dir', 'checkpoint_path', 'device'):
+        assert key not in exported_model_args
+
+
+def test_reserved_model_arg_keys_cover_factory_signatures():
+    for fn in (timm.create_model, build_model_with_cfg):
+        sig_keys = {
+            name for name, param in inspect.signature(fn).parameters.items()
+            if param.kind != inspect.Parameter.VAR_KEYWORD
+        }
+        assert sig_keys <= _RESERVED_MODEL_ARG_KEYS
+    assert 'pruned' in _RESERVED_MODEL_ARG_KEYS
 
 
 def test_invalid_input_size_rejected(tmp_path):
