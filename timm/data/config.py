@@ -1,19 +1,10 @@
 import logging
 import numbers
+from timm.models._input import _validate_input_size
 from .constants import *
 
 
 _logger = logging.getLogger(__name__)
-
-
-def _validate_input_size(value, name: str = 'input_size'):
-    if (
-            not isinstance(value, (tuple, list))
-            or len(value) != 3
-            or not all(isinstance(x, numbers.Integral) and not isinstance(x, bool) and int(x) > 0 for x in value)
-    ):
-        raise ValueError(f'{name} must be a 3-element tuple/list of positive ints, got {value!r}.')
-    return tuple(int(x) for x in value)
 
 
 def resolve_data_config(
