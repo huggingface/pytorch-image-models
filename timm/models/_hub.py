@@ -208,6 +208,16 @@ def _parse_model_cfg(
         size = model_args['img_size']
         size = (size, size) if isinstance(size, int) else tuple(size)
         pretrained_cfg['input_size'] = (pretrained_cfg['input_size'][0], *size)
+    for key in ('input_size', 'test_input_size', 'min_input_size'):
+        val = pretrained_cfg.get(key)
+        if val is not None:
+            if (
+                    not isinstance(val, (tuple, list))
+                    or len(val) != 3
+                    or not all(isinstance(x, int) and not isinstance(x, bool) and x > 0 for x in val)
+            ):
+                raise ValueError(f"Model config '{key}' must be 3 positive ints, got {val!r}.")
+            pretrained_cfg[key] = tuple(val)
     model_name = cfg["architecture"]
     return pretrained_cfg, model_name, model_args
 

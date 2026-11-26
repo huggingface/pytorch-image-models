@@ -889,7 +889,7 @@ def main():
             exp_name = '-'.join([
                 datetime.now().strftime("%Y%m%d-%H%M%S"),
                 safe_model_name(args.model),
-                str(data_config['input_size'][-1])
+                str(int(data_config['input_size'][-1]))
             ])
         output_dir = utils.get_outdir(args.output if args.output else './output/train', exp_name)
         saver = utils.CheckpointSaver(

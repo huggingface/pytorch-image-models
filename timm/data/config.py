@@ -1,8 +1,19 @@
 import logging
+import numbers
 from .constants import *
 
 
 _logger = logging.getLogger(__name__)
+
+
+def _validate_input_size(value, name: str = 'input_size'):
+    if (
+            not isinstance(value, (tuple, list))
+            or len(value) != 3
+            or not all(isinstance(x, numbers.Integral) and not isinstance(x, bool) and int(x) > 0 for x in value)
+    ):
+        raise ValueError(f'{name} must be a 3-element tuple/list of positive ints, got {value!r}.')
+    return tuple(int(x) for x in value)
 
 
 def resolve_data_config(
@@ -28,18 +39,20 @@ def resolve_data_config(
 
     input_size = (in_chans, 224, 224)
     if args.get('input_size', None) is not None:
-        assert isinstance(args['input_size'], (tuple, list))
-        assert len(args['input_size']) == 3
-        input_size = tuple(args['input_size'])
+        input_size = _validate_input_size(args['input_size'])
         in_chans = input_size[0]  # input_size overrides in_chans
     elif args.get('img_size', None) is not None:
-        assert isinstance(args['img_size'], int)
-        input_size = (in_chans, args['img_size'], args['img_size'])
+        img_size = args['img_size']
+        if not isinstance(img_size, numbers.Integral) or isinstance(img_size, bool) or int(img_size) <= 0:
+            raise ValueError(f'img_size must be a positive int, got {img_size!r}.')
+        input_size = _validate_input_size((in_chans, int(img_size), int(img_size)))
     else:
         if use_test_size and pretrained_cfg.get('test_input_size', None) is not None:
-            input_size = pretrained_cfg['test_input_size']
+            input_size = _validate_input_size(pretrained_cfg['test_input_size'], name='test_input_size')
         elif pretrained_cfg.get('input_size', None) is not None:
-            input_size = pretrained_cfg['input_size']
+            input_size = _validate_input_size(pretrained_cfg['input_size'], name='input_size')
+        else:
+            input_size = _validate_input_size(input_size)
     data_config['input_size'] = input_size
 
     # resolve interpolation method

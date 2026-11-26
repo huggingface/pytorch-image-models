@@ -496,3 +496,28 @@ def test_local_config_strips_reserved_model_args(tmp_path, caplog):
     exported = timm.create_model('test_resnet', pretrained=False, pretrained_strict=False, kwargs_filter=('unused',))
     assert 'pretrained_strict' not in get_model_args(exported)
     assert 'kwargs_filter' not in get_model_args(exported)
+
+
+def test_invalid_input_size_rejected(tmp_path):
+    bad_sizes = (
+        [3, 224, '../../../tmp/evil'],
+        '../../../tmp/evil',
+        [3, 224],
+        [3, True, 224],
+        [3, 0, 224],
+    )
+    for bad in bad_sizes:
+        with pytest.raises(ValueError, match='input_size'):
+            resolve_data_config(pretrained_cfg={'input_size': bad})
+        with pytest.raises(ValueError, match='test_input_size'):
+            resolve_data_config(pretrained_cfg={'test_input_size': bad}, use_test_size=True)
+        with pytest.raises(ValueError, match='input_size'):
+            resolve_data_config(args={'input_size': bad})
+
+    (tmp_path / 'config.json').write_text(json.dumps({
+        'architecture': 'test_resnet',
+        'num_classes': 10,
+        'pretrained_cfg': {'input_size': [3, 224, '../../../tmp/evil'], 'num_classes': 10},
+    }))
+    with pytest.raises(ValueError, match='input_size'):
+        resolve_model_input_args('local-dir:' + str(tmp_path))
