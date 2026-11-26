@@ -483,7 +483,7 @@ def test_clearing_hf_hub_id_uses_registry_custom_loader(tmp_path, monkeypatch, e
         return checkpoint_path
 
     monkeypatch.setattr(_builder, 'download_cached_file', _download)
-    monkeypatch.setattr(_builder, 'load_state_dict_from_url',
+    monkeypatch.setattr(_builder, '_torch_load',
                         lambda *a, **kw: pytest.fail('Registry .npz weights must use the custom loader'))
     monkeypatch.setattr(VisionTransformer, 'load_pretrained', lambda self, path: loaded.append(path))
 
@@ -544,20 +544,40 @@ def test_teacher_pretrained_cfg_overlay_custom_load(tmp_path, monkeypatch):
     assert loaded == [checkpoint_path]
 
 
-def test_load_pretrained_url_no_unsafe_weights_only_fallback(monkeypatch):
-    from timm.models import _builder
+def test_load_pretrained_url_no_unsafe_weights_only_fallback(tmp_path, monkeypatch):
+    from timm.models import _builder, _helpers
 
+    cached = tmp_path / 'weights.pth'
+    cached.write_bytes(b'not-used')
     calls = []
 
-    def _legacy_load_state_dict_from_url(url, map_location=None, progress=False, check_hash=False, model_dir=None):
-        calls.append(url)
+    def _legacy_torch_load(path, map_location=None):
+        calls.append(path)
         return {}
 
-    monkeypatch.setattr(_builder, 'load_state_dict_from_url', _legacy_load_state_dict_from_url)
+    monkeypatch.setattr(_builder, 'download_cached_file', lambda url, **kw: str(cached))
+    monkeypatch.setattr(_helpers.torch, 'load', _legacy_torch_load)
     model = torch.nn.Linear(2, 2)
-    with pytest.raises(RuntimeError, match='No automatic unsafe pickle fallback'):
+    with pytest.raises(RuntimeError, match='No automatic unsafe pickle fallback.*Upgrade PyTorch'):
         _builder.load_pretrained(
             model,
             pretrained_cfg=dict(url='https://example.com/weights.pth', num_classes=2),
         )
     assert calls == []
+
+
+def test_load_pretrained_url_loads_cached_weights_safely(tmp_path, monkeypatch):
+    from timm.models import _builder
+
+    model = torch.nn.Linear(2, 2)
+    expected = {k: torch.full_like(v, 3.5) for k, v in model.state_dict().items()}
+    cached = tmp_path / 'weights.pth'
+    torch.save(expected, cached)
+
+    monkeypatch.setattr(_builder, 'download_cached_file', lambda url, **kw: str(cached))
+    _builder.load_pretrained(
+        model,
+        pretrained_cfg=dict(url='https://example.com/weights.pth', num_classes=2),
+    )
+    assert torch.allclose(model.weight, expected['weight'])
+    assert torch.allclose(model.bias, expected['bias'])
