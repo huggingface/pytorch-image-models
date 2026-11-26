@@ -135,9 +135,41 @@ def test_wds_zero_loader_workers_keeps_length(wds_root):
     assert len(dataset) == 8
 
 
+def _write_info(root, filename):
+    info = {'splits': {'train': {'name': 'train', 'num_samples': 1, 'filenames': [filename], 'shard_lengths': [1]}}}
+    (root / '_info.json').write_text(json.dumps(info))
+
+
 def test_wds_info_rejects_unsafe_shard_filenames(tmp_path):
-    for bad in ('pipe:echo pwned', 'https://example.com/a.tar', '/etc/passwd', '../escape.tar', 'sub/../../a.tar'):
-        info = {'splits': {'train': {'name': 'train', 'num_samples': 1, 'filenames': [bad], 'shard_lengths': [1]}}}
-        (tmp_path / '_info.json').write_text(json.dumps(info))
+    bad_names = (
+        'pipe:echo pwned', 'https://example.com/a.tar', '/etc/passwd', '../escape.tar', 'sub/../../a.tar',
+        '..\\escape.tar', 'C:\\a.tar', 'C:a.tar', '\\\\server\\share\\a.tar',
+    )
+    for bad in bad_names:
+        _write_info(tmp_path, bad)
         with pytest.raises(ValueError, match='relative path'):
             create_dataset('wds/', root=str(tmp_path), split='train')
+
+
+def test_wds_info_shard_filename_chars_depend_on_root(tmp_path):
+    # a local root is opened as a file, any relative name is fine
+    _write_info(tmp_path, "my shard (1); it's.tar")
+    dataset = create_dataset('wds/', root=tmp_path, split='train')
+    assert dataset.reader.split_info.filenames == ("my shard (1); it's.tar",)
+
+    # a remote / pipe root passes the joined name to a shell
+    marker = tmp_path / 'marker'
+    pipe_root = f'pipe:cat {tmp_path}'
+    bad_names = (
+        f'a.tar; touch {marker}', f'a.tar$(touch {marker})', "a.tar'; id; '", 'a b.tar', 'a.tar|sh', '%PATH%.tar',
+    )
+    for bad in bad_names:
+        _write_info(tmp_path, bad)
+        with pytest.raises(ValueError, match='not allowed when the dataset root is a remote or pipe URL') as exc:
+            create_dataset('wds/', root=pipe_root, split='train')
+        assert pipe_root not in str(exc.value)  # the root may carry credentials
+    assert not marker.exists()
+
+    _write_info(tmp_path, 'sub/train-0000_a+b@1.tar')
+    dataset = create_dataset('wds/', root=pipe_root, split='train')
+    assert dataset.reader.split_info.filenames == ('sub/train-0000_a+b@1.tar',)

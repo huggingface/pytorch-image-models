@@ -6,14 +6,16 @@ import io
 import json
 import logging
 import math
+import ntpath
 import os
+import posixpath
 import random
+import re
 import sys
 from dataclasses import dataclass
 from functools import partial
 from itertools import islice
-from pathlib import PurePosixPath
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import torch
@@ -42,6 +44,9 @@ _logger = logging.getLogger(__name__)
 
 SAMPLE_SHUFFLE_SIZE = int(os.environ.get('WDS_SHUFFLE_SIZE', 8192))
 SAMPLE_INITIAL_SIZE = int(os.environ.get('WDS_INITIAL_SIZE', 2048))
+
+# Characters allowed in _info.json shard filenames when they are appended to a remote / pipe root (shell command).
+_REMOTE_SHARD_FILENAME_PATTERN = re.compile(r'[A-Za-z0-9._+@/-]+')
 
 
 def _load_info(root, names=('_info.json', 'info.json')):
@@ -77,26 +82,44 @@ class SplitInfo:
     name: str = ''
 
 
-def _validate_info_shard_filename(filename: Any) -> str:
-    """Validate that a shard filename from dataset metadata (_info.json) is a safe relative path."""
-    if not isinstance(filename, str) or not filename:
+def _is_local_root(root: Union[str, os.PathLike]) -> bool:
+    """Whether webdataset opens shards under this root directly as files, instead of via a shell command."""
+    root = os.fspath(root)
+    scheme = urlparse(root).scheme
+    # a single letter 'scheme' is a Windows drive
+    return scheme in ('', 'file') or (len(scheme) == 1 and bool(ntpath.splitdrive(root)[0]))
+
+
+def _validate_info_shard_filename(filename: Any, root: Union[str, os.PathLike]) -> str:
+    """Validate that a shard filename from dataset metadata (_info.json) is a safe relative path.
+
+    Filenames are joined to the dataset root. For a remote or ``pipe:`` root, webdataset passes the
+    result to a shell, so only a conservative character set is allowed there.
+    """
+    if not isinstance(filename, str) or not filename or '\0' in filename:
         raise ValueError(f'Invalid shard filename in dataset info: {filename!r}.')
-    normalized = filename.replace('\\', '/')
     if (
-            os.path.isabs(filename)
-            or normalized.startswith('/')
+            posixpath.isabs(filename)
+            or ntpath.isabs(filename)
+            or ntpath.splitdrive(filename)[0]
             or urlparse(filename).scheme
-            or '..' in PurePosixPath(normalized).parts
+            or '..' in filename.replace('\\', '/').split('/')
     ):
         raise ValueError(
             f'Dataset info shard filename must be a relative path without URL schemes or traversal, got {filename!r}.'
         )
+    if not _is_local_root(root) and not _REMOTE_SHARD_FILENAME_PATTERN.fullmatch(filename):
+        raise ValueError(
+            f'Dataset info shard filename {filename!r} contains characters that are not allowed when the dataset'
+            f' root is a remote or pipe URL. Allowed characters are letters, digits and . _ - + @ /'
+            f' Rename the shard or use a local root.'
+        )
     return filename
 
 
-def _parse_split_info(split: str, info: Dict):
+def _parse_split_info(split: str, info: Dict, root: Union[str, os.PathLike]):
     def _info_convert(dict_info):
-        filenames = tuple(_validate_info_shard_filename(f) for f in dict_info['filenames'])
+        filenames = tuple(_validate_info_shard_filename(f, root) for f in dict_info['filenames'])
         return SplitInfo(
             num_samples=dict_info['num_samples'],
             filenames=filenames,
@@ -349,7 +372,7 @@ class ReaderWds(Reader):
         self.key_ext = '.JPEG'  # extension to add to key for original filenames (DS specific, default ImageNet)
 
         self.info = _load_info(self.root)
-        self.split_info = _parse_split_info(split, self.info)
+        self.split_info = _parse_split_info(split, self.info, self.root)
         if num_samples is not None:
             self.num_samples = num_samples
         else:
