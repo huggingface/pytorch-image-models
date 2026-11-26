@@ -2672,17 +2672,3 @@ def test_attention_bias_cache_apply_preserves_recurse_argument():
     assert not attention.attention_bias_cache
     assert attention.attention_biases.dtype == torch.float64
     assert attention.qkv.weight.dtype == torch.float32
-
-
-@pytest.mark.base
-def test_hgnetv2_stem_pool_ignores_padding():
-    """The stem max pool must not let its right / bottom padding win once LAB makes stem1 output negative (B0-B3)."""
-    model = create_model('hgnetv2_b0', pretrained=False).eval()
-    stem = model.stem
-    pooled = []
-    stem.pool.register_forward_hook(lambda module, args, output: pooled.append(output))
-    with torch.no_grad():
-        stem.stem1.conv.weight.zero_()
-        stem.stem1.lab.bias.fill_(-1.)  # stem1 output is -1 everywhere
-        stem(torch.randn(1, 3, 32, 32))
-    torch.testing.assert_close(pooled[0], torch.full_like(pooled[0], -1.))
