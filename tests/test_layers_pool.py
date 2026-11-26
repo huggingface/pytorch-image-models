@@ -227,39 +227,39 @@ class TestAttentionPool:
 
         torch.testing.assert_close(pool(x), expected)
 
-    @pytest.mark.parametrize('pool_cls', ['AttentionPool2d', 'RotAttentionPool2d'])
-    @pytest.mark.parametrize('qkv_separate', [False, True])
-    @pytest.mark.parametrize('fused_attn', [False, True])
-    def test_attention_pool2d_token_matches_full_attention(self, pool_cls, qkv_separate, fused_attn):
+    def test_attention_pool2d_token_matches_full_attention(self):
         from copy import deepcopy
+        from timm.layers import AttentionPool2d, RotAttentionPool2d
 
-        import timm.layers as layers
+        fused_modes = (False, True) if hasattr(torch.nn.functional, 'scaled_dot_product_attention') else (False,)
+        for pool_cls in (AttentionPool2d, RotAttentionPool2d):
+            for qkv_separate in (False, True):
+                for fused_attn in fused_modes:
+                    pool = pool_cls(
+                        in_features=64, out_features=16, num_heads=4, qkv_separate=qkv_separate,
+                    ).to(torch_device).eval()
+                    pool.fused_attn = fused_attn
+                    reference = deepcopy(pool)
+                    reference.pool_type = ''
+                    tokens = []
+                    handle = reference.proj.register_forward_hook(
+                        lambda module, args, output: tokens.append(output[:, 0])
+                    )
+                    x = torch.randn(2, 64, 3, 5, device=torch_device, requires_grad=True)
+                    reference_x = x.detach().clone().requires_grad_()
+                    try:
+                        reference(reference_x)
+                    finally:
+                        handle.remove()
+                    expected = tokens[0]
+                    actual = pool(x)
 
-        if fused_attn and not hasattr(torch.nn.functional, 'scaled_dot_product_attention'):
-            pytest.skip('requires scaled_dot_product_attention')
-        pool = getattr(layers, pool_cls)(
-            in_features=64, out_features=16, num_heads=4, qkv_separate=qkv_separate,
-        ).to(torch_device).eval()
-        pool.fused_attn = fused_attn
-        reference = deepcopy(pool)
-        reference.pool_type = ''
-        tokens = []
-        handle = reference.proj.register_forward_hook(lambda module, args, output: tokens.append(output[:, 0]))
-        x = torch.randn(2, 64, 3, 5, device=torch_device, requires_grad=True)
-        reference_x = x.detach().clone().requires_grad_()
-        try:
-            reference(reference_x)
-        finally:
-            handle.remove()
-        expected = tokens[0]
-        actual = pool(x)
-
-        torch.testing.assert_close(actual, expected)
-        actual.square().sum().backward()
-        expected.square().sum().backward()
-        torch.testing.assert_close(x.grad, reference_x.grad)
-        for parameter, reference_parameter in zip(pool.parameters(), reference.parameters()):
-            torch.testing.assert_close(parameter.grad, reference_parameter.grad)
+                    torch.testing.assert_close(actual, expected)
+                    actual.square().sum().backward()
+                    expected.square().sum().backward()
+                    torch.testing.assert_close(x.grad, reference_x.grad)
+                    for parameter, reference_parameter in zip(pool.parameters(), reference.parameters()):
+                        torch.testing.assert_close(parameter.grad, reference_parameter.grad)
 
     def test_rot_attention_pool2d_basic(self):
         from timm.layers import RotAttentionPool2d
