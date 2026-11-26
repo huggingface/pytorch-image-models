@@ -5,13 +5,11 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar, Union
 
-import torch
 from torch import nn as nn
-from torch.hub import load_state_dict_from_url
 
 from timm.models._features import FeatureListNet, FeatureDictNet, FeatureHookNet, FeatureGetterNet
 from timm.models._features_fx import FeatureGraphNet
-from timm.models._helpers import load_state_dict
+from timm.models._helpers import _torch_load, load_state_dict
 from timm.models._hub import has_hf_hub, download_cached_file, check_cached_file, load_state_dict_from_hf, \
     load_state_dict_from_path, load_custom_from_hf
 from timm.models._manipulate import adapt_input_conv
@@ -193,32 +191,17 @@ def load_pretrained(
             state_dict = load_state_dict(pretrained_loc)
     elif load_from == 'url':
         _logger.info(f'Loading pretrained weights from url ({pretrained_loc})')
+        pretrained_loc = download_cached_file(
+            pretrained_loc,
+            progress=_DOWNLOAD_PROGRESS,
+            check_hash=_CHECK_HASH,
+            cache_dir=cache_dir,
+        )
         if pretrained_cfg.get('custom_load', False):
-            pretrained_loc = download_cached_file(
-                pretrained_loc,
-                progress=_DOWNLOAD_PROGRESS,
-                check_hash=_CHECK_HASH,
-                cache_dir=cache_dir,
-            )
             model.load_pretrained(pretrained_loc)
             return
         else:
-            try:
-                state_dict = load_state_dict_from_url(
-                    pretrained_loc,
-                    map_location='cpu',
-                    progress=_DOWNLOAD_PROGRESS,
-                    check_hash=_CHECK_HASH,
-                    weights_only=True,
-                    model_dir=cache_dir,
-                )
-            except TypeError as e:
-                if 'weights_only' in str(e):
-                    raise RuntimeError(
-                        f"weights_only=True is not supported by load_state_dict_from_url in this PyTorch build "
-                        f"(torch=={torch.__version__}). No automatic unsafe pickle fallback is performed."
-                    ) from e
-                raise
+            state_dict = _torch_load(pretrained_loc, map_location='cpu', weights_only=True)
     elif load_from == 'hf-hub':
         _logger.info(f'Loading pretrained weights from Hugging Face hub ({pretrained_loc})')
         if isinstance(pretrained_loc, (list, tuple)):
