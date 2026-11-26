@@ -542,3 +542,22 @@ def test_teacher_pretrained_cfg_overlay_custom_load(tmp_path, monkeypatch):
     )
 
     assert loaded == [checkpoint_path]
+
+
+def test_load_pretrained_url_no_unsafe_weights_only_fallback(monkeypatch):
+    from timm.models import _builder
+
+    calls = []
+
+    def _legacy_load_state_dict_from_url(url, map_location=None, progress=False, check_hash=False, model_dir=None):
+        calls.append(url)
+        return {}
+
+    monkeypatch.setattr(_builder, 'load_state_dict_from_url', _legacy_load_state_dict_from_url)
+    model = torch.nn.Linear(2, 2)
+    with pytest.raises(RuntimeError, match='No automatic unsafe pickle fallback'):
+        _builder.load_pretrained(
+            model,
+            pretrained_cfg=dict(url='https://example.com/weights.pth', num_classes=2),
+        )
+    assert calls == []

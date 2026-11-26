@@ -5,6 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar, Union
 
+import torch
 from torch import nn as nn
 from torch.hub import load_state_dict_from_url
 
@@ -211,14 +212,13 @@ def load_pretrained(
                     weights_only=True,
                     model_dir=cache_dir,
                 )
-            except TypeError:
-                state_dict = load_state_dict_from_url(
-                    pretrained_loc,
-                    map_location='cpu',
-                    progress=_DOWNLOAD_PROGRESS,
-                    check_hash=_CHECK_HASH,
-                    model_dir=cache_dir,
-                )
+            except TypeError as e:
+                if 'weights_only' in str(e):
+                    raise RuntimeError(
+                        f"weights_only=True is not supported by load_state_dict_from_url in this PyTorch build "
+                        f"(torch=={torch.__version__}). No automatic unsafe pickle fallback is performed."
+                    ) from e
+                raise
     elif load_from == 'hf-hub':
         _logger.info(f'Loading pretrained weights from Hugging Face hub ({pretrained_loc})')
         if isinstance(pretrained_loc, (list, tuple)):
