@@ -133,3 +133,11 @@ def test_wds_zero_loader_workers_keeps_length(wds_root):
     dataset = create_dataset('wds/', root=wds_root, split='validation')
     dataset.set_loader_cfg(num_workers=0)
     assert len(dataset) == 8
+
+
+def test_wds_info_rejects_unsafe_shard_filenames(tmp_path):
+    for bad in ('pipe:echo pwned', 'https://example.com/a.tar', '/etc/passwd', '../escape.tar', 'sub/../../a.tar'):
+        info = {'splits': {'train': {'name': 'train', 'num_samples': 1, 'filenames': [bad], 'shard_lengths': [1]}}}
+        (tmp_path / '_info.json').write_text(json.dumps(info))
+        with pytest.raises(ValueError, match='relative path'):
+            create_dataset('wds/', root=str(tmp_path), split='train')
