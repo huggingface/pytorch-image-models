@@ -12,7 +12,9 @@ import sys
 from dataclasses import dataclass
 from functools import partial
 from itertools import islice
+from pathlib import PurePosixPath
 from typing import Any, Callable, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 import torch
 import torch.distributed as dist
@@ -75,11 +77,29 @@ class SplitInfo:
     name: str = ''
 
 
+def _validate_info_shard_filename(filename: Any) -> str:
+    """Validate that a shard filename from dataset metadata (_info.json) is a safe relative path."""
+    if not isinstance(filename, str) or not filename:
+        raise ValueError(f'Invalid shard filename in dataset info: {filename!r}.')
+    normalized = filename.replace('\\', '/')
+    if (
+            os.path.isabs(filename)
+            or normalized.startswith('/')
+            or urlparse(filename).scheme
+            or '..' in PurePosixPath(normalized).parts
+    ):
+        raise ValueError(
+            f'Dataset info shard filename must be a relative path without URL schemes or traversal, got {filename!r}.'
+        )
+    return filename
+
+
 def _parse_split_info(split: str, info: Dict):
     def _info_convert(dict_info):
+        filenames = tuple(_validate_info_shard_filename(f) for f in dict_info['filenames'])
         return SplitInfo(
             num_samples=dict_info['num_samples'],
-            filenames=tuple(dict_info['filenames']),
+            filenames=filenames,
             shard_lengths=tuple(dict_info['shard_lengths']),
             alt_label=dict_info.get('alt_label', ''),
             name=dict_info['name'],
