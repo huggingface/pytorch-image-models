@@ -8,7 +8,6 @@ import logging
 import math
 import ntpath
 import os
-import posixpath
 import random
 import re
 import sys
@@ -99,8 +98,7 @@ def _validate_info_shard_filename(filename: Any, root: Union[str, os.PathLike]) 
     if not isinstance(filename, str) or not filename or '\0' in filename:
         raise ValueError(f'Invalid shard filename in dataset info: {filename!r}.')
     if (
-            posixpath.isabs(filename)
-            or ntpath.isabs(filename)
+            filename.startswith(('/', '\\'))
             or ntpath.splitdrive(filename)[0]
             or urlparse(filename).scheme
             or '..' in filename.replace('\\', '/').split('/')

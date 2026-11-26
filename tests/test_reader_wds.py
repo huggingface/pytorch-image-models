@@ -143,7 +143,7 @@ def _write_info(root, filename):
 def test_wds_info_rejects_unsafe_shard_filenames(tmp_path):
     bad_names = (
         'pipe:echo pwned', 'https://example.com/a.tar', '/etc/passwd', '../escape.tar', 'sub/../../a.tar',
-        '..\\escape.tar', 'C:\\a.tar', 'C:a.tar', '\\\\server\\share\\a.tar',
+        '..\\escape.tar', '\\images\\train.tar', 'C:\\a.tar', 'C:a.tar', '\\\\server\\share\\a.tar',
     )
     for bad in bad_names:
         _write_info(tmp_path, bad)
