@@ -28,6 +28,11 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD, OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from timm.layers import (
+    VarlenMeta,
+    build_varlen_meta,
+    pack_tokens,
+    unpack_tokens,
+    build_flex_padding_mask,
     get_device_dtype,
     AttentionPoolLatent,
     Mlp,
@@ -48,6 +53,7 @@ from ._features import feature_take_indices
 from ._features_fx import register_notrace_function, register_notrace_module
 from ._manipulate import checkpoint, named_apply
 from ._registry import register_model, generate_default_cfgs
+from timm.layers.attention_backends import has_flex, has_varlen
 from .eva import EvaBlock
 from .vision_transformer import Block, global_pool_nlc, _convert_radio
 
@@ -81,6 +87,11 @@ class NaFlexVitCfg:
     attn_drop_rate: float = 0.0
     scale_attn_inner_norm: bool = False  # Apply scaling norm to attn context
     use_key_only_attn_mask: bool = False  # Use [B, 1, 1, N] key-only mask for self-attention
+    # Attention backend for NaFlex (padded patch sequence) inputs:
+    #  'sdpa': dense (or key-only) mask w/ F.sdpa, 'varlen': pack valid tokens and use varlen (Flash / cuDNN)
+    #  attention, 'flex': FlexAttention w/ block mask. No masking / packing for any backend if patch_valid is None,
+    #  pass None for batches w/o padding (check on the CPU, e.g. at collate) to use the fastest unmasked kernels.
+    attn_backend: str = 'sdpa'
 
     # Regularization
     init_values: Optional[float] = None  # Layer-scale init values (layer-scale enabled if not None)
@@ -1164,6 +1175,13 @@ def global_pool_naflex(
         assert False
 
 
+def _varlen_supported(x: torch.Tensor) -> bool:
+    """ varlen attention kernels require CUDA tensors in half precision (directly or via autocast). """
+    if x.device.type != 'cuda':
+        return False
+    return x.dtype in (torch.float16, torch.bfloat16) or torch.is_autocast_enabled('cuda')
+
+
 class NaFlexVit(nn.Module):
     """NaFlexVit: Vision Transformer with NaFlex support for flexible input handling.
 
@@ -1234,6 +1252,18 @@ class NaFlexVit(nn.Module):
         self.has_class_token = cfg.class_token
         self.pool_include_prefix = cfg.pool_include_prefix
         self.use_key_only_attn_mask = cfg.use_key_only_attn_mask
+        assert cfg.attn_backend in ('sdpa', 'varlen', 'flex'), f'Unknown attn_backend {cfg.attn_backend}'
+        if cfg.attn_backend == 'varlen' and not has_varlen:
+            raise RuntimeError("attn_backend='varlen' requires torch.nn.attention.varlen (a newer PyTorch).")
+        if cfg.attn_backend == 'varlen' and cfg.drop_path_rate > 0:
+            # packing merges the batch into one sequence, per-sample stochastic depth would drop all samples together
+            raise ValueError("attn_backend='varlen' does not support drop_path_rate > 0, use 'flex' or 'sdpa'.")
+        if cfg.attn_backend in ('varlen', 'flex') and cfg.attn_drop_rate > 0:
+            # neither varlen_attn nor flex_attention take a dropout probability
+            raise ValueError(f"attn_backend='{cfg.attn_backend}' does not support attn_drop_rate > 0, use 'sdpa'.")
+        if cfg.attn_backend == 'flex' and not has_flex:
+            raise RuntimeError("attn_backend='flex' requires torch.nn.attention.flex_attention (a newer PyTorch).")
+        self.attn_backend = cfg.attn_backend
         self.grad_checkpointing = False
 
         # Initialize embedding module (includes patch, position embedding, and class/reg tokens)
@@ -1262,6 +1292,12 @@ class NaFlexVit(nn.Module):
             **dd,
         )
         self.supports_patch_interpolation = self.embeds.supports_patch_interpolation
+        if isinstance(self.embeds.proj, nn.Linear):
+            # flattened patch layout of the linear patch embed, used to adapt pretrained weights to other in_chans
+            self._traits['first_conv_linear_patch'] = dict(
+                patch_size=tuple(self.embeds.patch_size),
+                channels_last=getattr(cfg, 'patchify_channels_last', True),
+            )
         self.norm_pre = norm_layer(cfg.embed_dim, **dd) if cfg.pre_norm else nn.Identity()
 
         # ROPE position embeddings at model level
@@ -1658,7 +1694,9 @@ class NaFlexVit(nn.Module):
                     rope_embeds = rope_embeds.unsqueeze(1)
 
         # Create attention mask from patch_valid after patch dropout applied
-        if attn_mask is None:
+        if attn_mask is None and patch_valid is not None and self.attn_backend in ('varlen', 'flex'):
+            pass  # varlen / flex masking is set up from the validity mask in forward_features
+        elif attn_mask is None:
             attn_mask = create_attention_mask(
                 patch_valid,
                 num_prefix_tokens=self.num_prefix_tokens,
@@ -1675,6 +1713,51 @@ class NaFlexVit(nn.Module):
             'attn_mask': attn_mask,
             'keep_indices': keep_indices,
         }
+
+    def _setup_attn_backend(
+            self,
+            x: torch.Tensor,
+            attn_mask: Optional[torch.Tensor],
+            patch_valid: Optional[torch.Tensor],
+            rope_embeds: Optional[Any],
+    ):
+        """ Prepare attention masking for the 'varlen' / 'flex' backends from token validity.
+
+        Returns (x, attn_mask, rope_embeds, varlen_meta). For 'varlen' the valid tokens of the batch are packed into a
+        single [1, T, C] sequence (and axial ROPE embeddings packed to match), varlen_meta is needed to re-pad.
+        """
+        if attn_mask is not None or patch_valid is None or self.attn_backend not in ('varlen', 'flex'):
+            return x, attn_mask, rope_embeds, None
+        if self.attn_backend == 'varlen' and not _varlen_supported(x):
+            # varlen kernels are CUDA half precision only, fall back to a dense mask (e.g. fp32 / CPU eval)
+            attn_mask = create_attention_mask(
+                patch_valid,
+                num_prefix_tokens=self.num_prefix_tokens,
+                symmetric=not self.use_key_only_attn_mask,
+                q_len=1 if self.use_key_only_attn_mask else None,
+                dtype=x.dtype,
+            )
+            return x, attn_mask, rope_embeds, None
+        valid = patch_valid.bool()
+        if self.num_prefix_tokens:
+            valid = torch.cat([valid.new_ones(valid.shape[0], self.num_prefix_tokens), valid], dim=1)
+        if self.attn_backend == 'flex':
+            return x, build_flex_padding_mask(valid, symmetric=not self.use_key_only_attn_mask), rope_embeds, None
+        varlen_meta = build_varlen_meta(valid)
+        x = pack_tokens(x, varlen_meta)
+        if rope_embeds is not None and not self.rope_is_mixed:
+            rope_embeds = self._pack_rope(rope_embeds, varlen_meta)
+        return x, varlen_meta, rope_embeds, varlen_meta
+
+    def _pack_rope(self, rope: torch.Tensor, varlen_meta: VarlenMeta) -> torch.Tensor:
+        """ Pack [B, H, N - num_prefix, D] ROPE embeds to [1, H, T, D] w/ identity rotation for prefix tokens. """
+        npt = self.num_prefix_tokens
+        if npt:
+            sin_shape = rope.shape[:-2] + (npt, rope.shape[-1] // 2)
+            identity = torch.cat([rope.new_zeros(sin_shape), rope.new_ones(sin_shape)], dim=-1)  # sin = 0, cos = 1
+            rope = torch.cat([identity, rope], dim=-2)
+        rope = rope.transpose(1, 2)  # B, N, H, D
+        return pack_tokens(rope, varlen_meta).transpose(1, 2)
 
     def forward_intermediates(
             self,
@@ -1755,6 +1838,7 @@ class NaFlexVit(nn.Module):
         attn_mask = embeds.get('attn_mask', None)
         # validity aligned with the token sequence (gathered through patch dropout)
         patch_valid = embeds.get('patch_valid', patch_valid)
+        x, attn_mask, rope_embeds, varlen_meta = self._setup_attn_backend(x, attn_mask, patch_valid, rope_embeds)
 
         # Forward pass through blocks
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
@@ -1775,6 +1859,8 @@ class NaFlexVit(nn.Module):
                         keep_indices,
                         pos_embed_has_batch=embeds.get('naflex_mode', False),
                     )
+                if varlen_meta is not None:
+                    rope_embed = self._pack_rope(rope_embed, varlen_meta)
                 if do_checkpointing:
                     x = checkpoint(blk, x, rope=rope_embed, attn_mask=attn_mask)
                 else:
@@ -1798,6 +1884,10 @@ class NaFlexVit(nn.Module):
                 if i in take_indices:
                     # normalize intermediates with final norm layer if enabled
                     intermediates.append(self.norm(x) if norm else x)
+
+        if varlen_meta is not None:
+            intermediates = [unpack_tokens(y, varlen_meta) for y in intermediates]
+            x = unpack_tokens(x, varlen_meta)
 
         # Process intermediates
         if self.num_prefix_tokens:
@@ -1893,6 +1983,9 @@ class NaFlexVit(nn.Module):
         keep_indices = embeds.get('keep_indices', None)
         attn_mask = embeds.get('attn_mask', None)
 
+        x, attn_mask, rope_embeds, varlen_meta = self._setup_attn_backend(
+            x, attn_mask, embeds.get('patch_valid', None), rope_embeds)
+
         # Apply transformer blocks with masked attention and/or ROPE if provided
         do_checkpointing = self.grad_checkpointing and not torch.jit.is_scripting()
         if self.rope_is_mixed and rope_embeds is not None:
@@ -1906,6 +1999,8 @@ class NaFlexVit(nn.Module):
                         keep_indices,
                         pos_embed_has_batch=naflex_mode,
                     )
+                if varlen_meta is not None:
+                    rope_embed = self._pack_rope(rope_embed, varlen_meta)
                 if do_checkpointing:
                     x = checkpoint(blk, x, rope=rope_embed, attn_mask=attn_mask)
                 else:
@@ -1925,6 +2020,8 @@ class NaFlexVit(nn.Module):
                     x = blk(x, attn_mask=attn_mask)
 
         x = self.norm(x)
+        if varlen_meta is not None:
+            x = unpack_tokens(x, varlen_meta)
 
         if naflex_mode:
             return {
@@ -2122,6 +2219,9 @@ def checkpoint_filter_fn(state_dict: Dict[str, Any], model: NaFlexVit) -> Dict[s
             out_dict['embeds.cls_token'] = v
         elif k == 'reg_token':
             out_dict['embeds.reg_token'] = v
+        elif k.startswith('attn_pool.') and getattr(model, 'attn_pool', None) is None:
+            # attention pooling disabled in the model (e.g. global_pool=''), drop pretrained pooling params
+            continue
         # Convert patch_embed.X to embeds.patch_embed.X
         elif k.startswith('patch_embed.'):
             suffix = k[12:]

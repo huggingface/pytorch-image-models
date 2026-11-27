@@ -12,7 +12,7 @@ from timm.models._features_fx import FeatureGraphNet
 from timm.models._helpers import _torch_load, load_state_dict
 from timm.models._hub import has_hf_hub, download_cached_file, check_cached_file, load_state_dict_from_hf, \
     load_state_dict_from_path, load_custom_from_hf
-from timm.models._manipulate import adapt_input_conv
+from timm.models._manipulate import adapt_input_conv, adapt_input_linear_patch
 from timm.models._input import _init_model_traits, get_model_traits
 from timm.models._pretrained import PretrainedCfg
 from timm.models._prune import adapt_model_from_file
@@ -231,7 +231,8 @@ def load_pretrained(
             # for backwards compat with filter fn that take one arg
             state_dict = filter_fn(state_dict)
 
-    input_convs = get_model_traits(model).get('first_conv', pretrained_cfg.get('first_conv'))
+    model_traits = get_model_traits(model)
+    input_convs = model_traits.get('first_conv', pretrained_cfg.get('first_conv'))
     pretrained_in_chans = (pretrained_cfg.get('input_size') or (3,))[0]
     if input_convs is not None:
         if isinstance(input_convs, str):
@@ -263,11 +264,22 @@ def load_pretrained(
             if in_chans == pretrained_in_chans:
                 continue
             try:
-                state_dict[weight_name] = adapt_input_conv(
-                    in_chans,
-                    state_dict[weight_name],
-                    base_chans=pretrained_in_chans,
-                )
+                linear_layout = model_traits.get('first_conv_linear_patch')
+                if isinstance(module, nn.Linear) and weight.ndim == 2 and linear_layout is not None:
+                    # linear patch embed (flattened patches), layout declared by the model
+                    state_dict[weight_name] = adapt_input_linear_patch(
+                        in_chans,
+                        weight,
+                        patch_size=linear_layout['patch_size'],
+                        base_chans=pretrained_in_chans,
+                        channels_last=linear_layout.get('channels_last', True),
+                    )
+                else:
+                    state_dict[weight_name] = adapt_input_conv(
+                        in_chans,
+                        state_dict[weight_name],
+                        base_chans=pretrained_in_chans,
+                    )
                 _logger.info(
                     f'Converted input conv {input_conv_name} pretrained weights '
                     f'from {pretrained_in_chans} to {in_chans} channel(s)'

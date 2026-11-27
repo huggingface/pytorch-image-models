@@ -290,6 +290,40 @@ def checkpoint_seq(
     return x
 
 
+def adapt_input_linear_patch(
+        in_chans: int,
+        weight: Tensor,
+        patch_size: Tuple[int, int],
+        base_chans: int = 3,
+        channels_last: bool = True,
+) -> Tensor:
+    """Adapt pretrained linear patch embedding weights (flattened patches) to a different channel count.
+
+    Args:
+        in_chans: Number of input channels for the target model.
+        weight: Pretrained Linear weights of shape (O, ph * pw * base_chans).
+        patch_size: Patch size (ph, pw) used to flatten the patches.
+        base_chans: Number of input channels used for pretraining.
+        channels_last: Patch flattening layout, True for (ph, pw, C), False for (C, ph, pw).
+
+    Returns:
+        Linear weights of shape (O, ph * pw * in_chans), adapted as per ``adapt_input_conv``.
+    """
+    ph, pw = patch_size
+    O, I = weight.shape
+    if I != ph * pw * base_chans:
+        raise NotImplementedError(
+            f'Linear patch weight input dim {I} does not match patch size {patch_size} x {base_chans} channels.')
+    if channels_last:
+        conv_weight = weight.reshape(O, ph, pw, base_chans).permute(0, 3, 1, 2)
+    else:
+        conv_weight = weight.reshape(O, base_chans, ph, pw)
+    conv_weight = adapt_input_conv(in_chans, conv_weight, base_chans=base_chans)
+    if channels_last:
+        conv_weight = conv_weight.permute(0, 2, 3, 1)
+    return conv_weight.reshape(O, -1)
+
+
 def adapt_input_conv(in_chans: int, conv_weight: Tensor, base_chans: int = 3) -> Tensor:
     """Adapt pretrained input convolution weights to a different channel count.
 
