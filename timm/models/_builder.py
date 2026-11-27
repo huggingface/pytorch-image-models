@@ -345,12 +345,12 @@ def _update_default_model_kwargs(pretrained_cfg, kwargs, kwargs_filter) -> None:
         if n == 'img_size':
             input_size = pretrained_cfg.get('input_size', None)
             if input_size is not None:
-                assert len(input_size) == 3
+                assert len(input_size) in (3, 4)  # (C, H, W) or (C, D, H, W)
                 kwargs.setdefault(n, input_size[-2:])
         elif n == 'in_chans':
             input_size = pretrained_cfg.get('input_size', None)
             if input_size is not None:
-                assert len(input_size) == 3
+                assert len(input_size) in (3, 4)  # (C, H, W) or (C, D, H, W)
                 kwargs.setdefault(n, input_size[0])
         elif n == 'num_classes':
             default_val = pretrained_cfg.get(n, None)

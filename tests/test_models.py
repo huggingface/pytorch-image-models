@@ -73,7 +73,7 @@ NON_STD_FILTERS = [
     'convit_*', 'levit*', 'visformer*', 'deit*', 'xcit_*', 'crossvit_*', 'beit*', 'aimv2*', 'swiftformer_*',
     'poolformer_*', 'volo_*', 'sequencer2d_*', 'mvitv2*', 'gcvit*', 'efficientformer*', 'sam_hiera*',
     'eva_*', 'flexivit*', 'eva02*', 'samvit_*', 'efficientvit_m*', 'tiny_vit_*', 'hiera_*', 'vitamin*', 'test_vit*',
-    'gemma4_vit*', 'qwen3_vit*', 'efficientvim*', 'deepseek_vit*',
+    'gemma4_vit*', 'qwen3_vit*', 'efficientvim*', 'deepseek_vit*', 'resnet*_3d',
 ]
 NUM_NON_STD = len(NON_STD_FILTERS)
 
@@ -2672,3 +2672,146 @@ def test_attention_bias_cache_apply_preserves_recurse_argument():
     assert not attention.attention_bias_cache
     assert attention.attention_biases.dtype == torch.float64
     assert attention.qkv.weight.dtype == torch.float32
+
+
+# 3D ResNet tests (timm #2628) — behaviour specific to the 3D slice; the generic
+# forward / backward / default-cfg tests above cover the registered models too.
+def test_format_ncdhw():
+    assert get_spatial_dim('NCDHW') == (2, 3, 4)
+    assert get_channel_dim('NCDHW') == 1
+
+
+def test_resnet3d_pool_types():
+    """avgmax averages (same channels as avg); catavgmax concatenates (doubled)."""
+    for pool_type, feat_mult in (('avg', 1), ('max', 1), ('avgmax', 1), ('catavgmax', 2)):
+        model = create_model(
+            'resnet18_3d', pretrained=False, in_chans=1, num_classes=2, global_pool=pool_type,
+        )
+        model.eval()
+        with torch.no_grad():
+            out = model(torch.randn(1, 1, 16, 32, 32))
+        assert out.shape == (1, 2)
+        # num_features is the backbone channel count (as in 2D ResNet);
+        # the classifier input doubles for catavgmax
+        assert model.num_features == 512
+        assert model.fc.in_features == 512 * feat_mult
+
+
+@pytest.mark.parametrize('model_name', ['resnet18_3d', 'resnet34_3d', 'resnet50_3d'])
+def test_resnet3d_create_model_forward(model_name):
+    model = create_model(model_name, pretrained=False, in_chans=1, num_classes=2)
+    assert model.output_fmt == 'NCDHW'
+    x = torch.randn(1, 1, 32, 64, 64)
+    out = model(x)
+    assert out.shape == (1, 2)
+    assert not torch.isnan(out).any()
+
+
+def test_resnet3d_aniso_stem_preserves_depth():
+    """Anisotropic (default) mode never strides the depth axis."""
+    model = create_model('resnet18_3d', pretrained=False, in_chans=1, num_classes=2)
+    model.eval()
+    x = torch.randn(1, 1, 16, 64, 64)
+    with torch.no_grad():
+        feats = model.forward_features(x)
+    # depth 16 in -> 16 out; in-plane 64 -> 2 (stem 2, maxpool 2, three stages x2)
+    assert feats.shape == (1, 512, 16, 2, 2)
+
+
+def test_resnet3d_isotropic_downsamples_depth():
+    """With aniso=False the depth axis is downsampled like the in-plane axes."""
+    model = create_model('resnet18_3d', pretrained=False, in_chans=1, num_classes=2, aniso=False)
+    model.eval()
+    x = torch.randn(1, 1, 16, 64, 64)
+    with torch.no_grad():
+        feats = model.forward_features(x)
+    assert feats.shape == (1, 512, 1, 2, 2)
+
+
+def test_resnet3d_intermediates_keep_depth():
+    model = create_model('resnet18_3d', pretrained=False, in_chans=1, num_classes=2)
+    _, inter = model.forward_intermediates(torch.randn(1, 1, 16, 32, 32))
+    assert len(inter) == 5
+    assert [t.shape for t in inter] == [
+        (1, 64, 16, 16, 16),
+        (1, 64, 16, 8, 8),
+        (1, 128, 16, 4, 4),
+        (1, 256, 16, 2, 2),
+        (1, 512, 16, 1, 1),
+    ]
+
+
+def test_resnet3d_features_only_and_reset_classifier():
+    model = create_model('resnet18_3d', pretrained=False, in_chans=1, num_classes=0, features_only=True)
+    with torch.no_grad():
+        feats = model(torch.randn(1, 1, 16, 32, 32))
+    assert len(feats) == 5
+    assert feats[-1].shape == (1, 512, 16, 1, 1)
+
+    model = create_model('resnet18_3d', pretrained=False, in_chans=1, num_classes=2)
+    model.reset_classifier(0)
+    with torch.no_grad():
+        pooled = model(torch.randn(1, 1, 16, 32, 32))
+    assert pooled.shape == (1, 512)
+    model.reset_classifier(0, '')
+    with torch.no_grad():
+        unpooled = model(torch.randn(1, 1, 16, 32, 32))
+    assert unpooled.shape == (1, 512, 16, 1, 1)
+
+
+def test_resnet3d_output_stride_16_uses_inplane_dilation():
+    """output_stride applies to the in-plane axes only (dilation, not depth stride)."""
+    model = create_model('resnet18_3d', pretrained=False, in_chans=1, num_classes=2, output_stride=16)
+    model.eval()
+    x = torch.randn(1, 1, 16, 64, 64)
+    with torch.no_grad():
+        feats = model.forward_features(x)
+    assert feats.shape == (1, 512, 16, 4, 4)
+
+
+@pytest.mark.parametrize('stem_type', ['deep', 'deep_tiered'])
+def test_resnet3d_deep_stems(stem_type):
+    model = create_model(
+        'resnet18_3d', pretrained=False, in_chans=1, num_classes=2,
+        stem_width=32, stem_type=stem_type, avg_down=True,
+    )
+    model.eval()
+    x = torch.randn(1, 1, 16, 64, 64)
+    with torch.no_grad():
+        feats = model.forward_features(x)
+    assert feats.shape == (1, 512, 16, 2, 2)
+
+
+def test_resnet3d_replace_stem_pool_and_avg_down():
+    model = create_model(
+        'resnet18_3d', pretrained=False, in_chans=1, num_classes=2,
+        replace_stem_pool=True, avg_down=True,
+    )
+    model.eval()
+    x = torch.randn(1, 1, 16, 64, 64)
+    with torch.no_grad():
+        feats = model.forward_features(x)
+    assert feats.shape == (1, 512, 16, 2, 2)
+
+
+def test_resnet3d_bottleneck_cardinality():
+    model = create_model(
+        'resnet50_3d', pretrained=False, in_chans=1, num_classes=2, cardinality=2,
+    )
+    model.eval()
+    x = torch.randn(1, 1, 16, 32, 32)
+    with torch.no_grad():
+        out = model(x)
+    assert out.shape == (1, 2)
+
+
+def test_resnet3d_grad_checkpointing_matches():
+    model = create_model('resnet18_3d', pretrained=False, in_chans=1, num_classes=2)
+    model.eval()
+    x = torch.randn(1, 1, 16, 32, 32)
+    with torch.no_grad():
+        out1 = model(x)
+    model.set_grad_checkpointing()
+    with torch.no_grad():
+        out2 = model(x)
+    assert torch.allclose(out1, out2, rtol=1e-4, atol=1e-5)
