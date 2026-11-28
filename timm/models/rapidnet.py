@@ -11,7 +11,8 @@ RapidNet: Multi-Level Dilated Convolution Based Mobile Backbone (WACV2025)
     year      = {2025},
     pages     = {8291-8301}
 }
-Modifications by / Copyright 2026 Ryan Hou & Ross Wightman, original copyrights below
+Ported from the official implementation (Apache-2.0 license).
+Modifications by / Copyright 2026 Ryan Hou & Ross Wightman
 """
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple, Type, Union
@@ -440,7 +441,6 @@ class RapidNet(nn.Module):
         self.num_classes = num_classes
         if global_pool is None:
             global_pool = self.global_pool.pool_type
-        # cannot meaningfully change pooling of efficient head after creation    
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         assert self.global_pool.feat_mult() == 1, 'Pooling that changes the pooled width is not supported.'
         self.global_pool.train(self.training)

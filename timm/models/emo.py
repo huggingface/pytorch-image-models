@@ -317,7 +317,7 @@ class EMO(nn.Module):
 
         if version == 'v1':
             stem_dim = 24
-            self.patch_embed = nn.Sequential(
+            self.stem = nn.Sequential(
                 nn.Conv2d(in_chans, stem_dim, dw_kss[0], 2, dw_kss[0]//2, **dd),
                 get_norm_layer(norm_layers[0])(stem_dim, eps=1e-6, **dd) if norm_layers[0] else nn.Identity(),
                 nn.Conv2d(stem_dim, stem_dim, dw_kss[0], 1, dw_kss[0]//2, groups=stem_dim, bias=False, **dd),
@@ -329,7 +329,7 @@ class EMO(nn.Module):
             )
         else:
             stem_dim = embed_dims[0] // 2
-            self.patch_embed = nn.Sequential(
+            self.stem = nn.Sequential(
                 nn.Conv2d(in_chans, stem_dim, 3, 2, 1, **dd),
                 nn.BatchNorm2d(stem_dim, eps=1e-6, **dd),
                 nn.SiLU(),
@@ -369,11 +369,14 @@ class EMO(nn.Module):
             self.feature_info.append(dict(num_chs=embed_dims[i], reduction=reduction, module=f'stages.{i}'))
         self.stages = nn.Sequential(*stages)
 
-        self.norm = get_norm_layer(norm_layers[-1])(embed_dims[-1], eps=1e-6, **dd) if norm_layers[-1] else nn.Identity()
+        self.norm = (
+            get_norm_layer(norm_layers[-1])(embed_dims[-1], eps=1e-6, **dd) if norm_layers[-1] else nn.Identity()
+        )
         self.num_features = embed_dims[-1]
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.head_hidden_size = self.num_features * self.global_pool.feat_mult()
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
+        self.head_drop = nn.Dropout(drop_rate)
         self.head = Linear(self.head_hidden_size, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.apply(self._init_weights)
 
@@ -397,7 +400,7 @@ class EMO(nn.Module):
     @torch.jit.ignore
     def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
         return dict(
-            stem=r'^patch_embed',
+            stem=r'^stem',
             blocks=r'^stages\.(\d+)' if coarse else [
                 (r'^stages\.(\d+)\.downsample', (0,)),
                 (r'^stages\.(\d+)\.blocks\.(\d+)', None),
@@ -454,7 +457,7 @@ class EMO(nn.Module):
         last_idx = len(self.stages) - 1
 
         # forward pass
-        x = self.patch_embed(x)
+        x = self.stem(x)
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             stages = self.stages
         else:
@@ -506,7 +509,7 @@ class EMO(nn.Module):
         return take_indices
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.patch_embed(x)
+        x = self.stem(x)
         x = self.stages(x)
         x = self.norm(x)
         return x
@@ -514,8 +517,7 @@ class EMO(nn.Module):
     def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
         x = self.global_pool(x)
         x = self.flatten(x)
-        if self.drop_rate > 0.:
-            x = F.dropout(x, p=self.drop_rate, training=self.training)
+        x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -530,19 +532,19 @@ def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: nn.Module) 
         if k.startswith('stage0.'):
             if 'convs.' in k or '.se.' in k or 'conv_local' in k or 'proj.' in k:
                 # v1 stem
-                k = k.replace('stage0.0.convs.0.0.', 'patch_embed.0.')
-                k = k.replace('stage0.0.convs.0.1.', 'patch_embed.1.')
-                k = k.replace('stage0.1.conv_local.conv.', 'patch_embed.2.')
-                k = k.replace('stage0.1.conv_local.norm.', 'patch_embed.3.')
-                k = k.replace('stage0.1.se.', 'patch_embed.5.')
-                k = k.replace('stage0.1.proj.conv.', 'patch_embed.7.')
+                k = k.replace('stage0.0.convs.0.0.', 'stem.0.')
+                k = k.replace('stage0.0.convs.0.1.', 'stem.1.')
+                k = k.replace('stage0.1.conv_local.conv.', 'stem.2.')
+                k = k.replace('stage0.1.conv_local.norm.', 'stem.3.')
+                k = k.replace('stage0.1.se.', 'stem.5.')
+                k = k.replace('stage0.1.proj.conv.', 'stem.7.')
             else:
                 # v2 stem: 3x ConvNormAct (conv/bn, dw-conv/bn, 1x1 conv, no SE)
-                k = k.replace('stage0.0.conv.', 'patch_embed.0.')
-                k = k.replace('stage0.0.norm.', 'patch_embed.1.')
-                k = k.replace('stage0.1.conv.', 'patch_embed.3.')
-                k = k.replace('stage0.1.norm.', 'patch_embed.4.')
-                k = k.replace('stage0.2.conv.', 'patch_embed.6.')
+                k = k.replace('stage0.0.conv.', 'stem.0.')
+                k = k.replace('stage0.0.norm.', 'stem.1.')
+                k = k.replace('stage0.1.conv.', 'stem.3.')
+                k = k.replace('stage0.1.norm.', 'stem.4.')
+                k = k.replace('stage0.2.conv.', 'stem.6.')
         else:
             m = re.match(r'stage([1-4])\.(\d+)\.(.*)', k)
             if m:
@@ -583,53 +585,71 @@ def _cfg(url: str = '', **kwargs: Any) -> Dict[str, Any]:
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'patch_embed.0', 'classifier': 'head',
+        'first_conv': 'stem.0', 'classifier': 'head',
         **kwargs
     }
 
 
+def _cfg_v1(**kwargs: Any) -> Dict[str, Any]:
+    return _cfg(
+        paper_ids='arXiv:2301.01146',
+        paper_name='Rethinking Mobile Block for Efficient Attention-based Models',
+        origin_url='https://github.com/zhangzjn/EMO',
+        **kwargs,
+    )
+
+
+def _cfg_v2(**kwargs: Any) -> Dict[str, Any]:
+    return _cfg(
+        paper_ids='arXiv:2412.06674',
+        paper_name='EMOv2: Pushing 5M Vision Model Frontier',
+        origin_url='https://github.com/zhangzjn/EMOv2',
+        **kwargs,
+    )
+
+
 default_cfgs = generate_default_cfgs({
-    'emo_1m.in1k': _cfg(
+    'emo_1m.in1k': _cfg_v1(
         # hf_hub_id='timm/',
         # url='https://github.com/zhangzjn/EMO/blob/main/resources/EMO_1M/net.pth'
     ),
-    'emo_2m.in1k': _cfg(
+    'emo_2m.in1k': _cfg_v1(
         # hf_hub_id='timm/',
         # url='https://github.com/zhangzjn/EMO/blob/main/resources/EMO_2M/net.pth'
     ),
-    'emo_5m.in1k': _cfg(
+    'emo_5m.in1k': _cfg_v1(
         # hf_hub_id='timm/',
         # url='https://github.com/zhangzjn/EMO/blob/main/resources/EMO_5M/net.pth'
     ),
-    'emo_6m.in1k': _cfg(
+    'emo_6m.in1k': _cfg_v1(
         # hf_hub_id='timm/',
         # url='https://github.com/zhangzjn/EMO/blob/main/resources/EMO_6M/net.pth'
     ),
-    'emo2_1m.in1k': _cfg(
+    'emo2_1m.in1k': _cfg_v2(
         # hf_hub_id='timm/',
         # url='https://github.com/zhangzjn/EMOv2/blob/main/resources/Cls/EMOv2_1M_224.pth'
     ),
-    'emo2_1m.dist_in1k': _cfg(
+    'emo2_1m.dist_in1k': _cfg_v2(
         # hf_hub_id='timm/',
         # url='https://github.com/zhangzjn/EMOv2/blob/main/resources/Cls/EMOv2_1M_224_KD.pth'
     ),
-    'emo2_2m.in1k': _cfg(
+    'emo2_2m.in1k': _cfg_v2(
         # hf_hub_id='timm/',
         # url='https://github.com/zhangzjn/EMOv2/blob/main/resources/Cls/EMOv2_2M_224.pth'
     ),
-    'emo2_2m.dist_in1k': _cfg(
+    'emo2_2m.dist_in1k': _cfg_v2(
         # hf_hub_id='timm/',
         # url='https://github.com/zhangzjn/EMOv2/blob/main/resources/Cls/EMOv2_2M_224_KD.pth'
     ),
-    'emo2_5m.in1k': _cfg(
+    'emo2_5m.in1k': _cfg_v2(
         # hf_hub_id='timm/',
         # url='https://github.com/zhangzjn/EMOv2/blob/main/resources/Cls/EMOv2_5M_224.pth'
     ),
-    'emo2_5m.dist_in1k': _cfg(
+    'emo2_5m.dist_in1k': _cfg_v2(
         # hf_hub_id='timm/',
         # url='https://github.com/zhangzjn/EMOv2/blob/main/resources/Cls/EMOv2_5M_224_KD.pth'
     ),
-    'emo2_20m.untrained': _cfg(),
+    'emo2_20m.untrained': _cfg_v2(),
 })
 
 
@@ -647,76 +667,77 @@ def _create_emo(variant: str, pretrained: bool = False, **kwargs: Any) -> EMO:
 def emo_1m(pretrained: bool = False, **kwargs: Any) -> EMO:
     """ EMO-1M """
     model_args = dict(
-        depths=(2, 2, 8, 3), embed_dims=(32, 48, 80, 168), exp_ratios=(2., 2.5, 3.0, 3.5),
+        version='v1', depths=(2, 2, 8, 3), embed_dims=(32, 48, 80, 168), exp_ratios=(2., 2.5, 3.0, 3.5),
         dim_heads=(16, 16, 20, 21), drop_path_rate=0.04036,
     )
-    return _create_emo('emo_1m', pretrained=pretrained, version='v1', **dict(model_args, **kwargs))
+    return _create_emo('emo_1m', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def emo_2m(pretrained: bool = False, **kwargs: Any) -> EMO:
     """ EMO-2M """
     model_args = dict(
-        depths=(3, 3, 9, 3), embed_dims=(32, 48, 120, 200), exp_ratios=(2., 2.5, 3.0, 3.5),
+        version='v1', depths=(3, 3, 9, 3), embed_dims=(32, 48, 120, 200), exp_ratios=(2., 2.5, 3.0, 3.5),
         dim_heads=(16, 16, 20, 20), drop_path_rate=0.05,
     )
-    return _create_emo('emo_2m', pretrained=pretrained, version='v1', **dict(model_args, **kwargs))
+    return _create_emo('emo_2m', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def emo_5m(pretrained: bool = False, **kwargs: Any) -> EMO:
     """ EMO-5M """
     model_args = dict(
-        depths=(3, 3, 9, 3), embed_dims=(48, 72, 160, 288), exp_ratios=(2., 3., 4., 4.),
+        version='v1', depths=(3, 3, 9, 3), embed_dims=(48, 72, 160, 288), exp_ratios=(2., 3., 4., 4.),
         dim_heads=(24, 24, 32, 32), drop_path_rate=0.05,
     )
-    return _create_emo('emo_5m', pretrained=pretrained, version='v1', **dict(model_args, **kwargs))
+    return _create_emo('emo_5m', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def emo_6m(pretrained: bool = False, **kwargs: Any) -> EMO:
     """ EMO-6M """
     model_args = dict(
-        depths=(3, 3, 9, 3), embed_dims=(48, 72, 160, 320), exp_ratios=(2., 3., 4., 5.),
+        version='v1', depths=(3, 3, 9, 3), embed_dims=(48, 72, 160, 320), exp_ratios=(2., 3., 4., 5.),
         dim_heads=(16, 24, 20, 32), drop_path_rate=0.05,
     )
-    return _create_emo('emo_6m', pretrained=pretrained, version='v1', **dict(model_args, **kwargs))
+    return _create_emo('emo_6m', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def emo2_1m(pretrained: bool = False, **kwargs: Any) -> EMO:
     """ EMO2-1M """
     model_args = dict(
-        depths=(2, 2, 8, 3), embed_dims=(32, 48, 80, 180), exp_ratios=(2., 2.5, 3.0, 3.5),
+        version='v2', depths=(2, 2, 8, 3), embed_dims=(32, 48, 80, 180), exp_ratios=(2., 2.5, 3.0, 3.5),
         dim_heads=(16, 16, 20, 20), drop_path_rate=0.04036, layer_scale_init_value=1e-6, dw_kss=(5, 5, 5, 5),
     )
-    return _create_emo('emo2_1m', pretrained=pretrained, version='v2', **dict(model_args, **kwargs))
+    return _create_emo('emo2_1m', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def emo2_2m(pretrained: bool = False, **kwargs: Any) -> EMO:
     """ EMO2-2M """
     model_args = dict(
-        depths=(3, 3, 9, 3), embed_dims=(32, 48, 120, 200), exp_ratios=(2., 2.5, 3.0, 3.5),
+        version='v2', depths=(3, 3, 9, 3), embed_dims=(32, 48, 120, 200), exp_ratios=(2., 2.5, 3.0, 3.5),
         dim_heads=(16, 16, 20, 20), drop_path_rate=0.05, layer_scale_init_value=1e-6, dw_kss=(5, 5, 5, 5),
     )
-    return _create_emo('emo2_2m', pretrained=pretrained, version='v2', **dict(model_args, **kwargs))
+    return _create_emo('emo2_2m', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def emo2_5m(pretrained: bool = False, **kwargs: Any) -> EMO:
     """ EMO2-5M """
     model_args = dict(
-        depths=(3, 3, 9, 3), embed_dims=(48, 72, 160, 288), exp_ratios=(2., 3., 4., 4.),
+        version='v2', depths=(3, 3, 9, 3), embed_dims=(48, 72, 160, 288), exp_ratios=(2., 3., 4., 4.),
         dim_heads=(16, 24, 32, 32), drop_path_rate=0.05, layer_scale_init_value=1e-6, dw_kss=(5, 5, 5, 5),
     )
-    return _create_emo('emo2_5m', pretrained=pretrained, version='v2', **dict(model_args, **kwargs))
+    return _create_emo('emo2_5m', pretrained=pretrained, **dict(model_args, **kwargs))
+
 
 @register_model
 def emo2_20m(pretrained: bool = False, **kwargs: Any) -> EMO:
     """ EMO2-20M """
     model_args = dict(
-        depths=(3, 3, 13, 3), embed_dims=(64, 128, 320, 448), exp_ratios=(2., 3., 4., 4.),
+        version='v2', depths=(3, 3, 13, 3), embed_dims=(64, 128, 320, 448), exp_ratios=(2., 3., 4., 4.),
         dim_heads=(16, 32, 32, 32), drop_path_rate=0.1, layer_scale_init_value=1e-6, dw_kss=(5, 5, 5, 5),
     )
-    return _create_emo('emo2_20m', pretrained=pretrained, version='v2', **dict(model_args, **kwargs))
+    return _create_emo('emo2_20m', pretrained=pretrained, **dict(model_args, **kwargs))

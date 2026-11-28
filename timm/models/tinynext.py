@@ -4,14 +4,16 @@ An Efficient Hybrid Vision Transformer for TinyML Applications (ICCV2025)
 - code: https://github.com/yuffeenn/TinyNeXt
 
 @inproceedings{tinynext_iccv2025,
-	author    = {Zeng, Fanhong and Li, Huanan and Guan, Juntao and Fan, Rui and Wu, Tong and Wang, Xilong and Lai, Rui},
-	title     = {An Efficient Hybrid Vision Transformer for TinyML Applications},
-	booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
-	month     = {October}, 
-	year      = {2025},    
-	pages     = {19914-19924} 
+    author    = {Zeng, Fanhong and Li, Huanan and Guan, Juntao and Fan, Rui and Wu, Tong and Wang, Xilong and Lai, Rui},
+    title     = {An Efficient Hybrid Vision Transformer for TinyML Applications},
+    booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
+    month     = {October},
+    year      = {2025},
+    pages     = {19914-19924}
 }
-Modifications by / Copyright 2026 Ryan Hou & Ross Wightman, original copyrights below
+
+Ported from the official implementation (MIT license, Copyright (c) 2025 Fanhong Zeng).
+Modifications by / Copyright 2026 Ryan Hou & Ross Wightman
 """
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple, Type, Union
@@ -21,11 +23,14 @@ import torch.nn as nn
 
 from timm.layers import (
     ConvNormAct,
+    LayerType,
     SqueezeExcite,
     ConvMlp,
     SelectAdaptivePool2d,
     Linear,
+    get_act_layer,
     get_device_dtype,
+    get_norm_layer,
     trunc_normal_,
 )
 from ._efficientnet_blocks import InvertedResidual
@@ -196,13 +201,15 @@ class TinyNeXt(nn.Module):
             ratios: Tuple[float, ...] = (2., 2., 2., 2.),
             reduction: int = 4,
             drop_rate: float = 0.,
-            act_layer: Type[nn.Module] = nn.GELU,
-            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            act_layer: LayerType = nn.GELU,
+            norm_layer: LayerType = nn.BatchNorm2d,
             device=None,
             dtype=None,
     ):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
+        act_layer = get_act_layer(act_layer)
+        norm_layer = get_norm_layer(norm_layer)
         self.num_classes = num_classes
         self.in_chans = in_chans
         self.drop_rate = drop_rate
@@ -442,6 +449,7 @@ def _cfg(url: str = '', **kwargs: Any) -> Dict[str, Any]:
         'crop_pct': 0.875, 'interpolation': 'bicubic',
         'mean': (128./255, 128./255, 128./255), 'std': (1./255, 1./255, 1./255),
         'first_conv': 'stem.0.conv', 'classifier': 'head',
+        'paper_ids': 'doi:10.1109/ICCV51701.2025.01852',
         'paper_name': 'An Efficient Hybrid Vision Transformer for TinyML Applications',
         'origin_url': 'https://github.com/yuffeenn/TinyNeXt',
         'license': 'mit',
