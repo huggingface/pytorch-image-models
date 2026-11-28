@@ -178,6 +178,16 @@ def test_export_requires_serializable_architecture_options(tmp_path):
     assert isinstance(restored.norm, torch.nn.LayerNorm)
 
 
+def test_tinynext_string_layers_roundtrip(tmp_path):
+    model = timm.create_model('tinynext_t', act_layer='silu', norm_layer='batchnorm2d').eval()
+    assert isinstance(model.stages[2].blocks[0].mlp[1].act, torch.nn.SiLU)
+    save_for_hf(model, tmp_path)
+    restored = timm.create_model('local-dir:' + str(tmp_path), pretrained=True).eval()
+    assert isinstance(restored.stages[2].blocks[0].mlp[1].act, torch.nn.SiLU)
+    x = torch.randn(1, 3, 64, 64)
+    torch.testing.assert_close(restored(x), model(x), rtol=0, atol=0)
+
+
 @pytest.mark.parametrize('nested', [False, True])
 def test_export_rejects_conflicting_model_metadata(tmp_path, nested):
     model = _vit(in_chans=4)

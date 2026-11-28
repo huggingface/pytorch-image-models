@@ -297,6 +297,14 @@ FAMILIES: Dict[str, Dict[str, Any]] = {
             'attention, which feeds each attention head a different split of the features.'
         ),
     ),
+    'emo': dict(
+        title='EMO',
+        category='Efficient/Mobile',
+        description=(
+            'EMO is an efficient mobile backbone built from inverted residual mobile blocks with lightweight '
+            'attention, including the EMOv2 variants.'
+        ),
+    ),
     'eva': dict(
         title='EVA',
         category='ViT',
@@ -598,6 +606,13 @@ FAMILIES: Dict[str, Dict[str, Any]] = {
             'the `_enc` variants keep the native projector that maps the tokens to the language model width.'
         ),
     ),
+    'rapidnet': dict(
+        title='RapidNet',
+        category='Efficient/Mobile',
+        description=(
+            'RapidNet is a mobile backbone using multi-level dilated convolutions for efficient feature extraction.'
+        ),
+    ),
     'rdnet': dict(
         title='RDNet',
         category='CNN',
@@ -763,6 +778,14 @@ FAMILIES: Dict[str, Dict[str, Any]] = {
         description=(
             'TinyViT is a family of small hierarchical vision transformers (a convolutional first stage, then local '
             'window attention), pretrained by fast distillation from large teacher models.'
+        ),
+    ),
+    'tinynext': dict(
+        title='TinyNeXt',
+        category='Efficient/Mobile',
+        description=(
+            'TinyNeXt is a tiny hybrid vision transformer for TinyML, combining convolutional stages with '
+            'lightweight attention.'
         ),
     ),
     'tnt': dict(

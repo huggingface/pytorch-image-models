@@ -191,6 +191,8 @@
       title: EfficientViT (MIT)
     - local: models/efficientvit-msra
       title: EfficientViT (MSRA)
+    - local: models/emo
+      title: EMO
     - local: models/fasternet
       title: FasterNet
     - local: models/fastvit
@@ -209,6 +211,8 @@
       title: MobileViT
     - local: models/lcnetv2
       title: PP-LCNetV2
+    - local: models/rapidnet
+      title: RapidNet
     - local: models/repghost
       title: RepGhost
     - local: models/repvit
@@ -221,6 +225,8 @@
       title: StarNet
     - local: models/swiftformer
       title: SwiftFormer
+    - local: models/tinynext
+      title: TinyNeXt
     title: Efficient and mobile networks
     isExpanded: false
   - sections:
